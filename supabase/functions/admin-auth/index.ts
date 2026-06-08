@@ -103,11 +103,10 @@ async function getPinHash(supabase: ReturnType<typeof createClient>): Promise<{ 
   return { pin_hash: data.pin, setup_required: false };
 }
 
-if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
     const body = (await req.json()) as { pin?: string; action?: string; newPin?: string };

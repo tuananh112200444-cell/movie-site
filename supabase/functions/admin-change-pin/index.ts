@@ -130,7 +130,6 @@ serve(async (req) => {
       if (!newPin) return json({ error: 'Missing new password.' }, 400, corsHeaders);
       const complexity = validatePinComplexity(newPin);
       if (!complexity.valid) return json({ error: complexity.error }, 400, corsHeaders);
-      }
 
       const hashedNewPin = await hashPin(newPin);
       const { error } = await supabase
