@@ -1,0 +1,1080 @@
+/* Font loaded via <link> in index.html to avoid render-blocking CSS @import */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Be Vietnam Pro', sans-serif;
+  background-color: #080a10;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeSpeed;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+video::cue {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.58);
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+  font-size: clamp(14px, 2.2vw, 24px);
+  line-height: 1.35;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95);
+}
+/* Mobile: heavier font weight + legibility for readability */
+@media (max-width: 768px) {
+  body {
+    font-weight: 500;
+    text-rendering: optimizeLegibility;
+    letter-spacing: 0.01em;
+    line-height: 1.6;
+  }
+  
+  /* But keep headings bold */
+  h1, h2, h3, h4, h5, h6, strong, b, .font-bold, .font-extrabold, .font-black {
+    font-weight: 700 !important;
+  }
+
+  /* Force readable font sizes on mobile — anything below 13px is unreadable */
+  html body .text-xs,
+  html body .text-\[10px\],
+  html body .text-\[11px\],
+  html body .text-\[12px\],
+  html body .text-\[13px\] {
+    font-size: 0.8rem !important; /* ~13px minimum */
+  }
+}
+
+/* ─── MOBILE VIEWPORT FIX ─── */
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+input, textarea, select, button {
+  
+  -webkit-text-size-adjust: 100%;
+}
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+
+#root {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* ─── THEME TRANSITION ─ smooth color morphing ─── */
+html {
+  /* Khi class light/dark thay đổi, màu nền và chữ transition mượt */
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+body {
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+/* Khi đang trong quá trình chuyển theme, tăng transition lên toàn trang */
+html.theme-transitioning,
+html.theme-transitioning body,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, opacity 0.35s ease !important;
+}
+
+/* Tắt transition cho những element có animation riêng để tránh xung đột */
+html.theme-transitioning .skeleton::after,
+html.theme-transitioning .animate-shimmer-sweep,
+html.theme-transitioning .float-animation,
+html.theme-transitioning .glow-pulse::before,
+html.theme-transitioning .top-loading-bar,
+html.theme-transitioning .page-root,
+html.theme-transitioning .stagger-item,
+html.theme-transitioning .reveal,
+html.theme-transitioning .reveal-left,
+html.theme-transitioning .reveal-scale,
+html.theme-transitioning .hero-content-enter,
+html.theme-transitioning .hero-title-enter,
+html.theme-transitioning .hero-sub-enter,
+html.theme-transitioning .hero-badges-enter,
+html.theme-transitioning .hero-cta-enter {
+  transition: none !important;
+}
+
+/* ─── Theme icon enter animation ─── */
+@keyframes theme-icon-pop {
+  0%   { transform: scale(0.7) rotate(-10deg); opacity: 0; }
+  60%  { transform: scale(1.1) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.theme-icon-enter {
+  animation: theme-icon-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ════════════════════════════════════════════
+   CINEMATIC NOISE TEXTURE — DISABLED
+   Đã tắt: fixed overlay z-9999 tạo GPU composite layer nặng
+   ảnh hưởng FPS toàn trang, đặc biệt khi scroll
+   ════════════════════════════════════════════ */
+
+/* Fix iOS input text color */
+input, textarea, select {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+input::placeholder, textarea::placeholder {
+  -webkit-text-fill-color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.3);
+}
+
+/* Fix iOS tap highlight */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #0d0f18; }
+::-webkit-scrollbar-thumb { background: #1e2030; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #ef4444; }
+
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Selection color */
+::selection { background: rgba(239, 68, 68, 0.3); color: #fff; }
+
+/* ─── Shimmer skeleton — dùng transform thay background-position (GPU-accelerated) ─── */
+@keyframes skeleton-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ─── NEW: Image loading placeholder — NO blur filter, clean gradient ─── */
+.blur-placeholder {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(45, 30, 60, 0.5) 0%, transparent 55%),
+    radial-gradient(ellipse at 70% 80%, rgba(20, 25, 45, 0.6) 0%, transparent 55%),
+    linear-gradient(135deg, #151828 0%, #111320 50%, #1a1d2e 100%);
+  /* KHÔNG dùng backdrop-filter — làm mờ cả content bên dưới, rất xấu */
+}
+
+/* Skeleton nâng cấp — gradient phong phú hơn, đậm hơn, không trông trống */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, #111320 0%, #16192a 50%, #111320 100%);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 40%,
+    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.06) 60%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Tắt animation cho người dùng prefer-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; }
+  .page-root { animation: none; }
+  .top-loading-bar { animation: none; }
+  .stagger-item { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .reveal, .reveal-left, .reveal-scale { transition: none !important; opacity: 1 !important; transform: none !important; }
+}
+
+@keyframes shine-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* Hide scrollbar for horizontal movie rows */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Movie card: GPU layer chỉ khi hover ─── */
+.movie-card-img {
+  transition: transform 400ms ease;
+}
+.group:hover .movie-card-img {
+  will-change: transform;
+}
+
+/* ─── Layout containment — giảm layout recalc ─── */
+.movie-card-contain {
+  contain: layout style paint;
+}
+
+/* ─── contain-paint utility — cô lập paint không cần layout recalc ─── */
+.contain-paint {
+  contain: paint;
+}
+.contain-layout {
+  contain: layout;
+}
+
+.home-poster-item {
+  flex: 0 0 31.5%;
+  width: 31.5%;
+  max-width: 210px;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .home-poster-item {
+    flex-basis: 24%;
+    width: 24%;
+  }
+}
+
+@media (min-width: 768px) {
+  .home-poster-item {
+    flex-basis: 19%;
+    width: 19%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .home-poster-item {
+    flex-basis: 16%;
+    width: 16%;
+  }
+}
+
+@media (min-width: 1280px) {
+  .home-poster-item {
+    flex-basis: 13%;
+    width: 13%;
+  }
+}
+
+@media (min-width: 1536px) {
+  .home-poster-item {
+    flex-basis: 11.5%;
+    width: 11.5%;
+  }
+}
+
+/* ─── Content visibility — lazy render off-screen sections ─── */
+/* Tăng tốc FCP/LCP bằng cách skip render section chưa vào viewport */
+.content-visibility-auto {
+  content-visibility: auto;
+  /* contain-intrinsic-size: giả lập chiều cao để tránh CLS khi scroll */
+  contain-intrinsic-size: 0 400px;
+}
+
+/* ⚠️ content-visibility-section đã xóa vì gây bug render không hiện nội dung */
+
+/* ─── Aspect ratio placeholder — tránh CLS khi ảnh chưa load ─── */
+.aspect-ratio-2-3 {
+  aspect-ratio: 2 / 3;
+}
+.aspect-ratio-16-9 {
+  aspect-ratio: 16 / 9;
+}
+
+/* ─── Font display optimization — tránh FOIT (Flash of Invisible Text) ─── */
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-display: swap; /* Hiển thị fallback font ngay lập tức */
+}
+
+/* ─── Page transition — chỉ opacity, KHÔNG blur (blur gây GPU jank nặng) ─── */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-root {
+  animation: page-fade-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  /* KHÔNG dùng will-change ở đây — tạo stacking context cho cả page rất nặng */
+}
+
+/* ─── Top progress bar ─── */
+@keyframes top-bar-progress {
+  0%   { transform: translateX(-100%); }
+  60%  { transform: translateX(-10%); }
+  100% { transform: translateX(0%); }
+}
+.top-loading-bar {
+  animation: top-bar-progress 1.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  /* will-change chỉ add khi đang chạy, không đặt static */
+}
+
+/* ─── Image display ─── */
+img {
+  display: block;
+  /* Sharp default: auto cho mượt, component override crisp-edges khi cần */
+  image-rendering: auto;
+}
+
+/* ════════════════════════════════════════════
+   SCROLL REVEAL
+   ════════════════════════════════════════════ */
+
+.reveal-left {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.js-reveal-ready .reveal-left {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+.js-reveal-ready .reveal-left.revealed {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.reveal-scale {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.js-reveal-ready .reveal-scale {
+  opacity: 0;
+  transform: scale(0.97) translateY(12px);
+}
+.js-reveal-ready .reveal-scale.revealed {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+/* ─── Stagger delays — KHÔNG dùng scale (tránh composite layer mỗi card) ─── */
+.stagger-item {
+  opacity: 1;
+  transform: none;
+}
+.js-stagger-ready .stagger-item {
+  opacity: 0;
+  transform: translateY(18px);
+}
+.js-stagger-ready .stagger-item.staggered {
+  animation: stagger-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  /* will-change chỉ đặt trên element đang animate, tự xóa sau animation */
+}
+/* Once revealed, lock state — never re-animate */
+.js-stagger-ready .stagger-item[data-revealed="true"] {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
+@supports selector(:has(.x)) { } /* placeholder for potential :has usage */
+@keyframes stagger-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+.js-stagger-ready .stagger-item:nth-child(1)  { animation-delay: 0ms; }
+.js-stagger-ready .stagger-item:nth-child(2)  { animation-delay: 50ms; }
+.js-stagger-ready .stagger-item:nth-child(3)  { animation-delay: 100ms; }
+.js-stagger-ready .stagger-item:nth-child(4)  { animation-delay: 150ms; }
+.js-stagger-ready .stagger-item:nth-child(5)  { animation-delay: 200ms; }
+.js-stagger-ready .stagger-item:nth-child(6)  { animation-delay: 250ms; }
+.js-stagger-ready .stagger-item:nth-child(7)  { animation-delay: 300ms; }
+.js-stagger-ready .stagger-item:nth-child(8)  { animation-delay: 350ms; }
+
+/* ─── Movie card shine sweep on hover ─── */
+.movie-card-shine {
+  position: relative;
+  overflow: hidden;
+}
+.movie-card-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  transition: transform 0s;
+  pointer-events: none;
+}
+.movie-card-shine:hover::after {
+  transform: translateX(100%);
+  transition: transform 0.5s ease;
+}
+
+/* ─── Glow border on card hover ─── */
+.movie-card-glow {
+  transition: box-shadow 0.25s ease;
+}
+.movie-card-glow:hover {
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25),
+              0 8px 24px rgba(239, 68, 68, 0.1);
+}
+
+/* ─── Gradient text ─── */
+.gradient-text {
+  background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.7) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.gradient-text-red {
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Horizontal scroll fade edges ─── */
+.scroll-fade-right {
+  -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  mask-image: linear-gradient(to right, black 80%, transparent 100%);
+}
+
+/* ─── Button ripple effect ─── */
+.btn-ripple {
+  position: relative;
+  overflow: hidden;
+}
+.btn-ripple::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
+  transform: scale(0);
+  opacity: 0;
+  transition: transform 0.4s ease, opacity 0.4s ease;
+}
+.btn-ripple:active::after {
+  transform: scale(2);
+  opacity: 1;
+  transition: 0s;
+}
+
+/* ─── Ticker fade transition ─── */
+@keyframes ticker-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ticker-in {
+  animation: ticker-in 0.3s ease forwards;
+}
+
+/* ─── Navbar backdrop blur transition ─── */
+@keyframes navbar-blur-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.navbar-blur-enter {
+  animation: navbar-blur-in 0.25s ease forwards;
+}
+
+/* ─── Movie card hover — CSS thay vì JS inline style (tránh style recalc) ─── */
+.movie-card-hover {
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.32s ease;
+}
+.group:hover .movie-card-hover {
+  transform: scale(1.06) translateY(-4px);
+  box-shadow: 0 16px 40px rgba(239, 68, 68, 0.3), 0 0 0 1.5px rgba(239, 68, 68, 0.35);
+}
+
+/* ─── Card shine sweep — CSS only, không cần JS ─── */
+.card-shine-sweep {
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 65%
+  );
+  transform: translateX(-100%);
+  transition: transform 0.55s ease;
+}
+.group:hover .card-shine-sweep {
+  transform: translateX(100%);
+}
+
+/* ─── Genre card hover — CSS custom properties + Tailwind, no inline style manipulation ─── */
+.genre-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.genre-card:hover {
+  box-shadow: 0 8px 28px var(--g-glow), 0 0 0 1px var(--g-border);
+}
+.genre-card:hover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+/* ─── Section header animated accent line ─── */
+.section-accent-line {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ════════════════════════════════════════════
+   CINEMATIC IMAGE EFFECTS
+   ════════════════════════════════════════════ */
+
+/* Poster card: cinematic color grade overlay
+   Tối ưu: bỏ ::after pseudo (2 pseudo = 2x paint), gộp vào 1 gradient */
+.img-cinematic {
+  position: relative;
+  overflow: hidden;
+}
+.img-cinematic::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(160deg, rgba(120,40,20,0.15) 0%, transparent 45%),
+    linear-gradient(to bottom, transparent 50%, rgba(10,8,20,0.85) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Hover: chỉ box-shadow + translateY, KHÔNG scale container */
+.img-cinematic-hover {
+  transition: box-shadow 0.3s ease, transform 0.35s cubic-bezier(0.22,1,0.36,1);
+}
+.group:hover .img-cinematic-hover {
+  box-shadow:
+    0 0 0 1.5px rgba(239,68,68,0.5),
+    0 12px 40px rgba(239,68,68,0.22),
+    0 4px 12px rgba(0,0,0,0.6);
+  transform: translateY(-4px);
+}
+
+/* Image: scale chỉ trên <img> bên trong, KHÔNG scale container */
+.img-enhanced {
+  transition: transform 0.4s cubic-bezier(0.22,1,0.36,1);
+}
+.group:hover .img-enhanced {
+  transform: scale(1.07);
+}
+
+/* Wide card image */
+.img-enhanced-wide {
+  transition: transform 0.4s cubic-bezier(0.22,1,0.36,1);
+}
+.group:hover .img-enhanced-wide {
+  transform: scale(1.06);
+}
+
+/* Gradient border glow on card */
+.card-glow-border {
+  position: relative;
+}
+.card-glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(239,68,68,0) 0%, rgba(239,68,68,0) 100%);
+  z-index: -1;
+  transition: background 0.35s ease, opacity 0.35s ease;
+  opacity: 0;
+}
+.group:hover .card-glow-border::before {
+  background: linear-gradient(135deg, rgba(239,68,68,0.6) 0%, rgba(249,115,22,0.4) 50%, rgba(239,68,68,0.2) 100%);
+  opacity: 1;
+}
+
+/* Hero banner background image */
+.hero-bg-img {
+  filter: brightness(0.5) contrast(1.08) saturate(1.15);
+}
+
+/* Hero banner: cinematic vignette */
+.hero-vignette {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0,0,0,0.7) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 0% 50%, rgba(0,0,0,0.5) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* Trending featured: cinematic tint */
+.trending-img-overlay {
+  background:
+    linear-gradient(to bottom, rgba(8,10,16,0.2) 0%, transparent 30%, rgba(8,10,16,0.95) 100%),
+    linear-gradient(to right, rgba(8,10,16,0.6) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Rank card: số thứ tự glow */
+.rank-number-glow {
+  text-shadow:
+    0 0 20px currentColor,
+    0 0 40px rgba(239,68,68,0.3);
+}
+
+/* ── Rank card shimmer sweep on top accent bar ── */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.animate-shimmer-sweep {
+  animation: shimmer-sweep 2.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* ── Rank badge subtle pulse on top 3 ── */
+/* @keyframes rank-badge-pulse { */
+/*   0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.4); } */
+/*   50% { box-shadow: 0 0 0 8px rgba(251,191,36,0); } */
+/* } */
+/* .animate-rank-pulse { */
+/*   animation: rank-badge-pulse 2s ease-in-out infinite; */
+/* } */
+
+/* ─── Smooth section reveal — nâng cấp ─── */
+.reveal {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.js-reveal-ready .reveal {
+  opacity: 0;
+  transform: translateY(24px);
+}
+.js-reveal-ready .reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── Section header slide-in từ trái ─── */
+@keyframes section-header-in {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.section-header-animate {
+  animation: section-header-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── Floating glow pulse — opacity thay vì box-shadow (tránh paint) ─── */
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
+}
+.glow-pulse {
+  position: relative;
+}
+.glow-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 1.5px rgba(239,68,68,0.6), 0 12px 40px rgba(239,68,68,0.25);
+  animation: glow-pulse 2.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ─── Smooth number counter animation ─── */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.count-up {
+  animation: count-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── Ripple click effect ─── */
+@keyframes ripple-out {
+  from { transform: translate(-50%, -50%) scale(0); opacity: 0.4; }
+  to   { transform: translate(-50%, -50%) scale(3); opacity: 0; }
+}
+.ripple-effect {
+  position: relative;
+  overflow: hidden;
+}
+.ripple-effect::after {
+  content: '';
+  position: absolute;
+  width: 40px; height: 40px;
+  background: rgba(239,68,68,0.3);
+  border-radius: 50%;
+  top: var(--ry, 50%); left: var(--rx, 50%);
+  animation: ripple-out 0.5s ease-out forwards;
+  pointer-events: none;
+}
+
+/* ─── Smooth link underline hover ─── */
+.link-underline {
+  position: relative;
+}
+.link-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0;
+  width: 0; height: 1px;
+  background: currentColor;
+  transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.link-underline:hover::after { width: 100%; }
+
+/* ─── Skeleton — tốc độ cân bằng ─── */
+.skeleton::after {
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+}
+
+/* ─── Tắt tất cả transition/animation khi scroll nhanh (JS sẽ toggle class) ─── */
+body.is-scrolling .img-cinematic-hover,
+body.is-scrolling .img-enhanced,
+body.is-scrolling .img-enhanced-wide,
+body.is-scrolling .card-glow-border::before,
+body.is-scrolling .transition-transform,
+body.is-scrolling .transition-all,
+body.is-scrolling .transition-colors,
+body.is-scrolling .transition-opacity {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Tab hidden — freeze all animations to save CPU/GPU */
+body.tab-hidden .animate-shimmer-sweep,
+body.tab-hidden .animate-rank-pulse,
+body.tab-hidden .float-animation,
+body.tab-hidden .glow-pulse::before,
+body.tab-hidden .skeleton::after,
+body.tab-hidden .animate-pulse {
+  animation-play-state: paused !important;
+}
+
+/* ─── Hero banner content animate khi đổi slide ─── */
+@keyframes hero-content-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes hero-title-in {
+  from { opacity: 0; transform: translateY(24px) skewY(1deg); }
+  to   { opacity: 1; transform: translateY(0) skewY(0); }
+}
+@keyframes hero-sub-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.hero-content-enter { animation: hero-content-in 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+.hero-title-enter   { animation: hero-title-in   0.55s cubic-bezier(0.22,1,0.36,1) 0.05s both; }
+.hero-sub-enter     { animation: hero-sub-in     0.45s cubic-bezier(0.22,1,0.36,1) 0.12s both; }
+.hero-badges-enter  { animation: hero-content-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.18s both; }
+.hero-cta-enter     { animation: hero-content-in 0.45s cubic-bezier(0.22,1,0.36,1) 0.26s both; }
+
+/* Image reveal — chỉ dùng opacity, KHÔNG clip-path (clip-path rasterize lại mỗi frame) */
+@keyframes img-reveal-top-down {
+  from { opacity: 0; transform: translateY(6px) scale(1.01); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.img-reveal-top-down {
+  animation: img-reveal-top-down 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Fallback opacity reveal */
+@keyframes img-reveal {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.img-reveal {
+  animation: img-reveal 0.25s ease-out forwards;
+}
+
+/* ════════════════════════════════════════════
+   HERO BANNER — CSS progress animations (zero JS)
+   ════════════════════════════════════════════ */
+
+@keyframes hero-progress-fill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+.hero-progress-animate {
+  animation: hero-progress-fill 6s linear forwards;
+}
+
+@keyframes hero-circle-fill {
+  from { stroke-dashoffset: 75.398; }
+  to   { stroke-dashoffset: 0; }
+}
+.hero-circle-progress {
+  animation: hero-circle-fill 6s linear forwards;
+}
+
+/* ════════════════════════════════════════════
+   CINEMATIC ENHANCEMENTS v2
+   ════════════════════════════════════════════ */
+
+/* ─── Glassmorphism card — NO backdrop-filter (GPU killer) ───
+   Mỗi element có backdrop-filter = 1 composite layer riêng.
+   Thay bằng solid background với opacity cao. */
+.glass-card {
+  background: rgba(13, 15, 26, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.glass-card-hover:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+/* ─── Cinematic gradient text headings ─── */
+.gradient-heading {
+  background: linear-gradient(135deg, #ffffff 0%, #e8e8e8 40%, #d4d4d4 70%, #ef4444 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-heading-warm {
+  background: linear-gradient(135deg, #ffffff 0%, #fef3c7 30%, #fbbf24 60%, #ef4444 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Cinematic light leak effect ─── */
+.light-leak {
+  position: relative;
+}
+.light-leak::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 60%;
+  height: 200%;
+  background: radial-gradient(ellipse, rgba(239,68,68,0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── Cinematic scanline effect ─── */
+.scanlines {
+  position: relative;
+}
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ─── Dramatic shadow for cards ─── */
+.shadow-cinematic {
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.3),
+    0 2px 4px -1px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+/* ─── Red accent glow for important elements ─── */
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15), 0 0 60px rgba(239, 68, 68, 0.05);
+}
+
+/* ─── Cinematic border glow — opacity-only (no paint recalc) ─── */
+@keyframes border-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.border-glow {
+  position: relative;
+}
+.border-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  animation: border-glow 3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ─── Section border glow pulse — nhẹ nhàng thu hút mắt ─── */
+@keyframes section-border-glow {
+  0%, 100% { opacity: 0.12; }
+  50%       { opacity: 0.35; }
+}
+.section-border-glow {
+  position: relative;
+}
+.section-border-glow::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1.5px solid var(--section-glow-color, rgba(255,255,255,0.15));
+  animation: section-border-glow 3.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ─── Subtle floating — GPU layer chỉ khi cần ─── */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.float-animation {
+  animation: float 4s ease-in-out infinite;
+  contain: layout style;
+}
+
+/* ─── Cinematic text shadow for headings ─── */
+.text-shadow-cinematic {
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5), 0 4px 20px rgba(0,0,0,0.3);
+}
+
+/* ─── Dramatic divider line ─── */
+.divider-cinematic {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(239,68,68,0.3) 20%, rgba(239,68,68,0.5) 50%, rgba(239,68,68,0.3) 80%, transparent 100%);
+}
+
+/* ─── Spotlight hover effect for cards ─── */
+.spotlight-hover {
+  position: relative;
+  overflow: hidden;
+}
+.spotlight-hover::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, rgba(239,68,68,0.15) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  transition: width 0.5s ease, height 0.5s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+.spotlight-hover:hover::before {
+  width: 200%;
+  height: 200%;
+}
+
+/* ─── Cinematic loading shimmer for images ─── */
+@keyframes image-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.image-shimmer {
+  background: linear-gradient(90deg, #16192a 25%, #1e2030 50%, #16192a 75%);
+  background-size: 200% 100%;
+  animation: image-shimmer 1.5s ease-in-out infinite;
+}
+
+/* ─── Scroll progress bar ─── */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #ef4444, #f97316, #ef4444);
+  z-index: 9999;
+  transition: width 0.1s linear;
+}
+
+/* ─── Cinematic badge styles — NO backdrop-filter ─── */
+.badge-cinematic {
+  background: linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(249,115,22,0.15) 100%);
+  border: 1px solid rgba(239,68,68,0.25);
+}
+
+/* ─── Dramatic hover lift with shadow ─── */
+.hover-lift {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(239,68,68,0.15);
+}
+
+/* ─── Cinematic frame border ─── */
+.frame-border {
+  position: relative;
+}
+.frame-border::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ─── Ambient glow behind elements ─── */
+.ambient-glow {
+  position: relative;
+}
+.ambient-glow::before {
+  content: '';
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(ellipse at center, rgba(239,68,68,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ─── Auto-next overlay animation ─── */
+@keyframes playerFlash {
+  0%   { opacity: 1; transform: scale(1); }
+  60%  { opacity: 0.8; transform: scale(1.18); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Offline indicator slide-down animation ─── */
+@keyframes slideDownFade {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ─── Player fallback reload animation ─── */
+@keyframes spin-reverse {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
