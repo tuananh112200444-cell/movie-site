@@ -42,6 +42,8 @@ interface MovieRow {
   origin_name?: string | null;
   title_vi?: string | null;
   title_en?: string | null;
+  source_site?: string | null;
+  source_name?: string | null;
   showtimes?: string | null;
   episode_current?: string | null;
   current_episode?: number | null;
@@ -279,17 +281,25 @@ function buildMovieIndexes(movies: MovieRow[]) {
   const byPostId = new Map<string, MovieRow>();
   const byTitle = new Map<string, MovieRow>();
   const bySlug = new Map<string, MovieRow>();
+  const bySourceUrl = new Map<string, MovieRow>();
 
   for (const movie of movies) {
     bySlug.set(movie.slug, movie);
     const postId = extractPostIdFromMovie(movie);
     if (postId) byPostId.set(postId, movie);
+    const sourceUrl = String(movie.showtimes || '').trim();
+    if (sourceUrl) {
+      const existing = bySourceUrl.get(sourceUrl);
+      const isAdminQueer = String(movie.source_site || '').includes('admin-queer');
+      const existingIsAdminQueer = String(existing?.source_site || '').includes('admin-queer');
+      if (!existing || (isAdminQueer && !existingIsAdminQueer)) bySourceUrl.set(sourceUrl, movie);
+    }
     for (const key of getMovieTitleKeys(movie)) {
       if (!byTitle.has(key)) byTitle.set(key, movie);
     }
   }
 
-  return { byPostId, byTitle, bySlug };
+  return { byPostId, byTitle, bySlug, bySourceUrl };
 }
 
 function findMovieForEntry(
@@ -297,8 +307,9 @@ function findMovieForEntry(
   indexes: ReturnType<typeof buildMovieIndexes>,
 ): MovieRow | null {
   const generatedSlug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
-  if (indexes.bySlug.has(generatedSlug)) return indexes.bySlug.get(generatedSlug) || null;
   if (indexes.byPostId.has(entry.postId)) return indexes.byPostId.get(entry.postId) || null;
+  if (entry.sourceUrl && indexes.bySourceUrl.has(entry.sourceUrl)) return indexes.bySourceUrl.get(entry.sourceUrl) || null;
+  if (indexes.bySlug.has(generatedSlug)) return indexes.bySlug.get(generatedSlug) || null;
 
   for (const key of [entry.title, entry.originName].map(normalizeText).filter(Boolean)) {
     const movie = indexes.byTitle.get(key);
@@ -355,14 +366,14 @@ async function createMovieFromEntry(
   const { data, error } = await supabase
     .from('movies')
     .insert(payload)
-    .select('id, slug, name, origin_name, title_vi, title_en, showtimes, episode_current, current_episode, total_episodes')
+    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes')
     .single();
 
   if (error) {
     if (error.code === '23505' || error.message.toLowerCase().includes('duplicate')) {
       const { data: existing, error: existingError } = await supabase
         .from('movies')
-        .select('id, slug, name, origin_name, title_vi, title_en, showtimes, episode_current, current_episode, total_episodes')
+        .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes')
         .eq('slug', slug)
         .single();
       if (!existingError && existing) return existing as MovieRow;
@@ -487,7 +498,7 @@ serve(async (req) => {
 
     const { data: movies, error: moviesError } = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, showtimes, episode_current, current_episode, total_episodes')
+      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes')
       .eq('is_published', true)
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
       .limit(500);
