@@ -820,7 +820,7 @@ function promiseAllSettledWithTimeout<T>(promises: Promise<T>[], timeoutMs: numb
 const SUPABASE_URL = typeof import.meta.env !== 'undefined' ? (import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined) : undefined;
 
 const ENABLE_SUPABASE_TEXT_SEARCH =
-  typeof import.meta.env === 'undefined' || import.meta.env.VITE_ENABLE_SUPABASE_TEXT_SEARCH !== 'false';
+  typeof import.meta.env === 'undefined' || import.meta.env.VITE_DISABLE_SUPABASE_TEXT_SEARCH !== 'true';
 async function fetchMovieDetailFromProxy(slug: string): Promise<MovieDetailResponse | null> {
   if (!SUPABASE_URL) return null;
   try {

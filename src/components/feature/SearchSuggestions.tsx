@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { searchMovies, getOptimizedImageUrl, searchMoviesInSupabase, searchQueerUniverseMovies } from '../../services/movieApi';
+import { fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMoviesInSupabase } from '../../services/movieApi';
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -42,6 +42,32 @@ function addToHistory(term: string): void {
   } catch { /* quota */ }
 }
 
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function getMovieSearchText(movie: Movie): string {
+  return normalizeSearchText([
+    movie.name,
+    movie.origin_name,
+    movie.title_vi,
+    movie.title_en,
+    movie.slug,
+    movie.category?.map((c) => c.name).join(' '),
+  ].filter(Boolean).join(' '));
+}
+
+function getInstantLocalHits(pool: Movie[], keyword: string, limit = 8): Movie[] {
+  const query = normalizeSearchText(keyword.trim());
+  if (!query || pool.length === 0) return [];
+  const tokens = query.split(/\s+/).filter((token) => token.length >= 2);
+  const hits = pool.filter((movie) => {
+    const text = getMovieSearchText(movie);
+    return text.includes(query) || tokens.every((token) => text.includes(token));
+  });
+  return sortMoviesForSearch(mergeMoviesUnique(hits), keyword, 'relevance').slice(0, limit);
+}
+
 function getMovieHref(movie: Movie): string {
   const href = movieDetailUrl(movie.slug);
   const isOphimSource = movie.source_site === 'ophim' || movie.source_name === 'OPhim';
@@ -65,15 +91,31 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
   const [loading, setLoading] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const debouncedQuery = useDebounce(query, 1000);
+  const [localPool, setLocalPool] = useState<Movie[]>([]);
+  const debouncedQuery = useDebounce(query, 450);
   const navigate = useNavigate();
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLElement | null>(null);
+  const indexLoadRef = useRef<Promise<Movie[]> | null>(null);
   const isTyping = query.trim().length >= 2;
 
   // Load history on mount — NO API calls
   useEffect(() => {
     setSearchHistory(getSearchHistory());
+  }, []);
+
+  const ensureSearchIndexLoaded = useCallback(() => {
+    if (indexLoadRef.current) return indexLoadRef.current;
+    indexLoadRef.current = fetchSupabaseSearchIndex({ limit: 500 })
+      .then((items) => {
+        const movies = items as unknown as Movie[];
+        if (movies.length > 0) setLocalPool((prev) => mergeMoviesUnique([...movies, ...prev]));
+        return movies;
+      })
+      .finally(() => {
+        indexLoadRef.current = null;
+      });
+    return indexLoadRef.current;
   }, []);
 
   const fetchSuggestions = useCallback(async (q: string) => {
@@ -86,8 +128,11 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setLoading(true);
-    const cacheKey = `kp_suggest_v6_${q.trim().toLowerCase()}`;
+    const instantItems = getInstantLocalHits(localPool, q, 8);
+    setSuggestions(instantItems);
+    setHighlightIndex(-1);
+    setLoading(instantItems.length === 0);
+    const cacheKey = `kp_suggest_v7_${q.trim().toLowerCase()}`;
     try {
       const raw = sessionStorage.getItem(cacheKey);
       if (raw) {
@@ -103,24 +148,21 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
 
     try {
       // Search BOTH OPhim API + Supabase in parallel
-      const [apiRes, localRes, queerRes] = await Promise.allSettled([
-        q.trim().length >= 2 ? searchMovies(q.trim(), 1, ctrl.signal) : Promise.resolve({ items: [] }),
-        searchMoviesInSupabase(q.trim(), { timeoutMs: 1200, limit: 8, minLength: 2, signal: ctrl.signal }), 
-        searchQueerUniverseMovies(q.trim(), { timeoutMs: 1500, limit: 8, signal: ctrl.signal }),
-      ]);
-
-      let items: Movie[] = [];
-
-      if (apiRes.status === 'fulfilled') {
-        items = apiRes.value.items?.slice(0, 6) ?? [];
+      let items = instantItems;
+      const indexedItems = await ensureSearchIndexLoaded();
+      if (!ctrl.signal.aborted && indexedItems.length > 0) {
+        items = mergeMoviesUnique([...items, ...getInstantLocalHits(indexedItems, q, 8)]);
       }
 
       // Merge Supabase results (admin-added movies) — deduplicate by slug
-      if (localRes.status === 'fulfilled' && localRes.value.length > 0) {
-        items = mergeMoviesUnique([...(localRes.value as unknown as Movie[]), ...items]);
-      }
-      if (queerRes.status === 'fulfilled' && queerRes.value.length > 0) {
-        items = mergeMoviesUnique([...(queerRes.value as unknown as Movie[]), ...items]);
+      if (!ctrl.signal.aborted && items.length < 3 && q.trim().length >= 4) {
+        const localItems = await searchMoviesInSupabase(q.trim(), {
+          timeoutMs: 900,
+          limit: 8,
+          minLength: 4,
+          signal: ctrl.signal,
+        });
+        items = mergeMoviesUnique([...items, ...(localItems as unknown as Movie[])]);
       }
       items = sortMoviesForSearch(items, q.trim(), 'relevance');
 
@@ -142,7 +184,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
         setLoading(false);
       }
     }
-  }, []);
+  }, [ensureSearchIndexLoaded, localPool]);
 
   useEffect(() => {
     fetchSuggestions(debouncedQuery);
