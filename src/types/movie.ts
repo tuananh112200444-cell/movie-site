@@ -79,6 +79,7 @@ export interface EpisodeData {
   filename: string;
   link_embed: string;
   link_m3u8: string;
+  episode_number?: number;
   subtitle_url?: string;
   is_scheduled?: boolean;
   scheduled_target_at?: string;

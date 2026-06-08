@@ -214,7 +214,13 @@ export default function MovieDetailPage() {
     const newServerData = detail.episodes[originalIdx]?.server_data ?? [];
     setActiveServer(originalIdx);
     if (activeEp) {
-      const newEp = newServerData.find((ep) => ep.slug === activeEp.slug) ?? newServerData[0] ?? null;
+      const activeNumber = activeEp.episode_number ?? Number((activeEp.slug || activeEp.name || '').match(/\d+/)?.[0] ?? 0);
+      const activeKey = activeNumber > 0 ? `num:${activeNumber}` : `text:${activeEp.slug || activeEp.name}`;
+      const newEp = newServerData.find((ep) => {
+        const epNumber = ep.episode_number ?? Number((ep.slug || ep.name || '').match(/\d+/)?.[0] ?? 0);
+        const epKey = epNumber > 0 ? `num:${epNumber}` : `text:${ep.slug || ep.name}`;
+        return epKey === activeKey;
+      }) ?? newServerData[0] ?? null;
       setActiveEp(newEp);
     }
   }, [filteredEpisodes, detail?.episodes, activeEp]);
