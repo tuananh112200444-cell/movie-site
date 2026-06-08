@@ -1,1 +1,0 @@
-import{r as s}from"./vendor-react-D6y2VlaL.js";function f(n="150px"){const r=s.useRef(null),[e,i]=s.useState(!1);return s.useEffect(()=>{const c=r.current;if(!c||e)return;const t=new IntersectionObserver(([o])=>{o.isIntersecting&&(i(!0),t.disconnect())},{rootMargin:n});return t.observe(c),()=>t.disconnect()},[e,n]),{sectionRef:r,visible:e}}export{f as u};
