@@ -1815,9 +1815,10 @@ function bloggerEntryToMovieItem(entry: BloggerEntry): MovieItem | null {
   const mapped = mapBloggerCategories(entry.category);
   const image = extractBloggerImage(entry);
   const content = entry.content?.$t ?? '';
+  const episodeServers = parseBlvietsubEpisodesByHost(content);
   const quality = stripHtml(extractFirstMatch(content, /Chất lượng:\s*<\/?[^>]*>\s*<span>([\s\S]*?)<\/span>/i)) || 'HD';
 
-  return {
+  const item: MovieItem = {
     _id: postId,
     name,
     slug: `${BLVIETSUB_SLUG_PREFIX}${postId}-${slugifyText(name)}`,
@@ -1842,6 +1843,7 @@ function bloggerEntryToMovieItem(entry: BloggerEntry): MovieItem | null {
     status: mapped.status,
     showtimes: getBloggerAlternateUrl(entry),
   };
+  return normalizeMovieEpisodeCounts(item, episodeServers);
 }
 
 async function fetchBlvietsubEntries(options: { limit?: number; timeoutMs?: number; signal?: AbortSignal; query?: string } = {}): Promise<BloggerEntry[]> {
@@ -1958,6 +1960,7 @@ function parseBlvietsubEpisodesByHost(content: string): EpisodeServer[] {
         filename: '',
         link_embed,
         link_m3u8: '',
+        episode_number: getEpisodeNumberFromText(label.trim()) || undefined,
         subtitle_url: '',
       });
     }
