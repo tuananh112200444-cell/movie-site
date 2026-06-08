@@ -2074,7 +2074,7 @@ async function fetchMovieDetailFromOPhimForMovie(movie?: Partial<MovieDetail> | 
   return null;
 }
 function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
-  return {
+  const item: MovieItem = {
     _id: (m.id as string) || '',
     name: getMovieDisplayName({
       name: (m.name as string) || '',
@@ -2117,6 +2117,7 @@ function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
     next_episode_name: (m.next_episode_name as string) || undefined,
     schedule_note: (m.schedule_note as string) || undefined,
   };
+  return normalizeMovieEpisodeCounts(item);
 }
 export async function searchQueerUniverseMovies(
   keyword: string,
@@ -2278,7 +2279,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 4500);
 
   try {
-    const feedMovies = await fetchBlvietsubMovies({
+    const loadFeedMovies = () => fetchBlvietsubMovies({
       limit: Math.max(limit, 240),
       timeoutMs: options.timeoutMs ?? 4500,
       signal: controller.signal,
@@ -2294,6 +2295,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
       .abortSignal(controller.signal);
 
     const markedMovies = ((markedRows ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);
+    const feedMovies = markedMovies.length > 0 ? [] : await loadFeedMovies();
     const combinedQueerMovies = mergeMoviesUnique([...markedMovies, ...feedMovies]).sort((a, b) => {
       const ta = getMovieUpdateTime(a);
       const tb = getMovieUpdateTime(b);
