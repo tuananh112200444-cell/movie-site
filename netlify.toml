@@ -1,6 +1,6 @@
 [build]
   publish = "out"
-  command = "npm run build"
+  command = "chmod +x node_modules/.bin/* 2>/dev/null; npm run build"
 
 # Canonical host redirects.
 [[redirects]]
