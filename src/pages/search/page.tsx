@@ -99,7 +99,8 @@ function getInstantLocalHits(pool: MovieItem[], keyword: string, limit = 12): Mo
 /* ── Search History ── */
 const HISTORY_KEY = 'kp_search_history';
 const MAX_HISTORY = 10;
-const SEARCH_DEBOUNCE_MS = 1000;
+const SEARCH_DEBOUNCE_MS = 700;
+const REMOTE_SUGGESTION_MIN_LENGTH = 4;
 
 function getSearchHistory(): string[] {
   try {
@@ -152,6 +153,7 @@ export default function SearchPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const sugListRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
   const searchRunRef = useRef(0);
   const searchIndexLoadRef = useRef<Promise<MovieItem[]> | null>(null);
 
@@ -200,10 +202,21 @@ export default function SearchPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      searchAbortRef.current?.abort();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   // OPTIMIZED: parallel search + cache
   const doSearch = useCallback(async (keyword: string, pg: number) => {
     if (!keyword.trim()) return;
     const runId = ++searchRunRef.current;
+    searchAbortRef.current?.abort();
+    const searchCtrl = new AbortController();
+    searchAbortRef.current = searchCtrl;
     setLoading(true);
     setError('');
 
@@ -219,27 +232,37 @@ export default function SearchPage() {
           setTotalPages(entry.totalPages);
           setAllLoaded(pg >= entry.totalPages);
           setLoading(false);
+          if (searchAbortRef.current === searchCtrl) searchAbortRef.current = null;
           return;
         }
       } catch { /* ignore stale cache */ }
     }
 
-    if (pg === 1 && localPool.length > 0) {
-      const instantItems = getInstantLocalHits(localPool, normalizedKeyword, 16);
-      if (instantItems.length > 0) {
-        setResults(instantItems);
-        setTotalPages((prev) => Math.max(prev, 1));
-        setAllLoaded(false);
-      }
+    const instantItems = pg === 1 && localPool.length > 0
+      ? getInstantLocalHits(localPool, normalizedKeyword, 16)
+      : [];
+
+    if (instantItems.length > 0) {
+      setResults(instantItems);
+      setTotalPages((prev) => Math.max(prev, 1));
+      setAllLoaded(false);
     }
 
     try {
-      const apiPromise = searchMovies(normalizedKeyword, pg);
+      const hasGoodInstantHits = instantItems.length >= 8;
+      const apiPromise = searchMovies(normalizedKeyword, pg, searchCtrl.signal);
       const localPromise = pg === 1
-        ? searchMoviesInSupabase(normalizedKeyword, { timeoutMs: 1800, limit: 24, minLength: 2 })
+        ? (hasGoodInstantHits
+          ? Promise.resolve([])
+          : searchMoviesInSupabase(normalizedKeyword, {
+            timeoutMs: 1200,
+            limit: 16,
+            minLength: REMOTE_SUGGESTION_MIN_LENGTH,
+            signal: searchCtrl.signal,
+          }))
         : Promise.resolve([]);
         const queerPromise = pg === 1
-        ? searchQueerUniverseMovies(normalizedKeyword, { timeoutMs: 2200, limit: 36 })
+        ? searchQueerUniverseMovies(normalizedKeyword, { timeoutMs: 1400, limit: 16, signal: searchCtrl.signal })
         : Promise.resolve([]);
 
       const [apiResult, localResult, queerResult] = await Promise.allSettled([apiPromise, localPromise, queerPromise]);
@@ -284,11 +307,14 @@ export default function SearchPage() {
       setAllLoaded(pg >= (apiData.pagination?.totalPages ?? 1));
       if (pg === 1 && items.length === 0) setError('Không tìm thấy phim nào cho từ khoá này.');
     } catch {
-      if (runId === searchRunRef.current) {
+      if (runId === searchRunRef.current && !searchCtrl.signal.aborted) {
         setError('Không thể kết nối tới kho phim. Vui lòng thử lại.');
       }
     } finally {
-      if (runId === searchRunRef.current) setLoading(false);
+      if (runId === searchRunRef.current) {
+        setLoading(false);
+        if (searchAbortRef.current === searchCtrl) searchAbortRef.current = null;
+      }
     }
   }, [localPool]);
 
@@ -318,29 +344,27 @@ export default function SearchPage() {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setLoadingSug(true);
+    const instantItems = getInstantLocalHits(localPool, kw, 8);
+    setSuggestions(instantItems);
+    setHighlightIndex(-1);
+    setLoadingSug(instantItems.length === 0);
     try {
-      const [apiResult, localResult, queerResult] = await Promise.allSettled([
-        kw.trim().length >= 2 ? searchMovies(kw.trim(), 1, ctrl.signal) : Promise.resolve({ items: [] }),
-        searchMoviesInSupabase(kw.trim(), { timeoutMs: 1200, limit: 8, minLength: 2, signal: ctrl.signal }),
-        searchQueerUniverseMovies(kw.trim(), { timeoutMs: 1500, limit: 8, signal: ctrl.signal }),
-      ]);
-      const apiData = apiResult.status === 'fulfilled' ? apiResult.value : { items: [] };
-      const localItems = localResult.status === 'fulfilled' ? localResult.value : [];
-      const queerItems = queerResult.status === 'fulfilled' ? queerResult.value : [];
-      let items = mergeMoviesUnique([...queerItems, ...(localItems ?? []), ...(apiData.items?.slice(0, 7) ?? [])]);
-      // Fuzzy fallback
-      if (items.length < 4 && localPool.length > 0) {
-        const fuse = new Fuse(localPool, {
-          keys: ['name', 'origin_name'],
-          threshold: 0.35,
-          distance: 100,
-          ignoreLocation: true,
-          minMatchCharLength: 1,
-        });
-        const fuzzyHits = fuse.search(kw.trim()).map((r) => r.item);
-        items = mergeMoviesUnique([...items, ...fuzzyHits.slice(0, 4)]);
+      let items = instantItems;
+      const indexedItems = await ensureSearchIndexLoaded();
+      if (!ctrl.signal.aborted && indexedItems.length > 0) {
+        items = mergeMoviesUnique([...items, ...getInstantLocalHits(indexedItems, kw, 8)]);
       }
+
+      if (!ctrl.signal.aborted && items.length < 3 && kw.trim().length >= REMOTE_SUGGESTION_MIN_LENGTH) {
+        const localItems = await searchMoviesInSupabase(kw.trim(), {
+          timeoutMs: 900,
+          limit: 8,
+          minLength: REMOTE_SUGGESTION_MIN_LENGTH,
+          signal: ctrl.signal,
+        });
+        items = mergeMoviesUnique([...items, ...localItems]);
+      }
+
       items = sortMoviesForSearch(mergeMoviesUnique(items), kw.trim(), 'relevance').slice(0, 8);
       if (!ctrl.signal.aborted) {
         setSuggestions(items);
@@ -351,7 +375,7 @@ export default function SearchPage() {
     } finally {
       if (!ctrl.signal.aborted) setLoadingSug(false);
     }
-  }, [localPool]);
+  }, [ensureSearchIndexLoaded, localPool]);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -359,12 +383,13 @@ export default function SearchPage() {
     setHighlightIndex(-1);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (val.trim().length >= 2) {
-      void ensureSearchIndexLoaded();
-      setLoadingSug(true);
+      setShowSuggestions(true);
+      const instantItems = getInstantLocalHits(localPool, val, 8);
+      setSuggestions(instantItems);
+      setLoadingSug(instantItems.length === 0);
       debounceRef.current = setTimeout(() => {
-        setShowSuggestions(false);
-        setLoadingSug(false);
         const nextQuery = val.trim();
+        void fetchSuggestions(nextQuery);
         if (nextQuery && nextQuery !== q.trim()) {
           setSearchParams({ q: nextQuery });
         }
@@ -380,7 +405,7 @@ export default function SearchPage() {
     setShowSuggestions(true);
     setHighlightIndex(-1);
     if (query.trim().length > 0) {
-      void ensureSearchIndexLoaded();
+      setSuggestions(getInstantLocalHits(localPool, query, 8));
     }
   };
 
@@ -418,7 +443,7 @@ export default function SearchPage() {
     ? suggestions.length + 1 // +1 for "View all"
     : searchHistory.length + HOT_SEARCHES.length;
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!showSuggestions) return;
 
     if (e.key === 'ArrowDown') {
@@ -462,7 +487,7 @@ export default function SearchPage() {
       setShowSuggestions(false);
       inputRef.current?.blur();
     }
-  }, [showSuggestions, totalSugItems, highlightIndex, query, suggestions, searchHistory, setSearchParams]);
+  };
 
   // Scroll highlighted into view
   useEffect(() => {
