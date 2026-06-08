@@ -20,6 +20,7 @@ interface BloggerEntry {
   content?: { $t?: string };
   published?: { $t?: string };
   updated?: { $t?: string };
+  category?: Array<{ term?: string }>;
   link?: Array<{ rel?: string; href?: string }>;
 }
 
@@ -51,6 +52,13 @@ interface ParsedEntry {
   postId: string;
   title: string;
   originName: string;
+  content: string;
+  image: string;
+  year: number;
+  type: string;
+  status: string;
+  category: Array<{ id: string; name: string; slug: string }>;
+  country: Array<{ id: string; name: string; slug: string }>;
   sourceUrl: string;
   updatedAt: string;
   episodes: ParsedEpisode[];
@@ -73,6 +81,10 @@ function normalizeText(value = ''): string {
     .trim();
 }
 
+function slugify(value = ''): string {
+  return normalizeText(value).replace(/\s+/g, '-') || 'phim';
+}
+
 function stripTags(html = ''): string {
   return html
     .replace(/&nbsp;/g, ' ')
@@ -82,6 +94,10 @@ function stripTags(html = ''): string {
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function firstMatch(html = '', pattern: RegExp): string {
+  return pattern.exec(html)?.[1] || '';
 }
 
 function getPostId(entry: BloggerEntry): string {
@@ -96,6 +112,77 @@ function getOriginName(content = ''): string {
   return stripTags(
     content.match(/(?:T\u00ean kh\u00e1c|T\u00ean g\u1ed1c|Original name|Other name):\s*<\/?[^>]*>\s*<span>([\s\S]*?)<\/span>/i)?.[1] || '',
   );
+}
+
+function getSynopsis(content = ''): string {
+  return stripTags(firstMatch(content, /<p id=["']synopsis["']>([\s\S]*?)<\/p>/i));
+}
+
+function getImage(entry: BloggerEntry): string {
+  const content = entry.content?.$t || '';
+  const image =
+    firstMatch(content, /<img[^>]+src=["']([^"']+)["']/i) ||
+    firstMatch(content, /background-image:\s*url\(["']?([^"')]+)["']?\)/i);
+  return image.replace(/\/s\d+\//, '/s640/');
+}
+
+function getEntryYear(entry: BloggerEntry): number {
+  const terms = entry.category?.map((item) => item.term || '') || [];
+  const categoryYear = terms.find((term) => /^(19|20)\d{2}$/.test(term));
+  const titleYear = entry.title?.$t?.match(/\b(19|20)\d{2}\b/)?.[0];
+  return Number(categoryYear || titleYear || 0);
+}
+
+function getTerms(entry: BloggerEntry): string[] {
+  return (entry.category || [])
+    .map((item) => (item.term || '').trim())
+    .filter(Boolean);
+}
+
+function buildTaxonomy(entry: BloggerEntry): {
+  category: Array<{ id: string; name: string; slug: string }>;
+  country: Array<{ id: string; name: string; slug: string }>;
+  type: string;
+  status: string;
+} {
+  const countryTerms = new Set([
+    'Th\u00e1i Lan',
+    'H\u00e0n Qu\u1ed1c',
+    'Nh\u1eadt B\u1ea3n',
+    'Trung Qu\u1ed1c',
+    '\u0110\u00e0i Loan',
+    'Vi\u1ec7t Nam',
+    'M\u1ef9',
+  ]);
+  const skip = new Set(['BL', 'GL', 'LGBT', 'HD', 'Vietsub', SOURCE_NAME]);
+  const terms = getTerms(entry);
+  const isSingle = terms.some((term) => normalizeText(term) === 'phim le');
+  const isCompleted = terms.some((term) => normalizeText(term).includes('hoan tat'));
+  const countries = terms
+    .filter((term) => countryTerms.has(term))
+    .map((name) => ({ id: slugify(name), name, slug: slugify(name) }));
+  const categories = terms
+    .filter((term) => !countryTerms.has(term))
+    .filter((term) => !skip.has(term))
+    .filter((term) => !/^(19|20)\d{2}$/.test(term))
+    .filter((term) => !/^Ep\b/i.test(term))
+    .map((name) => ({ id: slugify(name), name, slug: slugify(name) }));
+
+  const baseCategories = [
+    { id: 'bl-gl', name: 'BL / GL', slug: 'bl-gl' },
+    { id: 'dam-my', name: '\u0110am m\u1ef9', slug: 'dam-my' },
+  ];
+  const seen = new Set<string>();
+  return {
+    category: [...baseCategories, ...categories].filter((item) => {
+      if (seen.has(item.slug)) return false;
+      seen.add(item.slug);
+      return true;
+    }),
+    country: countries,
+    type: isSingle ? 'phim-le' : 'phim-bo',
+    status: isCompleted ? 'completed' : 'ongoing',
+  };
 }
 
 function parseEpisodes(content = ''): ParsedEpisode[] {
@@ -130,10 +217,15 @@ function parseEntry(entry: BloggerEntry): ParsedEntry | null {
   const content = entry.content?.$t || '';
   const episodes = parseEpisodes(content);
   if (!postId || episodes.length === 0) return null;
+  const taxonomy = buildTaxonomy(entry);
   return {
     postId,
     title: entry.title?.$t || '',
     originName: getOriginName(content),
+    content: getSynopsis(content),
+    image: getImage(entry),
+    year: getEntryYear(entry),
+    ...taxonomy,
     sourceUrl: getAlternateLink(entry) || `https://www.blvietsub.top/?p=${postId}`,
     updatedAt: entry.updated?.$t || entry.published?.$t || new Date().toISOString(),
     episodes,
@@ -163,6 +255,12 @@ function buildEntryIndexes(entries: ParsedEntry[]) {
   return { byPostId, byTitle };
 }
 
+function getMovieTitleKeys(movie: MovieRow): string[] {
+  return [movie.name, movie.origin_name, movie.title_vi, movie.title_en]
+    .map((value) => normalizeText(value || ''))
+    .filter(Boolean);
+}
+
 function findEntryForMovie(
   movie: MovieRow,
   indexes: ReturnType<typeof buildEntryIndexes>,
@@ -175,6 +273,103 @@ function findEntryForMovie(
     if (entry) return entry;
   }
   return null;
+}
+
+function buildMovieIndexes(movies: MovieRow[]) {
+  const byPostId = new Map<string, MovieRow>();
+  const byTitle = new Map<string, MovieRow>();
+  const bySlug = new Map<string, MovieRow>();
+
+  for (const movie of movies) {
+    bySlug.set(movie.slug, movie);
+    const postId = extractPostIdFromMovie(movie);
+    if (postId) byPostId.set(postId, movie);
+    for (const key of getMovieTitleKeys(movie)) {
+      if (!byTitle.has(key)) byTitle.set(key, movie);
+    }
+  }
+
+  return { byPostId, byTitle, bySlug };
+}
+
+function findMovieForEntry(
+  entry: ParsedEntry,
+  indexes: ReturnType<typeof buildMovieIndexes>,
+): MovieRow | null {
+  const generatedSlug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
+  if (indexes.bySlug.has(generatedSlug)) return indexes.bySlug.get(generatedSlug) || null;
+  if (indexes.byPostId.has(entry.postId)) return indexes.byPostId.get(entry.postId) || null;
+
+  for (const key of [entry.title, entry.originName].map(normalizeText).filter(Boolean)) {
+    const movie = indexes.byTitle.get(key);
+    if (movie) return movie;
+  }
+
+  return null;
+}
+
+async function createMovieFromEntry(
+  supabase: SupabaseClient,
+  entry: ParsedEntry,
+): Promise<MovieRow> {
+  const maxEpisode = Math.max(...entry.episodes.map((episode) => episode.episode_number));
+  const slug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
+  const normalizedName = slugify([entry.title, entry.originName].filter(Boolean).join(' '));
+  const payload = {
+    slug,
+    name: entry.title,
+    origin_name: entry.originName,
+    title_vi: entry.title,
+    title_en: '',
+    title_original: entry.originName,
+    normalized_name: normalizedName,
+    content: entry.content,
+    type: entry.type,
+    status: entry.status,
+    thumb_url: entry.image,
+    poster_url: entry.image,
+    quality: 'HD',
+    lang: 'Vietsub',
+    time: '',
+    episode_current: `${TAP_LABEL} ${maxEpisode}`,
+    episode_total: '',
+    current_episode: maxEpisode,
+    total_episodes: maxEpisode,
+    year: entry.year || new Date().getFullYear(),
+    actor: [],
+    director: [],
+    category: entry.category,
+    country: entry.country,
+    trailer_url: '',
+    notify: '',
+    showtimes: entry.sourceUrl,
+    source_url: entry.sourceUrl,
+    source_site: SOURCE_SITE,
+    source_name: SOURCE_NAME,
+    ophim_id: '',
+    is_published: true,
+    last_synced_at: new Date().toISOString(),
+    schedule_timezone: 'Asia/Ho_Chi_Minh',
+  };
+
+  const { data, error } = await supabase
+    .from('movies')
+    .insert(payload)
+    .select('id, slug, name, origin_name, title_vi, title_en, showtimes, episode_current, current_episode, total_episodes')
+    .single();
+
+  if (error) {
+    if (error.code === '23505' || error.message.toLowerCase().includes('duplicate')) {
+      const { data: existing, error: existingError } = await supabase
+        .from('movies')
+        .select('id, slug, name, origin_name, title_vi, title_en, showtimes, episode_current, current_episode, total_episodes')
+        .eq('slug', slug)
+        .single();
+      if (!existingError && existing) return existing as MovieRow;
+    }
+    throw new Error(`movies insert ${slug}: ${error.message}`);
+  }
+  return data as MovieRow;
 }
 
 async function insertMissingEpisodes(
@@ -288,7 +483,7 @@ serve(async (req) => {
 
     const feed = (await feedResponse.json()) as BloggerFeedResponse;
     const entries = (feed.feed?.entry || []).map(parseEntry).filter(Boolean) as ParsedEntry[];
-    const indexes = buildEntryIndexes(entries);
+    const entryIndexes = buildEntryIndexes(entries);
 
     const { data: movies, error: moviesError } = await supabase
       .from('movies')
@@ -299,20 +494,32 @@ serve(async (req) => {
 
     if (moviesError) throw new Error(`movies select: ${moviesError.message}`);
 
+    const movieRows = (movies || []) as MovieRow[];
+    const movieIndexes = buildMovieIndexes(movieRows);
     let matched = 0;
+    let created = 0;
     let inserted = 0;
     let updated = 0;
     const missing: string[] = [];
 
-    for (const movie of (movies || []) as MovieRow[]) {
-      const entry = findEntryForMovie(movie, indexes);
-      if (!entry) {
-        missing.push(movie.slug);
-        continue;
-      }
-
-      matched += 1;
+    for (const entry of entries) {
+      let movie = findMovieForEntry(entry, movieIndexes);
       try {
+        if (!movie) {
+          movie = await createMovieFromEntry(supabase, entry);
+          created += 1;
+          movieRows.push(movie);
+          const refreshedIndexes = buildMovieIndexes(movieRows);
+          movieIndexes.byPostId.clear();
+          movieIndexes.byTitle.clear();
+          movieIndexes.bySlug.clear();
+          refreshedIndexes.byPostId.forEach((value, key) => movieIndexes.byPostId.set(key, value));
+          refreshedIndexes.byTitle.forEach((value, key) => movieIndexes.byTitle.set(key, value));
+          refreshedIndexes.bySlug.forEach((value, key) => movieIndexes.bySlug.set(key, value));
+        } else {
+          matched += 1;
+        }
+
         inserted += await insertMissingEpisodes(supabase, movie, entry);
         if (await updateMovieMetadata(supabase, movie, entry)) updated += 1;
       } catch (error) {
@@ -320,11 +527,16 @@ serve(async (req) => {
       }
     }
 
+    for (const movie of movieRows) {
+      if (!findEntryForMovie(movie, entryIndexes)) missing.push(movie.slug);
+    }
+
     const result = {
       success: errors.length === 0,
       feed_entries: entries.length,
-      scanned: movies?.length || 0,
+      scanned: movieRows.length,
       matched,
+      created,
       missing,
       inserted,
       updated,
