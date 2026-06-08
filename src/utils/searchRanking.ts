@@ -39,6 +39,28 @@ function sourcePriority(movie: MovieItem): number {
   return 1;
 }
 
+function getEpisodeNumber(value?: string | number): number {
+  if (value === undefined || value === null) return 0;
+  const text = String(value);
+  const matches = Array.from(text.matchAll(/\d+/g)).map((match) => Number(match[0])).filter(Number.isFinite);
+  return matches.length ? Math.max(...matches) : 0;
+}
+
+function getMovieEpisodeNumber(movie: MovieItem): number {
+  return Math.max(
+    getEpisodeNumber(movie.current_episode),
+    getEpisodeNumber(movie.episode_current)
+  );
+}
+
+function getMergedEpisodeText(preferred: MovieItem, fallback: MovieItem): string {
+  const preferredEp = getMovieEpisodeNumber(preferred);
+  const fallbackEp = getMovieEpisodeNumber(fallback);
+  const maxEp = Math.max(preferredEp, fallbackEp);
+  if (!maxEp) return preferred.episode_current || fallback.episode_current || '';
+  return preferredEp >= maxEp && preferred.episode_current ? preferred.episode_current : `Tập ${maxEp}`;
+}
+
 function textScore(text: string, query: string, tokens: string[]): number {
   if (!text || !query) return 0;
   if (text === query) return 1200;
@@ -151,7 +173,8 @@ export function mergeMoviesUnique<T extends MovieItem>(movies: T[]): T[] {
     result[existingIndex] = {
       ...fallback,
       ...preferred,
-      episode_current: preferred.episode_current || fallback.episode_current,
+      episode_current: getMergedEpisodeText(preferred, fallback),
+      current_episode: Math.max(getMovieEpisodeNumber(preferred), getMovieEpisodeNumber(fallback)) || preferred.current_episode || fallback.current_episode,
       poster_url: preferred.poster_url || fallback.poster_url,
       thumb_url: preferred.thumb_url || fallback.thumb_url,
       category: preferred.category?.length ? preferred.category : fallback.category,

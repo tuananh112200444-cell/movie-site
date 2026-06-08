@@ -2521,6 +2521,12 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       );
       if (quickPlayable) {
         if (isQueerMovieDetail(quickPlayable.movie)) {
+          const freshQueerDetail = await getFreshQueerDetailWithTimeout(quickPlayable, blvietsubPromise, ophimPromise, 2200);
+          if (freshQueerDetail) {
+            if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using fresh merged queer detail for "${slug}" (source=ophim/CJK)`);
+            setCached(cacheKey, freshQueerDetail);
+            return freshQueerDetail;
+          }
           refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, ophimPromise);
         }
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using quick playable source for "${slug}" (source=ophim/CJK)`);
@@ -2542,7 +2548,15 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       );
       if (quickPlayable) {
         if (isQueerMovieDetail(quickPlayable.movie)) {
-          refreshQueerDetailCacheInBackground(cacheKey, quickPlayable);
+          blvietsubPromise = fetchMovieDetailFromBlvietsubForMovie(quickPlayable.movie);
+          const queerOphimPromise = fetchMovieDetailFromOPhimForMovie(quickPlayable.movie);
+          const freshQueerDetail = await getFreshQueerDetailWithTimeout(quickPlayable, blvietsubPromise, queerOphimPromise, 2200);
+          if (freshQueerDetail) {
+            if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using fresh merged queer detail for "${slug}"`);
+            setCached(cacheKey, freshQueerDetail);
+            return freshQueerDetail;
+          }
+          refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, queerOphimPromise);
         }
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using first quick playable source for "${slug}"`);
         setCached(cacheKey, quickPlayable);
@@ -2842,6 +2856,30 @@ function refreshQueerDetailCacheInBackground(
       }
     })
     .catch(() => {});
+}
+
+async function getFreshQueerDetailWithTimeout(
+  primary: MovieDetailResponse,
+  blvietsubPromise?: Promise<MovieDetailResponse | null>,
+  ophimPromise?: Promise<MovieDetailResponse | null>,
+  timeoutMs = 2200
+): Promise<MovieDetailResponse | null> {
+  if (!isQueerMovieDetail(primary.movie)) return null;
+
+  const work = Promise.all([
+    blvietsubPromise ?? fetchMovieDetailFromBlvietsubForMovie(primary.movie),
+    ophimPromise ?? fetchMovieDetailFromOPhimForMovie(primary.movie),
+  ])
+    .then(([blvietsub, ophim]) => {
+      const merged = mergeQueerDetailWithSources(primary, blvietsub, ophim);
+      return merged && detailHasPlayableEpisodes(merged) ? merged : null;
+    })
+    .catch(() => null);
+
+  return Promise.race([
+    work,
+    new Promise<MovieDetailResponse | null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
 }
 
 function getEpisodeQualityScore(ep: EpisodeData): number {
