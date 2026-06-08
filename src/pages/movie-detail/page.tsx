@@ -1,0 +1,444 @@
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
+import Navbar from '@/components/feature/Navbar';
+import Footer from '@/components/feature/Footer';
+import MovieCard from '@/components/base/MovieCard';
+import { useToast } from '@/components/base/Toast';
+import { useWatchHistory } from '@/hooks/useWatchHistory';
+import { useResumeWatch } from '@/hooks/useResumeWatch';
+import { useFavorites } from '@/hooks/useFavorites';
+import MovieDetailHero from './components/MovieDetailHero';
+import MovieDetailPlayerSection from './components/MovieDetailPlayerSection';
+import SEO from '@/components/base/SEO';
+import type { MovieDetailResponse, EpisodeData, MovieItem } from '@/types/movie';
+import {
+  fetchMovieDetail,
+  fetchMoviesByCategory,
+  deduplicateAndLimitServers,
+  pickBestServerIndex,
+  hasPlayableUrl,
+  pickBestEpisodeByPriority,
+} from '@/services/movieApi';
+
+const UserComments = lazy(() => import('./components/UserComments'));
+const MovieReviewSection = lazy(() => import('@/components/feature/MovieReview'));
+const MovieDetailSEOBlock = lazy(() => import('./components/MovieDetailSEOBlock'));
+
+function getTrailerEmbedUrl(url: string): string | null {
+  if (!url) return null;
+  const watchMatch = url.match(/youtube\.com\/watch\?v=([^&]+)/);
+  if (watchMatch) return `https://www.youtube.com/embed/${watchMatch[1]}?autoplay=0`;
+  const shortMatch = url.match(/youtu\.be\/([^?]+)/);
+  if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}?autoplay=0`;
+  if (url.includes('youtube.com/embed/')) return url;
+  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/video\/([a-zA-Z0-9]+)/i.exec(url);
+  if (dm) return `https://www.dailymotion.com/embed/video/${dm[1]}`;
+  const shortDm = /^https?:\/\/dai\.ly\/([a-zA-Z0-9]+)/i.exec(url);
+  if (shortDm) return `https://www.dailymotion.com/embed/video/${shortDm[1]}`;
+  if (url.includes('dailymotion.com/embed/')) return url;
+  const vimeo = /^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)/i.exec(url);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+  if (url.includes('player.vimeo.com/')) return url;
+  return null;
+}
+
+export default function MovieDetailPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { showToast } = useToast();
+  const { addEntry, updateProgress } = useWatchHistory();
+  const { getResume, saveProgress, clearProgress } = useResumeWatch();
+  const { isFav, toggle } = useFavorites();
+
+  const [detail, setDetail] = useState<MovieDetailResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeServer, setActiveServer] = useState(0);
+  const [activeEp, setActiveEp] = useState<EpisodeData | null>(null);
+  const [related, setRelated] = useState<MovieItem[]>([]);
+  const [resumeInfo, setResumeInfo] = useState<{ time: number; duration: number; progress: number; shouldResume: boolean } | null>(null);
+  const [showResumeBanner, setShowResumeBanner] = useState(false);
+  const [initialSeekTime, setInitialSeekTime] = useState(0);
+  const [cinemaMode, setCinemaMode] = useState(false);
+  const [showBottom, setShowBottom] = useState(false);
+
+  const playerRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeEpRef = useRef<string | null>(null);
+  const relatedFetchedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (saveProgressTimer.current) clearTimeout(saveProgressTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    activeEpRef.current = activeEp?.slug ?? null;
+  }, [activeEp?.slug]);
+
+  /* IntersectionObserver to defer bottom sections until user scrolls near */
+  useEffect(() => {
+    if (!detail || showBottom) return;
+    const el = bottomRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShowBottom(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '600px' } // increased from 400px to defer more
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [detail, showBottom]);
+
+  /* ── Fetch movie detail ── */
+  useEffect(() => {
+    if (!slug) return;
+    const isFresh = searchParams.has('fresh');
+    const source = searchParams.get('source') || undefined;
+    if (isFresh) {
+      setSearchParams({}, { replace: true });
+    }
+    setLoading(true);
+    setError(null);
+    setActiveServer(0);
+    setActiveEp(null);
+    setShowBottom(false);
+    relatedFetchedRef.current = false;
+    setRelated([]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    fetchMovieDetail(slug, isFresh, source)
+      .then((data) => {
+        if (!data) {
+          setError(`Không thể tải thông tin phim "${slug}". Phim không tồn tại hoặc đang được cập nhật.`);
+          return;
+        }
+        setDetail(data);
+        const deduped = deduplicateAndLimitServers(data.episodes ?? []);
+        if (deduped.length > 0) {
+          const bestIdx = pickBestServerIndex(deduped);
+          const origIdx = (data.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
+          setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
+        } else {
+          setActiveServer(-1);
+        }
+
+        // DEFER related movies: only fetch after 2s idle or when user scrolls near bottom
+        const genre = data.movie?.category?.[0]?.slug;
+        const country = data.movie?.country?.[0]?.slug;
+        if ((genre || country) && !relatedFetchedRef.current) {
+          relatedFetchedRef.current = true;
+          const run = () => {
+            fetchMoviesByCategory({ category: genre, country, page: 1 })
+              .then((r) => setRelated(r.items?.filter((m) => m.slug !== slug).slice(0, 6) ?? []))
+              .catch(() => {});
+          };
+          // Defer 3s to prioritize player loading first
+          setTimeout(run, 3000);
+        }
+      })
+      .catch(() => {
+        setError(`Không thể tải thông tin phim "${slug}". Phim có thể chưa được lưu hoặc slug không khớp.`);
+      })
+      .finally(() => setLoading(false));
+  }, [slug]);
+
+  /* ── ESC to exit cinema mode ── */
+  useEffect(() => {
+    if (!cinemaMode) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCinemaMode(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [cinemaMode]);
+
+  const filteredEpisodes = useMemo(
+    () => deduplicateAndLimitServers(detail?.episodes ?? []),
+    [detail?.episodes]
+  );
+
+  const hasEpisodes = useMemo(() => {
+    return filteredEpisodes.length > 0 && filteredEpisodes.some((s) => (s.server_data?.length ?? 0) > 0);
+  }, [filteredEpisodes]);
+
+  const activeFilteredIndex = useMemo(() => {
+    if (!detail?.episodes || activeServer < 0) return -1;
+    const activeSrv = detail.episodes[activeServer];
+    return filteredEpisodes.findIndex((fe) => fe === activeSrv);
+  }, [detail?.episodes, activeServer, filteredEpisodes]);
+
+  const isTrailerOnly = useMemo(() => {
+    if (!detail?.movie) return false;
+    const epCurrent = (detail.movie.episode_current ?? '').toLowerCase().trim();
+    if (epCurrent === 'trailer') return true;
+    const allEps = detail.episodes?.flatMap((s) => s.server_data ?? []) ?? [];
+    if (allEps.length === 0) {
+      return epCurrent === 'trailer';
+    }
+    if (allEps.every((ep) => ep.name?.toLowerCase().includes('trailer'))) return true;
+    return false;
+  }, [detail]);
+
+  const trailerEmbedUrl = useMemo(
+    () => (detail?.movie?.trailer_url ? getTrailerEmbedUrl(detail.movie.trailer_url) : null),
+    [detail?.movie?.trailer_url]
+  );
+
+  const handleSelectEp = useCallback((ep: EpisodeData, seekTime = 0) => {
+    if (!hasPlayableUrl(ep)) {
+      showToast('Tập này chưa có liên kết phát. Vui lòng thử tập khác.', 'error');
+      return;
+    }
+    setActiveEp(ep);
+    setInitialSeekTime(seekTime);
+    setShowResumeBanner(false);
+    if (detail?.movie) addEntry(detail.movie as unknown as MovieItem, ep.slug, ep.name);
+    if (slug && seekTime === 0) {
+      const info = getResume(slug, ep.slug);
+      setResumeInfo(info);
+      setShowResumeBanner(info.shouldResume);
+    }
+    setTimeout(() => playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  }, [detail, slug, addEntry, getResume, showToast]);
+
+  const handleSwitchServer = useCallback((filteredIdx: number) => {
+    const targetServer = filteredEpisodes[filteredIdx];
+    if (!targetServer || !detail?.episodes) return;
+    const originalIdx = detail.episodes.findIndex((ep) => ep === targetServer);
+    if (originalIdx < 0) return;
+    const newServerData = detail.episodes[originalIdx]?.server_data ?? [];
+    setActiveServer(originalIdx);
+    if (activeEp) {
+      const newEp = newServerData.find((ep) => ep.slug === activeEp.slug) ?? newServerData[0] ?? null;
+      setActiveEp(newEp);
+    }
+  }, [filteredEpisodes, detail?.episodes, activeEp]);
+
+  const handleTimeUpdate = useCallback((time: number, duration: number) => {
+    if (!slug || !activeEpRef.current) return;
+    if (saveProgressTimer.current) clearTimeout(saveProgressTimer.current);
+    saveProgressTimer.current = setTimeout(() => {
+      const epSlug = activeEpRef.current;
+      if (!epSlug) return;
+      saveProgress(slug, epSlug, time, duration);
+      if (detail?.movie) updateProgress(detail.movie._id, time, duration);
+    }, 5000);
+  }, [slug, saveProgress, detail, updateProgress]);
+
+  const handleResume = useCallback(() => {
+    if (!resumeInfo) return;
+    setInitialSeekTime(resumeInfo.time);
+    setShowResumeBanner(false);
+  }, [resumeInfo]);
+
+  const handleRestart = useCallback(() => {
+    if (slug && activeEp) clearProgress(slug, activeEp.slug);
+    setInitialSeekTime(0);
+    setShowResumeBanner(false);
+  }, [slug, activeEp, clearProgress]);
+
+  const handleRefetchMovie = useCallback(async () => {
+    if (!slug) return;
+    setLoading(true);
+    setError(null);
+    setActiveEp(null);
+    setShowResumeBanner(false);
+    try {
+      const data = await fetchMovieDetail(slug, true);
+      if (!data) {
+        setError('Không thể tải thông tin phim');
+        showToast('Không tìm thấy nguồn phim nào khác.', 'error');
+        setDetail(null);
+        return;
+      }
+      setDetail(data);
+      const deduped = deduplicateAndLimitServers(data.episodes ?? []);
+      if (deduped.length > 0) {
+        const bestIdx = pickBestServerIndex(deduped);
+        const origIdx = (data.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
+        setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
+      } else {
+        setActiveServer(-1);
+      }
+      showToast('Đã tìm thấy nguồn phim mới!', 'success');
+    } catch {
+      setError('Không thể tải thông tin phim');
+      showToast('Không tìm thấy nguồn phim nào khác.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [slug, showToast]);
+
+  const handleFavToggle = useCallback(() => {
+    if (!detail?.movie) return;
+    const added = toggle(detail.movie as unknown as MovieItem);
+    showToast(added ? 'Đã thêm vào Yêu Thích!' : 'Đã xóa khỏi Yêu Thích', added ? 'success' : 'info');
+  }, [detail, toggle, showToast]);
+
+  /* ── Loading ── */
+  if (loading) return (
+    <div className="min-h-screen bg-[#080a10] text-white">
+      <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
+      <Navbar />
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 pt-24 pb-10">
+        <div className="flex flex-row gap-3 sm:gap-8 mb-8">
+          <div className="flex-shrink-0 w-24 sm:w-40 md:w-52 skeleton rounded-xl" style={{ aspectRatio: '2/3' }} />
+          <div className="flex-1 space-y-3 pt-2">
+            <div className="h-7 skeleton rounded-lg w-3/4" />
+            <div className="h-4 skeleton rounded w-1/2" />
+            <div className="flex gap-2">
+              {[40, 56, 44].map((w, i) => <div key={i} className="h-6 skeleton rounded-md" style={{ width: w }} />)}
+            </div>
+            <div className="space-y-2">
+              <div className="h-3 skeleton rounded w-full" />
+              <div className="h-3 skeleton rounded w-5/6" />
+            </div>
+          </div>
+        </div>
+        <div className="aspect-video w-full skeleton rounded-xl" />
+      </div>
+    </div>
+  );
+
+  if (error || !detail) return (
+    <div className="min-h-screen bg-[#080a10] text-white">
+      <SEO title="Không tìm thấy phim – KhoPhim" description="Phim không tồn tại hoặc đã bị xóa." noIndex={true} />
+      <Navbar />
+      <div className="flex flex-col items-center justify-center min-h-[70vh] gap-4 px-4">
+        <i className="ri-error-warning-line text-5xl text-white/20" />
+        <p className="text-white/40 text-center max-w-md">{error ?? 'Không tìm thấy phim'}</p>
+        <p className="text-white/20 text-xs font-mono">slug: {slug ?? '—'}</p>
+        <div className="flex items-center gap-3 mt-2">
+          <button
+            onClick={handleRefetchMovie}
+            className="flex items-center gap-2 px-4 py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/20 rounded-xl text-red-400 text-sm font-medium transition-all cursor-pointer whitespace-nowrap"
+          >
+            <i className="ri-refresh-line" /> Thử tải lại
+          </button>
+          <Link to="/" className="text-red-400 hover:text-red-300 text-sm">← Về trang chủ</Link>
+        </div>
+      </div>
+    </div>
+  );
+
+  const { movie } = detail;
+  const favored = isFav(movie._id);
+
+  return (
+    <div className="min-h-screen bg-[#080a10] text-white">
+      <Navbar />
+
+      {/* Hero section */}
+      <MovieDetailHero
+        movie={movie}
+        slug={slug ?? ''}
+        favored={favored}
+        isTrailerOnly={isTrailerOnly}
+        hasEpisodes={hasEpisodes}
+        onFavToggle={handleFavToggle}
+        onWatchNow={() => {
+          if (!hasEpisodes && !isTrailerOnly) {
+            showToast('Phim đang cập nhật, chưa có tập phim', 'info');
+            return;
+          }
+          if (isTrailerOnly) {
+            playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+          const firstEpSlug = filteredEpisodes
+            .flatMap((server) => server.server_data ?? [])
+            .find((ep) => hasPlayableUrl(ep))?.slug;
+          const best = pickBestEpisodeByPriority(filteredEpisodes, firstEpSlug);
+          if (best) {
+            handleSwitchServer(best.serverIndex);
+            handleSelectEp(best.episode);
+          }
+          playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }}
+      />
+
+      {/* Player section */}
+      <MovieDetailPlayerSection
+        ref={playerRef}
+        movie={movie}
+        episodes={filteredEpisodes}
+        isTrailerOnly={isTrailerOnly}
+        trailerEmbedUrl={trailerEmbedUrl}
+        onSelectEp={handleSelectEp}
+        onTimeUpdate={handleTimeUpdate}
+        resumeInfo={resumeInfo}
+        showResumeBanner={showResumeBanner}
+        onResume={handleResume}
+        onRestart={handleRestart}
+        activeEp={activeEp}
+        activeServer={activeFilteredIndex}
+        onSwitchServer={handleSwitchServer}
+        onRefetchMovie={handleRefetchMovie}
+        initialSeekTime={initialSeekTime}
+        onVideoEnded={() => { if (slug && activeEp) clearProgress(slug, activeEp.slug); }}
+        slug={slug ?? ''}
+        cinemaMode={cinemaMode}
+        setCinemaMode={setCinemaMode}
+      />
+
+      {/* Bottom sections — deferred + lazy loaded */}
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 pb-12">
+        {showBottom ? (
+          <>
+            {related.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 bg-red-500 rounded-full" />
+                  <h2 className="text-white font-bold text-sm sm:text-base">Phim Liên Quan</h2>
+                  {movie.category?.[0] && (
+                    <Link to={`/the-loai/${movie.category[0].slug}`} className="text-red-400 text-xs hover:underline ml-auto whitespace-nowrap">
+                      Xem thêm
+                    </Link>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
+                  {related.map((m) => <MovieCard key={m._id} movie={m} />)}
+                </div>
+              </div>
+            )}
+
+            <Suspense fallback={<div className="h-40 skeleton rounded-xl" />}>
+              <UserComments slug={slug ?? ''} movieName={movie.name} />
+            </Suspense>
+
+            <Suspense fallback={<div className="h-40 skeleton rounded-xl" />}>
+              <MovieReviewSection
+                slug={slug ?? ''}
+                movieName={movie.name}
+                originName={movie.origin_name}
+                year={movie.year}
+                genres={movie.category?.map((c) => c.name)}
+                posterUrl={`https://img.ophim.live/uploads/movies/${movie.poster_url || movie.thumb_url}`}
+              />
+            </Suspense>
+
+            <Suspense fallback={<div className="h-60 skeleton rounded-xl" />}>
+              <MovieDetailSEOBlock movie={movie} slug={slug ?? ''} />
+            </Suspense>
+          </>
+        ) : (
+          <div ref={bottomRef} className="space-y-4">
+            <div className="h-6 skeleton rounded w-32" />
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="skeleton rounded-xl" style={{ aspectRatio: '2/3' }} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Footer />
+    </div>
+  );
+}

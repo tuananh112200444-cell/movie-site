@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+
+# Google can crawl pages and read each page's own robots meta tag.
+# Keep admin/internal endpoints out of crawl budget.
+Disallow: /api/
+Disallow: /tmp/
+
+Sitemap: https://khophim.org/sitemap.xml
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
