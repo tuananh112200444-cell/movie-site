@@ -1599,6 +1599,8 @@ function getEpisodeNumberFromText(value?: string): number {
 }
 
 function getEpisodeNumberFromData(ep: EpisodeData): number {
+  const explicit = Number(ep.episode_number ?? 0);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
   return getEpisodeNumberFromText(ep.slug) || getEpisodeNumberFromText(ep.name);
 }
 
@@ -2368,6 +2370,8 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
   }
 }
 export function epSortKey(ep: EpisodeData): number {
+  const explicit = Number(ep.episode_number ?? 0);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
   const text = ep.slug || ep.name || '';
   const match = text.match(/(\d+)/);
   if (match) return Number(match[1]);
@@ -2484,7 +2488,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
   }
 
   const promise = (async (): Promise<MovieDetailResponse | null> => {
-    const blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
+    let blvietsubPromise: Promise<MovieDetailResponse | null> | undefined;
 
     // ── PRIORITY: If source=ophim or slug looks like CJK/non-ASCII, try OPhim FIRST ──
     const isOphimSource = source === 'ophim';
@@ -2501,6 +2505,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       const ophimPromise = fetchMovieDetailFromOPhim(slug, false);
       const sbPromise = fetchMovieDetailFromSupabase(slug);
       const proxyPromise = fetchMovieDetailFromProxy(slug);
+      blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
       const quickPlayable = await raceFirstValidWithTimeout(
         [
           ophimPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
@@ -2518,14 +2523,11 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
         return quickPlayable;
       }
       if (!ophim && !sb && !proxy && !blvietsub) {
-        [ophim, sb, proxy, blvietsub] = await Promise.all([ophimPromise, sbPromise, proxyPromise, blvietsubPromise]);
+        [ophim, sb, proxy, blvietsub] = await Promise.all([ophimPromise, sbPromise, proxyPromise, blvietsubPromise!]);
       }
     } else {
-      // Default: start all sources, but return Supabase immediately when admin data is playable.
-      // Manual uploads live in Supabase, so waiting for OPhim/proxy makes new movies feel stale.
+      // Default: Supabase first. Most saved/admin movies are playable there, so avoid slow external requests.
       const sbPromise = fetchMovieDetailFromSupabase(slug);
-      const ophimPromise = fetchMovieDetailFromOPhim(slug, false);
-      const proxyPromise = fetchMovieDetailFromProxy(slug);
 
       const quickPlayable = await raceFirstValidWithTimeout(
         [
@@ -2535,15 +2537,19 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       );
       if (quickPlayable) {
         if (isQueerMovieDetail(quickPlayable.movie)) {
-          refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, ophimPromise);
+          refreshQueerDetailCacheInBackground(cacheKey, quickPlayable);
         }
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using first quick playable source for "${slug}"`);
         setCached(cacheKey, quickPlayable);
         return quickPlayable;
       }
 
-      if (!sb && !ophim && !proxy && !blvietsub) {
-        [sb, ophim, proxy, blvietsub] = await Promise.all([sbPromise, ophimPromise, proxyPromise, blvietsubPromise]);
+      sb = await sbPromise.catch(() => null);
+      if (!detailHasPlayableEpisodes(sb)) {
+        const ophimPromise = fetchMovieDetailFromOPhim(slug, false);
+        const proxyPromise = fetchMovieDetailFromProxy(slug);
+        blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
+        [ophim, proxy, blvietsub] = await Promise.all([ophimPromise, proxyPromise, blvietsubPromise]);
       }
     }
 
@@ -3019,10 +3025,19 @@ export function pickBestEpisodeByPriority(
   targetEpSlug?: string,
 ): { serverIndex: number; episode: EpisodeData; priorityLabel: string | null } | null {
   const candidates: { serverIndex: number; episode: EpisodeData; priorityRank: number; qualityScore: number }[] = [];
+  const targetText = targetEpSlug?.trim() ?? '';
+  const targetNumber = getEpisodeNumberFromText(targetText);
 
   episodes.forEach((server, serverIndex) => {
     for (const episode of server.server_data ?? []) {
-      if (targetEpSlug && episode.slug !== targetEpSlug && episode.name !== targetEpSlug) continue;
+      if (targetText) {
+        const episodeNumber = getEpisodeNumberFromData(episode);
+        const matchesTarget =
+          episode.slug === targetText ||
+          episode.name === targetText ||
+          (targetNumber > 0 && episodeNumber === targetNumber);
+        if (!matchesTarget) continue;
+      }
       if (!hasPlayableUrl(episode)) continue;
       candidates.push({
         serverIndex,
@@ -3308,6 +3323,7 @@ export async function getMergedEpisodes(
       filename: '',
       link_embed: normalizeDailymotionUrl(ep.link_embed || ''),
       link_m3u8: ep.link_m3u8 || '',
+      episode_number: num || undefined,
       subtitle_url: ep.subtitle_url || '',
     };
 
@@ -3351,6 +3367,7 @@ export async function getMergedEpisodes(
         filename: '',
         link_embed: normalizeDailymotionUrl(String(row.link_embed || '')),
         link_m3u8: String(row.link_m3u8 || ''),
+        episode_number: num || undefined,
         subtitle_url: String(row.subtitle_url || ''),
       };
     } else if (row.server_data && typeof row.server_data === 'object' && !Array.isArray(row.server_data)) {
@@ -3362,6 +3379,7 @@ export async function getMergedEpisodes(
         filename: String(sd.filename || ''),
         link_embed: normalizeDailymotionUrl(String(sd.link_embed || '')),
         link_m3u8: String(sd.link_m3u8 || ''),
+        episode_number: num || getEpisodeNumberFromText(String(sd.slug || sd.name || '')) || undefined,
         subtitle_url: String(sd.subtitle_url || sd.subtitle || ''),
       };
     } else if (Array.isArray(row.server_data)) {
@@ -3395,6 +3413,7 @@ export async function getMergedEpisodes(
         serverMap.get(serverName)!.push({
           ...ep,
           link_embed: normalizeDailymotionUrl(ep.link_embed || ''),
+          episode_number: numericEp || ep.episode_number,
         });
       }
       continue; // skip the rest of this iteration — array was already handled inline
@@ -3448,6 +3467,7 @@ export async function getMergedEpisodes(
       filename: '',
       link_embed: normalizeDailymotionUrl(embedUrl),
       link_m3u8: streamUrl,
+      episode_number: num || undefined,
       subtitle_url: String(sm.subtitle_url || ''),
     };
     if (hasSeenEpisode(seen, serverName, slug, num, epData.name)) continue;
@@ -3494,6 +3514,7 @@ export async function getMergedEpisodes(
           slug,
           link_embed: normalizeDailymotionUrl(ep.link_embed || ''),
           link_m3u8: ep.link_m3u8 || '',
+          episode_number: num || ep.episode_number,
           subtitle_url: ep.subtitle_url || '',
         };
 
@@ -3540,6 +3561,7 @@ export async function getMergedEpisodes(
           slug,
           link_embed: normalizeDailymotionUrl(ep.link_embed || ''),
           link_m3u8: ep.link_m3u8 || '',
+          episode_number: num || ep.episode_number,
           subtitle_url: ep.subtitle_url || '',
         };
 
