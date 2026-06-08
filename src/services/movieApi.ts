@@ -2279,7 +2279,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 4500);
 
   try {
-    const loadFeedMovies = () => fetchBlvietsubMovies({
+    const feedMoviesPromise = fetchBlvietsubMovies({
       limit: Math.max(limit, 240),
       timeoutMs: options.timeoutMs ?? 4500,
       signal: controller.signal,
@@ -2295,7 +2295,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
       .abortSignal(controller.signal);
 
     const markedMovies = ((markedRows ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);
-    const feedMovies = markedMovies.length > 0 ? [] : await loadFeedMovies();
+    const feedMovies = await feedMoviesPromise;
     const combinedQueerMovies = mergeMoviesUnique([...markedMovies, ...feedMovies]).sort((a, b) => {
       const ta = getMovieUpdateTime(a);
       const tb = getMovieUpdateTime(b);
