@@ -4,6 +4,7 @@ import type { MovieItem } from '@/types/movie';
 import { getOptimizedImageUrl } from '@/services/movieApi';
 import { parseMovieYear } from '@/utils/searchRanking';
 import { movieDetailUrl } from '@/utils/slugEncoder';
+import MovieCountdown from '@/components/base/MovieCountdown';
 
 
 interface Props {
@@ -65,7 +66,8 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
             </span>
           )}
         </div>
-        <div className="absolute top-2 right-2">
+        <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+          <MovieCountdown movie={movie} />
           {isFull ? (
             <span className="bg-green-500/80 text-white text-xs font-bold px-1.5 py-0.5 rounded-md">
               Full
@@ -189,6 +191,7 @@ function ListItem({ movie, query }: { movie: MovieItem; query: string }) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 mt-2 sm:mt-2.5 text-sm text-white/40 flex-wrap">
+          <MovieCountdown movie={movie} />
           <span className="flex items-center gap-1">
             <i className="ri-film-line" />
             {movie.type === 'single' ? 'Phim Lẻ' : movie.type === 'series' ? 'Phim Bộ' : 'Phim'}

@@ -31,6 +31,47 @@ function movieTitleKeys(movie: MovieItem): string[] {
   return keys;
 }
 
+function canonicalDuplicateTitle(value?: string | null): string {
+  return normalizeSearchText(value)
+    .replace(/\b(18|19|20)\d{2}\b/g, ' ')
+    .replace(/\b(tap|ep|episode|phan|season|trailer|vietsub|thuyet minh|long tieng|full|hd|fhd|4k)\b/g, ' ')
+    .replace(/\b\d+\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function compactTitle(value: string): string {
+  return value.replace(/\s+/g, '');
+}
+
+function movieLooseTitleKeys(movie: MovieItem): string[] {
+  const year = parseMovieYear(movie);
+  const source = `${movie.source_site ?? ''} ${movie.source_name ?? ''}`.toLowerCase();
+  const names = [
+    movie.name,
+    movie.title_vi,
+    movie.title_en,
+    movie.title_zh,
+    movie.origin_name,
+  ]
+    .map(canonicalDuplicateTitle)
+    .filter((value): value is string => value.length >= 6);
+
+  const keys: string[] = [];
+  for (const name of Array.from(new Set(names))) {
+    const compact = compactTitle(name);
+    if (compact.length < 8) continue;
+    if (year > 0) keys.push(`loose-title-year:${compact}:${year}`);
+    if (
+      compact.length >= 12 &&
+      (source.includes('admin') || source.includes('supabase') || source.includes('blvietsub') || source.includes('ophim'))
+    ) {
+      keys.push(`loose-title:${compact}`);
+    }
+  }
+  return keys;
+}
+
 function sourcePriority(movie: MovieItem): number {
   const source = `${movie.source_site ?? ''} ${movie.source_name ?? ''}`.toLowerCase();
   if (source.includes('admin') || source.includes('supabase')) return 4;
@@ -59,6 +100,36 @@ function getMergedEpisodeText(preferred: MovieItem, fallback: MovieItem): string
   const maxEp = Math.max(preferredEp, fallbackEp);
   if (!maxEp) return preferred.episode_current || fallback.episode_current || '';
   return preferredEp >= maxEp && preferred.episode_current ? preferred.episode_current : `Tập ${maxEp}`;
+}
+
+function movieCompleteness(movie: MovieItem): number {
+  return [
+    movie.poster_url,
+    movie.thumb_url,
+    movie.origin_name,
+    movie.title_vi,
+    movie.title_en,
+    movie.title_zh,
+    movie.content,
+    movie.episode_current,
+    movie.current_episode,
+    movie.total_episodes,
+    movie.release_at,
+    movie.next_episode_at,
+    movie.schedule_type,
+    movie.category?.length,
+    movie.country?.length,
+    movie.tmdb_id,
+    movie.ophim_id,
+  ].reduce<number>((score, value) => score + (value ? 1 : 0), 0);
+}
+
+function choosePreferredMovie<T extends MovieItem>(a: T, b: T): T {
+  const priorityDiff = sourcePriority(a) - sourcePriority(b);
+  if (priorityDiff !== 0) return priorityDiff > 0 ? a : b;
+  const completenessDiff = movieCompleteness(a) - movieCompleteness(b);
+  if (completenessDiff !== 0) return completenessDiff > 0 ? a : b;
+  return getMovieModifiedTime(a) >= getMovieModifiedTime(b) ? a : b;
 }
 
 function textScore(text: string, query: string, tokens: string[]): number {
@@ -149,11 +220,12 @@ export function mergeMoviesUnique<T extends MovieItem>(movies: T[]): T[] {
 
   for (const movie of movies) {
     const keys = [
-      movie.slug,
-      movie._id,
-      movie.ophim_id,
-      movie.tmdb_id,
+      movie.slug ? `slug:${normalizeSearchText(movie.slug)}` : '',
+      movie._id ? `id:${String(movie._id).trim().toLowerCase()}` : '',
+      movie.ophim_id ? `ophim:${String(movie.ophim_id).trim().toLowerCase()}` : '',
+      movie.tmdb_id ? `tmdb:${String(movie.tmdb_id).trim().toLowerCase()}` : '',
       ...movieTitleKeys(movie),
+      ...movieLooseTitleKeys(movie),
     ].filter(Boolean) as string[];
 
     const existingIndex = keys
@@ -168,7 +240,7 @@ export function mergeMoviesUnique<T extends MovieItem>(movies: T[]): T[] {
     }
 
     const current = result[existingIndex];
-    const preferred = sourcePriority(movie) > sourcePriority(current) ? movie : current;
+    const preferred = choosePreferredMovie(movie, current);
     const fallback = preferred === movie ? current : movie;
     result[existingIndex] = {
       ...fallback,
@@ -185,6 +257,7 @@ export function mergeMoviesUnique<T extends MovieItem>(movies: T[]): T[] {
     };
     keys.forEach((key) => seen.set(key, existingIndex));
     movieTitleKeys(result[existingIndex]).forEach((key) => seen.set(key, existingIndex));
+    movieLooseTitleKeys(result[existingIndex]).forEach((key) => seen.set(key, existingIndex));
   }
 
 
