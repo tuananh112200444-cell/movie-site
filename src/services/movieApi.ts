@@ -2142,13 +2142,36 @@ export async function searchQueerUniverseMovies(
 
   try {
     const safeKw = escapePostgrestIlike(kw);
+    const normalizedKw = normalizeSearchText(kw);
+    const safeNormalizedKw = escapePostgrestIlike(normalizedKw);
+    const safeSlugKw = escapePostgrestIlike(normalizedKw.replace(/\s+/g, '-'));
+    const searchFilters = Array.from(new Set([
+      `name.ilike.%${safeKw}%`,
+      `origin_name.ilike.%${safeKw}%`,
+      `title_vi.ilike.%${safeKw}%`,
+      `title_en.ilike.%${safeKw}%`,
+      `title_zh.ilike.%${safeKw}%`,
+      `title_original.ilike.%${safeKw}%`,
+      `content.ilike.%${safeKw}%`,
+      `slug.ilike.%${safeKw}%`,
+      ...(safeNormalizedKw
+        ? [
+            `normalized_name.ilike.%${safeNormalizedKw}%`,
+            `slug.ilike.%${safeSlugKw}%`,
+            `name.ilike.%${safeNormalizedKw}%`,
+            `origin_name.ilike.%${safeNormalizedKw}%`,
+            `title_vi.ilike.%${safeNormalizedKw}%`,
+            `title_en.ilike.%${safeNormalizedKw}%`,
+          ]
+        : []),
+    ])).join(',');
     const supabaseQueerPromise: Promise<MovieItem[]> = (async () => {
       const { data } = await supabase
         .from('movies')
         .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, content, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note')
         .eq('is_published', true)
         .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%')
-        .or(`name.ilike.%${safeKw}%,origin_name.ilike.%${safeKw}%,title_vi.ilike.%${safeKw}%,title_en.ilike.%${safeKw}%,title_zh.ilike.%${safeKw}%,title_original.ilike.%${safeKw}%,content.ilike.%${safeKw}%,slug.ilike.%${safeKw}%`)
+        .or(searchFilters)
         .order('updated_at', { ascending: false })
         .limit(limit)
         .abortSignal(controller.signal);
@@ -2201,7 +2224,7 @@ export async function searchQueerUniverseMovies(
       .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, content, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note')
       .eq('is_published', true)
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%')
-      .or(`name.ilike.%${safeKw}%,origin_name.ilike.%${safeKw}%,title_vi.ilike.%${safeKw}%,title_en.ilike.%${safeKw}%,title_zh.ilike.%${safeKw}%,title_original.ilike.%${safeKw}%,content.ilike.%${safeKw}%,slug.ilike.%${safeKw}%`)
+      .or(searchFilters)
       .order('updated_at', { ascending: false })
       .limit(limit)
       .abortSignal(controller.signal);
