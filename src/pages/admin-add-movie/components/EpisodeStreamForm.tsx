@@ -158,6 +158,8 @@ export default function EpisodeStreamForm({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [currentMovieId, setCurrentMovieId] = useState(movieId);
+  const [currentMovieSlug, setCurrentMovieSlug] = useState(movieSlug);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | string | null>(null);
@@ -171,6 +173,11 @@ export default function EpisodeStreamForm({
   const [epSubtitleFile, setEpSubtitleFile] = useState<File | null>(null);
   const [epSubtitleUrl, setEpSubtitleUrl] = useState('');
   const isSingle = movieType === 'phim-le' || movieType === 'phim-chieu-rap';
+
+  useEffect(() => {
+    setCurrentMovieId(movieId);
+    setCurrentMovieSlug(movieSlug);
+  }, [movieId, movieSlug]);
 
   const nextEpNumber = useMemo(() => {
     let max = 0;
@@ -233,7 +240,7 @@ export default function EpisodeStreamForm({
   const loadExisting = useCallback(async () => {
     setLoading(true);
     try {
-      const { flatEpisodes } = await getMergedEpisodes(movieId);
+      const { flatEpisodes } = await getMergedEpisodes(currentMovieId);
       setEpisodes(flatEpisodes);
       if (import.meta.env.DEV) console.log('[EpisodeStreamForm] Loaded merged episodes:', flatEpisodes.length, '(admin:', flatEpisodes.filter(e => e.source_origin === 'admin').length, ', ophim:', flatEpisodes.filter(e => e.source_origin === 'ophim').length, ')');
     } catch (e) {
@@ -242,7 +249,7 @@ export default function EpisodeStreamForm({
     } finally {
       setLoading(false);
     }
-  }, [movieId]);
+  }, [currentMovieId]);
 
   useEffect(() => {
     loadExisting();
@@ -261,10 +268,11 @@ export default function EpisodeStreamForm({
   const handleDone = useCallback(async () => {
     // Evict ALL caches for this movie so detail page fetches fresh data
     evictAllMovieCaches(movieSlug);
+    if (currentMovieSlug !== movieSlug) evictAllMovieCaches(currentMovieSlug);
     if (import.meta.env.DEV) console.log('[EpisodeStreamForm] Cache cleared, navigating to movie detail...');
     // Navigate directly to movie detail with forceRefresh flag
-    navigate(`/phim/${movieSlug}?fresh=${Date.now()}`, { replace: false });
-  }, [movieSlug, navigate]);
+    navigate(`/phim/${currentMovieSlug}?fresh=${Date.now()}`, { replace: false });
+  }, [currentMovieSlug, movieSlug, navigate]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -316,6 +324,8 @@ export default function EpisodeStreamForm({
 
   const handleHideExternalEpisode = async (ep: MovieEpisode) => {
     if (isHiddenEpisode(ep)) return;
+    let targetMovieId = currentMovieId;
+    let targetMovieSlug = currentMovieSlug;
     if (!window.confirm(`Ẩn tập "${ep.episode_name}" khỏi server "${ep.server_name}"?`)) return;
 
     const token = getAdminToken();
@@ -329,7 +339,7 @@ export default function EpisodeStreamForm({
     setSaveMsg('');
     try {
       const payload: Record<string, unknown> = {
-        movie_id: movieId,
+        movie_id: currentMovieId,
         episode_number: ep.episode_number,
         episode_name: ep.episode_name || (isSingle ? 'Full' : `Tập ${ep.episode_number}`),
         slug: ep.slug || (isSingle ? 'full' : `tap-${ep.episode_number}`),
@@ -351,12 +361,22 @@ export default function EpisodeStreamForm({
           body: JSON.stringify({ token, action: 'insert', episode: payload }),
         }
       );
-      const data = (await res.json()) as { success?: boolean; error?: string };
+      const data = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+        canonical_movie_id?: string;
+        canonical_movie_slug?: string;
+      };
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Lỗi ẩn tập');
       }
+      if (data.canonical_movie_id) targetMovieId = data.canonical_movie_id;
+      if (data.canonical_movie_slug) targetMovieSlug = data.canonical_movie_slug;
 
       evictAllMovieCaches(movieSlug);
+      if (targetMovieSlug && targetMovieSlug !== movieSlug) evictAllMovieCaches(targetMovieSlug);
+      setCurrentMovieId(targetMovieId);
+      setCurrentMovieSlug(targetMovieSlug);
       setSaveMsg(`Đã ẩn ${ep.episode_name}`);
       await loadExisting();
     } catch (e) {
@@ -369,8 +389,8 @@ export default function EpisodeStreamForm({
   const handleSave = async () => {
     setError('');
     setSaveMsg('');
-    let targetMovieId = movieId;
-    let targetMovieSlug = movieSlug;
+    let targetMovieId = currentMovieId;
+    let targetMovieSlug = currentMovieSlug;
 
     if (!isSingle && !epNumber.trim()) {
       setError('Số tập không được để trống');
@@ -399,11 +419,11 @@ export default function EpisodeStreamForm({
       }
     }
     setSaving(true);
-    if (import.meta.env.DEV) console.log('[EpisodeStreamForm] Saving episode', { movieId, num, slug, title, server, source, isBackup });
+    if (import.meta.env.DEV) console.log('[EpisodeStreamForm] Saving episode', { movieId: currentMovieId, num, slug, title, server, source, isBackup });
 
     try {
       const payload: Record<string, unknown> = {
-        movie_id: movieId,
+        movie_id: currentMovieId,
         episode_number: num,
         episode_name: title,
         slug,
@@ -551,11 +571,13 @@ export default function EpisodeStreamForm({
       }
 
       evictAllMovieCaches(movieSlug);
+      if (targetMovieSlug && targetMovieSlug !== movieSlug) evictAllMovieCaches(targetMovieSlug);
+      setCurrentMovieId(targetMovieId);
+      setCurrentMovieSlug(targetMovieSlug);
 
       setSaveMsg(`Đã lưu ${title} (${slug}) — source: ${source}, backup: ${isBackup ? 'có' : 'không'} — cache đã xóa.`);
-      if (targetMovieSlug && targetMovieSlug !== movieSlug) evictAllMovieCaches(targetMovieSlug);
       resetForm();
-      if (targetMovieId !== movieId && targetMovieSlug) {
+      if (targetMovieId !== currentMovieId && targetMovieSlug) {
         navigate(`/phim/${targetMovieSlug}?fresh=${Date.now()}`, { replace: false });
         return;
       }
@@ -609,9 +631,9 @@ export default function EpisodeStreamForm({
       // Recalculate max episode from all sources after deletion
       try {
         const [{ data: allManual }, { data: allOphEps }, { data: allOphStr }] = await Promise.all([
-          supabase.from('movie_episodes').select('episode_number, source').eq('movie_id', movieId),
-          supabase.from('episodes').select('server_data').eq('movie_id', movieId),
-          supabase.from('streams').select('episode_slug').eq('movie_id', movieId).eq('is_active', true),
+          supabase.from('movie_episodes').select('episode_number, source').eq('movie_id', currentMovieId),
+          supabase.from('episodes').select('server_data').eq('movie_id', currentMovieId),
+          supabase.from('streams').select('episode_slug').eq('movie_id', currentMovieId).eq('is_active', true),
         ]);
 
         let maxEp = 0;
@@ -656,7 +678,7 @@ export default function EpisodeStreamForm({
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ token, action: 'update', id: movieId, movie: updatePayload }),
+              body: JSON.stringify({ token, action: 'update', id: currentMovieId, movie: updatePayload }),
             }
           );
         }
@@ -666,6 +688,7 @@ export default function EpisodeStreamForm({
       }
 
       evictAllMovieCaches(movieSlug);
+      if (currentMovieSlug !== movieSlug) evictAllMovieCaches(currentMovieSlug);
       await loadExisting();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lỗi xóa tập');

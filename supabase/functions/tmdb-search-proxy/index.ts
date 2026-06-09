@@ -6,9 +6,8 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
-// Fallback key hardcoded to guarantee operation regardless of secrets configuration
-const HARDCODED_KEY = '75c107f309e77803399d42354463a0f7';
-const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY') || HARDCODED_KEY;
+const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY') || '';
+const TMDB_READ_ACCESS_TOKEN = Deno.env.get('TMDB_READ_ACCESS_TOKEN') || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
 interface TMDBSearchItem {
@@ -69,16 +68,16 @@ serve(async (req) => {
       );
     }
 
-    if (!TMDB_API_KEY) {
+    if (!TMDB_API_KEY && !TMDB_READ_ACCESS_TOKEN) {
       return new Response(
-        JSON.stringify({ error: 'TMDB_API_KEY not available' }),
+        JSON.stringify({ error: 'TMDB credentials not available' }),
         { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } },
       );
     }
 
     const buildUrl = (endpoint: string) => {
       const url = new URL(`${TMDB_BASE}${endpoint}`);
-      url.searchParams.set('api_key', TMDB_API_KEY);
+      if (TMDB_API_KEY) url.searchParams.set('api_key', TMDB_API_KEY);
       url.searchParams.set('language', 'en-US');
       url.searchParams.set('include_adult', 'false');
       url.searchParams.set('page', String(page));
@@ -90,8 +89,8 @@ serve(async (req) => {
     const tvUrl = buildUrl('/search/tv');
 
     const [movieRes, tvRes] = await Promise.all([
-      fetch(movieUrl),
-      fetch(tvUrl),
+      fetch(movieUrl, TMDB_READ_ACCESS_TOKEN ? { headers: { Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}` } } : undefined),
+      fetch(tvUrl, TMDB_READ_ACCESS_TOKEN ? { headers: { Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}` } } : undefined),
     ]);
 
     // If TMDB returns auth error, forward it clearly so frontend knows
