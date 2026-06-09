@@ -73,9 +73,25 @@ interface FindResult {
   year: number | null;
   source_site: string | null;
   source_name: string | null;
+  content?: string | null;
+  thumb_url?: string | null;
+  poster_url?: string | null;
+  quality?: string | null;
+  lang?: string | null;
+  time?: string | null;
+  category?: unknown;
+  country?: unknown;
+  release_at?: string | null;
+  next_episode_at?: string | null;
+  next_episode_name?: string | null;
+  schedule_type?: string | null;
+  release_time?: string | null;
+  release_day?: number | null;
+  schedule_timezone?: string | null;
+  schedule_note?: string | null;
 }
 
-const MOVIE_MATCH_SELECT = 'id,slug,name,title_vi,title_en,title_zh,title_original,status,type,episode_current,tmdb_id,imdb_id,ophim_id,ophim_slug,normalized_name,origin_name,year,source_site,source_name';
+const MOVIE_MATCH_SELECT = 'id,slug,name,title_vi,title_en,title_zh,title_original,status,type,episode_current,tmdb_id,imdb_id,ophim_id,ophim_slug,normalized_name,origin_name,year,source_site,source_name,content,thumb_url,poster_url,quality,lang,time,category,country,release_at,next_episode_at,next_episode_name,schedule_type,release_time,release_day,schedule_timezone,schedule_note';
 const MOVIE_MERGE_SELECT = 'id,slug,name,title_vi,title_en,title_zh,title_original,origin_name,normalized_name,type,status,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,tmdb_id,imdb_id,ophim_id,ophim_slug,source_site,source_name,is_published,year,thumb_url,poster_url';
 
 function normalizeTitle(value: unknown): string {
@@ -140,6 +156,30 @@ function titleCandidates(value: Record<string, unknown> | FindResult): string[] 
     .filter((title) => title.length >= 3)));
 }
 
+function canonicalDuplicateTitle(value: unknown): string {
+  return normalizeTitle(value)
+    .replace(/\b(18|19|20)\d{2}\b/g, ' ')
+    .replace(/\b(tap|ep|episode|phan|season|trailer|vietsub|thuyet minh|long tieng|full|hd|fhd|4k)\b/g, ' ')
+    .replace(/\b\d+\b/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function canonicalTitleCandidates(value: Record<string, unknown> | FindResult): string[] {
+  const record = value as Record<string, unknown>;
+  return Array.from(new Set([
+    record.name,
+    record.title_vi,
+    record.title_en,
+    record.title_zh,
+    record.title_original,
+    record.origin_name,
+    record.normalized_name,
+  ]
+    .map(canonicalDuplicateTitle)
+    .filter((title) => title.length >= 6)));
+}
+
 function rawTitleTerms(value: Record<string, unknown>): string[] {
   return Array.from(new Set([
     value.name,
@@ -163,13 +203,24 @@ function escapePostgrestIlike(value: string): string {
 function hasSharedTitle(existing: FindResult, payload: Record<string, unknown>): boolean {
   const incomingTitles = titleCandidates(payload);
   const existingTitles = titleCandidates(existing);
-  if (incomingTitles.length === 0 || existingTitles.length === 0) return false;
-
-  return incomingTitles.some((incoming) =>
+  const strictMatch = incomingTitles.some((incoming) =>
     existingTitles.some((existingTitle) =>
       incoming === existingTitle ||
       (incoming.length >= 8 && existingTitle.includes(incoming)) ||
       (existingTitle.length >= 8 && incoming.includes(existingTitle))
+    )
+  );
+  if (strictMatch) return true;
+
+  const incomingCanonical = canonicalTitleCandidates(payload);
+  const existingCanonical = canonicalTitleCandidates(existing);
+  if (incomingCanonical.length === 0 || existingCanonical.length === 0) return false;
+
+  return incomingCanonical.some((incoming) =>
+    existingCanonical.some((existingTitle) =>
+      incoming === existingTitle ||
+      (incoming.length >= 10 && existingTitle.includes(incoming)) ||
+      (existingTitle.length >= 10 && incoming.includes(existingTitle))
     )
   );
 }
@@ -350,6 +401,40 @@ function mergeMovieData(
   if (!incoming.ophim_id && existing.ophim_id) merged.ophim_id = existing.ophim_id;
   if (!incoming.ophim_slug && existing.ophim_slug) merged.ophim_slug = existing.ophim_slug;
 
+  const preserveIfIncomingEmpty = [
+    'name',
+    'title_vi',
+    'title_en',
+    'title_zh',
+    'title_original',
+    'origin_name',
+    'normalized_name',
+    'content',
+    'thumb_url',
+    'poster_url',
+    'type',
+    'status',
+    'quality',
+    'lang',
+    'time',
+    'category',
+    'country',
+    'release_at',
+    'next_episode_at',
+    'next_episode_name',
+    'schedule_type',
+    'release_time',
+    'release_day',
+    'schedule_timezone',
+    'schedule_note',
+    'year',
+  ];
+  for (const key of preserveIfIncomingEmpty) {
+    if (!hasValue(incoming[key]) && hasValue((existing as unknown as Record<string, unknown>)[key])) {
+      delete merged[key];
+    }
+  }
+
   const existingSource = sourceText(existing);
   const incomingSource = sourceText(incoming);
   const existingIsManaged = existingSource.includes('admin') || isQueerSource(existing);
@@ -359,6 +444,12 @@ function mergeMovieData(
   if (existingIsManaged && !incomingIsManaged) {
     delete merged.source_site;
     delete merged.source_name;
+    delete merged.name;
+    delete merged.title_vi;
+    delete merged.origin_name;
+    delete merged.content;
+    delete merged.thumb_url;
+    delete merged.poster_url;
   }
   if (isQueerSource(existing) && !isQueerSource(incoming)) {
     delete merged.category;
@@ -680,6 +771,15 @@ async function mergeDuplicateMovies(
   }
 
   await cleanupCaches(supabase, [target.slug, ...sources.map((source) => source.slug)]);
+
+  await supabase.from('movie_merge_audit').insert({
+    target_movie_id: target.id,
+    target_slug: target.slug,
+    source_movie_ids: sources.map((source) => source.id),
+    source_slugs: sources.map((source) => source.slug),
+    reason: 'admin-merge',
+    summary,
+  }).throwOnError();
 
   return {
     target: { id: target.id, slug: target.slug, name: target.name },

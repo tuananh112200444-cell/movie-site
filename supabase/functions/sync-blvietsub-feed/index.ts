@@ -48,6 +48,7 @@ interface MovieRow {
   episode_current?: string | null;
   current_episode?: number | null;
   total_episodes?: number | null;
+  year?: number | null;
 }
 
 interface ParsedEntry {
@@ -85,6 +86,15 @@ function normalizeText(value = ''): string {
 
 function slugify(value = ''): string {
   return normalizeText(value).replace(/\s+/g, '-') || 'phim';
+}
+
+function canonicalDuplicateTitle(value = ''): string {
+  return normalizeText(value)
+    .replace(/\b(18|19|20)\d{2}\b/g, ' ')
+    .replace(/\b(tap|ep|episode|phan|season|trailer|vietsub|thuyet minh|long tieng|full|hd|fhd|4k)\b/g, ' ')
+    .replace(/\b\d+\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function stripTags(html = ''): string {
@@ -250,7 +260,7 @@ function buildEntryIndexes(entries: ParsedEntry[]) {
   const byTitle = new Map<string, ParsedEntry>();
   for (const entry of entries) {
     byPostId.set(entry.postId, entry);
-    for (const key of [entry.title, entry.originName].map(normalizeText).filter(Boolean)) {
+    for (const key of [entry.title, entry.originName].map(canonicalDuplicateTitle).filter(Boolean)) {
       if (!byTitle.has(key)) byTitle.set(key, entry);
     }
   }
@@ -259,7 +269,7 @@ function buildEntryIndexes(entries: ParsedEntry[]) {
 
 function getMovieTitleKeys(movie: MovieRow): string[] {
   return [movie.name, movie.origin_name, movie.title_vi, movie.title_en]
-    .map((value) => normalizeText(value || ''))
+    .map((value) => canonicalDuplicateTitle(value || ''))
     .filter(Boolean);
 }
 
@@ -270,7 +280,7 @@ function findEntryForMovie(
   const postId = extractPostIdFromMovie(movie);
   if (postId && indexes.byPostId.has(postId)) return indexes.byPostId.get(postId) || null;
 
-  for (const key of [movie.name, movie.origin_name, movie.title_vi, movie.title_en].map((value) => normalizeText(value || '')).filter(Boolean)) {
+  for (const key of [movie.name, movie.origin_name, movie.title_vi, movie.title_en].map((value) => canonicalDuplicateTitle(value || '')).filter(Boolean)) {
     const entry = indexes.byTitle.get(key);
     if (entry) return entry;
   }
@@ -311,9 +321,9 @@ function findMovieForEntry(
   if (entry.sourceUrl && indexes.bySourceUrl.has(entry.sourceUrl)) return indexes.bySourceUrl.get(entry.sourceUrl) || null;
   if (indexes.bySlug.has(generatedSlug)) return indexes.bySlug.get(generatedSlug) || null;
 
-  for (const key of [entry.title, entry.originName].map(normalizeText).filter(Boolean)) {
+  for (const key of [entry.title, entry.originName].map(canonicalDuplicateTitle).filter(Boolean)) {
     const movie = indexes.byTitle.get(key);
-    if (movie) return movie;
+    if (movie && (!entry.year || !movie.year || entry.year === movie.year)) return movie;
   }
 
   return null;
@@ -366,14 +376,14 @@ async function createMovieFromEntry(
   const { data, error } = await supabase
     .from('movies')
     .insert(payload)
-    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes')
+    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes, year')
     .single();
 
   if (error) {
     if (error.code === '23505' || error.message.toLowerCase().includes('duplicate')) {
       const { data: existing, error: existingError } = await supabase
         .from('movies')
-        .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes')
+        .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes, year')
         .eq('slug', slug)
         .single();
       if (!existingError && existing) return existing as MovieRow;
@@ -498,7 +508,7 @@ serve(async (req) => {
 
     const { data: movies, error: moviesError } = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes')
+      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes, year')
       .eq('is_published', true)
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
       .limit(500);
