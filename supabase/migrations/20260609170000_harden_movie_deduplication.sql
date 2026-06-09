@@ -53,6 +53,7 @@ with candidate_keys as (
     source_name,
     updated_at,
     lower(trim(coalesce(normalized_name, ''))) as normalized_key,
+    lower(trim(coalesce(origin_name, ''))) as origin_key,
     lower(trim(coalesce(ophim_slug, ''))) as ophim_slug_key,
     lower(trim(coalesce(ophim_id, ''))) as ophim_id_key,
     lower(trim(coalesce(imdb_id, ''))) as imdb_id_key,
@@ -61,10 +62,10 @@ with candidate_keys as (
   where is_published = true
 ),
 groups as (
-  select 'normalized_name_year'::text as reason, normalized_key as dedup_key, year, array_agg(id order by updated_at desc) as ids
+  select 'normalized_origin_year'::text as reason, normalized_key || '|' || origin_key as dedup_key, year, array_agg(id order by updated_at desc) as ids
   from candidate_keys
-  where normalized_key <> '' and year is not null
-  group by normalized_key, year
+  where normalized_key <> '' and origin_key <> '' and year is not null
+  group by normalized_key, origin_key, year
   having count(*) > 1
 
   union all
