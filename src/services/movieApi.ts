@@ -3691,7 +3691,16 @@ export function evictAllMovieCaches(slug: string): void {
   try {
     const keys = Object.keys(sessionStorage);
     for (const k of keys) {
-      if (k.includes(slug) || k.startsWith('detail_')) sessionStorage.removeItem(k);
+      if (
+        k.includes(slug) ||
+        k.startsWith('detail_') ||
+        k.startsWith('search_v') ||
+        k === SUPABASE_SEARCH_INDEX_KEY ||
+        k.includes('queer') ||
+        k.includes('home')
+      ) {
+        sessionStorage.removeItem(k);
+      }
     }
   } catch { /* quota */ }
 
