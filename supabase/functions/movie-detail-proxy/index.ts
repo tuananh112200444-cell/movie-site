@@ -292,9 +292,7 @@ async function findMovieIdForPersist(
       .maybeSingle();
     if (data?.id) return String(data.id);
   }
-  return null;
-}
-const terms = Array.from(new Set([
+  const terms = Array.from(new Set([
     payload.name,
     payload.title_vi,
     payload.title_en,
@@ -338,6 +336,8 @@ const terms = Array.from(new Set([
     if (match?.id) return String(match.id);
   }
 
+  return null;
+}
 
 async function persistExternalMovie(
   supabase: ReturnType<typeof createClient>,
