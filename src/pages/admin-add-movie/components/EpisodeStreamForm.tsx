@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { getAdminToken } from '@/services/adminAuth';
 import { getMergedEpisodes, evictAllMovieCaches, type FlatEpisode } from '@/services/movieApi';
+import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
 
 type MovieEpisode = FlatEpisode;
 
@@ -428,7 +429,7 @@ export default function EpisodeStreamForm({
         episode_name: title,
         slug,
         server_name: server,
-        link_m3u8: epStream.trim(),
+        link_m3u8: normalizeVideoCdnUrl(epStream),
         link_embed: epEmbed.trim(),
         subtitle_url: epSubtitleUrl.trim(),
         thumbnail_url: epThumb.trim(),
