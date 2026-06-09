@@ -3,6 +3,7 @@ import type { EpisodeData, EpisodeServer } from '@/types/movie';
 import { pickBestEpisodeByPriority } from '@/services/movieApi';
 import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
+import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
 /* ─── URL helpers ─── */
 function normalizeDailymotionUrl(url: string): string {
   const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/video\/([a-zA-Z0-9]+)/i.exec(url);
@@ -69,10 +70,11 @@ function shouldProxyHls(url: string): boolean {
 }
 
 function getHlsProxyUrl(url: string): string {
+  const normalizedUrl = normalizeVideoCdnUrl(url);
   const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined;
-  if (!supabaseUrl || !shouldProxyHls(url)) return url;
+  if (!supabaseUrl || !shouldProxyHls(normalizedUrl)) return normalizedUrl;
   const proxy = new URL(`${supabaseUrl}/functions/v1/hls-cors-proxy`);
-  proxy.searchParams.set('url', url);
+  proxy.searchParams.set('url', normalizedUrl);
   return proxy.toString();
 }
 
@@ -177,8 +179,8 @@ export default function PlayerBox({
   const dmOriginalUrl = useMemo(() => getOriginalDailymotionUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
   const directVideoSrc = useMemo(() => {
     const streamUrl = episode?.link_m3u8 ?? '';
-    if (streamUrl && !isHlsUrl(streamUrl)) return streamUrl;
-    return episode?.link_embed ?? '';
+    if (streamUrl && !isHlsUrl(streamUrl)) return normalizeVideoCdnUrl(streamUrl);
+    return normalizeVideoCdnUrl(episode?.link_embed ?? '');
   }, [episode?.link_m3u8, episode?.link_embed]);
   const hlsSrc = useMemo(() => getHlsProxyUrl(episode?.link_m3u8 ?? ''), [episode?.link_m3u8]);
   const streamIsHls = Boolean(episode?.link_m3u8 && isHlsUrl(episode.link_m3u8));
@@ -408,7 +410,6 @@ export default function PlayerBox({
               autoPlay
               playsInline
               preload="metadata"
-              crossOrigin="anonymous"
             >
               {episode?.subtitle_url && (
                 <track
