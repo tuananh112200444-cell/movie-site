@@ -104,6 +104,55 @@ function slugify(value = ''): string {
   return normalizeText(value).replace(/\s+/g, '-') || 'phim';
 }
 
+function canonicalDuplicateTitle(value = ''): string {
+  return normalizeText(value)
+    .replace(/\b(18|19|20)\d{2}\b/g, ' ')
+    .replace(/\b(tap|ep|episode|phan|season|trailer|vietsub|thuyet minh|long tieng|full|hd|fhd|4k)\b/g, ' ')
+    .replace(/\b\d+\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function titleCandidates(record: Record<string, unknown>): string[] {
+  return Array.from(new Set([
+    record.name,
+    record.origin_name,
+    record.title_vi,
+    record.title_en,
+    record.title_zh,
+    record.title_original,
+    record.normalized_name,
+    String(record.slug || '').replace(/-/g, ' '),
+    String(record.ophim_slug || '').replace(/-/g, ' '),
+  ]
+    .map((value) => canonicalDuplicateTitle(String(value || '')))
+    .filter((value) => value.length >= 6)));
+}
+
+function sourcePriority(record: Record<string, unknown>): number {
+  const source = `${record.source_site || ''} ${record.source_name || ''}`.toLowerCase();
+  if (source.includes('admin') || source.includes('supabase') || source.includes('blvietsub')) return 4;
+  if (record.tmdb_id) return 3;
+  if (source.includes('ophim')) return 2;
+  return 1;
+}
+
+function sameMovieByTitle(existing: Record<string, unknown>, incoming: Record<string, unknown>): boolean {
+  const existingYear = Number(existing.year || 0);
+  const incomingYear = Number(incoming.year || 0);
+  if (existingYear > 0 && incomingYear > 0 && existingYear !== incomingYear) return false;
+
+  const existingTitles = titleCandidates(existing);
+  const incomingTitles = titleCandidates(incoming);
+  return incomingTitles.some((incomingTitle) =>
+    existingTitles.some((existingTitle) =>
+      incomingTitle === existingTitle ||
+      (incomingTitle.length >= 10 && existingTitle.includes(incomingTitle)) ||
+      (existingTitle.length >= 10 && incomingTitle.includes(existingTitle))
+    )
+  );
+}
+
 function escapePostgrestIlike(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/[(),]/g, ' ');
 }
@@ -222,7 +271,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
   for (const [column, value] of checks) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,source_site,source_name,current_episode,total_episodes,episode_current')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,tmdb_id,ophim_id,ophim_slug')
       .eq(column as string, value as string)
       .limit(1)
       .maybeSingle();
@@ -235,14 +284,27 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
     const safe = escapePostgrestIlike(title);
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,source_site,source_name,current_episode,total_episodes,episode_current')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,tmdb_id,ophim_id,ophim_slug')
       .eq('year', year)
-      .or(`name.ilike.%${safe}%,origin_name.ilike.%${safe}%,title_vi.ilike.%${safe}%,title_en.ilike.%${safe}%`)
+      .or(`name.ilike.%${safe}%,origin_name.ilike.%${safe}%,title_vi.ilike.%${safe}%,title_en.ilike.%${safe}%,title_zh.ilike.%${safe}%,title_original.ilike.%${safe}%`)
+      .limit(20);
+    const match = ((data || []) as Record<string, unknown>[])
+      .filter((row) => sameMovieByTitle(row, payload))
+      .sort((a, b) => sourcePriority(b) - sourcePriority(a))[0];
+    if (match?.id) return match;
+  }
+
+  const normalized = String(payload.normalized_name || '').trim();
+  if (normalized.length >= 6 && year > 0) {
+    const { data } = await supabase
+      .from('movies')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,tmdb_id,ophim_id,ophim_slug')
+      .eq('year', year)
+      .ilike('normalized_name', normalized)
       .limit(10);
-    const titleKey = normalizeText(title);
-    const match = ((data || []) as Record<string, unknown>[]).find((row) =>
-      [row.name, row.origin_name, row.title_vi, row.title_en].map((v) => normalizeText(String(v || ''))).includes(titleKey)
-    );
+    const match = ((data || []) as Record<string, unknown>[])
+      .filter((row) => sameMovieByTitle(row, payload))
+      .sort((a, b) => sourcePriority(b) - sourcePriority(a))[0];
     if (match?.id) return match;
   }
   return null;
