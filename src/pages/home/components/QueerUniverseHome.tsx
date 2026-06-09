@@ -5,6 +5,7 @@ import PortalGateway from './PortalGateway';
 import type { MovieItem } from '../../../types/movie';
 import { fetchQueerUniverseSections, getOptimizedImageUrl, searchQueerUniverseMovies } from '../../../services/movieApi';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
+import MovieCountdown from '../../../components/base/MovieCountdown';
 
 interface QueerUniverseHomeProps {
   onBack: () => void;
@@ -77,6 +78,10 @@ function matchesSearch(movie: MovieItem, query: string): boolean {
   const haystack = normalizeText([
     movie.name,
     movie.origin_name,
+    movie.title_vi,
+    movie.title_en,
+    movie.title_zh,
+    movie.slug,
     movie.content,
     movie.episode_current,
     movie.year ? String(movie.year) : '',
@@ -117,6 +122,7 @@ function MoviePosterCard({ movie, priority }: { movie: MovieItem; priority?: boo
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
           <div className="absolute left-2 top-2 z-[2] flex flex-col items-start gap-1">
+            <MovieCountdown movie={movie} />
             {movie.episode_current && (
               <span className="rounded-md bg-cyan-300 px-2 py-1 text-[10px] font-black text-[#041416] shadow-lg shadow-cyan-950/25">
                 {movie.episode_current}
