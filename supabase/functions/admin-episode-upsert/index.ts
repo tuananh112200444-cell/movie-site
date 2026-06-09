@@ -228,7 +228,9 @@ function canonicalMovieScore(movie: MovieRow, currentId: string, episodeCount: n
   else if (!source.includes('ophim') && !source.includes('phimapi')) score += 300;
   if (movie.tmdb_id) score += 100;
   if (movie.imdb_id) score += 50;
-  if (movie.is_published) score += 20;
+  if (movie.is_published) score += 2000;
+  else score -= 1000;
+  if (source.includes('merged')) score -= 500;
   score += Math.min(episodeCount, 50) * 5;
   if (movie.id === currentId) score += 1;
   return score;
