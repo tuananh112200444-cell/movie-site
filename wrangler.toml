@@ -1,0 +1,8 @@
+name = "khophim"
+compatibility_date = "2026-06-09"
+pages_build_output_dir = "out"
+
+[vars]
+VITE_SITE_URL = "https://khophim.org"
+VITE_VIDEO_CDN_ORIGIN = "https://video.khophim.org"
+VITE_BACKBLAZE_BUCKET = "videomeu8"

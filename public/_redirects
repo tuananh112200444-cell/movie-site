@@ -1,20 +1,16 @@
-# Netlify _redirects
-# Bot prerender is handled by netlify/edge-functions/bot-prerender.ts.
+# Canonical host redirects.
+https://www.khophim.org/* https://khophim.org/:splat 301!
+https://mhophim.com/* https://khophim.org/:splat 301!
+https://www.mhophim.com/* https://khophim.org/:splat 301!
+http://mhophim.com/* https://khophim.org/:splat 301!
+http://www.mhophim.com/* https://khophim.org/:splat 301!
+http://khophim.org/* https://khophim.org/:splat 301!
+http://www.khophim.org/* https://khophim.org/:splat 301!
 
-# Canonical host redirects
-https://www.khophim.org/*  https://khophim.org/:splat  301!
-http://khophim.org/*  https://khophim.org/:splat  301!
-http://www.khophim.org/*  https://khophim.org/:splat  301!
+# Dynamic XML endpoints for Google. Keep these above the SPA fallback.
+/sitemap.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-index 200!
+/sitemap-movies.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml 200!
+/sitemap-movies-dynamic https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml 200!
 
-# Old domain redirects
-https://mhophim.com/*  https://khophim.org/:splat  301!
-https://www.mhophim.com/*  https://khophim.org/:splat  301!
-http://mhophim.com/*  https://khophim.org/:splat  301!
-http://www.mhophim.com/*  https://khophim.org/:splat  301!
-
-# Sitemap Movies proxy
-/sitemap-movies-dynamic   https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml  200
-/sitemap-movies.xml       https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml  200!
-
-# SPA fallback
-/*    /index.html   200
+# React Router SPA fallback.
+/* /index.html 200
