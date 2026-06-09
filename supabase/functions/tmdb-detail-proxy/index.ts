@@ -6,9 +6,8 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
-// Fallback key hardcoded to guarantee operation regardless of secrets configuration
-const HARDCODED_KEY = '75c107f309e77803399d42354463a0f7';
-const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY') || HARDCODED_KEY;
+const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY') || '';
+const TMDB_READ_ACCESS_TOKEN = Deno.env.get('TMDB_READ_ACCESS_TOKEN') || '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
 serve(async (req) => {
@@ -34,9 +33,9 @@ serve(async (req) => {
       );
     }
 
-    if (!TMDB_API_KEY) {
+    if (!TMDB_API_KEY && !TMDB_READ_ACCESS_TOKEN) {
       return new Response(
-        JSON.stringify({ error: 'TMDB_API_KEY not available' }),
+        JSON.stringify({ error: 'TMDB credentials not available' }),
         { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } },
       );
     }
@@ -46,11 +45,14 @@ serve(async (req) => {
       : 'credits,videos,content_ratings';
 
     const url = new URL(`${TMDB_BASE}/${mediaType}/${id}`);
-    url.searchParams.set('api_key', TMDB_API_KEY);
+    if (TMDB_API_KEY) url.searchParams.set('api_key', TMDB_API_KEY);
     url.searchParams.set('language', 'en-US');
     url.searchParams.set('append_to_response', append);
 
-    const res = await fetch(url.toString());
+    const res = await fetch(
+      url.toString(),
+      TMDB_READ_ACCESS_TOKEN ? { headers: { Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}` } } : undefined,
+    );
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
       console.error(`[tmdb-detail-proxy] TMDB error ${res.status}:`, txt.slice(0, 500));
