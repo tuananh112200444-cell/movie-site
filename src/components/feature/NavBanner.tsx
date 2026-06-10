@@ -1,12 +1,35 @@
 import { useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
-const BANNER_URL = 'https://s6b22.6789.show/register.html';
-const BANNER_IMAGE = 'https://storage.readdy-site.link/project_files/ae072a89-671e-4fbc-ae27-6b94b6cb5c25/b9d20cec-297f-40d5-8cb8-07cbeb5f185b_728X90-WORLD-CUP2026.gif?v=3c6908c952347f9a696c86f44ee81c38';
+interface BannerItem {
+  id: string;
+  url: string;
+  image: string;
+  alt: string;
+}
 
-function trackNavBannerClick(pagePath: string) {
+const ROTATE_INTERVAL_MS = 5000;
+const COLLAPSED_STORAGE_KEY = 'khophim_nav_banner_collapsed_v2';
+
+const BANNERS: BannerItem[] = [
+  {
+    id: 'world-cup-2026',
+    url: 'https://s6b22.6789.show/register.html',
+    image: 'https://storage.readdy-site.link/project_files/ae072a89-671e-4fbc-ae27-6b94b6cb5c25/b9d20cec-297f-40d5-8cb8-07cbeb5f185b_728X90-WORLD-CUP2026.gif?v=3c6908c952347f9a696c86f44ee81c38',
+    alt: 'World Cup 2026',
+  },
+  {
+    id: 'winaz',
+    url: 'https://winaz.it.com/?utm_source=Khophim&utm_medium=facebook&utm_campaign=booking',
+    image: '/banners/winaz-728x90.gif',
+    alt: 'WinAZ banner',
+  },
+];
+
+function trackNavBannerClick(pagePath: string, banner: BannerItem) {
   const payload = {
-    url: BANNER_URL,
+    url: banner.url,
     page_path: pagePath,
     user_agent: navigator.userAgent.slice(0, 250),
     clicked_at: new Date().toISOString(),
@@ -42,33 +65,113 @@ function trackNavBannerClick(pagePath: string) {
 
 export default function NavBanner() {
   const location = useLocation();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSED_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (!isCollapsed || BANNERS.length < 2) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      setActiveIndex((currentIndex) => (currentIndex + 1) % BANNERS.length);
+    }, ROTATE_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [isCollapsed]);
+
+  const activeBanner = BANNERS[activeIndex];
 
   const handleClick = () => {
-    trackNavBannerClick(location.pathname);
+    trackNavBannerClick(location.pathname, activeBanner);
   };
 
+  const toggleCollapsed = () => {
+    setIsCollapsed((currentValue) => {
+      const nextValue = !currentValue;
+
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, nextValue ? '1' : '0');
+      } catch { /* silent */ }
+
+      return nextValue;
+    });
+  };
+
+  if (isCollapsed) {
+    return (
+      <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/85">
+        <div className="relative mx-auto max-w-[728px] px-2 py-1 sm:px-3">
+          <a
+            key={activeBanner.id}
+            href={activeBanner.url}
+            target="_blank"
+            rel="noopener noreferrer nofollow sponsored"
+            onClick={handleClick}
+            className="block relative active:scale-[0.99] transition-transform cursor-pointer"
+          >
+            <img
+              src={activeBanner.image}
+              alt={activeBanner.alt}
+              className="w-full h-auto max-h-[38px] object-contain object-center sm:max-h-[52px]"
+              loading="eager"
+              width={728}
+              height={90}
+            />
+            <span className="absolute bottom-0.5 left-2 text-[9px] text-white/25 font-medium tracking-wide uppercase select-none pointer-events-none">
+              Ad
+            </span>
+          </a>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label="Mo banner"
+            className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/65 text-white/75 shadow-sm backdrop-blur transition-colors hover:bg-black/80 hover:text-white sm:right-4 sm:h-7 sm:w-7"
+          >
+            <i className="ri-arrow-down-s-line text-sm leading-none" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative z-0 w-full bg-[#0d0f1a]/80">
-      <div className="relative mx-auto max-w-[728px] px-2 sm:px-3">
-        <a
-          href={BANNER_URL}
-          target="_blank"
-          rel="noopener noreferrer nofollow"
-          onClick={handleClick}
-          className="block relative active:scale-[0.99] transition-transform cursor-pointer"
+    <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/88">
+      <div className="relative mx-auto flex max-w-[728px] flex-col gap-1 px-2 py-1 sm:gap-1.5 sm:px-3">
+        {BANNERS.map((banner) => (
+          <a
+            key={banner.id}
+            href={banner.url}
+            target="_blank"
+            rel="noopener noreferrer nofollow sponsored"
+            onClick={() => trackNavBannerClick(location.pathname, banner)}
+            className="block relative active:scale-[0.99] transition-transform cursor-pointer"
+          >
+            <img
+              src={banner.image}
+              alt={banner.alt}
+              className="w-full h-auto max-h-[38px] object-contain object-center sm:max-h-[52px]"
+              loading="eager"
+              width={728}
+              height={90}
+            />
+            <span className="absolute bottom-0.5 left-2 text-[9px] text-white/25 font-medium tracking-wide uppercase select-none pointer-events-none">
+              Ad
+            </span>
+          </a>
+        ))}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label="Thu gon banner"
+          className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/65 text-white/75 shadow-sm backdrop-blur transition-colors hover:bg-black/80 hover:text-white sm:right-4 sm:h-7 sm:w-7"
         >
-          <img
-            src={BANNER_IMAGE}
-            alt="World Cup 2026"
-            className="w-full h-auto max-h-[48px] sm:max-h-[56px] object-contain object-center"
-            loading="eager"
-            width={728}
-            height={90}
-          />
-          <span className="absolute bottom-0.5 left-2 text-[9px] text-white/25 font-medium tracking-wide uppercase select-none pointer-events-none">
-            Ad
-          </span>
-        </a>
+          <i className="ri-arrow-up-s-line text-sm leading-none" aria-hidden="true" />
+        </button>
       </div>
     </div>
   );
