@@ -105,7 +105,7 @@ export default function NavBanner() {
   if (isCollapsed) {
     return (
       <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/85">
-        <div className="relative mx-auto max-w-[728px] px-2 py-1 sm:px-3">
+        <div className="relative mx-auto grid max-w-[728px] grid-cols-[1fr_auto] items-center gap-1 px-2 py-1 sm:gap-2 sm:px-3">
           <a
             key={activeBanner.id}
             href={activeBanner.url}
@@ -117,7 +117,7 @@ export default function NavBanner() {
             <img
               src={activeBanner.image}
               alt={activeBanner.alt}
-              className="w-full h-auto max-h-[38px] object-contain object-center sm:max-h-[52px]"
+              className="h-[30px] w-full object-contain object-center min-[420px]:h-9 sm:h-auto sm:max-h-[52px]"
               loading="eager"
               width={728}
               height={90}
@@ -130,7 +130,7 @@ export default function NavBanner() {
             type="button"
             onClick={toggleCollapsed}
             aria-label="Mo banner"
-            className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/65 text-white/75 shadow-sm backdrop-blur transition-colors hover:bg-black/80 hover:text-white sm:right-4 sm:h-7 sm:w-7"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.07] text-white/70 transition-colors hover:bg-white/[0.12] hover:text-white sm:h-9 sm:w-9"
           >
             <i className="ri-arrow-down-s-line text-sm leading-none" aria-hidden="true" />
           </button>
@@ -141,37 +141,41 @@ export default function NavBanner() {
 
   return (
     <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/88">
-      <div className="relative mx-auto flex max-w-[728px] flex-col gap-1 px-2 py-1 sm:gap-1.5 sm:px-3">
-        {BANNERS.map((banner) => (
-          <a
-            key={banner.id}
-            href={banner.url}
-            target="_blank"
-            rel="noopener noreferrer nofollow sponsored"
-            onClick={() => trackNavBannerClick(location.pathname, banner)}
-            className="block relative active:scale-[0.99] transition-transform cursor-pointer"
+      <div className="mx-auto max-w-[728px] px-2 py-1 sm:px-3">
+        <div className="grid grid-cols-[1fr_auto] items-stretch gap-1 sm:gap-2">
+          <div className="flex min-w-0 flex-col gap-1 sm:gap-1.5">
+            {BANNERS.map((banner) => (
+              <a
+                key={banner.id}
+                href={banner.url}
+                target="_blank"
+                rel="noopener noreferrer nofollow sponsored"
+                onClick={() => trackNavBannerClick(location.pathname, banner)}
+                className="block relative active:scale-[0.99] transition-transform cursor-pointer"
+              >
+                <img
+                  src={banner.image}
+                  alt={banner.alt}
+                  className="h-[30px] w-full object-contain object-center min-[420px]:h-9 sm:h-auto sm:max-h-[52px]"
+                  loading="eager"
+                  width={728}
+                  height={90}
+                />
+                <span className="absolute bottom-0.5 left-2 text-[9px] text-white/25 font-medium tracking-wide uppercase select-none pointer-events-none">
+                  Ad
+                </span>
+              </a>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label="Thu gon banner"
+            className="flex h-full min-h-12 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.07] text-white/70 transition-colors hover:bg-white/[0.12] hover:text-white sm:w-9"
           >
-            <img
-              src={banner.image}
-              alt={banner.alt}
-              className="w-full h-auto max-h-[38px] object-contain object-center sm:max-h-[52px]"
-              loading="eager"
-              width={728}
-              height={90}
-            />
-            <span className="absolute bottom-0.5 left-2 text-[9px] text-white/25 font-medium tracking-wide uppercase select-none pointer-events-none">
-              Ad
-            </span>
-          </a>
-        ))}
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-label="Thu gon banner"
-          className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/65 text-white/75 shadow-sm backdrop-blur transition-colors hover:bg-black/80 hover:text-white sm:right-4 sm:h-7 sm:w-7"
-        >
-          <i className="ri-arrow-up-s-line text-sm leading-none" aria-hidden="true" />
-        </button>
+            <i className="ri-arrow-up-s-line text-sm leading-none" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   );
