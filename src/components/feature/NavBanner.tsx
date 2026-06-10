@@ -111,14 +111,16 @@ export default function NavBanner() {
               Ad
             </span>
           </a>
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-label="Mo banner"
-            className="flex h-5 w-full items-center justify-center border-t border-white/[0.04] bg-black/35 text-white/60 transition-colors hover:bg-black/50 hover:text-white/85 sm:h-6"
-          >
-            <i className="ri-arrow-down-s-line text-sm leading-none" aria-hidden="true" />
-          </button>
+          <div className="flex justify-end px-2 py-1 sm:px-0">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label="Mo banner"
+              className="flex h-6 w-9 items-center justify-center rounded-full border border-white/12 bg-black/55 text-amber-200 shadow-sm backdrop-blur transition-colors hover:bg-black/70 hover:text-white sm:h-7 sm:w-10"
+            >
+              <i className="ri-arrow-down-s-line text-lg leading-none" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -150,14 +152,16 @@ export default function NavBanner() {
               </span>
             </a>
           ))}
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-label="Thu gon banner"
-            className="flex h-5 w-full items-center justify-center border-t border-white/[0.04] bg-black/35 text-white/60 transition-colors hover:bg-black/50 hover:text-white/85 sm:h-6"
-          >
-            <i className="ri-arrow-up-s-line text-sm leading-none" aria-hidden="true" />
-          </button>
+          <div className="flex justify-end px-2 sm:px-0">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label="Thu gon banner"
+              className="flex h-6 w-9 items-center justify-center rounded-full border border-white/12 bg-black/55 text-amber-200 shadow-sm backdrop-blur transition-colors hover:bg-black/70 hover:text-white sm:h-7 sm:w-10"
+            >
+              <i className="ri-arrow-up-s-line text-lg leading-none" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
