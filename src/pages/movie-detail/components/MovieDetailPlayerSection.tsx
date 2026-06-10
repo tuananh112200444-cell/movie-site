@@ -421,15 +421,6 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                 </>
               )}
 
-              <div className="mt-3 sm:mt-4 flex justify-center">
-                <img
-                  src="/banners/winaz-728x90.gif"
-                  alt="WinAZ banner"
-                  className="h-auto w-full max-w-[728px] rounded-lg object-contain"
-                  loading="lazy"
-                />
-              </div>
-
               {/* Watch controls */}
               {episodes.length > 0 && (
                 <div className="mt-3 sm:mt-4 rounded-xl bg-[#11131b] border border-white/[0.07] overflow-hidden">
