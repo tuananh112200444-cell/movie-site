@@ -28,6 +28,21 @@ function getEpisodeMergeKey(ep: EpisodeData): string {
   return (ep.slug || ep.name || '').toLowerCase().trim().replace(/^0+/, '').replace(/\s+/g, '-');
 }
 
+function getServerIdentityText(srv: EpisodeServer): string {
+  const firstEp = srv.server_data?.[0];
+  return [
+    srv.server_name,
+    firstEp?.link_m3u8,
+    firstEp?.link_embed,
+  ].filter(Boolean).join(' ');
+}
+
+function getServerDisplayName(srv: EpisodeServer, idx: number): string {
+  const identity = getServerIdentityText(srv).toLowerCase();
+  if (identity.includes('khophim') || identity.includes('video.khophim.org')) return 'KhoPhim';
+  return getAnonymousServerDisplay(srv.server_name, idx);
+}
+
 interface Props {
   movie: MovieDetail;
   episodes: EpisodeServer[];
@@ -78,7 +93,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     const [activeTab, setActiveTab] = useState<'episodes' | 'trailer'>('episodes');
     const [episodesCollapsed, setEpisodesCollapsed] = useState(true);
     const [isDesktopEpisodeLayout, setIsDesktopEpisodeLayout] = useState(false);
-    const [serverTypeTab, setServerTypeTab] = useState<'all' | 'vietsub' | 'thuyetminh' | 'longtieng' | 'other'>('all');
+    const [serverTypeTab, setServerTypeTab] = useState<'all' | 'khophim' | 'vietsub' | 'thuyetminh' | 'longtieng' | 'other'>('all');
     const serverNow = useServerNow(true);
     const scheduledCountdown = useMemo(() => getMovieCountdownInfo(movie, serverNow), [movie, serverNow]);
     const scheduledEpisode = useMemo<MergedEpisode | null>(() => {
@@ -146,7 +161,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       return episodes.map((srv, idx) => ({
         srv,
         idx,
-        typeKey: detectServerType(srv.server_name ?? ''),
+        typeKey: detectServerType(getServerIdentityText(srv)),
       }));
     }, [episodes]);
 
@@ -475,7 +490,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     {visibleServerOptions.map(({ srv, idx, typeKey }) => {
                       const type = getServerTypeStyle(typeKey);
                       const isActive = idx === activeServer;
-                      const sourceName = getAnonymousServerDisplay(srv.server_name, idx);
+                      const sourceName = getServerDisplayName(srv, idx);
                       return (
                         <button
                           key={idx}
