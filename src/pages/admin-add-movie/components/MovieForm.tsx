@@ -575,7 +575,10 @@ export default function MovieForm({ onDone }: Props) {
     if (!kw) return [];
     try {
       const isNumeric = /^\d+$/.test(kw);
-      let qry = supabase.from('movies').select(ADMIN_MOVIE_SELECT);
+      let qry = supabase
+        .from('movies')
+        .select(ADMIN_MOVIE_SELECT)
+        .neq('source_site', 'merged');
       if (isNumeric) {
         qry = qry.or(`tmdb_id.eq.${kw},ophim_id.eq.${kw}`);
       } else {
