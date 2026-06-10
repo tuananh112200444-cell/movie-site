@@ -1,0 +1,21 @@
+[2m10:08:57 PM[22m [31m[1m[vite][22m[39m [31mInternal server error:   x Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+     ,-[C:/Users/CPS/Downloads/project-10351557/src/components/feature/NavBanner.tsx:164:1]
+ 161 |       </div>
+ 162 |     </div>
+ 163 |   );
+ 164 | }
+     : ^
+     `----
+  x Expected '</', got '<eof>'
+     ,-[C:/Users/CPS/Downloads/project-10351557/src/components/feature/NavBanner.tsx:164:3]
+ 162 |     </div>
+ 163 |   );
+ 164 | }
+     `----
+
+
+Caused by:
+    Syntax Error[39m
+  Plugin: [35mvite:react-swc[39m
+  File: [36mC:/Users/CPS/Downloads/project-10351557/src/components/feature/NavBanner.tsx[39m
+  
