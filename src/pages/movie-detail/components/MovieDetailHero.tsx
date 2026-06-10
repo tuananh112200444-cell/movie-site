@@ -172,7 +172,7 @@ function buildMovieSchema({
     ...countries,
   ].filter(Boolean);
 
-  return [
+  const schemas: object[] = [
     {
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
@@ -211,7 +211,10 @@ function buildMovieSchema({
         target: canonical,
       } : undefined,
     },
-    {
+  ];
+
+  if (hasEpisodes) {
+    schemas.push({
       '@context': 'https://schema.org',
       '@type': 'VideoObject',
       '@id': `${canonical}#video`,
@@ -228,7 +231,10 @@ function buildMovieSchema({
         '@type': 'WatchAction',
         target: canonical,
       },
-    },
+    });
+  }
+
+  schemas.push(
     {
       '@context': 'https://schema.org',
       '@type': 'WebPage',
@@ -241,7 +247,9 @@ function buildMovieSchema({
       dateModified,
       inLanguage: 'vi-VN',
     },
-  ];
+  );
+
+  return schemas;
 }
 
 export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, hasEpisodes, onFavToggle, onWatchNow }: Props) {

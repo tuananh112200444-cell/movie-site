@@ -4,6 +4,32 @@ const ALLOWED_ORIGINS = new Set([
   'https://khophim.org',
   'https://www.khophim.org',
 ]);
+const ONE_DAY = 60 * 60 * 24;
+const SEVEN_DAYS = ONE_DAY * 7;
+const THIRTY_DAYS = ONE_DAY * 30;
+
+function cacheConfig(pathname) {
+  const lowerPath = pathname.toLowerCase();
+  if (lowerPath.endsWith('.ts')) {
+    return {
+      edgeTtl: THIRTY_DAYS,
+      browserTtl: SEVEN_DAYS,
+      contentType: 'video/mp2t',
+    };
+  }
+  if (lowerPath.endsWith('.m3u8')) {
+    return {
+      edgeTtl: SEVEN_DAYS,
+      browserTtl: ONE_DAY,
+      contentType: 'application/vnd.apple.mpegurl; charset=utf-8',
+    };
+  }
+  return {
+    edgeTtl: SEVEN_DAYS,
+    browserTtl: ONE_DAY,
+    contentType: null,
+  };
+}
 
 function corsHeaders(request) {
   const origin = request.headers.get('Origin') || '';
@@ -35,6 +61,7 @@ export default {
     if (!objectPath || objectPath.includes('..')) {
       return new Response('Not Found', { status: 404, headers: corsHeaders(request) });
     }
+    const caching = cacheConfig(url.pathname);
 
     const upstream = new URL(`${B2_ORIGIN}/file/${B2_BUCKET}/${objectPath}`);
     upstream.search = url.search;
@@ -47,7 +74,7 @@ export default {
     const response = await fetch(upstreamRequest, {
       cf: {
         cacheEverything: true,
-        cacheTtl: 60 * 60 * 24 * 7,
+        cacheTtl: caching.edgeTtl,
       },
     });
 
@@ -55,7 +82,13 @@ export default {
     for (const [key, value] of Object.entries(corsHeaders(request))) {
       headers.set(key, value);
     }
-    headers.set('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+    if (caching.contentType) {
+      headers.set('Content-Type', caching.contentType);
+    }
+    headers.set(
+      'Cache-Control',
+      `public, max-age=${caching.browserTtl}, s-maxage=${caching.edgeTtl}`
+    );
 
     return new Response(response.body, {
       status: response.status,

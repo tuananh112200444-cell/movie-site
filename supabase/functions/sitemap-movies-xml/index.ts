@@ -1,6 +1,10 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+
 const SITE_URL = 'https://khophim.org';
 const API_BASE = 'https://ophim1.com';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 const XML_HEADERS = {
   'Content-Type': 'application/xml; charset=utf-8',
@@ -25,7 +29,9 @@ interface MovieItem {
   thumb_url?: string;
   poster_url?: string;
   modified?: { time?: string };
+  updated_at?: string;
   episode_current?: string;
+  is_published?: boolean;
 }
 
 interface ApiResponse {
@@ -68,7 +74,7 @@ function getChangeFreq(modifiedTime?: string): string {
 function getPriority(movie: MovieItem): string {
   const ep = (movie.episode_current ?? '').toLowerCase();
   const isFull = ep === 'full' || ep.startsWith('hoan tat') || ep.startsWith('hoan-tat');
-  const modifiedTime = movie.modified?.time;
+  const modifiedTime = movie.updated_at || movie.modified?.time;
   if (!modifiedTime) return isFull ? '0.80' : '0.70';
 
   const date = new Date(modifiedTime);
@@ -92,33 +98,63 @@ async function fetchMoviePage(type: string, page: number): Promise<MovieItem[]> 
   }
 }
 
+async function fetchSupabaseMovies(): Promise<MovieItem[]> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+  const pageSize = 1000;
+  const maxRows = 5000;
+  const rows: MovieItem[] = [];
+
+  for (let from = 0; from < maxRows; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('movies')
+      .select('slug,name,thumb_url,poster_url,modified,updated_at,episode_current,is_published')
+      .eq('is_published', true)
+      .not('slug', 'is', null)
+      .order('updated_at', { ascending: false })
+      .range(from, to);
+
+    if (error || !data?.length) break;
+    rows.push(...(data as MovieItem[]));
+    if (data.length < pageSize) break;
+  }
+
+  return rows;
+}
+
 async function buildMovieSitemap(): Promise<{ xml: string; count: number }> {
   const pages = [1, 2, 3, 4, 5, 6];
-  const lists = await Promise.all(
-    LIST_TYPES.flatMap((type) => pages.map((page) => fetchMoviePage(type, page))),
-  );
+  const [supabaseMovies, ...lists] = await Promise.all([
+    fetchSupabaseMovies(),
+    ...LIST_TYPES.flatMap((type) => pages.map((page) => fetchMoviePage(type, page))),
+  ]);
 
+  const ophimMovies = lists.flat();
   const seen = new Set<string>();
-  const movies = lists
-    .flat()
+  const movies = [...supabaseMovies, ...ophimMovies]
     .filter((movie) => {
       const slug = movie.slug?.trim();
       if (!slug || seen.has(slug)) return false;
       seen.add(slug);
-      return true;
+      return movie.is_published !== false;
     })
-    .slice(0, 1500);
+    .slice(0, 5000);
 
   const urls = movies.map((movie) => {
     const slug = movie.slug ?? '';
     const loc = `${SITE_URL}/phim/${encodeURIComponent(slug)}`;
     const image = toImageUrl(movie.thumb_url || movie.poster_url || '');
     const title = movie.name || slug;
+    const modifiedTime = movie.updated_at || movie.modified?.time;
 
     return `  <url>
     <loc>${escapeXml(loc)}</loc>
-    <lastmod>${toLastMod(movie.modified?.time)}</lastmod>
-    <changefreq>${getChangeFreq(movie.modified?.time)}</changefreq>
+    <lastmod>${toLastMod(modifiedTime)}</lastmod>
+    <changefreq>${getChangeFreq(modifiedTime)}</changefreq>
     <priority>${getPriority(movie)}</priority>${image ? `
     <image:image>
       <image:loc>${escapeXml(image)}</image:loc>
