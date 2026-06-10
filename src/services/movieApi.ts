@@ -2816,7 +2816,7 @@ interface ServerQualityInfo {
   hasM3u8: boolean;
   hasEmbed: boolean;
 }
-export const STREAM_SERVER_PRIORITY = ['OPHIM', 'SUPABASE', 'DL', 'SS', 'VK', 'OK'] as const;
+export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'SUPABASE', 'OPHIM', 'DL', 'SS', 'VK', 'OK'] as const;
 const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
 
 function normalizeServerPriorityText(value: string): string {
@@ -2837,6 +2837,14 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
 
   const tokens = new Set(text.split(/\s+/).filter(Boolean));
   const compact = text.replace(/\s+/g, '');
+  if (
+    tokens.has('KHOPHIM') ||
+    (tokens.has('KHO') && tokens.has('PHIM')) ||
+    compact.includes('KHOPHIM') ||
+    compact.includes('VIDEOKHOPHIMORG')
+  ) {
+    return STREAM_SERVER_PRIORITY.indexOf('KHOPHIM');
+  }
   if (
     tokens.has('SUPABASE') ||
     tokens.has('ADMIN') ||
@@ -3135,6 +3143,11 @@ export function pickBestEpisodeByPriority(
    AUTO-PICK BEST SERVER — static score + latency
    ════════════════════════════════════════════ */
 export function getAnonymousServerDisplay(serverName: string, index: number): string {
+  const normalized = normalizeServerPriorityText(serverName);
+  const compact = normalized.replace(/\s+/g, '');
+  if (compact.includes('KHOPHIM') || (normalized.includes('KHO') && normalized.includes('PHIM'))) return 'KhoPhim';
+  if (compact.includes('BLVIETSUB')) return 'BLVietsub';
+  if (compact.includes('OPHIM')) return 'OPhim';
   const match = serverName.match(/\[(.*?)\]/);
   if (match && match[1]) return `[${match[1]}]`;
   return `Server ${index + 1}`;
@@ -3143,11 +3156,20 @@ export function getAnonymousServerDisplay(serverName: string, index: number): st
 /* ════════════════════════════════════════════
    DEDUPLICATE & LIMIT SERVERS — clean UI
    ════════════════════════════════════════════ */
-export function detectServerType(serverName: string): 'vietsub' | 'thuyetminh' | 'longtieng' | 'other' {
+export function detectServerType(serverName: string): 'khophim' | 'vietsub' | 'thuyetminh' | 'longtieng' | 'other' {
   const n = serverName.toLowerCase();
   // Remove bracketed suffixes like [NguonC], [OPHIM], etc. for cleaner matching
   const clean = n.replace(/\[.*?\]/g, '').trim();
   const tokens = clean.split(/[\s\-_#]+/).filter(Boolean);
+  const priorityText = normalizeServerPriorityText(serverName);
+  const compactPriority = priorityText.replace(/\s+/g, '');
+
+  if (
+    compactPriority.includes('KHOPHIM') ||
+    (priorityText.includes('KHO') && priorityText.includes('PHIM'))
+  ) {
+    return 'khophim';
+  }
 
   // --- Thuyết Minh (check before vietsub to avoid false positives) ---
   if (
@@ -3193,6 +3215,14 @@ export interface ServerTypeStyle {
 
 export function getServerTypeStyle(type: string): ServerTypeStyle {
   switch (type) {
+    case 'khophim':
+      return {
+        label: 'KhoPhim',
+        icon: 'ri-cloud-line',
+        activeClass: 'bg-red-500 text-white border-red-600',
+        inactiveClass: 'bg-red-500/10 text-red-400 border-red-500/25 hover:bg-red-500/20',
+        dotClass: 'bg-red-400',
+      };
     case 'vietsub':
       return {
         label: 'Vietsub',
@@ -3238,7 +3268,7 @@ export function deduplicateAndLimitServers(episodes: EpisodeServer[]): EpisodeSe
   if (!playableOnly.length) return [];
 
   // 1. Sắp xếp: vietsub → thuyetminh → longtieng → other, trong mỗi nhóm sort by quality
-  const order: Record<string, number> = { vietsub: 0, thuyetminh: 1, longtieng: 2, other: 3 };
+  const order: Record<string, number> = { khophim: 0, vietsub: 1, thuyetminh: 2, longtieng: 3, other: 4 };
   const sorted = [...playableOnly].sort((a, b) => {
     const rankA = getServerPriorityRank(a, a.server_data?.[0]);
     const rankB = getServerPriorityRank(b, b.server_data?.[0]);

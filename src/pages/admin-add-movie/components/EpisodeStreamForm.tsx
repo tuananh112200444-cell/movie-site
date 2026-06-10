@@ -30,7 +30,7 @@ interface Props {
   onDone: () => void;
 }
 
-const DEFAULT_SERVER = 'Vietsub';
+const DEFAULT_SERVER = 'KhoPhim';
 
 function isQueerSourceText(value: string): boolean {
   const normalized = value
@@ -59,6 +59,9 @@ function resolveSource(serverName: string, streamUrl: string, embedUrl: string):
   const sn = serverName.toLowerCase();
   const sUrl = streamUrl.toLowerCase();
   const eUrl = embedUrl.toLowerCase();
+  if (sn.includes('khophim') || sUrl.includes('video.khophim.org') || eUrl.includes('video.khophim.org')) {
+    return { source: 'khophim', isBackup: false };
+  }
   if (isQueerSourceText(`${serverName} ${streamUrl} ${embedUrl}`)) {
     return { source: 'admin-queer', isBackup: false };
   }
