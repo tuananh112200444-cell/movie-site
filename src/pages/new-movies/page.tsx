@@ -12,7 +12,7 @@ import { isImagePreloaded, markImagePreloaded } from '@/utils/imagePreloader';
 import { movieDetailUrl } from '@/utils/slugEncoder';
 import type { Movie } from '@/types/movie';
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 30;
 const INITIAL_BATCHES = 3;
 
 function getMovieKey(movie: Movie): string {
@@ -401,7 +401,7 @@ export default function NewMoviesPage() {
 
         {/* ── Movie Grid: 10 cols, smaller posters ── */}
         {showLoading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
               <div key={i}>
                 <div className="aspect-[2/3] skeleton rounded-lg" />
@@ -422,7 +422,7 @@ export default function NewMoviesPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
             {pageMovies.map((m, idx) => (
               <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 4} />
             ))}

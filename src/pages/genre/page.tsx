@@ -355,7 +355,7 @@ const SORT_OPTIONS = [
   { value: 'year_asc', label: 'Năm cũ nhất', icon: 'ri-history-line' },
 ];
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 30;
 const POOL_CACHE_TTL = 10 * 60 * 1000;
 const VIRTUAL_GENRE_KEYWORDS: Record<string, string[]> = {
 };
@@ -763,7 +763,7 @@ export default function GenrePage() {
         {/* ─── Movie Grid ─── */}
         <div className="pt-6">
           {loading && movies.length === 0 ? (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : movies.length === 0 ? (
@@ -776,7 +776,7 @@ export default function GenrePage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
                 {movies.map((m, idx) => (
                   <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 2} />
                 ))}
