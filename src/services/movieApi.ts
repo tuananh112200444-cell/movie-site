@@ -653,15 +653,20 @@ function parsePagination(data: Record<string, unknown>): MovieListResponse['pagi
     p = asRecord(rootParams?.pagination);
   }
   p ??= {};
-  const currentPage = (p.currentPage as number) ?? 1;
-  const totalItems = (p.totalItems as number) ?? 0;
-  const totalItemsPerPage = (p.totalItemsPerPage as number) ?? 24;
-  let totalPages = (p.totalPages as number) ?? 0;
+  const currentPage = Number(p.currentPage ?? p.page ?? 0) || 0;
+  const totalItems = Number(p.totalItems ?? 0) || 0;
+  const totalItemsPerPage = Number(p.totalItemsPerPage ?? 24) || 24;
+  let totalPages = Number(p.totalPages ?? 0) || 0;
   if (!totalPages && totalItems > 0 && totalItemsPerPage > 0) {
     totalPages = Math.ceil(totalItems / totalItemsPerPage);
   }
   totalPages = Math.max(1, totalPages);
   return { currentPage, totalItems, totalItemsPerPage, totalPages };
+}
+
+function isExpectedPage(result: MovieListResponse, page: number): boolean {
+  const currentPage = Number(result.pagination?.currentPage ?? 0) || 0;
+  return currentPage === 0 || currentPage === page;
 }
 
 function parseItems(data: Record<string, unknown>): MovieListResponse['items'] {
@@ -760,7 +765,7 @@ export async function fetchMoviesByType(
   const promises = urls.map((url) =>
     fetchJSON<Record<string, unknown>>(url, 6000)
       .then(toMovieListResponse)
-      .then((res) => ((res.items?.length ?? 0) > 0 ? res : null))
+      .then((res) => ((res.items?.length ?? 0) > 0 && isExpectedPage(res, page) ? res : null))
       .catch(() => null)
   );
 
@@ -806,7 +811,7 @@ export async function fetchMoviesByCategory(params: {
   const promises = urls.map((url) =>
     fetchJSON<Record<string, unknown>>(url, 6000)
       .then(toMovieListResponse)
-      .then((res) => ((res.items?.length ?? 0) > 0 ? res : null))
+      .then((res) => ((res.items?.length ?? 0) > 0 && isExpectedPage(res, params.page ?? 1) ? res : null))
       .catch(() => null)
   );
 

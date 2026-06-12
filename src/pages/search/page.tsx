@@ -861,7 +861,7 @@ export default function SearchPage() {
               <div className="w-1 h-5 bg-red-500 rounded-full" />
               <h2 className="text-base font-bold text-white">Khám Phá Theo Danh Mục</h2>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
               {QUICK_CATEGORIES.map((cat) => (
                 <Link
                   key={cat.href}
@@ -972,7 +972,7 @@ export default function SearchPage() {
             {/* Loading skeleton */}
             {loading && results.length === 0 ? (
               viewMode === 'grid' ? (
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
                 {Array.from({ length: 24 }).map((_, i) => (
                     <div key={i}>
                       <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -1020,7 +1020,7 @@ export default function SearchPage() {
             ) : filteredResults.length > 0 ? (
               <>
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
                     {filteredResults.map((m, index) => (
                       <SearchResultItem key={searchResultKey(m, index)} movie={m} query={q} viewMode="grid" />
                     ))}
@@ -1080,7 +1080,7 @@ export default function SearchPage() {
               <span className="text-sm text-white/30 bg-white/[0.04] border border-white/[0.06] px-2.5 py-1 rounded-full">Cập nhật hàng ngày</span>
             </div>
             {trending.length === 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
                 {Array.from({ length: 16 }).map((_, i) => (
                   <div key={i}>
                     <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -1090,7 +1090,7 @@ export default function SearchPage() {
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
                 {trending.map((m) => (
                   <MovieCard key={m._id} movie={m} />
                 ))}
