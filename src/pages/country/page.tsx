@@ -320,7 +320,7 @@ export const COUNTRY_CONFIGS: Record<string, CountryConfig> = {
   },
 };
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 30;
 const API_PAGE_SIZE = 24;
 const POOL_CACHE_TTL = 10 * 60 * 1000;
 
@@ -633,7 +633,7 @@ export default function CountryPage({ countrySlug }: Props) {
 
         {/* Movie Grid */}
         {loading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
               <div key={i}>
                 <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -648,7 +648,7 @@ export default function CountryPage({ countrySlug }: Props) {
             <p className="text-lg">Không có phim nào</p>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
             {sortedMovies.map((m, idx) => (
               <MovieCard key={m._id} movie={m} priority={idx < 2} />
             ))}

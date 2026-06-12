@@ -6,7 +6,7 @@ import type { Movie, MovieListResponse } from '../types/movie';
 interface HookCacheEntry { movies: Movie[]; totalPages: number; ts: number }
 const hookCache = new Map<string, HookCacheEntry>();
 const HOOK_CACHE_TTL = 5 * 60 * 1000;
-const DEFAULT_PAGE_SIZE = 24;
+const DEFAULT_PAGE_SIZE = 30;
 function getHookCache(key: string): HookCacheEntry | null {
   const entry = hookCache.get(key);
   if (!entry) return null;
