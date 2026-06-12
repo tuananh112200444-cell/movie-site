@@ -585,7 +585,7 @@ export default function Home() {
           ogType="website"
         />
         <Navbar />
-        <div className="-mt-14 lg:-mt-16 pt-20 lg:pt-24">
+        <div className="pt-3 lg:pt-4">
           <QueerUniverseHome onBack={() => setActivePortal(null)} onSelectPortal={setActivePortal} />
         </div>
         <Footer />
@@ -605,7 +605,7 @@ export default function Home() {
       />
       <Navbar />
       
-      <div className="-mt-14 lg:-mt-16 relative z-0">
+      <div className="relative z-0">
         <HeroBanner movies={trendingMovies} loading={bannerLoading} />
       </div>
 

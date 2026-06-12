@@ -340,7 +340,7 @@ export default function MovieSection({
       </div>
 
       {/* Grid — stagger delays từ CSS nth-child, không cần inline style */}
-      <div className="reveal -mx-3 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-3 pb-3 pt-1 scrollbar-hide md:-mx-4 md:gap-4 md:px-4 md:pb-4">
+      <div className="reveal flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-3 pt-1 scrollbar-hide md:gap-4 md:pb-4">
         {displayMovies.map((movie, index) => (
           <div
             key={`${movie._id}-${index}`}

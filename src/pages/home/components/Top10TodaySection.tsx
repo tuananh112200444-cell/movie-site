@@ -366,7 +366,7 @@ export default function Top10TodaySection({ initialMovies = [], loading: parentL
       </div>
 
       {/* ── 2-column grid ── */}
-      <div className="-mx-3 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-3 pb-3 scrollbar-hide lg:hidden">
+      <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-3 scrollbar-hide lg:hidden">
         {loading
           ? Array.from({ length: 10 }).map((_, i) => <MobileSkeletonCard key={i} />)
           : movies.slice(0, 10).map((movie, idx) => (
