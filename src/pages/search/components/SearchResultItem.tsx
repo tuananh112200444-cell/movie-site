@@ -4,6 +4,7 @@ import type { MovieItem } from '@/types/movie';
 import { getOptimizedImageUrl } from '@/services/movieApi';
 import { parseMovieYear } from '@/utils/searchRanking';
 import { movieDetailUrl } from '@/utils/slugEncoder';
+import { cancelPrefetchMovieDetail, prefetchMovieDetail } from '@/utils/prefetchRoute';
 import MovieCountdown from '@/components/base/MovieCountdown';
 
 
@@ -37,6 +38,8 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
     <Link
       to={href}
       className="group relative flex flex-col cursor-pointer"
+      onMouseEnter={() => prefetchMovieDetail(movie.slug)}
+      onMouseLeave={() => cancelPrefetchMovieDetail(movie.slug)}
     >
       {/* Poster */}
       <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-white/5">
@@ -123,6 +126,8 @@ function ListItem({ movie, query }: { movie: MovieItem; query: string }) {
     <Link
       to={href}
       className="group flex gap-2.5 sm:gap-4 bg-[#0f1219] hover:bg-[#151921] border border-white/[0.05] hover:border-red-500/15 rounded-2xl p-2 sm:p-3 transition-all cursor-pointer"
+      onMouseEnter={() => prefetchMovieDetail(movie.slug)}
+      onMouseLeave={() => cancelPrefetchMovieDetail(movie.slug)}
     >
       {/* Thumbnail */}
       <div className="relative w-[80px] sm:w-[100px] md:w-[120px] aspect-[2/3] rounded-xl overflow-hidden bg-white/5 flex-shrink-0">

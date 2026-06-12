@@ -203,9 +203,35 @@ export async function fetchNewMoviesMultiSource(page = 1): Promise<MovieListResp
    OPTIMIZED: chỉ 2 nguồn nhanh nhất để giảm latency
    ════════════════════════════════════════════ */
 const SEARCH_SOURCES = [
-  { base: 'https://ophim1.com',  name: 'OPhim',  site: 'ophim', timeout: 5000, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://ophim.tv' },
-  { base: 'https://phimapi.com', name: 'KKPhim', site: 'phimapi', timeout: 5000, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://phimapi.net' },
+  { base: 'https://ophim1.com',  name: 'OPhim',  site: 'ophim', timeout: 2200, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://ophim.tv' },
+  { base: 'https://phimapi.com', name: 'KKPhim', site: 'phimapi', timeout: 2200, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://phimapi.net' },
 ] as const;
+
+async function fetchSearchJSON<T>(url: string, timeoutMs: number, signal?: AbortSignal): Promise<T> {
+  const ttl = resolveTTL(url);
+  const cached = getCached<T>(url, ttl);
+  if (cached) {
+    if (cached.stale) {
+      fetchOnce<T>(url, timeoutMs, signal)
+        .then((data) => setCached(url, data))
+        .catch(() => { /* keep stale cache */ });
+    }
+    return cached.data;
+  }
+
+  const inflightKey = `search:${url}`;
+  const inflight = inflightMap.get(inflightKey) as Promise<T> | undefined;
+  if (inflight) return inflight;
+
+  const promise = fetchOnce<T>(url, timeoutMs, signal)
+    .then((data) => {
+      setCached(url, data);
+      return data;
+    })
+    .finally(() => inflightMap.delete(inflightKey));
+  inflightMap.set(inflightKey, promise as Promise<unknown>);
+  return promise;
+}
 
 export async function searchMoviesMultiSource(keyword: string, page = 1, signal?: AbortSignal): Promise<MovieListResponse> {
   if (!keyword.trim()) return { status: true, items: [], pagination: { currentPage: 1, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
@@ -221,12 +247,12 @@ export async function searchMoviesMultiSource(keyword: string, page = 1, signal?
 
   const sourcePromises = sourceRequests.map(async ({ primaryUrl, mirrorUrl, name, site, timeout }) => {
     try {
-      const data = await fetchJSON<Record<string, unknown>>(primaryUrl, timeout, signal);
+      const data = await fetchSearchJSON<Record<string, unknown>>(primaryUrl, timeout, signal);
       return { result: withSourceMetadata(toMovieListResponse(data), site, name), source: name, url: primaryUrl };
     } catch {
       if (mirrorUrl) {
         try {
-          const data = await fetchJSON<Record<string, unknown>>(mirrorUrl, Math.min(timeout * 1.5, 8000), signal);
+          const data = await fetchSearchJSON<Record<string, unknown>>(mirrorUrl, Math.min(timeout, 2500), signal);
           return { result: withSourceMetadata(toMovieListResponse(data), site, name), source: `${name}-M`, url: mirrorUrl };
         } catch {
           return { result: { status: false, items: [], pagination: { currentPage: page, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } } as MovieListResponse, source: name, url: primaryUrl };
@@ -236,7 +262,18 @@ export async function searchMoviesMultiSource(keyword: string, page = 1, signal?
     }
   });
 
-  const sourceResults = await Promise.all(sourcePromises);
+  const settledSourceResults = await promiseAllSettledWithTimeout(sourcePromises, 2800);
+  const sourceResults = settledSourceResults
+    .filter((result): result is PromiseFulfilledResult<Awaited<(typeof sourcePromises)[number]>> => result.status === 'fulfilled')
+    .map((result) => result.value);
+
+  if (sourceResults.length === 0) {
+    return {
+      status: true,
+      items: [],
+      pagination: { currentPage: page, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 },
+    };
+  }
 
   // Sort by result count descending — source with most matches first
   sourceResults.sort((a, b) => {
@@ -825,12 +862,12 @@ async function fetchMovieDetailFromProxy(slug: string): Promise<MovieDetailRespo
   if (!SUPABASE_URL) return null;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4500);
+    const timer = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(
       `${SUPABASE_URL}/functions/v1/movie-detail-proxy?slug=${encodeURIComponent(slug)}`,
       {
         signal: controller.signal,
-        cache: 'default',
+        cache: 'force-cache',
       
       }
     );
@@ -1438,16 +1475,17 @@ export async function searchMoviesInSupabase(
   }
 }
 
-const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v1';
+const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v2';
 const SUPABASE_SEARCH_INDEX_TTL = 30 * 60 * 1000;
 let supabaseSearchIndexInflight: Promise<MovieItem[]> | null = null;
 
 export async function fetchSupabaseSearchIndex(options: { limit?: number; signal?: AbortSignal } = {}): Promise<MovieItem[]> {
   if (!ENABLE_SUPABASE_TEXT_SEARCH) return [];
-  const limit = options.limit ?? 400;
+  const limit = options.limit ?? 800;
+  const cacheKey = `${SUPABASE_SEARCH_INDEX_KEY}_${limit}`;
 
   try {
-    const raw = sessionStorage.getItem(SUPABASE_SEARCH_INDEX_KEY);
+    const raw = localStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
     if (raw) {
       const cached = JSON.parse(raw) as { items: MovieItem[]; ts: number };
       if (Date.now() - cached.ts < SUPABASE_SEARCH_INDEX_TTL) return cached.items;
@@ -1457,18 +1495,20 @@ export async function fetchSupabaseSearchIndex(options: { limit?: number; signal
   if (supabaseSearchIndexInflight) return supabaseSearchIndexInflight;
 
   supabaseSearchIndexInflight = (async () => {
-    const { data, error } = await supabase
-      .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, content, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note')
-      .eq('is_published', true)
-      .order('updated_at', { ascending: false })
-      .limit(limit)
-      .abortSignal(options.signal ?? new AbortController().signal);
-
-    if (error || !data) return [];
-    const items = ((data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);
+    if (!SUPABASE_URL) return [];
+    const url = new URL(`${SUPABASE_URL}/functions/v1/search-index-proxy`);
+    url.searchParams.set('limit', String(limit));
+    const res = await fetch(url.toString(), {
+      signal: options.signal,
+      cache: 'force-cache',
+    });
+    if (!res.ok) return [];
+    const data = await res.json() as { items?: Record<string, unknown>[] };
+    const items = ((data.items ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);
     try {
-      sessionStorage.setItem(SUPABASE_SEARCH_INDEX_KEY, JSON.stringify({ items, ts: Date.now() }));
+      const payload = JSON.stringify({ items, ts: Date.now() });
+      localStorage.setItem(cacheKey, payload);
+      sessionStorage.setItem(cacheKey, payload);
     } catch { /* quota */ }
     return items;
   })().catch((e) => {
@@ -2560,14 +2600,15 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
         [ophim, sb, proxy, blvietsub] = await Promise.all([ophimPromise, sbPromise, proxyPromise, blvietsubPromise!]);
       }
     } else {
-      // Default: Supabase first. Most saved/admin movies are playable there, so avoid slow external requests.
-      const sbPromise = fetchMovieDetailFromSupabase(slug);
+      // Default path: let the edge proxy serve DB/cache first. Direct Supabase is a fallback
+      // so a large click burst does not double the database queries for every movie open.
+      const proxyPromise = fetchMovieDetailFromProxy(slug);
 
       const quickPlayable = await raceFirstValidWithTimeout(
         [
-          sbPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
+          proxyPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
         ],
-        3500
+        1800
       );
       if (quickPlayable) {
         if (isQueerMovieDetail(quickPlayable.movie)) {
@@ -2586,12 +2627,12 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
         return quickPlayable;
       }
 
-      sb = await sbPromise.catch(() => null);
+      proxy = await proxyPromise.catch(() => null);
+      sb = detailHasPlayableEpisodes(proxy) ? null : await fetchMovieDetailFromSupabase(slug).catch(() => null);
       if (!detailHasPlayableEpisodes(sb)) {
         const ophimPromise = fetchMovieDetailFromOPhim(slug, false);
-        const proxyPromise = fetchMovieDetailFromProxy(slug);
         blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
-        [ophim, proxy, blvietsub] = await Promise.all([ophimPromise, proxyPromise, blvietsubPromise]);
+        [ophim, blvietsub] = await Promise.all([ophimPromise, blvietsubPromise]);
       }
     }
 

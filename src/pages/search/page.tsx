@@ -8,7 +8,7 @@ import SEO, { SITE_URL } from '@/components/base/SEO';
 import SearchResultItem from './components/SearchResultItem';
 import SearchFilterBar from './components/SearchFilterBar';
 import type { MovieItem } from '@/types/movie';
-import { searchMovies, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, searchMoviesInSupabase, searchQueerUniverseMovies, fetchSupabaseSearchIndex } from '@/services/movieApi';
+import { searchMovies, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, searchQueerUniverseMovies, fetchSupabaseSearchIndex } from '@/services/movieApi';
 import {
   mergeMoviesUnique,
   parseMovieYear,
@@ -53,7 +53,7 @@ const VIRTUAL_GENRE_TERMS: Record<string, string[]> = {
 };
 
 function normalizeSearchText(value: string): string {
-  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return value.toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function getMovieSearchText(movie: MovieItem): string {
@@ -99,8 +99,22 @@ function getInstantLocalHits(pool: MovieItem[], keyword: string, limit = 12): Mo
 /* ── Search History ── */
 const HISTORY_KEY = 'kp_search_history';
 const MAX_HISTORY = 10;
-const SEARCH_DEBOUNCE_MS = 700;
-const REMOTE_SUGGESTION_MIN_LENGTH = 4;
+const SEARCH_DEBOUNCE_MS = 350;
+const QUEER_SEARCH_TERMS = [
+  'bl',
+  'gl',
+  'dam my',
+  'đam mỹ',
+  'bach hop',
+  'bách hợp',
+  'boy love',
+  'boys love',
+  'girl love',
+  'girls love',
+  'yuri',
+  'lesbian',
+  'blvietsub',
+];
 
 function getSearchHistory(): string[] {
   try {
@@ -118,6 +132,11 @@ function addToHistory(term: string): void {
     const cleaned = [term.trim(), ...existing.filter(h => h.toLowerCase() !== term.trim().toLowerCase())].slice(0, MAX_HISTORY);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(cleaned));
   } catch { /* quota */ }
+}
+
+function isQueerSearchIntent(keyword: string): boolean {
+  const normalized = normalizeSearchText(keyword.trim());
+  return QUEER_SEARCH_TERMS.some((term) => normalized.includes(normalizeSearchText(term)));
 }
 
 export default function SearchPage() {
@@ -180,7 +199,7 @@ export default function SearchPage() {
 
   const ensureSearchIndexLoaded = useCallback(() => {
     if (searchIndexLoadRef.current) return searchIndexLoadRef.current;
-    searchIndexLoadRef.current = fetchSupabaseSearchIndex({ limit: 400 })
+    searchIndexLoadRef.current = fetchSupabaseSearchIndex({ limit: 800 })
       .then((items) => {
         if (items.length > 0) {
           setLocalPool((prev) => mergeMoviesUnique([...items, ...prev]));
@@ -222,7 +241,7 @@ export default function SearchPage() {
 
     // Check memory cache first (60s TTL for search)
     const normalizedKeyword = keyword.trim();
-    const cacheKey = `search_v5_${normalizedKeyword.toLowerCase()}_${pg}`;
+    const cacheKey = `search_v6_${normalizedKeyword.toLowerCase()}_${pg}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -249,20 +268,16 @@ export default function SearchPage() {
     }
 
     try {
-      const hasGoodInstantHits = instantItems.length >= 8;
       const apiPromise = searchMovies(normalizedKeyword, pg, searchCtrl.signal);
       const localPromise = pg === 1
-        ? (hasGoodInstantHits
-          ? Promise.resolve([])
-          : searchMoviesInSupabase(normalizedKeyword, {
-            timeoutMs: 1200,
-            limit: 16,
-            minLength: REMOTE_SUGGESTION_MIN_LENGTH,
-            signal: searchCtrl.signal,
-          }))
+        ? ensureSearchIndexLoaded()
+          .then((indexedItems) => getInstantLocalHits(indexedItems, normalizedKeyword, 16))
+          .catch(() => [])
         : Promise.resolve([]);
         const queerPromise = pg === 1
-        ? searchQueerUniverseMovies(normalizedKeyword, { timeoutMs: 1400, limit: 16, signal: searchCtrl.signal })
+        ? (isQueerSearchIntent(normalizedKeyword)
+          ? searchQueerUniverseMovies(normalizedKeyword, { timeoutMs: 1400, limit: 16, signal: searchCtrl.signal })
+          : Promise.resolve([]))
         : Promise.resolve([]);
 
       const [apiResult, localResult, queerResult] = await Promise.allSettled([apiPromise, localPromise, queerPromise]);
@@ -316,7 +331,7 @@ export default function SearchPage() {
         if (searchAbortRef.current === searchCtrl) searchAbortRef.current = null;
       }
     }
-  }, [localPool]);
+  }, [ensureSearchIndexLoaded, localPool]);
 
   useEffect(() => {
     if (q) {
@@ -355,16 +370,6 @@ export default function SearchPage() {
         items = mergeMoviesUnique([...items, ...getInstantLocalHits(indexedItems, kw, 8)]);
       }
 
-      if (!ctrl.signal.aborted && items.length < 3 && kw.trim().length >= REMOTE_SUGGESTION_MIN_LENGTH) {
-        const localItems = await searchMoviesInSupabase(kw.trim(), {
-          timeoutMs: 900,
-          limit: 8,
-          minLength: REMOTE_SUGGESTION_MIN_LENGTH,
-          signal: ctrl.signal,
-        });
-        items = mergeMoviesUnique([...items, ...localItems]);
-      }
-
       items = sortMoviesForSearch(mergeMoviesUnique(items), kw.trim(), 'relevance').slice(0, 8);
       if (!ctrl.signal.aborted) {
         setSuggestions(items);
@@ -388,11 +393,7 @@ export default function SearchPage() {
       setSuggestions(instantItems);
       setLoadingSug(instantItems.length === 0);
       debounceRef.current = setTimeout(() => {
-        const nextQuery = val.trim();
-        void fetchSuggestions(nextQuery);
-        if (nextQuery && nextQuery !== q.trim()) {
-          setSearchParams({ q: nextQuery });
-        }
+        void fetchSuggestions(val.trim());
       }, SEARCH_DEBOUNCE_MS);
     } else {
       setSuggestions([]);
