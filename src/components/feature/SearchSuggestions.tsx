@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMoviesInSupabase } from '../../services/movieApi';
+import { fetchSupabaseSearchIndex, getOptimizedImageUrl } from '../../services/movieApi';
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -43,7 +43,7 @@ function addToHistory(term: string): void {
 }
 
 function normalizeSearchText(value: string): string {
-  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return value.toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function getMovieSearchText(movie: Movie): string {
@@ -106,7 +106,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
 
   const ensureSearchIndexLoaded = useCallback(() => {
     if (indexLoadRef.current) return indexLoadRef.current;
-    indexLoadRef.current = fetchSupabaseSearchIndex({ limit: 500 })
+    indexLoadRef.current = fetchSupabaseSearchIndex({ limit: 800 })
       .then((items) => {
         const movies = items as unknown as Movie[];
         if (movies.length > 0) setLocalPool((prev) => mergeMoviesUnique([...movies, ...prev]));
@@ -147,7 +147,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
     } catch { /* ignore cache */ }
 
     try {
-      // Search BOTH OPhim API + Supabase in parallel
+      // Search the cached index locally so typing does not hit Postgres per keyword.
       let items = instantItems;
       const indexedItems = await ensureSearchIndexLoaded();
       if (!ctrl.signal.aborted && indexedItems.length > 0) {
@@ -155,15 +155,6 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
       }
 
       // Merge Supabase results (admin-added movies) — deduplicate by slug
-      if (!ctrl.signal.aborted && items.length < 3 && q.trim().length >= 4) {
-        const localItems = await searchMoviesInSupabase(q.trim(), {
-          timeoutMs: 900,
-          limit: 8,
-          minLength: 4,
-          signal: ctrl.signal,
-        });
-        items = mergeMoviesUnique([...items, ...(localItems as unknown as Movie[])]);
-      }
       items = sortMoviesForSearch(items, q.trim(), 'relevance');
 
       if (!ctrl.signal.aborted) {

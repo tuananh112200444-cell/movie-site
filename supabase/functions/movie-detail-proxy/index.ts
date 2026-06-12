@@ -4,11 +4,61 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const ENABLE_PUBLIC_LAZY_PERSIST = Deno.env.get('ENABLE_PUBLIC_LAZY_PERSIST') === 'true';
+const DETAIL_CACHE_TTL_MIN = 10;
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
+
+const MOVIE_DETAIL_SELECT = [
+  'id',
+  'slug',
+  'name',
+  'origin_name',
+  'title_vi',
+  'title_en',
+  'title_zh',
+  'title_original',
+  'content',
+  'type',
+  'status',
+  'thumb_url',
+  'poster_url',
+  'trailer_url',
+  'time',
+  'episode_current',
+  'episode_total',
+  'current_episode',
+  'total_episodes',
+  'schedule_type',
+  'release_time',
+  'release_day',
+  'schedule_timezone',
+  'release_at',
+  'next_episode_at',
+  'next_episode_name',
+  'schedule_note',
+  'quality',
+  'lang',
+  'year',
+  'actor',
+  'director',
+  'category',
+  'country',
+  'notify',
+  'showtimes',
+  'view',
+  'ophim_id',
+  'ophim_slug',
+  'tmdb_id',
+  'imdb_id',
+  'source_site',
+  'source_name',
+  'is_published',
+  'created_at',
+  'updated_at',
+].join(',');
 
 function normalizeDailymotionUrl(url: string): string {
   const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/video\/([a-zA-Z0-9]+)/i.exec(url);
@@ -64,6 +114,64 @@ function isHiddenEpisodeSource(source: unknown): boolean {
 function pushEpisode(serverMap: Map<string, unknown[]>, serverName: string, epData: Record<string, unknown>): void {
   if (!serverMap.has(serverName)) serverMap.set(serverName, []);
   serverMap.get(serverName)!.push(epData);
+}
+
+function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...CORS_HEADERS,
+      ...extraHeaders,
+    },
+  });
+}
+
+function timeoutSignal(ms: number): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
+async function readCachedDetail(
+  supabase: ReturnType<typeof createClient>,
+  slug: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const { data } = await supabase
+      .from('movie_api_cache')
+      .select('payload, expires_at')
+      .eq('slug', slug)
+      .abortSignal(timeoutSignal(650))
+      .maybeSingle();
+
+    const row = data as { payload?: unknown; expires_at?: string } | null;
+    if (!row?.payload || !row.expires_at || row.expires_at <= new Date().toISOString()) return null;
+    return row.payload as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedDetail(
+  supabase: ReturnType<typeof createClient>,
+  slug: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await supabase
+      .from('movie_api_cache')
+      .upsert({
+        slug,
+        payload,
+        source: 'movie-detail-proxy',
+        updated_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + DETAIL_CACHE_TTL_MIN * 60 * 1000).toISOString(),
+      })
+      .abortSignal(timeoutSignal(800));
+  } catch {
+    /* cache write is best-effort */
+  }
 }
 
 /* ── Search OPhim for correct slug when detail 404 ── */
@@ -449,17 +557,25 @@ serve(async (req) => {
 
   const { searchParams } = new URL(req.url);
   const slug = searchParams.get('slug');
+  const forceRefresh = searchParams.get('refresh') === '1';
   if (!slug) {
-    return new Response(JSON.stringify({ status: false, message: 'Missing slug' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
+    return jsonResponse({ status: false, message: 'Missing slug' }, 400);
   }
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    if (!forceRefresh) {
+      const cachedDetail = await readCachedDetail(supabase, slug);
+      if (cachedDetail?.status) {
+        return jsonResponse(cachedDetail, 200, {
+          'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800',
+          'X-Cache': 'DB-HIT',
+        });
+      }
+    }
 
     /* ── 1. Try Supabase DB first (multiple slug variants) ── */
     let movie: Record<string, unknown> | null = null;
@@ -470,7 +586,7 @@ serve(async (req) => {
     for (const variant of slugVariants) {
       const { data, error } = await supabase
         .from('movies')
-        .select('*')
+        .select(MOVIE_DETAIL_SELECT)
         .eq('slug', variant)
         .eq('is_published', true)
         .maybeSingle();
@@ -488,7 +604,7 @@ serve(async (req) => {
       for (const variant of slugVariants) {
         const { data, error } = await supabase
           .from('movies')
-          .select('*')
+          .select(MOVIE_DETAIL_SELECT)
           .eq('ophim_slug', variant)
           .eq('is_published', true)
           .limit(1)
@@ -517,7 +633,7 @@ serve(async (req) => {
       ] = await Promise.all([
         supabase
           .from('movie_episodes')
-          .select('*')
+          .select('server_name, source, episode_number, slug, episode_name, link_embed, link_m3u8, subtitle_url')
           .eq('movie_id', movieId)
           .order('episode_number', { ascending: true }),
         supabase
@@ -527,7 +643,7 @@ serve(async (req) => {
           .order('episode_number', { ascending: true }),
         supabase
           .from('streams')
-          .select('*')
+          .select('server_name, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active')
           .eq('movie_id', movieId)
           .eq('is_active', true)
           .order('priority', { ascending: false }),
@@ -725,10 +841,7 @@ serve(async (req) => {
     }
 
     if (!movieData) {
-      return new Response(JSON.stringify({ status: false, message: 'Movie not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-      });
+      return jsonResponse({ status: false, message: 'Movie not found' }, 404);
     }
 
     const m = movieData;
@@ -781,25 +894,26 @@ serve(async (req) => {
       episodes: episodeServers,
     };
 
-    // Cache successful responses for 30 seconds to reduce DB load
+    // Cache successful responses for repeat opens; episode metadata rarely changes minute by minute.
     const hasEpisodes = episodeServers.length > 0;
     const cacheControl = hasEpisodes
-      ? 'public, max-age=30, stale-while-revalidate=60'
+      ? 'public, max-age=300, stale-while-revalidate=1800'
       : 'no-store';
 
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': cacheControl,
-        ...CORS_HEADERS,
-      },
+    if (hasEpisodes) {
+      await writeCachedDetail(supabase, slug, response);
+      const responseSlug = String(response.movie.slug || '');
+      if (responseSlug && responseSlug !== slug) {
+        await writeCachedDetail(supabase, responseSlug, response);
+      }
+    }
+
+    return jsonResponse(response, 200, {
+      'Cache-Control': cacheControl,
+      'X-Cache': forceRefresh ? 'REFRESH' : 'MISS',
     });
   } catch (err) {
     console.error('[movie-detail-proxy] Fatal Error:', err);
-    return new Response(JSON.stringify({ status: false, message: 'Server error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
+    return jsonResponse({ status: false, message: 'Server error' }, 500);
   }
 });
