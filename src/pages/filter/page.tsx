@@ -13,7 +13,7 @@ type ViewMode = 'grid' | 'list';
 const VIRTUAL_GENRE_KEYWORDS: Record<string, string[]> = {
 };
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 30;
 
 function getMovieKey(movie: MovieItem): string {
   return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
@@ -341,7 +341,7 @@ export default function FilterPage() {
             ) : (
               <>
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
                     {movies.map(m => (
                       <MovieCard key={getMovieKey(m)} movie={m} />
                     ))}
@@ -518,8 +518,8 @@ function LoadingSkeleton({ viewMode }: { viewMode: ViewMode }) {
     );
   }
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
-      {Array.from({ length: 24 }).map((_, i) => (
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+      {Array.from({ length: PAGE_SIZE }).map((_, i) => (
         <div key={i}>
           <div className="aspect-[2/3] skeleton rounded-xl" />
           <div className="mt-2 h-3 skeleton rounded w-3/4" />
