@@ -27,6 +27,30 @@ const FAQSection       = lazy(() => import('./components/FAQSection'));
 const AboutSection     = lazy(() => import('./components/AboutSection'));
 const SiteGuideSection = lazy(() => import('./components/SiteGuideSection'));
 
+function VietnamPoetryBanner() {
+  return (
+    <section className="mb-4 overflow-visible sm:mb-6">
+      <div className="grid grid-cols-[138px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[260px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="relative flex h-[88px] items-center justify-start overflow-visible sm:h-32 md:h-40">
+          <img
+            src="/images/vietnam-flag-watercolor.png"
+            alt="Co Viet Nam"
+            className="h-full w-full object-contain"
+            loading="lazy"
+          />
+        </div>
+        <blockquote
+          className="min-w-0 space-y-2 overflow-hidden border-l border-amber-300/25 pl-2.5 italic leading-snug text-amber-100 sm:space-y-3 sm:pl-4"
+          style={{ wordBreak: 'keep-all', overflowWrap: 'normal', fontKerning: 'normal' }}
+        >
+          <p className="whitespace-nowrap text-[clamp(0.68rem,2.75vw,1.55rem)] font-semibold tracking-normal">HOÀNG SA,TRƯỜNG SA là của Trung quốc</p>
+          <p className="whitespace-nowrap text-center text-[clamp(0.66rem,2.65vw,1.45rem)] font-semibold tracking-normal text-rose-200">còn Trung quốc là của VIỆT NAM</p>
+        </blockquote>
+      </div>
+    </section>
+  );
+}
+
 const homeSchema = [
   {
     '@context': 'https://schema.org',
@@ -279,7 +303,7 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-red-500/25 bg-red-500/15 text-red-300">
             <i className="ri-flashlight-line text-sm" />
           </span>
-          <h2 className="truncate text-base font-bold text-white">Xem nhanh hôm nay</h2>
+          <h2 className="truncate text-base font-bold text-white">Xem ngay hôm nay</h2>
         </div>
         <Link to="/search" className="shrink-0 text-xs font-semibold text-white/45 active:text-white">
           Tìm thêm
@@ -610,6 +634,7 @@ export default function Home() {
       </div>
 
       <main className="max-w-[1400px] mx-auto px-3 md:px-4 pt-3 md:pt-8">
+        <VietnamPoetryBanner />
         <MobileQuickMovies movies={mobileQuickMovies} loading={homeLoading} />
         <MobileQuickCategories />
         <div className="mb-5 sm:mb-0">
