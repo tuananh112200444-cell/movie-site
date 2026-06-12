@@ -34,6 +34,36 @@ function extractMovies(results: PromiseSettledResult<MovieListResponse>[]): Movi
     .filter((r): r is PromiseFulfilledResult<MovieListResponse> => r.status === 'fulfilled')
     .flatMap((r) => r.value.items ?? []);
 }
+
+function getMovieKey(movie: Movie): string {
+  return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
+}
+
+function getModifiedTime(movie: Movie): number {
+  return new Date(movie.modified?.time ?? 0).getTime() || 0;
+}
+
+function dedupeAndSortNewest(movies: Movie[]): Movie[] {
+  const seen = new Set<string>();
+  return movies
+    .filter((movie) => {
+      const key = getMovieKey(movie);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      const byYear = (b.year ?? 0) - (a.year ?? 0);
+      if (byYear !== 0) return byYear;
+      return getModifiedTime(b) - getModifiedTime(a);
+    });
+}
+
+function pageSlice<T>(items: T[], page: number): T[] {
+  const start = (page - 1) * DEFAULT_PAGE_SIZE;
+  return items.slice(start, start + DEFAULT_PAGE_SIZE);
+}
+
 function inferTotalPages(totalPages: number, itemCount: number, page: number, pagesToLoad: number): number {
   const loadedUntil = page + pagesToLoad - 1;
   if (itemCount >= DEFAULT_PAGE_SIZE * pagesToLoad) {
@@ -135,11 +165,19 @@ export function useMoviesByType(
       if (append) setLoadingMore(true);
       else setLoading(true);
 
-      const promises = Array.from({ length: pagesToLoad }, (_, i) =>
-        fetchMoviesByType(type, page + i, sortField, 'desc')
+      const stableNewest = sortField === 'year_stable';
+      const sourcePagesToLoad = stableNewest
+        ? Math.min(Math.max(page + 4, 6), 12)
+        : pagesToLoad;
+      const sourceStartPage = stableNewest ? 1 : page;
+      const sourceSortField = stableNewest ? 'year' : sortField;
+      const promises = Array.from({ length: sourcePagesToLoad }, (_, i) =>
+        fetchMoviesByType(type, sourceStartPage + i, sourceSortField, 'desc')
       );
       const results = await Promise.allSettled(promises);
-      const allMovies = extractMovies(results);
+      const allMovies = stableNewest
+        ? pageSlice(dedupeAndSortNewest(extractMovies(results)), page)
+        : extractMovies(results);
       let tp = inferTotalPages(extractTotalPages(results), allMovies.length, page, pagesToLoad);
 
       // Fallback: nếu API trả totalPages ≤ 1 nhưng có nhiều items,

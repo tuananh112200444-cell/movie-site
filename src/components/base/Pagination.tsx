@@ -64,14 +64,14 @@ export default function Pagination({
           icon="ri-skip-left-line"
           disabled={page === 1}
           href={pageHref(basePath, 1)}
-          label="Trang đầu"
+          label="Trang dau"
           onClick={() => goToPage(1)}
         />
         <PageIconButton
           icon="ri-arrow-left-s-line"
           disabled={page === 1}
           href={pageHref(basePath, page - 1)}
-          label="Trang trước"
+          label="Trang truoc"
           onClick={() => goToPage(page - 1)}
         />
 
@@ -108,7 +108,7 @@ export default function Pagination({
           icon="ri-skip-right-line"
           disabled={!canGoNext}
           href={pageHref(basePath, safeTotal)}
-          label="Trang cuối"
+          label="Trang cuoi"
           onClick={() => goToPage(safeTotal)}
         />
       </div>

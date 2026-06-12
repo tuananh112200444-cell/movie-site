@@ -150,7 +150,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
 
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
   const [sortBy, setSortBy] = useState<'new' | 'hot' | 'updated'>('new');
-  const sortField = sortBy === 'new' ? 'year' : 'modified.time';
+  const sortField = sortBy === 'updated' ? 'modified.time' : 'year_stable';
 
   /* ── Gọi API đúng page — không còn pool system ── */
   const { movies: rawMovies, loading, totalPages: hookTotalPages } = useMoviesByType(
@@ -345,7 +345,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 md:gap-4">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
                 <div key={i} className="animate-pulse">
                   <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -364,7 +364,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
             <p className="text-sm text-white/15 mt-1">Thử chọn danh mục khác</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 md:gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
               {movies.map((m, idx) => (
                 <MovieCard key={m._id} movie={m} priority={idx < 2} />
               ))}

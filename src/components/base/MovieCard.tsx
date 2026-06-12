@@ -105,7 +105,7 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
       <div className="relative flex h-full flex-col">
         {/* Poster */}
         <div
-          className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-xl bg-[#16192a]"
+          className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg bg-[#16192a] sm:rounded-xl"
         >
           <div className={`absolute inset-0 blur-placeholder z-[1] transition-opacity duration-500 ${imgLoaded ? 'opacity-0' : 'opacity-100'}`} />
           {imgError && (
@@ -130,8 +130,8 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
           {/* Single gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-black/15 pointer-events-none z-[2]" />
 
-          <div className="absolute top-2 left-2 right-2 z-[3] flex items-start justify-between">
-            <div className="flex flex-col gap-1">
+          <div className="absolute top-1 left-1 right-1 z-[3] flex items-start justify-between gap-1 sm:top-2 sm:left-2 sm:right-2">
+            <div className="flex flex-col gap-0.5 sm:gap-1">
               {isNew && (
                 <span className="text-[9px] font-black bg-gradient-to-r from-red-500 to-red-600 text-white px-1.5 py-0.5 rounded-md tracking-wide shadow-sm">MỚI</span>
               )}
@@ -139,7 +139,7 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
               {getEpisodeBadge(movie.episode_current)}
             </div>
             {movie.quality && (
-              <span className="text-[9px] font-black bg-black/60 text-white/90 px-1.5 py-0.5 rounded-md border border-white/10 tracking-wider">
+              <span className="text-[8px] sm:text-[9px] font-black bg-black/60 text-white/90 px-1 py-0.5 sm:px-1.5 rounded border border-white/10 tracking-wider">
                 {movie.quality}
               </span>
             )}
@@ -147,14 +147,14 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
 
           {/* Play button: GIẢM shadow layers, ngắn duration */}
           <div className="absolute inset-0 z-[3] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <div className="absolute inset-0 bg-black/30 rounded-xl" />
-            <div className="relative w-8 h-8 flex items-center justify-center bg-red-500 rounded-full scale-50 group-hover:scale-100 transition-transform duration-200">
-              <i className="ri-play-fill text-white text-base ml-0.5" />
+            <div className="absolute inset-0 bg-black/30 rounded-lg sm:rounded-xl" />
+            <div className="relative flex h-7 w-7 items-center justify-center rounded-full bg-red-500 scale-50 group-hover:scale-100 transition-transform duration-200 sm:h-8 sm:w-8">
+              <i className="ri-play-fill text-white text-sm sm:text-base ml-0.5" />
             </div>
           </div>
 
           {/* Info overlay on hover — visible on mobile via active state */}
-          <div className="absolute bottom-0 left-0 right-0 z-[3] p-2.5 translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200">
+          <div className="absolute bottom-0 left-0 right-0 z-[3] hidden p-2.5 translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200 sm:block">
             <div className="flex items-center gap-1.5 flex-wrap">
               {movie.time && (
                 <span className="text-[10px] text-white/60 font-medium flex items-center gap-0.5">
@@ -171,18 +171,18 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
             </div>
           </div>
 
-          <div className="absolute inset-0 rounded-xl border border-white/0 group-hover:border-red-500/30 transition-colors duration-200 pointer-events-none z-[3]" />
+          <div className="absolute inset-0 rounded-lg border border-white/0 group-hover:border-red-500/30 transition-colors duration-200 pointer-events-none z-[3] sm:rounded-xl" />
         </div>
 
         {/* Info below — mobile: hiện rating + tập luôn */}
-        <div className="mt-1.5 md:mt-2.5 px-0.5 flex min-h-[66px] flex-col md:min-h-[78px]">
-          <p className="h-[30px] text-white/90 text-[11px] md:h-[36px] md:text-[13px] font-semibold line-clamp-2 group-hover:text-red-400 transition-colors duration-200 leading-snug">
+        <div className="mt-1 flex min-h-[62px] flex-col px-0.5 sm:mt-1.5 md:mt-2 md:min-h-[72px]">
+          <p className="min-h-[30px] text-[10px] font-semibold leading-tight text-white/90 line-clamp-2 group-hover:text-red-400 transition-colors duration-200 sm:min-h-[30px] sm:text-[11px] md:min-h-[36px] md:text-[13px]">
             {getDisplayTitle(movie)}
           </p>
-          <p className="mt-0.5 h-[13px] text-white/30 text-[9px] md:h-[16px] md:text-[11px] truncate">
+          <p className="mt-0.5 hidden min-h-[13px] text-white/30 text-[9px] md:min-h-[18px] md:text-[11px] truncate sm:block">
             {getDisplayOrigin(movie) && getDisplayOrigin(movie) !== getDisplayTitle(movie) ? getDisplayOrigin(movie) : '\u00a0'}
           </p>
-          <div className="mt-auto flex h-[18px] items-center gap-1 md:gap-2 pt-0.5">
+          <div className="mt-auto flex min-h-[18px] items-center gap-1 md:gap-2 pt-0.5 md:min-h-[18px]">
             {movie.year && <span className="text-[9px] md:text-[11px] text-white/40 font-medium">{movie.year}</span>}
             {epText && (
               <>

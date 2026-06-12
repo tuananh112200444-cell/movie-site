@@ -407,7 +407,7 @@ export default function MovieDetailPage() {
                     </Link>
                   )}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8">
                   {related.map((m) => <MovieCard key={m._id} movie={m} />)}
                 </div>
               </div>

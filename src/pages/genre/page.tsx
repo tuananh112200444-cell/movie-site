@@ -451,16 +451,6 @@ export default function GenrePage() {
     }
   }, [searchParams, page]);
 
-  const handleSetPage = useCallback((p: number) => {
-    setPage(p);
-    if (p > 1) {
-      setSearchParams({ page: String(p) });
-    } else {
-      setSearchParams({});
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [setSearchParams]);
-
   const [movies, setMovies] = useState<MovieItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('modified.time_desc');
@@ -480,25 +470,27 @@ export default function GenrePage() {
   const fetchMovies = useCallback(async (pg: number, reset = false, sort = sortBy) => {
     if (!slug) return;
     if (reset) {
-      // In-memory cache hit
-      const cached = poolMapRef.current[sort];
-      if (cached && cached.length > 0) {
-        setMovies(cached);
-        setTotalPages(inferCachedTotalPages(cached, totalPagesMapRef.current[sort] ?? 1));
-        setTotalItems(totalItemsMapRef.current[sort] ?? cached.length);
-        setLoading(false);
-        return;
-      }
-      // SessionStorage cache hit
-      const ssCached = getPoolCache(slug, sort);
-      if (ssCached && ssCached.length > 0) {
-        poolMapRef.current[sort] = ssCached;
-        seenMapRef.current[sort] = new Set(ssCached.map(getMovieKey));
-        setMovies(ssCached);
-        setTotalPages(inferCachedTotalPages(ssCached, totalPagesMapRef.current[sort] ?? 1));
-        setTotalItems(totalItemsMapRef.current[sort] ?? ssCached.length);
-        setLoading(false);
-        return;
+      if (pg === 1) {
+        // In-memory cache hit
+        const cached = poolMapRef.current[sort];
+        if (cached && cached.length > 0) {
+          setMovies(cached);
+          setTotalPages(inferCachedTotalPages(cached, totalPagesMapRef.current[sort] ?? 1));
+          setTotalItems(totalItemsMapRef.current[sort] ?? cached.length);
+          setLoading(false);
+          return;
+        }
+        // SessionStorage cache hit
+        const ssCached = getPoolCache(slug, sort);
+        if (ssCached && ssCached.length > 0) {
+          poolMapRef.current[sort] = ssCached;
+          seenMapRef.current[sort] = new Set(ssCached.map(getMovieKey));
+          setMovies(ssCached);
+          setTotalPages(inferCachedTotalPages(ssCached, totalPagesMapRef.current[sort] ?? 1));
+          setTotalItems(totalItemsMapRef.current[sort] ?? ssCached.length);
+          setLoading(false);
+          return;
+        }
       }
       seenMapRef.current[sort] = new Set();
       poolMapRef.current[sort] = [];
@@ -543,7 +535,7 @@ export default function GenrePage() {
       totalPagesMapRef.current[sort] = tp;
       setTotalItems(ti);
       totalItemsMapRef.current[sort] = ti;
-      if (poolMapRef.current[sort]?.length) {
+      if (pg === 1 && poolMapRef.current[sort]?.length) {
         setPoolCache(slug, sort, poolMapRef.current[sort]);
       }
     } catch {
@@ -574,11 +566,10 @@ export default function GenrePage() {
     fetchMovies(1, true, newSort);
   };
 
-  const handleLoadMore = () => {
-    const next = page + 1;
+  const handlePageChange = useCallback((next: number) => {
     setPage(next);
-    fetchMovies(next, false, sortBy);
-  };
+    fetchMovies(next, true, sortBy);
+  }, [fetchMovies, sortBy]);
 
   if (!meta) {
     return (
@@ -772,7 +763,7 @@ export default function GenrePage() {
         {/* ─── Movie Grid ─── */}
         <div className="pt-6">
           {loading && movies.length === 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : movies.length === 0 ? (
@@ -785,7 +776,7 @@ export default function GenrePage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
                 {movies.map((m, idx) => (
                   <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 2} />
                 ))}
@@ -796,7 +787,7 @@ export default function GenrePage() {
                 totalPages={totalPages}
                 basePath={canonicalPath}
                 hasNext={page < totalPages}
-                onPageChange={setPage}
+                onPageChange={handlePageChange}
               />
             </>
           )}
