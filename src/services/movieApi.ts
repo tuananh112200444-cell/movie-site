@@ -829,7 +829,48 @@ export async function fetchMoviesByCategory(params: {
 }
 
 export async function searchMovies(keyword: string, page = 1, signal?: AbortSignal): Promise<MovieListResponse> {
-  return searchMoviesMultiSource(keyword, page, signal);
+  const kw = keyword.trim();
+  if (!kw) {
+    return { status: true, items: [], pagination: { currentPage: 1, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
+  }
+
+  const [apiResult, supabaseResult, queerResult] = await Promise.allSettled([
+    searchMoviesMultiSource(kw, page, signal),
+    searchMoviesInSupabase(kw, { limit: 36, timeoutMs: 1800, minLength: 2, signal }),
+    page === 1
+      ? searchQueerUniverseMovies(kw, { limit: 24, timeoutMs: 2200, minLength: 2, signal })
+      : Promise.resolve([]),
+  ]);
+
+  const apiData = apiResult.status === 'fulfilled'
+    ? apiResult.value
+    : { status: true, items: [], pagination: { currentPage: page, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
+  const supabaseItems = supabaseResult.status === 'fulfilled' ? supabaseResult.value : [];
+  const queerItems = queerResult.status === 'fulfilled' ? queerResult.value : [];
+  const items = sortMoviesForSearch(
+    mergeMoviesUnique([...(page === 1 ? queerItems : []), ...supabaseItems, ...(apiData.items ?? [])]),
+    kw,
+    'relevance',
+  );
+  const apiPagination = apiData.pagination ?? { currentPage: page, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 };
+  const totalItemsPerPage = apiPagination.totalItemsPerPage || 24;
+  const totalItems = Math.max(apiPagination.totalItems ?? 0, items.length);
+
+  return {
+    status: true,
+    items,
+    pagination: {
+      ...apiPagination,
+      currentPage: page,
+      totalItems,
+      totalItemsPerPage,
+      totalPages: Math.max(
+        apiPagination.totalPages ?? 1,
+        totalItems > 0 ? Math.ceil(totalItems / totalItemsPerPage) : 1,
+        items.length >= totalItemsPerPage ? page + 1 : page,
+      ),
+    },
+  };
 }
 
 /* ════════════════════════════════════════════
