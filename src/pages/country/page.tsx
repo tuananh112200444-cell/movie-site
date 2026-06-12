@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useParams, Link, useLocation, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
@@ -9,6 +9,7 @@ import type { Movie } from '@/types/movie';
 import CountryHeroBanner from './components/CountryHeroBanner';
 import CountrySEOContent from './components/CountrySEOContent';
 import { useLazySection } from '@/hooks/useLazySection';
+import Pagination from '@/components/base/Pagination';
 
 export interface CountryConfig {
   slug: string;
@@ -363,7 +364,8 @@ interface Props {
 export default function CountryPage({ countrySlug }: Props) {
   const config = COUNTRY_CONFIGS[countrySlug];
   const { pathname } = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { sectionRef: seoRef, visible: seoVisible } = useLazySection('300px');
 
   // Read page from URL param
@@ -381,13 +383,12 @@ export default function CountryPage({ countrySlug }: Props) {
 
   const handleSetPage = useCallback((p: number) => {
     setPage(p);
-    if (p > 1) {
-      setSearchParams({ page: String(p) });
-    } else {
-      setSearchParams({});
-    }
+    navigate({
+      pathname: config?.path ?? pathname,
+      search: p > 1 ? `?page=${p}` : '',
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [setSearchParams]);
+  }, [config?.path, navigate, pathname]);
   
   // Self-referencing canonical — includes page param when page > 1
   const canonicalUrl = page > 1 
@@ -425,7 +426,11 @@ export default function CountryPage({ countrySlug }: Props) {
     setPoolReady(false);
   }, []);
 
-  useEffect(() => { resetPool(); setPage(1); setSearchParams({}); }, [countrySlug, resetPool, setSearchParams]);
+  useEffect(() => {
+    resetPool();
+    setPage(1);
+    navigate({ pathname: config?.path ?? pathname, search: '' }, { replace: true });
+  }, [countrySlug, config?.path, navigate, pathname, resetPool]);
 
   useEffect(() => {
     if (initialised.current) return;
@@ -515,17 +520,6 @@ export default function CountryPage({ countrySlug }: Props) {
   const nextPage = hasNextPage ? `${SITE_URL}${config?.path ?? pathname}?page=${page + 1}` : undefined;
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [page]);
-
-  const pageButtons = useMemo<(number | '...')[]>(() => {
-    const total = Math.min(totalPages, 999);
-    if (total <= 9) return Array.from({ length: total }, (_, i) => i + 1);
-    const range: (number | '...')[] = [1];
-    if (page > 4) range.push('...');
-    for (let i = Math.max(2, page - 2); i <= Math.min(total - 1, page + 3); i++) range.push(i);
-    if (page < total - 4) range.push('...');
-    range.push(total);
-    return range;
-  }, [page, totalPages]);
 
   if (!config) {
     return (
@@ -672,36 +666,17 @@ export default function CountryPage({ countrySlug }: Props) {
 
         {/* Pagination */}
         {!loading && (sortedMovies.length > 0 || page > 1) && (
-          <div className="mt-10 flex flex-col items-center gap-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-white/42">
-              Trang <span className="font-semibold text-white/85">{page}</span>
-              <span>/</span>
-              <span>{totalPages.toLocaleString('vi')}</span>
-            </div>
-            <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-white/[0.035] p-1">
-              <NavBtn icon="ri-skip-left-line" disabled={page === 1} onClick={() => handleSetPage(1)} title="Trang đầu" href={`${SITE_URL}${config?.path ?? pathname}`} />
-              <NavBtn icon="ri-arrow-left-s-line" disabled={page === 1} onClick={() => handleSetPage(page - 1)} title="Trang trước" href={`${SITE_URL}${config?.path ?? pathname}?page=${page - 1}`} />
-              {pageButtons.map((btn, idx) =>
-                btn === '...' ? (
-                  <span key={`d${idx}`} className="flex h-9 min-w-7 flex-shrink-0 items-center justify-center px-1 text-sm text-white/25 select-none">...</span>
-                ) : (
-                  <button
-                    key={btn}
-                    onClick={() => handleSetPage(btn as number)}
-                    className={`flex h-9 min-w-9 flex-shrink-0 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                      page === btn
-                        ? `${config.accentBg} text-white`
-                        : 'text-white/55 hover:text-white hover:bg-white/[0.08]'
-                    }`}
-                  >
-                    {btn}
-                  </button>
-                )
-              )}
-              <NavBtn icon="ri-arrow-right-s-line" disabled={!hasNextPage} onClick={() => handleSetPage(page + 1)} title="Trang sau" href={`${SITE_URL}${config?.path ?? pathname}?page=${page + 1}`} />
-            </div>
+          <>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              basePath={config?.path ?? pathname}
+              hasNext={hasNextPage}
+              accentClass={config.accentBg}
+              onPageChange={setPage}
+            />
             <JumpToPage current={page} onGo={handleSetPage} />
-          </div>
+          </>
         )}
 
         {/* SEO Content */}
@@ -711,21 +686,6 @@ export default function CountryPage({ countrySlug }: Props) {
       </main>
       <Footer />
     </div>
-  );
-}
-
-function NavBtn({ icon, disabled, onClick, title, href }: { icon: string; disabled: boolean; onClick: () => void; title: string; href: string }) {
-  return (
-    <a
-      href={disabled ? undefined : href}
-      onClick={(e) => { e.preventDefault(); if (!disabled) onClick(); }}
-      aria-disabled={disabled}
-      title={title}
-      className={`flex h-9 min-w-9 flex-shrink-0 items-center justify-center rounded-lg text-white/55 transition-colors cursor-pointer ${disabled ? 'opacity-30 pointer-events-none' : 'hover:bg-white/[0.08] hover:text-white'}`}
-    >
-      <i className={`${icon} text-base`} />
-      <span className="sr-only">{title}</span>
-    </a>
   );
 }
 
