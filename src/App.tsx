@@ -120,7 +120,11 @@ function AnimatedContent() {
   }, [location.pathname]);
 
   return (
-    <div key={location.pathname} className="page-root pt-[140px] lg:pt-[148px]">
+    <div
+      key={location.pathname}
+      className="page-root"
+      style={{ paddingTop: 'var(--kp-header-height, 140px)' }}
+    >
       <SkipToContent />
       <AppRoutes />
     </div>

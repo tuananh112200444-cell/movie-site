@@ -1,5 +1,5 @@
 import NavBanner from './NavBanner';
-import { lazy, Suspense, useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { prefetchRoute } from '../../utils/prefetchRoute';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
@@ -71,11 +71,34 @@ export default function Navbar() {
   const desktopSearchContainerRef = useRef<HTMLDivElement>(null);
   const mobileSearchContainerRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLInputElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const rafRef = useRef<number | null>(null);
   const lastScrolledRef = useRef(false);
   const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return undefined;
+
+    const updateHeaderHeight = () => {
+      const height = Math.ceil(header.getBoundingClientRect().height);
+      document.documentElement.style.setProperty('--kp-header-height', `${height}px`);
+    };
+
+    updateHeaderHeight();
+
+    const observer = new ResizeObserver(updateHeaderHeight);
+    observer.observe(header);
+    window.addEventListener('resize', updateHeaderHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeaderHeight);
+      document.documentElement.style.removeProperty('--kp-header-height');
+    };
+  }, []);
 
   const openDropdown = (name: string) => {
     if (dropdownTimeoutRef.current) {
@@ -219,6 +242,7 @@ export default function Navbar() {
       )}
 
       <header
+        ref={headerRef}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
           scrolled
             ? 'bg-[#07080d]/95 border-b border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl'

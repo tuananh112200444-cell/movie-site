@@ -9,8 +9,6 @@ interface BannerItem {
   alt: string;
 }
 
-const ROTATE_INTERVAL_MS = 5000;
-
 const BANNERS: BannerItem[] = [
   {
     id: 'world-cup-2026',
@@ -25,6 +23,8 @@ const BANNERS: BannerItem[] = [
     alt: 'WinAZ banner',
   },
 ];
+
+const ROTATE_INTERVAL_MS = 5000;
 
 function trackNavBannerClick(pagePath: string, banner: BannerItem) {
   const payload = {
@@ -79,24 +79,20 @@ export default function NavBanner() {
 
   const activeBanner = BANNERS[activeIndex];
 
-  const handleClick = () => {
-    trackNavBannerClick(location.pathname, activeBanner);
-  };
-
   const toggleCollapsed = () => {
     setIsCollapsed((currentValue) => !currentValue);
   };
 
   if (isCollapsed) {
     return (
-      <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/85">
+      <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/90">
         <div className="mx-auto w-full max-w-none sm:max-w-[728px] sm:px-3">
           <a
             key={activeBanner.id}
             href={activeBanner.url}
             target="_blank"
             rel="noopener noreferrer nofollow sponsored"
-            onClick={handleClick}
+            onClick={() => trackNavBannerClick(location.pathname, activeBanner)}
             className="block relative active:scale-[0.99] transition-transform cursor-pointer"
           >
             <img
@@ -111,11 +107,13 @@ export default function NavBanner() {
               Ad
             </span>
           </a>
+
           <div className="flex justify-end px-2 py-1 sm:px-0">
             <button
               type="button"
               onClick={toggleCollapsed}
-              aria-label="Mo banner"
+              aria-label="Mo tat ca banner"
+              title="Mo tat ca banner"
               className="flex h-6 w-9 items-center justify-center rounded-full border border-white/12 bg-black/55 text-amber-200 shadow-sm backdrop-blur transition-colors hover:bg-black/70 hover:text-white sm:h-7 sm:w-10"
             >
               <i className="ri-arrow-down-s-line text-lg leading-none" aria-hidden="true" />
