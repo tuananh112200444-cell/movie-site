@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useHeroLazyLoad } from '@/hooks/useHeroLazyLoad';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
+import Pagination from '@/components/base/Pagination';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByType, getFeaturedUrl, getSmallThumbUrl } from '@/services/movieApi';
 import { useLazySection } from '@/hooks/useLazySection';
@@ -95,7 +96,9 @@ const STATS = [
 ];
 
 export default function NewMoviesPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const poolRef     = useRef<Movie[]>([]);
   const seenRef     = useRef(new Set<string>());
   const nextApiRef  = useRef(1);
@@ -110,15 +113,15 @@ export default function NewMoviesPage() {
   const [fetchingMore, setFetchingMore] = useState(false);
   // ── Page derived directly from URL param (single source of truth) ──
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
+  const basePath = location.pathname === '/phim-moi-cap-nhat' ? '/phim-moi-cap-nhat' : '/phim-moi-nhat';
 
   const handleSetPage = useCallback((p: number) => {
-    if (p > 1) {
-      setSearchParams({ page: String(p) });
-    } else {
-      setSearchParams({});
-    }
+    navigate({
+      pathname: basePath,
+      search: p > 1 ? `?page=${p}` : '',
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [setSearchParams]);
+  }, [basePath, navigate]);
   const [filterType, setFilterType] = useState<FilterKey>('all');
   const didResetFilterRef = useRef(false);
   const { heroRef, showHeroBg, heroImgLoaded, setHeroImgLoaded } = useHeroLazyLoad();
@@ -180,22 +183,14 @@ export default function NewMoviesPage() {
   }, [addToPool]);
 
   useEffect(() => {
-    if (!poolReady) return;
-    const needed = (page + 1) * PAGE_SIZE;
-    if (pool.length < needed && !apiDoneRef.current && !fetchingRef.current) {
-      fetchMore();
-    }
-  }, [poolReady, page, pool.length, fetchMore]);
-
-  useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [page]);
 
   // Reset to page 1 when filter changes (skip on mount)
   useEffect(() => {
     if (!didResetFilterRef.current) { didResetFilterRef.current = true; return; }
-    setSearchParams({});
-  }, [filterType, setSearchParams]);
+    navigate({ pathname: basePath, search: '' }, { replace: true });
+  }, [filterType, basePath, navigate]);
 
   const filteredPool = useMemo(() => {
     if (filterType === 'all') return pool;
@@ -208,6 +203,15 @@ export default function NewMoviesPage() {
       return true;
     });
   }, [pool, filterType]);
+
+  useEffect(() => {
+    if (!poolReady) return;
+    const needed = 5 + page * PAGE_SIZE;
+    const available = filterType === 'all' ? pool.length : filteredPool.length;
+    if (available < needed && !apiDoneRef.current && !fetchingRef.current) {
+      fetchMore();
+    }
+  }, [poolReady, page, pool.length, filteredPool.length, filterType, fetchMore]);
 
   // Featured: first 5 movies
   const featuredMovies = filteredPool.slice(0, 5);
@@ -223,23 +227,11 @@ export default function NewMoviesPage() {
   const hasNext = !apiDoneRef.current || (page * PAGE_SIZE < Math.max(0, filteredPool.length - 5));
 
   // Self-referencing canonical
-  const basePath = '/phim-moi-nhat';
   const canonicalUrl = page > 1 ? `${SITE_URL}${basePath}?page=${page}` : `${SITE_URL}${basePath}`;
   const prevPage = page > 1
     ? (page > 2 ? `${SITE_URL}${basePath}?page=${page - 1}` : `${SITE_URL}${basePath}`)
     : undefined;
   const nextPage = hasNext ? `${SITE_URL}${basePath}?page=${page + 1}` : undefined;
-
-  const pageButtons = useMemo<(number | '...')[]>(() => {
-    const total = Math.min(totalPages, 99);
-    if (total <= 9) return Array.from({ length: total }, (_, i) => i + 1);
-    const range: (number | '...')[] = [1];
-    if (page > 4) range.push('...');
-    for (let i = Math.max(2, page - 2); i <= Math.min(total - 1, page + 3); i++) range.push(i);
-    if (page < total - 4) range.push('...');
-    range.push(total);
-    return range;
-  }, [page, totalPages]);
 
   const activeFilter = FILTERS.find((f) => f.key === filterType) ?? FILTERS[0];
 
@@ -448,49 +440,7 @@ export default function NewMoviesPage() {
 
         {/* ── Pagination ── */}
         {!showLoading && pageMovies.length > 0 && (
-          <div className="mt-10 flex flex-col items-center gap-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-white/42">
-              Trang <span className="font-semibold text-white/85">{page}</span>
-              <span>/</span>
-              <span>{totalPages.toLocaleString('vi')}</span>
-            </div>
-            <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-white/[0.035] p-1">
-              <PageBtn
-                icon="ri-skip-left-line"
-                disabled={page === 1}
-                href={page > 1 ? `${basePath}?page=1` : undefined}
-                onClick={() => handleSetPage(1)}
-              />
-              <PageBtn
-                icon="ri-arrow-left-s-line"
-                disabled={page === 1}
-                href={page > 2 ? `${basePath}?page=${page - 1}` : basePath}
-                onClick={() => handleSetPage(page - 1)}
-              />
-              {pageButtons.map((btn, idx) =>
-                btn === '...' ? (
-                  <span key={`d${idx}`} className="w-8 h-8 flex items-center justify-center text-white/25 text-sm select-none">···</span>
-                ) : (
-                  <a
-                    key={btn}
-                    href={btn === 1 ? basePath : `${basePath}?page=${btn}`}
-                    onClick={(e) => { e.preventDefault(); handleSetPage(btn as number); }}
-                    className={`flex h-9 min-w-9 flex-shrink-0 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                      page === btn ? 'bg-red-500 text-white' : 'text-white/55 hover:text-white hover:bg-white/[0.08]'
-                    }`}
-                  >
-                    {btn}
-                  </a>
-                )
-              )}
-              <PageBtn
-                icon="ri-arrow-right-s-line"
-                disabled={!hasNext}
-                href={hasNext ? `${basePath}?page=${page + 1}` : undefined}
-                onClick={() => handleSetPage(page + 1)}
-              />
-            </div>
-          </div>
+          <Pagination currentPage={page} totalPages={totalPages} basePath={basePath} hasNext={hasNext} />
         )}
 
         {/* SEO content block */}
@@ -591,20 +541,6 @@ export default function NewMoviesPage() {
       </main>
       <Footer />
     </div>
-  );
-}
-
-/* ── Page Button ── */
-function PageBtn({ icon, disabled, onClick, href }: { icon: string; disabled: boolean; onClick: () => void; href?: string }) {
-  return (
-    <a
-      href={disabled ? undefined : href}
-      onClick={(e) => { e.preventDefault(); if (!disabled) onClick(); }}
-      aria-disabled={disabled}
-      className={`flex h-9 min-w-9 flex-shrink-0 items-center justify-center rounded-lg text-white/55 transition-colors cursor-pointer ${disabled ? 'opacity-30 pointer-events-none' : 'hover:bg-white/[0.08] hover:text-white'}`}
-    >
-      <i className={`${icon} text-base`} />
-    </a>
   );
 }
 

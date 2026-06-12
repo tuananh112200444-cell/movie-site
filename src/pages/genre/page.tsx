@@ -7,6 +7,7 @@ import MovieCard from '@/components/base/MovieCard';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByCategory, searchMovies } from '@/services/movieApi';
 import type { MovieItem } from '@/types/movie';
+import Pagination from '@/components/base/Pagination';
 
 /* ─── Genre config: màu, icon, hình nền riêng từng thể loại ─── */
 const GENRE_META: Record<string, {
@@ -790,21 +791,13 @@ export default function GenrePage() {
                 ))}
               </div>
 
-              {/* Load more */}
-              {page < totalPages && (
-                <div className="flex justify-center mt-8 sm:mt-10">
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={loading}
-                    className="flex items-center gap-2 bg-[#1a1d27] hover:bg-red-500/10 text-white border border-white/10 hover:border-red-500/30 text-sm px-8 py-3 rounded-xl transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {loading
-                      ? <><i className="ri-loader-4-line animate-spin" /> Đang tải...</>
-                      : <><i className="ri-add-line" /> Tải thêm phim</>
-                    }
-                  </button>
-                </div>
-              )}
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                basePath={canonicalPath}
+                hasNext={page < totalPages}
+                onPageChange={setPage}
+              />
             </>
           )}
         </div>
