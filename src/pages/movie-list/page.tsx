@@ -8,6 +8,7 @@ import SEO, { SITE_URL } from '../../components/base/SEO';
 import CategorySEOContent from './components/CategorySEOContent';
 import { useLazySection } from '@/hooks/useLazySection';
 import { useMoviesByType } from '@/hooks/useMovies';
+import Pagination from '@/components/base/Pagination';
 import type { Movie } from '../../types/movie';
 
 interface MovieListPageProps {
@@ -144,21 +145,12 @@ function getModifiedTime(movie: Movie): number {
 }
 
 export default function MovieListPage({ type, title, countryFilter }: MovieListPageProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { pathname } = useLocation();
 
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
   const [sortBy, setSortBy] = useState<'new' | 'hot' | 'updated'>('new');
   const sortField = sortBy === 'new' ? 'year' : 'modified.time';
-
-  const handleSetPage = useCallback((p: number) => {
-    if (p > 1) {
-      setSearchParams({ page: String(p) });
-    } else {
-      setSearchParams({});
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [setSearchParams]);
 
   /* ── Gọi API đúng page — không còn pool system ── */
   const { movies: rawMovies, loading, totalPages: hookTotalPages } = useMoviesByType(
@@ -213,20 +205,6 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
   const hasNextPage = page < totalPages;
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [page]);
-
-  const pageButtons = useMemo<(number | '...')[]>(() => {
-    const total = Math.min(totalPages, 999);
-    if (total <= 15) return Array.from({ length: total }, (_, i) => i + 1);
-    const range: (number | '...')[] = [];
-    range.push(1);
-    const leftStart = Math.max(2, page - 4);
-    const leftEnd = Math.min(page + 4, total - 1);
-    if (leftStart > 2) range.push('...');
-    for (let i = leftStart; i <= leftEnd; i++) range.push(i);
-    if (leftEnd < total - 1) range.push('...');
-    range.push(total);
-    return range;
-  }, [page, totalPages]);
 
   const countryMeta = countryFilter ? COUNTRY_META[countryFilter] : undefined;
   const typeMeta    = TYPE_META[type];
@@ -395,52 +373,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
 
         {/* ── Pagination ── */}
         {!loading && (movies.length > 0 || page > 1) && (
-          <div className="mt-10 sm:mt-14 flex flex-col items-center gap-3">
-            {/* Page info */}
-            <div className="flex items-center gap-2 text-xs font-medium text-white/42">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
-              Trang <span className="text-white/85 font-semibold">{page}</span>
-              <span className="text-white/15">/</span>
-              <span className="text-white/50">{totalPages.toLocaleString('vi')}</span>
-            </div>
-
-            {/* ── Pagination bar ── */}
-            <div className="flex max-w-full items-center justify-start gap-1 overflow-x-auto rounded-xl bg-white/[0.035] p-1 sm:justify-center">
-              <NavBtn icon="ri-skip-left-line"    disabled={page === 1}       href={`${basePath}`}                                         onClick={() => handleSetPage(1)}            title="Trang đầu"   inBar />
-              <NavBtn icon="ri-arrow-left-s-line" disabled={page === 1}       href={page > 2 ? `${basePath}?page=${page - 1}` : basePath} onClick={() => handleSetPage(page - 1)}    title="Trang trước" inBar />
-
-              {/* Nhảy lùi 10 trang */}
-              <span className="hidden sm:block">
-                <NavBtn icon="ri-rewind-mini-line" disabled={page <= 10} href={page > 11 ? `${basePath}?page=${page - 10}` : basePath} onClick={() => handleSetPage(Math.max(1, page - 10))} title="-10 trang" inBar />
-              </span>
-
-              {pageButtons.map((btn, idx) =>
-                btn === '...' ? (
-                  <span key={`d${idx}`} className="w-10 h-10 sm:min-w-[48px] sm:h-12 flex items-center justify-center text-white/20 text-sm select-none border border-white/[0.06] sm:border-r sm:border-y-0 sm:border-l-0 rounded-lg sm:rounded-none">···</span>
-                ) : (
-                  <a
-                    key={btn}
-                    href={btn === 1 ? basePath : `${basePath}?page=${btn}`}
-                    onClick={(e) => { e.preventDefault(); handleSetPage(btn as number); }}
-                    className={`h-9 min-w-9 rounded-lg px-3 flex items-center justify-center text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                      page === btn
-                        ? 'bg-red-500 text-white'
-                        : 'text-white/55 hover:text-white hover:bg-white/[0.08]'
-                    }`}>
-                    {btn}
-                  </a>
-                )
-              )}
-
-              {/* Nhảy tới 10 trang */}
-              <span className="hidden sm:block">
-                <NavBtn icon="ri-speed-mini-line" disabled={!hasNextPage || page + 10 > totalPages} href={page + 10 <= totalPages ? `${basePath}?page=${page + 10}` : '#'} onClick={() => handleSetPage(Math.min(totalPages, page + 10))} title="+10 trang" inBar />
-              </span>
-
-              <NavBtn icon="ri-arrow-right-s-line" disabled={!hasNextPage}     href={hasNextPage ? `${basePath}?page=${page + 1}` : '#'}   onClick={() => handleSetPage(page + 1)}    title="Trang sau"   inBar />
-              <NavBtn icon="ri-skip-right-line"   disabled={!hasNextPage}     href={`${basePath}?page=${totalPages}`}                      onClick={() => handleSetPage(totalPages)}  title="Trang cuối"  inBar />
-            </div>
-          </div>
+          <Pagination currentPage={page} totalPages={totalPages} basePath={basePath} hasNext={hasNextPage} />
         )}
 
         <div className="mt-10 sm:mt-16 pt-8 sm:pt-12 pb-4" ref={seoRef}>
@@ -449,20 +382,5 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
       </main>
       <Footer />
     </div>
-  );
-}
-
-function NavBtn({ icon, disabled, onClick, title, href, inBar }: { icon: string; disabled: boolean; onClick: () => void; title: string; href: string; inBar?: boolean }) {
-  return (
-    <a
-      href={disabled ? undefined : href}
-      onClick={(e) => { e.preventDefault(); if (!disabled) onClick(); }}
-      aria-disabled={disabled}
-      title={title}
-      className={`flex h-9 min-w-9 flex-shrink-0 items-center justify-center rounded-lg px-2 text-white/55 transition-colors cursor-pointer ${disabled ? 'opacity-30 pointer-events-none' : 'hover:bg-white/[0.08] hover:text-white'}`}
-    >
-      <i className={`${icon} text-sm sm:text-lg`} />
-      <span className="sr-only">{title}</span>
-    </a>
   );
 }
