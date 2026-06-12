@@ -42,7 +42,7 @@ async function fetchFreshIndex(
 ): Promise<Record<string, unknown>[]> {
   const { data, error } = await supabase
     .from('movies')
-    .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note')
+    .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, imdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note, seo_catalog_status, catalog_source, tmdb_media_type, tmdb_popularity, tmdb_vote_count, tmdb_vote_average, catalog_synced_at')
     .eq('is_published', true)
     .order('updated_at', { ascending: false })
     .limit(limit)
