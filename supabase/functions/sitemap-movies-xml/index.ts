@@ -32,6 +32,10 @@ interface MovieItem {
   updated_at?: string;
   episode_current?: string;
   is_published?: boolean;
+  seo_catalog_status?: string;
+  catalog_source?: string;
+  release_at?: string;
+  tmdb_popularity?: number;
 }
 
 interface ApiResponse {
@@ -73,6 +77,9 @@ function getChangeFreq(modifiedTime?: string): string {
 
 function getPriority(movie: MovieItem): string {
   const ep = (movie.episode_current ?? '').toLowerCase();
+  const catalogStatus = String(movie.seo_catalog_status || '').toLowerCase();
+  if (catalogStatus === 'upcoming') return '0.88';
+  if (catalogStatus === 'catalog') return '0.82';
   const isFull = ep === 'full' || ep.startsWith('hoan tat') || ep.startsWith('hoan-tat');
   const modifiedTime = movie.updated_at || movie.modified?.time;
   if (!modifiedTime) return isFull ? '0.80' : '0.70';
@@ -112,7 +119,7 @@ async function fetchSupabaseMovies(): Promise<MovieItem[]> {
     const to = from + pageSize - 1;
     const { data, error } = await supabase
       .from('movies')
-      .select('slug,name,thumb_url,poster_url,modified,updated_at,episode_current,is_published')
+      .select('slug,name,thumb_url,poster_url,modified,updated_at,episode_current,is_published,seo_catalog_status,catalog_source,release_at,tmdb_popularity')
       .eq('is_published', true)
       .not('slug', 'is', null)
       .order('updated_at', { ascending: false })
@@ -149,7 +156,7 @@ async function buildMovieSitemap(): Promise<{ xml: string; count: number }> {
     const loc = `${SITE_URL}/phim/${encodeURIComponent(slug)}`;
     const image = toImageUrl(movie.thumb_url || movie.poster_url || '');
     const title = movie.name || slug;
-    const modifiedTime = movie.updated_at || movie.modified?.time;
+    const modifiedTime = movie.updated_at || movie.release_at || movie.modified?.time;
 
     return `  <url>
     <loc>${escapeXml(loc)}</loc>
