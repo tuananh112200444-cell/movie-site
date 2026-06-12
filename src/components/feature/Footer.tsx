@@ -62,6 +62,8 @@ const SEO_LANDING_LINKS = [
 ];
 
 const SOCIAL_LINKS = [
+  { href: 'https://m.me/j/AbY6361ilp6YeUsu/?send_source=gc:copy_invite_link_c', icon: 'ri-messenger-fill', label: 'Messenger', color: 'hover:bg-[#00B2FF]/15 hover:text-[#00B2FF] hover:border-[#00B2FF]/30' },
+  { href: 'https://www.tiktok.com/@khophim.org?_r=1&_t=ZS-979Na9uVNWE', icon: 'ri-tiktok-fill', label: 'TikTok', color: 'hover:bg-white/10 hover:text-white hover:border-white/25' },
   { href: 'https://t.me/davisjohn_1', icon: 'ri-telegram-fill', label: 'Telegram', color: 'hover:bg-[#29A8E8]/15 hover:text-[#29A8E8] hover:border-[#29A8E8]/30' },
 ];
 

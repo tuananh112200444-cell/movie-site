@@ -55,8 +55,10 @@ const NAV_LINKS = [
   { label: 'Chiếu Rạp', to: '/phim-chieu-rap' },
 ];
 const SOCIAL_LINKS = [
-  { href: 'https://www.facebook.com/', icon: 'ri-facebook-circle-fill', color: 'hover:text-[#1877F2]', title: 'Facebook KhoPhim' },
-  { href: 'https://t.me/davisjohn_1', icon: 'ri-telegram-fill', color: 'hover:text-[#29A8E8]', title: 'Telegram KhoPhim' },
+  { href: 'https://www.facebook.com/', icon: 'ri-facebook-circle-fill', color: 'hover:text-[#1877F2]', mobileColor: 'text-[#1877F2]', title: 'Facebook KhoPhim' },
+  { href: 'https://m.me/j/AbY6361ilp6YeUsu/?send_source=gc:copy_invite_link_c', icon: 'ri-messenger-fill', color: 'hover:text-[#00B2FF]', mobileColor: 'text-[#00B2FF]', title: 'Messenger KhoPhim' },
+  { href: 'https://www.tiktok.com/@khophim.org?_r=1&_t=ZS-979Na9uVNWE', icon: 'ri-tiktok-fill', color: 'hover:text-white', mobileColor: 'text-white', title: 'TikTok KhoPhim' },
+  { href: 'https://t.me/davisjohn_1', icon: 'ri-telegram-fill', color: 'hover:text-[#29A8E8]', mobileColor: 'text-[#29A8E8]', title: 'Telegram KhoPhim' },
 ];
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -404,8 +406,7 @@ export default function Navbar() {
             </div>
 
             <div className="hidden min-[390px]:flex lg:hidden items-center gap-0.5">
-              {SOCIAL_LINKS.map(({ href, icon, title }) => {
-                const brandColor = icon.includes('facebook') ? 'text-[#1877F2]' : 'text-[#29A8E8]';
+              {SOCIAL_LINKS.map(({ href, icon, title, mobileColor }) => {
                 return (
                 <a
                   key={href}
@@ -414,7 +415,7 @@ export default function Navbar() {
                   rel="noopener noreferrer nofollow"
                   title={title}
                   aria-label={title}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04] ${brandColor} active:scale-95`}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04] ${mobileColor} active:scale-95`}
                 >
                   <i className={`${icon} text-base`} aria-hidden="true" />
                   <span className="sr-only">{title}</span>
