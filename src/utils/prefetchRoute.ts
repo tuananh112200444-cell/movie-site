@@ -57,6 +57,26 @@ export function prefetchCriticalRoutes(): void {
 /** Prefetch movie detail API data khi hover card */
 const prefetchedSlugs = new Set<string>();
 const hoverTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const activeDetailPrefetches = new Set<string>();
+const MAX_ACTIVE_DETAIL_PREFETCHES = 2;
+
+function prefetchMovieDetailApi(slug: string): void {
+  const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined;
+  if (!supabaseUrl || activeDetailPrefetches.size >= MAX_ACTIVE_DETAIL_PREFETCHES) return;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
+  activeDetailPrefetches.add(slug);
+  fetch(`${supabaseUrl}/functions/v1/movie-detail-proxy?slug=${encodeURIComponent(slug)}`, {
+    signal: controller.signal,
+    cache: 'force-cache',
+  })
+    .catch(() => {})
+    .finally(() => {
+      clearTimeout(timer);
+      activeDetailPrefetches.delete(slug);
+    });
+}
 
 export function prefetchMovieDetail(slug: string): void {
   if (!slug || prefetchedSlugs.has(slug)) return;
@@ -68,7 +88,8 @@ export function prefetchMovieDetail(slug: string): void {
     hoverTimers.delete(slug);
     // Chỉ prefetch JS chunk — KHÔNG gọi API để tránh network lag khi hover
     prefetchRoute('/phim/slug');
-  }, 600);
+    prefetchMovieDetailApi(slug);
+  }, 350);
 
   hoverTimers.set(slug, timer);
 }

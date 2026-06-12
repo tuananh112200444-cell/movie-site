@@ -6,10 +6,10 @@
  * ═══════════════════════════════════════════════════════════
  */
 
-const CACHE_NAME = 'khophim-cache-v6';
-const STATIC_CACHE = 'khophim-static-v6';
-const IMAGE_CACHE = 'khophim-images-v6';
-const API_CACHE = 'khophim-api-v6';
+const CACHE_NAME = 'khophim-cache-v7';
+const STATIC_CACHE = 'khophim-static-v7';
+const IMAGE_CACHE = 'khophim-images-v7';
+const API_CACHE = 'khophim-api-v7';
 
 // Precache các file cốt lõi (được build ra từ Vite)
 const PRECACHE_ASSETS = [
@@ -36,6 +36,7 @@ const IMAGE_PATTERNS = [
 
 const API_PATTERNS = [
   /supabase\.co\/functions\/v1\/home-proxy/,
+  /supabase\.co\/functions\/v1\/search-index-proxy/,
   /supabase\.co\/functions\/v1\/movie-detail-proxy/,
   /ophim1\.com/,
   /phimapi\.com/,
@@ -44,6 +45,7 @@ const API_PATTERNS = [
 ];
 const STALE_FIRST_API_PATTERNS = [
   /supabase\.co\/functions\/v1\/home-proxy/,
+  /supabase\.co\/functions\/v1\/search-index-proxy/,
   /supabase\.co\/functions\/v1\/movie-detail-proxy/,
 ];
 const IMAGE_MAX_MB = 200;

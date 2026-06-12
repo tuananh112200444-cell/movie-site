@@ -16,7 +16,7 @@ import PortalGateway from './components/PortalGateway';
 import QueerUniverseHome from './components/QueerUniverseHome';
 import TrailerMoviesSection from './components/TrailerMoviesSection';
 import SEO, { SITE_URL } from '../../components/base/SEO';
-import { fetchHomePageData, getOptimizedImageUrl } from '../../services/movieApi';
+import { fetchHomePageData, fetchSupabaseSearchIndex, getOptimizedImageUrl } from '../../services/movieApi';
 import { prefetchCriticalRoutes } from '../../utils/prefetchRoute';
 import { injectPreloadLink, preloadBatch } from '../../utils/imagePreloader';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -507,6 +507,14 @@ export default function Home() {
   // ── Prefetch JS chunks sau khi paint xong ──
   useEffect(() => {
     prefetchCriticalRoutes();
+    const warmSearchIndex = () => {
+      fetchSupabaseSearchIndex({ limit: 800 }).catch(() => {});
+    };
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(warmSearchIndex, { timeout: 6000 });
+    } else {
+      setTimeout(warmSearchIndex, 4500);
+    }
   }, []);
   useEffect(() => {
     const priorityMovies = (homeData.trending ?? []).slice(0, 6);
