@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
+import Pagination from '@/components/base/Pagination';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByType } from '@/services/movieApi';
 import type { MovieItem } from '@/types/movie';
@@ -245,25 +246,27 @@ export default function AnimePage() {
   const fetchMovies = useCallback(async (pg: number, reset = false, sort = sortBy, season = activeSeason) => {
     const cacheKey = `${sort}_${season}`;
     if (reset) {
-      const cached = poolMapRef.current?.[cacheKey];
-      if (cached && cached.length > 0) {
-        setMovies(cached);
-        setTotalPages(inferCachedTotalPages(cached, totalPagesMapRef.current?.[cacheKey] ?? 1));
-        setTotalItems(totalItemsMapRef.current?.[cacheKey] ?? cached.length);
-        setLoading(false);
-        return;
-      }
-      const ssCached = getPoolCache('anime', sort, season);
-      if (ssCached && ssCached.length > 0) {
-        poolMapRef.current ??= {};
-        seenMapRef.current ??= {};
-        poolMapRef.current[cacheKey] = ssCached;
-        seenMapRef.current[cacheKey] = new Set(ssCached.map(getMovieKey));
-        setMovies(ssCached);
-        setTotalPages(inferCachedTotalPages(ssCached, totalPagesMapRef.current?.[cacheKey] ?? 1));
-        setTotalItems(totalItemsMapRef.current?.[cacheKey] ?? ssCached.length);
-        setLoading(false);
-        return;
+      if (pg === 1) {
+        const cached = poolMapRef.current?.[cacheKey];
+        if (cached && cached.length > 0) {
+          setMovies(cached);
+          setTotalPages(inferCachedTotalPages(cached, totalPagesMapRef.current?.[cacheKey] ?? 1));
+          setTotalItems(totalItemsMapRef.current?.[cacheKey] ?? cached.length);
+          setLoading(false);
+          return;
+        }
+        const ssCached = getPoolCache('anime', sort, season);
+        if (ssCached && ssCached.length > 0) {
+          poolMapRef.current ??= {};
+          seenMapRef.current ??= {};
+          poolMapRef.current[cacheKey] = ssCached;
+          seenMapRef.current[cacheKey] = new Set(ssCached.map(getMovieKey));
+          setMovies(ssCached);
+          setTotalPages(inferCachedTotalPages(ssCached, totalPagesMapRef.current?.[cacheKey] ?? 1));
+          setTotalItems(totalItemsMapRef.current?.[cacheKey] ?? ssCached.length);
+          setLoading(false);
+          return;
+        }
       }
       seenMapRef.current ??= {};
       poolMapRef.current ??= {};
@@ -305,7 +308,7 @@ export default function AnimePage() {
       totalPagesMapRef.current[cacheKey] = tp;
       totalItemsMapRef.current[cacheKey] = ti;
       setTotalItems(ti);
-      if (poolMapRef.current[cacheKey]?.length) {
+      if (pg === 1 && poolMapRef.current[cacheKey]?.length) {
         setPoolCache('anime', sort, season, poolMapRef.current[cacheKey]);
       }
     } catch {
@@ -348,10 +351,13 @@ export default function AnimePage() {
     fetchMovies(1, true, sortBy, newSeason);
   };
 
-  const handleLoadMore = () => {
-    const next = page + 1;
+  const handlePageChange = useCallback((next: number) => {
     setPage(next);
-    fetchMovies(next, false, sortBy, activeSeason);
+    fetchMovies(next, true, sortBy, activeSeason);
+  }, [activeSeason, fetchMovies, sortBy]);
+
+  const handleLoadMore = () => {
+    handlePageChange(page + 1);
   };
 
   const activeFilterCount = (activeStatus !== 'all' ? 1 : 0) + (activeEpisode !== 'all' ? 1 : 0) + (activeYear !== 'all' ? 1 : 0);
@@ -697,7 +703,7 @@ export default function AnimePage() {
         {/* ─── Movie Grid ─── */}
         <div className="pt-4">
           {loading && movies.length === 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : filteredMovies.length === 0 ? (
@@ -723,7 +729,7 @@ export default function AnimePage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
                 {filteredMovies.map((m, idx) => (
                   <div key={m._id} className="relative group">
                     <MovieCard movie={m} priority={idx < 2} />
@@ -734,7 +740,7 @@ export default function AnimePage() {
                 ))}
               </div>
 
-              {page < totalPages && activeFilterCount === 0 && (
+              {false && page < totalPages && activeFilterCount === 0 && (
                 <div className="flex justify-center mt-10">
                   <button
                     onClick={handleLoadMore}
@@ -748,6 +754,17 @@ export default function AnimePage() {
                     }
                   </button>
                 </div>
+              )}
+
+              {activeFilterCount === 0 && (
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  basePath={canonicalPath}
+                  hasNext={page < totalPages}
+                  accentClass="bg-purple-500"
+                  onPageChange={handlePageChange}
+                />
               )}
             </>
           )}

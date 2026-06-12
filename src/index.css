@@ -247,8 +247,8 @@ input::placeholder, textarea::placeholder {
 }
 
 .home-poster-item {
-  flex: 0 0 31.5%;
-  width: 31.5%;
+  flex: 0 0 24%;
+  width: 24%;
   max-width: 210px;
   min-width: 0;
 }

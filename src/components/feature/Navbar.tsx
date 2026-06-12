@@ -209,7 +209,7 @@ export default function Navbar() {
       {/* Mobile Menu Overlay */}
       {(mobileMenuOpen || mobileMenuVisible) && (
         <div
-          className={`fixed inset-0 z-[55] lg:hidden transition-opacity duration-300 ${mobileMenuOpen ? 'opacity-100' : 'opacity-0'}`}
+          className={`fixed inset-0 z-[55] lg:hidden transition-opacity duration-300 ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
           onClick={() => setMobileMenuOpen(false)}
           onTouchStart={() => setMobileMenuOpen(false)}
           aria-hidden="true"
@@ -379,7 +379,7 @@ export default function Navbar() {
               <div className="w-px h-4 bg-white/[0.08] mx-1" />
             </div>
 
-            <div className="flex lg:hidden items-center gap-0.5">
+            <div className="hidden min-[390px]:flex lg:hidden items-center gap-0.5">
               {SOCIAL_LINKS.map(({ href, icon, title }) => {
                 const brandColor = icon.includes('facebook') ? 'text-[#1877F2]' : 'text-[#29A8E8]';
                 return (
@@ -467,7 +467,7 @@ export default function Navbar() {
               setSearchOpen(!searchOpen);
             }}
               aria-label={searchOpen ? 'Đóng tìm kiếm' : 'Mở tìm kiếm'}
-              className={`lg:hidden relative h-9 min-w-9 px-2.5 flex items-center justify-center gap-1.5 rounded-full border transition-all cursor-pointer active:scale-95 ${
+              className={`lg:hidden relative z-[70] h-11 min-w-11 px-3 flex items-center justify-center gap-1.5 rounded-full border transition-all cursor-pointer active:scale-95 touch-manipulation ${
                 searchOpen
                   ? 'bg-white/[0.08] border-white/15 text-white shadow-none'
                   : 'bg-red-500 text-white border-red-400/60 shadow-[0_0_18px_rgba(239,68,68,0.45)]'
@@ -488,8 +488,8 @@ export default function Navbar() {
             }}
               aria-label={mobileMenuOpen ? 'Đóng menu' : 'Mở menu điều hướng'}
               aria-expanded={mobileMenuOpen}
-              className="w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer lg:hidden rounded-xl hover:bg-white/[0.06]">
-              <i className={`${mobileMenuOpen ? 'ri-close-line' : 'ri-menu-3-line'} text-lg`} aria-hidden="true" />
+              className="relative z-[70] flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.06] text-white/85 shadow-lg shadow-black/20 transition-colors cursor-pointer lg:hidden hover:bg-white/[0.10] hover:text-white active:scale-95 touch-manipulation">
+              <i className={`${mobileMenuOpen ? 'ri-close-line' : 'ri-menu-3-line'} text-[22px]`} aria-hidden="true" />
             </button>
           </div>
         </div>
