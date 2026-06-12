@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSupabaseSearchIndex, getOptimizedImageUrl } from '../../services/movieApi';
+import { fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMovies } from '../../services/movieApi';
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -43,7 +43,7 @@ function addToHistory(term: string): void {
 }
 
 function normalizeSearchText(value: string): string {
-  return value.toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return value.toLowerCase().replace(/[đĐ]/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function getMovieSearchText(movie: Movie): string {
@@ -92,7 +92,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [localPool, setLocalPool] = useState<Movie[]>([]);
-  const debouncedQuery = useDebounce(query, 450);
+  const debouncedQuery = useDebounce(query, 300);
   const navigate = useNavigate();
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLElement | null>(null);
@@ -106,7 +106,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
 
   const ensureSearchIndexLoaded = useCallback(() => {
     if (indexLoadRef.current) return indexLoadRef.current;
-    indexLoadRef.current = fetchSupabaseSearchIndex({ limit: 800 })
+    indexLoadRef.current = fetchSupabaseSearchIndex({ limit: 2000 })
       .then((items) => {
         const movies = items as unknown as Movie[];
         if (movies.length > 0) setLocalPool((prev) => mergeMoviesUnique([...movies, ...prev]));
@@ -132,7 +132,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
     setSuggestions(instantItems);
     setHighlightIndex(-1);
     setLoading(instantItems.length === 0);
-    const cacheKey = `kp_suggest_v7_${q.trim().toLowerCase()}`;
+    const cacheKey = `kp_suggest_v8_${q.trim().toLowerCase()}`;
     try {
       const raw = sessionStorage.getItem(cacheKey);
       if (raw) {
@@ -147,14 +147,24 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
     } catch { /* ignore cache */ }
 
     try {
-      // Search the cached index locally so typing does not hit Postgres per keyword.
+      // Query all lightweight search sources after debounce, then merge by relevance.
       let items = instantItems;
-      const indexedItems = await ensureSearchIndexLoaded();
-      if (!ctrl.signal.aborted && indexedItems.length > 0) {
+      const [indexedResult, apiResult] = await Promise.allSettled([
+        ensureSearchIndexLoaded(),
+        searchMovies(q.trim(), 1, ctrl.signal).then((res) => res.items ?? []),
+      ]);
+
+      if (ctrl.signal.aborted) return;
+
+      const indexedItems = indexedResult.status === 'fulfilled' ? indexedResult.value : [];
+      const apiItems = apiResult.status === 'fulfilled' ? apiResult.value : [];
+
+      if (indexedItems.length > 0) {
         items = mergeMoviesUnique([...items, ...getInstantLocalHits(indexedItems, q, 8)]);
       }
+      items = mergeMoviesUnique([...items, ...apiItems]);
 
-      // Merge Supabase results (admin-added movies) — deduplicate by slug
+      // Dedupe cross-source results before ranking.
       items = sortMoviesForSearch(items, q.trim(), 'relevance');
 
       if (!ctrl.signal.aborted) {
@@ -162,7 +172,9 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
         setSuggestions(nextItems);
         setHighlightIndex(-1);
         try {
-          sessionStorage.setItem(cacheKey, JSON.stringify({ items: nextItems, ts: Date.now() }));
+          if (nextItems.length > 0) {
+            sessionStorage.setItem(cacheKey, JSON.stringify({ items: nextItems, ts: Date.now() }));
+          }
         } catch { /* quota */ }
       }
     } catch {
