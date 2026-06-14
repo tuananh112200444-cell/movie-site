@@ -111,7 +111,6 @@ export async function getReviewCount(): Promise<number> {
   return count ?? 0;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapRow(row: any): MovieReview {
   return {
     slug: row.slug,

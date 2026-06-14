@@ -169,7 +169,6 @@ export default function SearchPage() {
     if (localPool.length === 0) {
       fetchNewMovies(1).then((d) => setTrending(d.items?.slice(0, 16) ?? []));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Preload only lightweight public lists. Supabase search index is loaded lazily on real search intent.
@@ -298,6 +297,7 @@ export default function SearchPage() {
             if (runId !== searchRunRef.current || searchCtrl.signal.aborted) return;
             const localItems = getInstantLocalHits(indexedItems, normalizedKeyword, 16);
             if (localItems.length === 0) return;
+            setError('');
             setResults((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...localItems]), normalizedKeyword, 'relevance'));
           })
           .catch(() => {});

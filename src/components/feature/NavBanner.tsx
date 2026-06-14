@@ -25,6 +25,7 @@ const BANNERS: BannerItem[] = [
 ];
 
 const ROTATE_INTERVAL_MS = 5000;
+const COLLAPSED_STORAGE_KEY = 'kp_nav_banner_collapsed';
 
 function trackNavBannerClick(pagePath: string, banner: BannerItem) {
   const payload = {
@@ -65,7 +66,13 @@ function trackNavBannerClick(pagePath: string, banner: BannerItem) {
 export default function NavBanner() {
   const location = useLocation();
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSED_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     if (!isCollapsed || BANNERS.length < 2) return undefined;
@@ -80,7 +87,13 @@ export default function NavBanner() {
   const activeBanner = BANNERS[activeIndex];
 
   const toggleCollapsed = () => {
-    setIsCollapsed((currentValue) => !currentValue);
+    setIsCollapsed((currentValue) => {
+      const nextValue = !currentValue;
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, nextValue ? '1' : '0');
+      } catch { /* ignore */ }
+      return nextValue;
+    });
   };
 
   if (isCollapsed) {
