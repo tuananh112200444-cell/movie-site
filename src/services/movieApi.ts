@@ -1937,6 +1937,40 @@ function mergeEpisodeServers(primary: EpisodeServer[] = [], secondary: EpisodeSe
   }));
 }
 
+function mergePlayableMovieDetails(
+  primary: MovieDetailResponse,
+  secondary: MovieDetailResponse | null
+): MovieDetailResponse {
+  if (!detailHasPlayableEpisodes(secondary)) return primary;
+  const episodes = mergeEpisodeServers(primary.episodes ?? [], secondary?.episodes ?? []);
+  const primaryMaxEp = getMaxEpisodeNumberFromServers(primary.episodes ?? []);
+  const mergedMaxEp = getMaxEpisodeNumberFromServers(episodes);
+  return {
+    ...primary,
+    movie: {
+      ...primary.movie,
+      current_episode: Math.max(Number(primary.movie.current_episode ?? 0) || primaryMaxEp, mergedMaxEp) || primary.movie.current_episode,
+      episode_current:
+        mergedMaxEp > primaryMaxEp && mergedMaxEp > 0
+          ? `Tập ${mergedMaxEp}`
+          : primary.movie.episode_current,
+    },
+    episodes,
+  };
+}
+
+async function mergeExternalDetailIfFast(
+  primary: MovieDetailResponse,
+  externalPromise: Promise<MovieDetailResponse | null>,
+  timeoutMs: number
+): Promise<MovieDetailResponse> {
+  const external = await Promise.race([
+    externalPromise.catch(() => null),
+    new Promise<MovieDetailResponse | null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+  return mergePlayableMovieDetails(primary, external);
+}
+
 function mergeQueerDetailWithSources(
   primary: MovieDetailResponse | null,
   blvietsub: MovieDetailResponse | null,
@@ -2749,11 +2783,13 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     let proxy: MovieDetailResponse | null = null;
     let blvietsub: MovieDetailResponse | null = null;
     let queerOphim: MovieDetailResponse | null = null;
+    let externalPromise: Promise<MovieDetailResponse | null> | undefined;
 
     if (preferOphim) {
       const ophimPromise = fetchMovieDetailFromOPhim(slug, false);
       const sbPromise = fetchMovieDetailFromSupabase(slug);
       const proxyPromise = fetchMovieDetailFromProxy(slug);
+      externalPromise = fetchMovieDetailFromExternal(slug);
       blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
       const quickPlayable = await raceFirstValidWithTimeout(
         [
@@ -2774,8 +2810,9 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
           refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, ophimPromise);
         }
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using quick playable source for "${slug}" (source=ophim/CJK)`);
-        setCached(cacheKey, quickPlayable);
-        return quickPlayable;
+        const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900);
+        setCached(cacheKey, mergedQuick);
+        return mergedQuick;
       }
       if (!ophim && !sb && !proxy && !blvietsub) {
         [ophim, sb, proxy, blvietsub] = await Promise.all([ophimPromise, sbPromise, proxyPromise, blvietsubPromise!]);
@@ -2784,6 +2821,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       // Default path: let the edge proxy serve DB/cache first. Direct Supabase is a fallback
       // so a large click burst does not double the database queries for every movie open.
       const proxyPromise = fetchMovieDetailFromProxy(slug);
+      externalPromise = fetchMovieDetailFromExternal(slug);
 
       const quickPlayable = await raceFirstValidWithTimeout(
         [
@@ -2804,8 +2842,9 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
           refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, queerOphimPromise);
         }
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using first quick playable source for "${slug}"`);
-        setCached(cacheKey, quickPlayable);
-        return quickPlayable;
+        const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900);
+        setCached(cacheKey, mergedQuick);
+        return mergedQuick;
       }
 
       proxy = await proxyPromise.catch(() => null);
@@ -2897,7 +2936,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     }
 
     // ── STEP 4: External fallback ──
-    let external = await fetchMovieDetailFromExternal(slug);
+    let external = externalPromise ? await externalPromise.catch(() => null) : await fetchMovieDetailFromExternal(slug);
     if (!external && canonicalSlug && canonicalSlug !== slug) {
       external = await fetchMovieDetailFromExternal(canonicalSlug);
     }
@@ -3418,6 +3457,7 @@ export function detectServerType(serverName: string): 'khophim' | 'vietsub' | 't
   if (
     clean.includes('vietsub') || clean.includes('viet sub') ||
     (clean.includes('sub') && !clean.includes('dub')) ||
+    ['ss', 'vk', 'ok', 'hx', 'dl'].includes(compactPriority.toLowerCase()) ||
     tokens.includes('vs') || clean === 'vs' ||
     n.includes('vietsub') || n.includes('viet sub')
   ) {
