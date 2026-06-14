@@ -312,7 +312,6 @@ export default function PhimMaPage() {
     setActiveYear('all');
     fetchMovies(1, true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchMovies]);
 
   const handleSortChange = (newSort: string) => {
@@ -692,7 +691,7 @@ export default function PhimMaPage() {
                 ))}
               </div>
 
-              {false && page < totalPages && activeFilterCount === 0 && (
+              {page < totalPages && activeFilterCount === 0 && (
                 <div className="flex justify-center mt-10">
                   <button
                     onClick={handleLoadMore}

@@ -78,6 +78,7 @@ interface MovieRow {
   source_name?: string | null;
   showtimes?: string | null;
   updated_at?: string | null;
+  last_synced_at?: string | null;
 }
 
 interface ParsedOPhimDetail {
@@ -144,21 +145,40 @@ function parseOPhimDetail(data: OPhimResponse, fallbackSlug: string): ParsedOPhi
   };
 }
 
+const OPHIM_MIRRORS = ['https://ophim1.com', 'https://ophim.tv', 'https://ophim9.cc', 'https://ophim8.cc'];
+
 async function fetchOPhimDetail(slug: string): Promise<ParsedOPhimDetail | null> {
   if (!slug) return null;
-  const apiUrl = `https://ophim1.com/v1/api/phim/${encodeURIComponent(slug)}`;
-  const apiRes = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
-  if (!apiRes.ok) return null;
-  return parseOPhimDetail((await apiRes.json()) as OPhimResponse, slug);
+  for (const base of OPHIM_MIRRORS) {
+    try {
+      const apiUrl = `${base}/v1/api/phim/${encodeURIComponent(slug)}`;
+      const apiRes = await fetch(apiUrl, { signal: AbortSignal.timeout(12000) });
+      if (!apiRes.ok) continue;
+      const detail = parseOPhimDetail((await apiRes.json()) as OPhimResponse, slug);
+      if (detail) return detail;
+    } catch {
+      /* try next mirror */
+    }
+  }
+  return null;
 }
 
 async function findOPhimSlug(movie: MovieRow): Promise<string> {
   const title = getMovieTitle(movie);
   if (!title) return '';
-  const searchUrl = `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(title)}&limit=5`;
-  const res = await fetch(searchUrl, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) return '';
-  const data = (await res.json()) as OPhimResponse;
+  let data: OPhimResponse | null = null;
+  for (const base of OPHIM_MIRRORS) {
+    try {
+      const searchUrl = `${base}/v1/api/tim-kiem?keyword=${encodeURIComponent(title)}&limit=5`;
+      const res = await fetch(searchUrl, { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) continue;
+      data = (await res.json()) as OPhimResponse;
+      break;
+    } catch {
+      /* try next mirror */
+    }
+  }
+  if (!data) return '';
   const items = data.data?.items || [];
   if (!Array.isArray(items) || items.length === 0) return '';
 
@@ -188,7 +208,17 @@ async function findOPhimSlug(movie: MovieRow): Promise<string> {
   return String(contains?.slug || '');
 }
 
+function isLikelyOPhimMovie(movie: MovieRow): boolean {
+  const source = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
+  return Boolean(
+    String(movie.ophim_slug || '').trim() ||
+    String(movie.ophim_id || '').trim() ||
+    source.includes('ophim')
+  );
+}
+
 async function resolveOPhimDetail(movie: MovieRow): Promise<ParsedOPhimDetail | null> {
+  if (!isLikelyOPhimMovie(movie)) return null;
   const candidates = [
     String(movie.ophim_slug || '').trim(),
     String(movie.ophim_id || '').trim(),
@@ -270,15 +300,15 @@ serve(async (req) => {
 
     let moviesQuery = supabase
       .from('movies')
-      .select('id, ophim_id, ophim_slug, slug, name, origin_name, title_vi, title_en, year, episode_current, current_episode, total_episodes, source_site, source_name, showtimes, updated_at')
+      .select('id, ophim_id, ophim_slug, slug, name, origin_name, title_vi, title_en, year, episode_current, current_episode, total_episodes, source_site, source_name, showtimes, updated_at, last_synced_at')
       .eq('is_published', true)
-      .order('updated_at', { ascending: true })
+      .order('last_synced_at', { ascending: true, nullsFirst: true })
       .limit(limit);
 
     if (targetSlug) {
       moviesQuery = moviesQuery.eq('slug', targetSlug);
     } else {
-      moviesQuery = moviesQuery.or('ophim_id.not.is.null,ophim_slug.not.is.null,source_site.eq.admin-queer,source_site.eq.blvietsub,source_name.eq.Vũ trụ đam mỹ');
+      moviesQuery = moviesQuery.or('ophim_id.not.is.null,ophim_slug.not.is.null,source_site.ilike.%ophim%,source_name.ilike.%ophim%');
     }
 
     const { data: movies, error: moviesErr } = await moviesQuery;
@@ -304,13 +334,19 @@ serve(async (req) => {
     let totalInserted = 0;
     let totalSkipped = 0;
     const errorDetails: string[] = [];
+    const skippedDetails: string[] = [];
 
     // ─── Process each movie ───
     for (const movie of movies) {
       try {
         const detail = await resolveOPhimDetail(movie as MovieRow);
         if (!detail) {
-          errorDetails.push(`[${movie.slug}] OPhim detail not found`);
+          totalSkipped++;
+          skippedDetails.push(`[${movie.slug}] OPhim detail not found`);
+          await supabase
+            .from('movies')
+            .update({ last_synced_at: new Date().toISOString() })
+            .eq('id', movie.id);
           continue;
         }
 
@@ -339,9 +375,8 @@ serve(async (req) => {
               .from('movie_episodes')
               .select('id')
               .eq('movie_id', movie.id)
+              .eq('server_name', serverName)
               .eq('episode_number', episodeNumber)
-              .eq('source', 'ophim')
-              .eq('is_backup', false)
               .maybeSingle();
 
             if (existing) {
@@ -366,6 +401,10 @@ serve(async (req) => {
             });
 
             if (insertErr) {
+              if (insertErr.code === '23505' || insertErr.message.toLowerCase().includes('duplicate')) {
+                movieSkipped++;
+                continue;
+              }
               errorDetails.push(`[${movie.slug}] ep ${episodeNumber} movie_episodes: ${insertErr.message}`);
               movieSkipped++;
               continue;
@@ -385,7 +424,9 @@ serve(async (req) => {
             });
 
             if (epInsertErr) {
-              errorDetails.push(`[${movie.slug}] ep ${episodeNumber} episodes: ${epInsertErr.message}`);
+              if (!(epInsertErr.code === '23505' || epInsertErr.message.toLowerCase().includes('duplicate'))) {
+                errorDetails.push(`[${movie.slug}] ep ${episodeNumber} episodes: ${epInsertErr.message}`);
+              }
             }
 
             // ─── INSERT into streams (individual stream per row) ───
@@ -401,7 +442,9 @@ serve(async (req) => {
             });
 
             if (streamInsertErr) {
-              errorDetails.push(`[${movie.slug}] ep ${episodeNumber} streams: ${streamInsertErr.message}`);
+              if (!(streamInsertErr.code === '23505' || streamInsertErr.message.toLowerCase().includes('duplicate'))) {
+                errorDetails.push(`[${movie.slug}] ep ${episodeNumber} streams: ${streamInsertErr.message}`);
+              }
             }
 
             movieInserted++;
@@ -416,6 +459,7 @@ serve(async (req) => {
         const movieUpdate: Record<string, unknown> = {
           ophim_id: detail.id || movie.ophim_id || '',
           ophim_slug: detail.slug || movie.ophim_slug || '',
+          last_synced_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
 
@@ -464,6 +508,7 @@ serve(async (req) => {
         episodes_inserted: totalInserted,
         episodes_skipped: totalSkipped,
         errors: errorDetails.length > 0 ? errorDetails : undefined,
+        skipped_details: skippedDetails.length > 0 ? skippedDetails.slice(0, 30) : undefined,
         duration_ms: duration,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

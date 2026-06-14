@@ -32,7 +32,6 @@ async function fetchPageDirect(type: string, page: number): Promise<MovieItem[]>
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = await res.json() as any;
     const items: MovieItem[] = data?.data?.items ?? data?.items ?? [];
     return items;
@@ -54,7 +53,6 @@ async function crawlAllPages(
       signal: AbortSignal.timeout(10000),
     });
     if (res.ok) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = await res.json() as any;
       const items: MovieItem[] = data?.data?.items ?? data?.items ?? [];
       const pagination = data?.data?.params?.pagination ?? {};

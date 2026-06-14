@@ -10,7 +10,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import MovieDetailHero from './components/MovieDetailHero';
 import MovieDetailPlayerSection from './components/MovieDetailPlayerSection';
 import SEO from '@/components/base/SEO';
-import type { MovieDetailResponse, EpisodeData, MovieItem } from '@/types/movie';
+import type { MovieDetailResponse, EpisodeData, EpisodeServer, MovieItem } from '@/types/movie';
 import {
   fetchMovieDetail,
   fetchMoviesByCategory,
@@ -40,6 +40,20 @@ function getTrailerEmbedUrl(url: string): string | null {
   if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
   if (url.includes('player.vimeo.com/')) return url;
   return null;
+}
+
+function getEpisodeNumber(ep: EpisodeData): number {
+  return ep.episode_number ?? Number((ep.slug || ep.name || '').match(/\d+/)?.[0] ?? 0);
+}
+
+function getHighestEpisodeFromServers(episodes: EpisodeServer[]): number {
+  return episodes.reduce((highest, server) => {
+    const serverHighest = (server.server_data ?? []).reduce((max, ep) => {
+      if (!hasPlayableUrl(ep) || ep.is_scheduled) return max;
+      return Math.max(max, getEpisodeNumber(ep));
+    }, 0);
+    return Math.max(highest, serverHighest);
+  }, 0);
 }
 
 export default function MovieDetailPage() {
@@ -161,6 +175,20 @@ export default function MovieDetailPage() {
     () => deduplicateAndLimitServers(detail?.episodes ?? []),
     [detail?.episodes]
   );
+
+  const displayMovie = useMemo(() => {
+    if (!detail?.movie) return null;
+    const highestEpisode = getHighestEpisodeFromServers(filteredEpisodes);
+    const currentEpisode =
+      detail.movie.current_episode ??
+      Number((detail.movie.episode_current || '').match(/\d+/)?.[0] ?? 0);
+    if (!highestEpisode || highestEpisode <= currentEpisode) return detail.movie;
+    return {
+      ...detail.movie,
+      current_episode: highestEpisode,
+      episode_current: `Tập ${highestEpisode}`,
+    };
+  }, [detail?.movie, filteredEpisodes]);
 
   const hasEpisodes = useMemo(() => {
     return filteredEpisodes.length > 0 && filteredEpisodes.some((s) => (s.server_data?.length ?? 0) > 0);
@@ -311,7 +339,7 @@ export default function MovieDetailPage() {
     </div>
   );
 
-  if (error || !detail) return (
+  if (error || !detail || !displayMovie) return (
     <div className="min-h-screen bg-[#080a10] text-white">
       <SEO title="Không tìm thấy phim – KhoPhim" description="Phim không tồn tại hoặc đã bị xóa." noIndex={true} />
       <Navbar />
@@ -332,7 +360,7 @@ export default function MovieDetailPage() {
     </div>
   );
 
-  const { movie } = detail;
+  const movie = displayMovie;
   const favored = isFav(movie._id);
 
   return (

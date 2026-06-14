@@ -193,6 +193,50 @@ function textScore(text: string, query: string, tokens: string[]): number {
   return score;
 }
 
+function editDistanceWithin(a: string, b: string, maxDistance: number): boolean {
+  if (Math.abs(a.length - b.length) > maxDistance) return false;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    let left = i;
+    let best = left;
+    let prevDiagonal = i - 1;
+    for (let j = 1; j <= b.length; j += 1) {
+      const above = prev[j] + 1;
+      const replace = prevDiagonal + (a[i - 1] === b[j - 1] ? 0 : 1);
+      prevDiagonal = prev[j];
+      const value = Math.min(above, left + 1, replace);
+      prev[j] = value;
+      left = value;
+      best = Math.min(best, value);
+    }
+    if (best > maxDistance) return false;
+  }
+  return prev[b.length] <= maxDistance;
+}
+
+function fuzzyTokenScore(text: string, tokens: string[]): number {
+  if (!text || tokens.length === 0) return 0;
+  const parts = text.split(' ').filter((part) => part.length >= 2);
+  if (parts.length === 0) return 0;
+
+  let score = 0;
+  let matched = 0;
+  for (const token of tokens.filter((item) => item.length >= 2)) {
+    const isMatched = parts.some((part) => {
+      if (part === token || part.startsWith(token) || token.startsWith(part)) return true;
+      const maxDistance = token.length <= 3 ? 1 : token.length >= 5 ? 1 : 0;
+      return maxDistance > 0 && editDistanceWithin(token, part, maxDistance);
+    });
+    if (isMatched) {
+      matched += 1;
+      score += token.length <= 3 ? 90 : 130;
+    }
+  }
+
+  if (matched > 0 && matched === tokens.filter((item) => item.length >= 2).length) score += 420;
+  return score;
+}
+
 export function getSearchScore(movie: MovieItem, keyword: string): number {
   const query = normalizeSearchText(keyword);
   if (!query) return 0;
@@ -213,6 +257,11 @@ export function getSearchScore(movie: MovieItem, keyword: string): number {
   score += textScore(origin, query, tokens) * 3;
   score += textScore(titleEn, query, tokens) * 3;
   score += textScore(slug, query, tokens);
+  score += fuzzyTokenScore(name, tokens) * 5;
+  score += fuzzyTokenScore(titleVi, tokens) * 4;
+  score += fuzzyTokenScore(origin, tokens) * 3;
+  score += fuzzyTokenScore(titleEn, tokens) * 3;
+  score += fuzzyTokenScore(slug, tokens);
   score += textScore(episodeCurrent, query, tokens);
   score += textScore(episodeTotal, query, tokens);
 

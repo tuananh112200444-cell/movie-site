@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Fuse from 'fuse.js';
 import { fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMoviesInSupabase } from '../../services/movieApi';
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
@@ -70,7 +71,14 @@ function getInstantLocalHits(pool: Movie[], keyword: string, limit = 8): Movie[]
     const text = getMovieSearchText(movie);
     return text.includes(query) || tokens.every((token) => text.includes(token));
   });
-  return sortMoviesForSearch(mergeMoviesUnique(hits), keyword, 'relevance').slice(0, limit);
+  const fuzzy = new Fuse(pool, {
+    keys: ['name', 'origin_name', 'title_vi', 'title_en', 'title_zh', 'slug', 'episode_current', 'episode_total'],
+    threshold: 0.34,
+    distance: 90,
+    ignoreLocation: true,
+    minMatchCharLength: 2,
+  }).search(keyword.trim()).map((result) => result.item);
+  return sortMoviesForSearch(mergeMoviesUnique([...hits, ...fuzzy]), keyword, 'relevance').slice(0, limit);
 }
 
 function getMovieHref(movie: Movie): string {

@@ -670,7 +670,6 @@ function isExpectedPage(result: MovieListResponse, page: number): boolean {
 }
 
 function parseItems(data: Record<string, unknown>): MovieListResponse['items'] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nested = asRecord(data.data);
   const items = nested?.items ?? data.items;
   return Array.isArray(items) ? items as MovieListResponse['items'] : [];

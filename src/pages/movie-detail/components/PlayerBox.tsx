@@ -133,6 +133,7 @@ export default function PlayerBox({
   onTimeUpdate,
   onVideoEnded,
   nextEpName,
+  onRefetchMovie,
 }: PlayerBoxProps) {
   const serverNow = useServerNow(Boolean(episode?.is_scheduled));
   const [playerMode, setPlayerMode] = useState(() => getPlayerMode(episode));
@@ -245,13 +246,7 @@ export default function PlayerBox({
     setAutoNextActive(false);
   }, []);
 
-  const handleHlsFatal = useCallback(() => {
-    // Fallback to embed or direct video mode
-    const embedUrl = episode?.link_embed;
-    if (embedUrl && playerMode === 'hls') {
-      setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
-      return;
-    }
+  const switchToFallbackServer = useCallback(() => {
     const remainingServerIndices = allServers
       .map((_, index) => index)
       .filter((index) => index !== activeServer);
@@ -259,19 +254,33 @@ export default function PlayerBox({
     const fallback = pickBestEpisodeByPriority(remainingServers, episode?.slug);
     if (fallback) {
       onSwitchServer(remainingServerIndices[fallback.serverIndex]);
+      return true;
+    }
+    return false;
+  }, [allServers, activeServer, episode?.slug, onSwitchServer]);
+
+  const handleHlsFatal = useCallback(() => {
+    const embedUrl = episode?.link_embed;
+    if (embedUrl && playerMode === 'hls') {
+      setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
       return;
     }
-  }, [episode?.link_embed, episode?.slug, playerMode, allServers, activeServer, onSwitchServer]);
+    switchToFallbackServer();
+  }, [episode?.link_embed, playerMode, switchToFallbackServer]);
+
+  const handleDirectVideoError = useCallback(() => {
+    const embedUrl = episode?.link_embed ?? '';
+    if (embedUrl && isIframeSource(embedUrl) && playerMode !== 'embed') {
+      setPlayerMode('embed');
+      return;
+    }
+    switchToFallbackServer();
+  }, [episode?.link_embed, playerMode, switchToFallbackServer]);
 
   useEffect(() => {
     if (!iframeBlocked || playerMode !== 'embed') return;
-    const remainingServerIndices = allServers
-      .map((_, index) => index)
-      .filter((index) => index !== activeServer);
-    const remainingServers = remainingServerIndices.map((index) => allServers[index]);
-    const fallback = pickBestEpisodeByPriority(remainingServers, episode?.slug);
-    if (fallback) onSwitchServer(remainingServerIndices[fallback.serverIndex]);
-  }, [iframeBlocked, playerMode, allServers, activeServer, episode?.slug, onSwitchServer]);
+    switchToFallbackServer();
+  }, [iframeBlocked, playerMode, switchToFallbackServer]);
 
   return (
     <div className="mb-2 relative">
@@ -363,6 +372,14 @@ export default function PlayerBox({
             >
               {isDailymotion(dmOriginalUrl) ? 'Mở trên Dailymotion' : 'Mở nguồn gốc'}
             </a>
+            {onRefetchMovie && (
+              <button
+                onClick={onRefetchMovie}
+                className="px-4 py-2 rounded-lg bg-white/10 text-white/70 text-xs font-semibold hover:bg-white/15 transition-colors whitespace-nowrap"
+              >
+                Tải lại nguồn phim
+              </button>
+            )}
           </div>
         )}
 
@@ -380,7 +397,7 @@ export default function PlayerBox({
             fallback={
               <div className="aspect-video w-full bg-[#0a0c14] flex flex-col items-center justify-center">
                 <div className="w-10 h-10 rounded-full border-2 border-red-500/20 border-t-red-500 animate-spin mb-3" />
-                <p className="text-white/30 text-sm">Dang tai trinh phat...</p>
+                <p className="text-white/30 text-sm">Đang tải trình phát...</p>
               </div>
             }
           >
@@ -410,13 +427,14 @@ export default function PlayerBox({
               autoPlay
               playsInline
               preload="metadata"
+              onError={handleDirectVideoError}
             >
               {episode?.subtitle_url && (
                 <track
                   kind="subtitles"
                   src={episode.subtitle_url}
                   srcLang="vi"
-                  label="Tieng Viet"
+                  label="Tiếng Việt"
                   default
                 />
               )}

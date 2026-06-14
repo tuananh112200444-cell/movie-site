@@ -140,7 +140,6 @@ export default function AnalyticsProvider({ children }: { children: React.ReactN
     scrollTracked.current = new Set();
     pageStartTime.current = Date.now();
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search]);
 
   // Track scroll depth
@@ -177,7 +176,6 @@ export default function AnalyticsProvider({ children }: { children: React.ReactN
       const seconds = (Date.now() - pageStartTime.current) / 1000;
       if (seconds > 5) trackTimeOnPage(seconds);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   return <>{children}</>;
