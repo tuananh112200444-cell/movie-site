@@ -147,16 +147,31 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     }, [mergedEpisodes]);
     const [epGroup, setEpGroup] = useState(0);
     const currentGroup = groups[epGroup] ?? mergedEpisodes;
+    const episodeHasSelectedServerType = useCallback((item: MergedEpisode) => {
+      if (serverTypeTab === 'all' || item.ep.is_scheduled) return true;
+      return item.serverIndices.some((idx) => {
+        const srv = episodes[idx];
+        return srv && detectServerType(getServerIdentityText(srv)) === serverTypeTab;
+      });
+    }, [episodes, serverTypeTab]);
+    const navigableEpisodes = useMemo(
+      () => mergedEpisodes.filter(episodeHasSelectedServerType),
+      [mergedEpisodes, episodeHasSelectedServerType]
+    );
+    const currentTypeGroup = useMemo(
+      () => currentGroup.filter(episodeHasSelectedServerType),
+      [currentGroup, episodeHasSelectedServerType]
+    );
     const collapsedEpisodeLimit = isDesktopEpisodeLayout ? DESKTOP_COLLAPSED_EPISODES : MOBILE_COLLAPSED_EPISODES;
     const shownEpisodes = useMemo(() => {
-      if (!episodesCollapsed) return currentGroup;
-      const compact = currentGroup.slice(0, collapsedEpisodeLimit);
+      if (!episodesCollapsed) return currentTypeGroup;
+      const compact = currentTypeGroup.slice(0, collapsedEpisodeLimit);
       const activeKey = activeEp ? getEpisodeMergeKey(activeEp) : '';
       if (!activeKey || compact.some((item) => item.key === activeKey)) return compact;
-      const activeItem = currentGroup.find((item) => item.key === activeKey);
+      const activeItem = currentTypeGroup.find((item) => item.key === activeKey);
       return activeItem ? [...compact.slice(0, collapsedEpisodeLimit - 1), activeItem] : compact;
-    }, [episodesCollapsed, currentGroup, activeEp, collapsedEpisodeLimit]);
-    const canCollapseEpisodes = currentGroup.length > collapsedEpisodeLimit;
+    }, [episodesCollapsed, currentTypeGroup, activeEp, collapsedEpisodeLimit]);
+    const canCollapseEpisodes = currentTypeGroup.length > collapsedEpisodeLimit;
     const visibleServerOptions = useMemo(() => {
       return episodes.map((srv, idx) => ({
         srv,
@@ -173,6 +188,23 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     }, [activeEp, activeTab]);
 
     useEffect(() => {
+      setEpGroup(0);
+    }, [serverTypeTab]);
+
+    useEffect(() => {
+      if (serverTypeTab === 'all' || activeServer < 0) return;
+      const activeVisible = visibleServerOptions.some(({ idx, typeKey }) => idx === activeServer && typeKey === serverTypeTab);
+      if (activeVisible) return;
+      const activeKey = activeEp ? getEpisodeMergeKey(activeEp) : '';
+      const replacement = visibleServerOptions.find(({ srv, typeKey }) => {
+        if (typeKey !== serverTypeTab) return false;
+        if (!activeKey) return true;
+        return srv.server_data?.some((ep) => getEpisodeMergeKey(ep) === activeKey);
+      }) ?? visibleServerOptions.find(({ typeKey }) => typeKey === serverTypeTab);
+      if (replacement) onSwitchServer(replacement.idx);
+    }, [activeEp, activeServer, onSwitchServer, serverTypeTab, visibleServerOptions]);
+
+    useEffect(() => {
       const query = window.matchMedia('(min-width: 640px)');
       const updateLayout = () => setIsDesktopEpisodeLayout(query.matches);
       updateLayout();
@@ -182,24 +214,29 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
 
     const currentEpIdx = useMemo(() => {
       const activeKey = activeEp ? getEpisodeMergeKey(activeEp) : '';
-      return mergedEpisodes.findIndex((item) => item.key === activeKey);
-    }, [mergedEpisodes, activeEp]);
+      return navigableEpisodes.findIndex((item) => item.key === activeKey);
+    }, [navigableEpisodes, activeEp]);
     const activeEpisodeKey = activeEp ? getEpisodeMergeKey(activeEp) : '';
     const hasPrev = currentEpIdx > 0;
-    const hasNext = currentEpIdx >= 0 && currentEpIdx < mergedEpisodes.length - 1;
+    const hasNext = currentEpIdx >= 0 && currentEpIdx < navigableEpisodes.length - 1;
 
     const handleSelectMergedEp = useCallback((item: MergedEpisode) => {
       if (item.ep.is_scheduled) {
         onSelectEp(item.ep);
         return;
       }
-      const availableServers = item.serverIndices
+      const allAvailableServers = item.serverIndices
         .map((idx) => {
           const srv = episodes[idx];
           const matched = srv?.server_data?.find((ep) => getEpisodeMergeKey(ep) === item.key);
           return srv && matched ? { ...srv, server_data: [matched], originalIndex: idx } : null;
         })
         .filter(Boolean) as Array<EpisodeServer & { originalIndex: number }>;
+      const tabMatchedServers = serverTypeTab === 'all'
+        ? allAvailableServers
+        : allAvailableServers.filter((srv) => detectServerType(getServerIdentityText(srv)) === serverTypeTab);
+      const availableServers = tabMatchedServers.length > 0 ? tabMatchedServers : allAvailableServers;
+      if (serverTypeTab !== 'all' && tabMatchedServers.length === 0) return;
       const best = pickBestEpisodeByPriority(availableServers);
       if (best) {
         onSwitchServer(availableServers[best.serverIndex].originalIndex);
@@ -211,17 +248,17 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       const fallbackEp = fallbackServer?.server_data?.find((ep) => getEpisodeMergeKey(ep) === item.key) || item.ep;
       onSwitchServer(fallbackIdx);
       onSelectEp(fallbackEp);
-    }, [episodes, onSwitchServer, onSelectEp]);
+    }, [episodes, onSwitchServer, onSelectEp, serverTypeTab]);
 
     const handlePrev = useCallback(() => {
-      if (!hasPrev || !mergedEpisodes[currentEpIdx - 1]) return;
-      handleSelectMergedEp(mergedEpisodes[currentEpIdx - 1]);
-    }, [hasPrev, currentEpIdx, mergedEpisodes, handleSelectMergedEp]);
+      if (!hasPrev || !navigableEpisodes[currentEpIdx - 1]) return;
+      handleSelectMergedEp(navigableEpisodes[currentEpIdx - 1]);
+    }, [hasPrev, currentEpIdx, navigableEpisodes, handleSelectMergedEp]);
 
     const handleNext = useCallback(() => {
-      if (!hasNext || !mergedEpisodes[currentEpIdx + 1]) return;
-      handleSelectMergedEp(mergedEpisodes[currentEpIdx + 1]);
-    }, [hasNext, currentEpIdx, mergedEpisodes, handleSelectMergedEp]);
+      if (!hasNext || !navigableEpisodes[currentEpIdx + 1]) return;
+      handleSelectMergedEp(navigableEpisodes[currentEpIdx + 1]);
+    }, [hasNext, currentEpIdx, navigableEpisodes, handleSelectMergedEp]);
 
     const handleWatchNow = useCallback(() => {
       if (isTrailerOnly) {
@@ -416,7 +453,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     onTimeUpdate={onTimeUpdate}
                     onRefetchMovie={onRefetchMovie}
                     onVideoEnded={onVideoEnded}
-                    nextEpName={hasNext ? mergedEpisodes[currentEpIdx + 1]?.ep.name : undefined}
+                    nextEpName={hasNext ? navigableEpisodes[currentEpIdx + 1]?.ep.name : undefined}
                   />
                 </>
               )}
@@ -445,7 +482,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   )}
 
                   {/* Type filter tabs */}
-                  <div className="hidden">
+                  <div className="overflow-x-auto px-3 pt-3 sm:px-4">
                   <div className="flex w-max gap-1.5 sm:w-auto sm:flex-wrap">
                     {[
                       { key: 'all' as const, label: 'Tất cả', icon: 'ri-apps-line', color: 'bg-white/10 text-white/70 border-white/10 hover:bg-white/15' },
@@ -487,7 +524,9 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   </div>
 
                   <div className="flex flex-wrap gap-1.5 px-3 py-3 sm:px-4">
-                    {visibleServerOptions.map(({ srv, idx, typeKey }) => {
+                    {visibleServerOptions
+                      .filter(({ typeKey }) => serverTypeTab === 'all' || typeKey === serverTypeTab)
+                      .map(({ srv, idx, typeKey }) => {
                       const type = getServerTypeStyle(typeKey);
                       const isActive = idx === activeServer;
                       const sourceName = getServerDisplayName(srv, idx);
@@ -540,7 +579,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
               )}
 
               {/* Episode list — ALWAYS visible */}
-              {currentGroup.length > 0 && (
+              {currentTypeGroup.length > 0 && (
                 <div className="mt-3 rounded-xl border border-white/[0.08] bg-[#11131b] p-3 sm:p-4">
                   <p className="text-white/35 text-[10px] uppercase tracking-wider mb-2">
                     Danh Sách Tập
@@ -590,7 +629,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     >
                       <span>
                         {episodesCollapsed
-                          ? `Mở rộng thêm ${currentGroup.length - shownEpisodes.length} tập`
+                          ? `Mở rộng thêm ${currentTypeGroup.length - shownEpisodes.length} tập`
                           : 'Rút gọn danh sách tập'}
                       </span>
                       <i className={`${episodesCollapsed ? 'ri-arrow-down-s-line' : 'ri-arrow-up-s-line'} text-base`} />
