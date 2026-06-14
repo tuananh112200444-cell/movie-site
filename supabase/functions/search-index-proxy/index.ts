@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const CACHE_ID = 'search_index_v1';
+const CACHE_ID = 'search_index_v2';
 const CACHE_TTL_MIN = 30;
 const REFRESH_LOCK_MS = 90 * 1000;
 
@@ -33,23 +33,32 @@ function timeoutSignal(ms: number): AbortSignal {
 function clampLimit(value: string | null): number {
   const parsed = Number(value || 800);
   if (!Number.isFinite(parsed)) return 800;
-  return Math.min(Math.max(Math.floor(parsed), 100), 1200);
+  return Math.min(Math.max(Math.floor(parsed), 100), 5000);
 }
 
 async function fetchFreshIndex(
   supabase: ReturnType<typeof createClient>,
   limit: number,
 ): Promise<Record<string, unknown>[]> {
-  const { data, error } = await supabase
-    .from('movies')
-    .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, imdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note, seo_catalog_status, catalog_source, tmdb_media_type, tmdb_popularity, tmdb_vote_count, tmdb_vote_average, catalog_synced_at')
-    .eq('is_published', true)
-    .order('updated_at', { ascending: false })
-    .limit(limit)
-    .abortSignal(timeoutSignal(1800));
+  const chunkSize = 1000;
+  const rows: Record<string, unknown>[] = [];
 
-  if (error || !data) return [];
-  return data as unknown as Record<string, unknown>[];
+  for (let offset = 0; offset < limit; offset += chunkSize) {
+    const end = Math.min(offset + chunkSize, limit) - 1;
+    const { data, error } = await supabase
+      .from('movies')
+      .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, imdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note, seo_catalog_status, catalog_source, tmdb_media_type, tmdb_popularity, tmdb_vote_count, tmdb_vote_average, catalog_synced_at')
+      .eq('is_published', true)
+      .order('updated_at', { ascending: false })
+      .range(offset, end)
+      .abortSignal(timeoutSignal(2500));
+
+    if (error || !data || data.length === 0) break;
+    rows.push(...(data as unknown as Record<string, unknown>[]));
+    if (data.length < chunkSize) break;
+  }
+
+  return rows;
 }
 
 function isRefreshLocked(cacheRow: { sections: Record<string, unknown>; updated_at: string; expires_at: string } | null): boolean {

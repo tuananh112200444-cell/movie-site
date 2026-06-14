@@ -8,7 +8,7 @@ import SEO, { SITE_URL } from '@/components/base/SEO';
 import SearchResultItem from './components/SearchResultItem';
 import SearchFilterBar from './components/SearchFilterBar';
 import type { MovieItem } from '@/types/movie';
-import { searchMovies, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, fetchSupabaseSearchIndex } from '@/services/movieApi';
+import { searchMovies, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, fetchSupabaseSearchIndex, searchMoviesInSupabase } from '@/services/movieApi';
 import {
   mergeMoviesUnique,
   parseMovieYear,
@@ -60,7 +60,14 @@ function getMovieSearchText(movie: MovieItem): string {
   return normalizeSearchText([
     movie.name,
     movie.origin_name,
+    movie.title_vi,
+    movie.title_en,
+    movie.title_zh,
     movie.slug,
+    movie.episode_current,
+    movie.episode_total,
+    movie.current_episode ? `tap ${movie.current_episode}` : '',
+    movie.total_episodes ? `season ${movie.total_episodes}` : '',
     movie.category?.map((c) => c.name).join(' '),
   ].filter(Boolean).join(' '));
 }
@@ -82,7 +89,7 @@ function getInstantLocalHits(pool: MovieItem[], keyword: string, limit = 12): Mo
 
   const directHits = pool.filter((movie) => getMovieSearchText(movie).includes(query));
   const fuse = new Fuse(pool, {
-    keys: ['name', 'origin_name', 'title_vi', 'title_en', 'slug'],
+    keys: ['name', 'origin_name', 'title_vi', 'title_en', 'title_zh', 'slug', 'episode_current', 'episode_total'],
     threshold: 0.32,
     distance: 80,
     ignoreLocation: true,
@@ -220,7 +227,7 @@ export default function SearchPage() {
 
     // Check memory cache first (60s TTL for search)
     const normalizedKeyword = keyword.trim();
-    const cacheKey = `search_v8_${normalizedKeyword.toLowerCase()}_${pg}`;
+    const cacheKey = `search_v9_${normalizedKeyword.toLowerCase()}_${pg}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -247,26 +254,17 @@ export default function SearchPage() {
     }
 
     try {
-      const apiPromise = searchMovies(normalizedKeyword, pg, searchCtrl.signal);
-      const localPromise = pg === 1
-        ? ensureSearchIndexLoaded()
-          .then((indexedItems) => getInstantLocalHits(indexedItems, normalizedKeyword, 16))
-          .catch(() => [])
-        : Promise.resolve([]);
-      const [apiResult, localResult] = await Promise.allSettled([apiPromise, localPromise]);
+      const apiResult = await searchMovies(normalizedKeyword, pg, searchCtrl.signal)
+        .then((value) => ({ status: 'fulfilled' as const, value }))
+        .catch((reason) => ({ status: 'rejected' as const, reason }));
       if (runId !== searchRunRef.current) return;
 
       const apiData = apiResult.status === 'fulfilled'
         ? apiResult.value
         : { items: [], pagination: { currentPage: pg, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
-      const localItems = localResult.status === 'fulfilled' ? localResult.value : [];
       let items = apiData.items ?? [];
 
       // STEP 2: Merge local index results (searchMovies already includes API, Supabase, and special sources)
-      if (pg === 1 && localItems.length > 0) {
-        items = mergeMoviesUnique([...localItems, ...items]);
-      }
-
       // STEP 3: Fuzzy fallback — only if very few results AND pool loaded
       if (pg === 1 && items.length < 6 && localPool.length > 0) {
         const fuse = new Fuse(localPool, {
@@ -294,6 +292,16 @@ export default function SearchPage() {
       });
       setTotalPages(apiData.pagination?.totalPages ?? 1);
       setAllLoaded(pg >= (apiData.pagination?.totalPages ?? 1));
+      if (pg === 1) {
+        ensureSearchIndexLoaded()
+          .then((indexedItems) => {
+            if (runId !== searchRunRef.current || searchCtrl.signal.aborted) return;
+            const localItems = getInstantLocalHits(indexedItems, normalizedKeyword, 16);
+            if (localItems.length === 0) return;
+            setResults((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...localItems]), normalizedKeyword, 'relevance'));
+          })
+          .catch(() => {});
+      }
       if (pg === 1 && items.length === 0) setError('Không tìm thấy phim nào cho từ khoá này.');
     } catch {
       if (runId === searchRunRef.current && !searchCtrl.signal.aborted) {
@@ -339,19 +347,8 @@ export default function SearchPage() {
     setLoadingSug(instantItems.length === 0);
     try {
       let items = instantItems;
-      const [indexedResult, apiResult] = await Promise.allSettled([
-        ensureSearchIndexLoaded(),
-        searchMovies(kw.trim(), 1, ctrl.signal).then((res) => res.items ?? []),
-      ]);
-
+      const apiItems = await searchMoviesInSupabase(kw.trim(), { limit: 12, timeoutMs: 800, minLength: 2, signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
-
-      const indexedItems = indexedResult.status === 'fulfilled' ? indexedResult.value : [];
-      const apiItems = apiResult.status === 'fulfilled' ? apiResult.value : [];
-
-      if (indexedItems.length > 0) {
-        items = mergeMoviesUnique([...items, ...getInstantLocalHits(indexedItems, kw, 8)]);
-      }
       items = mergeMoviesUnique([...items, ...apiItems]);
 
       items = sortMoviesForSearch(mergeMoviesUnique(items), kw.trim(), 'relevance').slice(0, 8);
@@ -359,6 +356,14 @@ export default function SearchPage() {
         setSuggestions(items);
         setHighlightIndex(-1);
       }
+      ensureSearchIndexLoaded()
+        .then((indexedItems) => {
+          if (ctrl.signal.aborted || indexedItems.length === 0) return;
+          const indexedHits = getInstantLocalHits(indexedItems, kw, 8);
+          if (indexedHits.length === 0) return;
+          setSuggestions((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...indexedHits]), kw.trim(), 'relevance').slice(0, 8));
+        })
+        .catch(() => {});
     } catch {
       if (!ctrl.signal.aborted) setSuggestions([]);
     } finally {
