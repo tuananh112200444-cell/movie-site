@@ -31,6 +31,34 @@ function movieTitleKeys(movie: MovieItem): string[] {
   return keys;
 }
 
+function appendSeasonScope(key: string, seasonSignature: string): string {
+  return seasonSignature ? `${key}:season:${seasonSignature}` : key;
+}
+
+function getMovieSeasonSignature(movie: MovieItem): string {
+  const text = normalizeSearchText([
+    movie.name,
+    movie.title_vi,
+    movie.title_en,
+    movie.title_zh,
+    movie.origin_name,
+    movie.slug?.replace(/-/g, ' '),
+  ].filter(Boolean).join(' '));
+
+  const patterns = [
+    /\b(?:season|ss|phan|mua|part)\s*(\d{1,2})\b/,
+    /\b(\d{1,2})\s*(?:season|ss|phan|mua|part)\b/,
+    /\bs(\d{1,2})\b/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return String(Number(match[1]));
+  }
+
+  return '';
+}
+
 function canonicalDuplicateTitle(value?: string | null): string {
   return normalizeSearchText(value)
     .replace(/\b(18|19|20)\d{2}\b/g, ' ')
@@ -139,10 +167,28 @@ function textScore(text: string, query: string, tokens: string[]): number {
   if (text.includes(query)) return 650;
 
   let score = 0;
+  const parts = text.split(' ').filter(Boolean);
+  const compactText = text.replace(/\s+/g, '');
+  const compactQuery = query.replace(/\s+/g, '');
+  if (compactQuery.length >= 6 && compactText.includes(compactQuery)) score += 520;
+
+  let matchedTokens = 0;
   for (const token of tokens) {
     if (token.length < 2) continue;
-    if (text.split(' ').some((part) => part === token)) score += 140;
-    else if (text.includes(token)) score += 70;
+    if (parts.some((part) => part === token)) {
+      score += 140;
+      matchedTokens++;
+    } else if (text.includes(token)) {
+      score += 70;
+      matchedTokens++;
+    }
+  }
+
+  const meaningfulTokens = tokens.filter((token) => token.length >= 2);
+  if (meaningfulTokens.length > 0) {
+    const coverage = matchedTokens / meaningfulTokens.length;
+    if (coverage === 1) score += meaningfulTokens.length >= 3 ? 420 : 180;
+    else if (coverage >= 0.75) score += 180;
   }
   return score;
 }
@@ -157,6 +203,8 @@ export function getSearchScore(movie: MovieItem, keyword: string): number {
   const titleVi = normalizeSearchText(movie.title_vi);
   const titleEn = normalizeSearchText(movie.title_en);
   const slug = normalizeSearchText(movie.slug);
+  const episodeCurrent = normalizeSearchText(movie.episode_current);
+  const episodeTotal = normalizeSearchText(movie.episode_total);
   const year = parseMovieYear(movie);
 
   let score = 0;
@@ -165,9 +213,18 @@ export function getSearchScore(movie: MovieItem, keyword: string): number {
   score += textScore(origin, query, tokens) * 3;
   score += textScore(titleEn, query, tokens) * 3;
   score += textScore(slug, query, tokens);
+  score += textScore(episodeCurrent, query, tokens);
+  score += textScore(episodeTotal, query, tokens);
 
   const queryYear = tokens.find((token) => /^(18|19|20)\d{2}$/.test(token));
   if (queryYear && Number(queryYear) === year) score += 500;
+  const querySeason = query.match(/\b(?:season|ss|phan|mua|part)\s*(\d{1,2})\b/)?.[1]
+    ?? query.match(/\b(\d{1,2})\s*(?:season|ss|phan|mua|part)\b/)?.[1]
+    ?? query.match(/\bs(\d{1,2})\b/)?.[1]
+    ?? '';
+  const movieSeason = getMovieSeasonSignature(movie);
+  if (querySeason && movieSeason && Number(querySeason) === Number(movieSeason)) score += 450;
+  if (querySeason && movieSeason && Number(querySeason) !== Number(movieSeason)) score -= 300;
 
   if ((movie.episode_current ?? '').toLowerCase().trim() === 'trailer') score -= 350;
   if (movie.poster_url || movie.thumb_url) score += 15;
@@ -219,13 +276,14 @@ export function mergeMoviesUnique<T extends MovieItem>(movies: T[]): T[] {
   const seen = new Map<string, number>();
 
   for (const movie of movies) {
+    const seasonSignature = getMovieSeasonSignature(movie);
     const keys = [
       movie.slug ? `slug:${normalizeSearchText(movie.slug)}` : '',
       movie._id ? `id:${String(movie._id).trim().toLowerCase()}` : '',
       movie.ophim_id ? `ophim:${String(movie.ophim_id).trim().toLowerCase()}` : '',
-      movie.tmdb_id ? `tmdb:${String(movie.tmdb_id).trim().toLowerCase()}` : '',
-      ...movieTitleKeys(movie),
-      ...movieLooseTitleKeys(movie),
+      movie.tmdb_id ? appendSeasonScope(`tmdb:${String(movie.tmdb_id).trim().toLowerCase()}`, seasonSignature) : '',
+      ...movieTitleKeys(movie).map((key) => appendSeasonScope(key, seasonSignature)),
+      ...movieLooseTitleKeys(movie).map((key) => appendSeasonScope(key, seasonSignature)),
     ].filter(Boolean) as string[];
 
     const existingIndex = keys
@@ -256,8 +314,9 @@ export function mergeMoviesUnique<T extends MovieItem>(movies: T[]): T[] {
         : fallback.modified,
     };
     keys.forEach((key) => seen.set(key, existingIndex));
-    movieTitleKeys(result[existingIndex]).forEach((key) => seen.set(key, existingIndex));
-    movieLooseTitleKeys(result[existingIndex]).forEach((key) => seen.set(key, existingIndex));
+    const mergedSeasonSignature = getMovieSeasonSignature(result[existingIndex]);
+    movieTitleKeys(result[existingIndex]).forEach((key) => seen.set(appendSeasonScope(key, mergedSeasonSignature), existingIndex));
+    movieLooseTitleKeys(result[existingIndex]).forEach((key) => seen.set(appendSeasonScope(key, mergedSeasonSignature), existingIndex));
   }
 
 

@@ -180,6 +180,34 @@ function canonicalTitleCandidates(value: Record<string, unknown> | FindResult): 
     .filter((title) => title.length >= 6)));
 }
 
+function seasonSignature(value: Record<string, unknown> | FindResult): string {
+  const record = value as Record<string, unknown>;
+  const text = normalizeTitle([
+    record.name,
+    record.title_vi,
+    record.title_en,
+    record.title_zh,
+    record.title_original,
+    record.origin_name,
+    String(record.slug || '').replace(/-/g, ' '),
+    String(record.ophim_slug || '').replace(/-/g, ' '),
+    record.normalized_name,
+  ].filter(Boolean).join(' '));
+
+  const patterns = [
+    /\b(?:season|ss|phan|mua|part)\s*(\d{1,2})\b/,
+    /\b(\d{1,2})\s*(?:season|ss|phan|mua|part)\b/,
+    /\bs(\d{1,2})\b/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return String(Number(match[1]));
+  }
+
+  return '';
+}
+
 function rawTitleTerms(value: Record<string, unknown>): string[] {
   return Array.from(new Set([
     value.name,
@@ -228,6 +256,13 @@ function isLikelySameMovie(existing: FindResult, payload: Record<string, unknown
   const incomingYear = movieYear(payload);
   const existingYear = movieYear(existing);
   if (incomingYear > 0 && existingYear > 0 && incomingYear !== existingYear) return false;
+
+  const incomingSeason = seasonSignature(payload);
+  const existingSeason = seasonSignature(existing);
+  if (incomingSeason || existingSeason) {
+    if (!incomingSeason || !existingSeason || incomingSeason !== existingSeason) return false;
+  }
+
   if (!hasSharedTitle(existing, payload)) return false;
 
   const incomingType = String(payload.type || '').trim();

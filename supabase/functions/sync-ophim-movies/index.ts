@@ -7,12 +7,31 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
 };
 
-const OPHIM_BASES = [
-  'https://ophim1.com',
-  'https://ophim.tv',
-  'https://ophim9.cc',
-  'https://ophim8.cc',
-];
+const PROVIDERS = {
+  ophim: {
+    sourceSite: 'ophim',
+    sourceName: 'OPhim',
+    bases: ['https://ophim1.com', 'https://ophim.tv', 'https://ophim9.cc', 'https://ophim8.cc'],
+    listPath: (page: number) => `/v1/api/danh-sach/phim-moi-cap-nhat?page=${page}&sort_field=modified.time&sort_type=desc`,
+    detailPath: (slug: string) => `/v1/api/phim/${encodeURIComponent(slug)}`,
+    trackOphimIdentity: true,
+  },
+  kkphim: {
+    sourceSite: 'phimapi',
+    sourceName: 'KKPhim',
+    bases: ['https://phimapi.com', 'https://phimapi.net'],
+    listPath: (page: number) => `/danh-sach/phim-moi-cap-nhat?page=${page}`,
+    detailPath: (slug: string) => `/phim/${encodeURIComponent(slug)}`,
+    trackOphimIdentity: false,
+  },
+} as const;
+
+type ProviderKey = keyof typeof PROVIDERS;
+type ProviderConfig = (typeof PROVIDERS)[ProviderKey];
+
+function providerFromParam(value: string | null): ProviderConfig {
+  return value === 'kkphim' ? PROVIDERS.kkphim : PROVIDERS.ophim;
+}
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -176,8 +195,8 @@ function getCurrentEpisode(movie: OPhimMovie, episodes: OPhimServer[]): number {
   return Math.max(fromText, fromEpisodes);
 }
 
-async function fetchJsonFromMirrors(path: string, timeoutMs = 12000): Promise<Record<string, unknown> | null> {
-  for (const base of OPHIM_BASES) {
+async function fetchJsonFromMirrors(provider: ProviderConfig, path: string, timeoutMs = 12000): Promise<Record<string, unknown> | null> {
+  for (const base of provider.bases) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -210,12 +229,12 @@ function parseDetail(payload: DetailPayload | null, fallbackSlug: string): Parse
   return { movie, episodes: Array.isArray(episodes) ? episodes : [] };
 }
 
-async function fetchDetail(slug: string): Promise<ParsedDetail | null> {
-  const payload = await fetchJsonFromMirrors(`/v1/api/phim/${encodeURIComponent(slug)}`);
+async function fetchDetail(provider: ProviderConfig, slug: string): Promise<ParsedDetail | null> {
+  const payload = await fetchJsonFromMirrors(provider, provider.detailPath(slug));
   return parseDetail(payload as DetailPayload | null, slug);
 }
 
-function moviePayload(detail: ParsedDetail): Record<string, unknown> {
+function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<string, unknown> {
   const movie = detail.movie;
   const now = new Date().toISOString();
   const name = String(movie.name || movie.slug || 'Phim');
@@ -225,8 +244,8 @@ function moviePayload(detail: ParsedDetail): Record<string, unknown> {
 
   return {
     slug,
-    ophim_slug: slug,
-    ophim_id: String(movie._id || movie.id || ''),
+    ophim_slug: provider.trackOphimIdentity ? slug : null,
+    ophim_id: provider.trackOphimIdentity ? String(movie._id || movie.id || '') : '',
     name,
     origin_name: originName,
     title_vi: name,
@@ -253,8 +272,8 @@ function moviePayload(detail: ParsedDetail): Record<string, unknown> {
     director: Array.isArray(movie.director) ? movie.director : [],
     category: Array.isArray(movie.category) ? movie.category : [],
     country: Array.isArray(movie.country) ? movie.country : [],
-    source_site: 'ophim',
-    source_name: 'OPhim',
+    source_site: provider.sourceSite,
+    source_name: provider.sourceName,
     is_published: true,
     last_synced_at: now,
     updated_at: movie.modified?.time || now,
@@ -329,12 +348,20 @@ function updatePayloadForExisting(existing: Record<string, unknown>, incoming: R
   };
 }
 
-async function upsertMovie(supabase: SupabaseClient, detail: ParsedDetail): Promise<{ id: string; created: boolean; updated: boolean }> {
-  const payload = moviePayload(detail);
+async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, detail: ParsedDetail): Promise<{ id: string; created: boolean; updated: boolean }> {
+  const payload = moviePayload(provider, detail);
   const existing = await findExistingMovie(supabase, payload);
 
   if (existing?.id) {
     const update = updatePayloadForExisting(existing, payload);
+    if (!provider.trackOphimIdentity) {
+      if (existing.ophim_id) delete update.ophim_id;
+      if (existing.ophim_slug) delete update.ophim_slug;
+      if (existing.source_site && String(existing.source_site) !== provider.sourceSite) {
+        delete update.source_site;
+        delete update.source_name;
+      }
+    }
     const { error } = await supabase.from('movies').update(update).eq('id', existing.id as string);
     if (error) throw new Error(`movies update ${payload.slug}: ${error.message}`);
     return { id: String(existing.id), created: false, updated: true };
@@ -345,9 +372,9 @@ async function upsertMovie(supabase: SupabaseClient, detail: ParsedDetail): Prom
   return { id: String(data.id), created: true, updated: false };
 }
 
-async function insertEpisodes(supabase: SupabaseClient, movieId: string, detail: ParsedDetail): Promise<number> {
+async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig, movieId: string, detail: ParsedDetail): Promise<number> {
   let inserted = 0;
-  const ophimId = String(detail.movie._id || detail.movie.id || '');
+  const sourceId = provider.trackOphimIdentity ? String(detail.movie._id || detail.movie.id || '') : '';
 
   for (const server of detail.episodes) {
     const serverName = String(server.server_name || 'OPhim');
@@ -364,7 +391,7 @@ async function insertEpisodes(supabase: SupabaseClient, movieId: string, detail:
         .from('movie_episodes')
         .select('id')
         .eq('movie_id', movieId)
-        .eq('source', 'ophim')
+        .eq('source', provider.sourceSite)
         .eq('episode_number', number)
         .limit(1)
         .maybeSingle();
@@ -372,7 +399,7 @@ async function insertEpisodes(supabase: SupabaseClient, movieId: string, detail:
       if (!existingAdmin) {
         const { error } = await supabase.from('movie_episodes').insert({
           movie_id: movieId,
-          ophim_id: ophimId,
+          ophim_id: sourceId,
           episode_number: number,
           episode_name: epName,
           slug: epSlug,
@@ -381,7 +408,7 @@ async function insertEpisodes(supabase: SupabaseClient, movieId: string, detail:
           link_embed: linkEmbed,
           thumbnail_url: '',
           duration: '',
-          source: 'ophim',
+          source: provider.sourceSite,
           is_backup: false,
         });
         if (!error) inserted += 1;
@@ -399,7 +426,7 @@ async function insertEpisodes(supabase: SupabaseClient, movieId: string, detail:
       if (!existingEpisode) {
         await supabase.from('episodes').insert({
           movie_id: movieId,
-          ophim_id: ophimId,
+          ophim_id: sourceId,
           server_name: serverName,
           episode_number: number,
           episode_name: epName,
@@ -422,12 +449,12 @@ async function insertEpisodes(supabase: SupabaseClient, movieId: string, detail:
       if (!existingStream) {
         await supabase.from('streams').insert({
           movie_id: movieId,
-          ophim_id: ophimId,
+          ophim_id: sourceId,
           server_name: serverName,
           episode_slug: epSlug,
           stream_url: linkM3u8,
           embed_url: linkEmbed,
-          source: 'ophim',
+          source: provider.sourceSite,
           is_active: true,
         });
       }
@@ -480,13 +507,14 @@ serve(async (req) => {
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 48), 200));
   const dryRun = url.searchParams.get('dry_run') === '1';
   const includeEpisodes = url.searchParams.get('episodes') === '1';
+  const provider = providerFromParam(url.searchParams.get('provider'));
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const stats: SyncStats = { scanned: 0, created: 0, updated: 0, episodesInserted: 0, skipped: 0, errors: [] };
 
   try {
     const candidates = new Map<string, OPhimMovie>();
     for (let page = 1; page <= pages; page += 1) {
-      const payload = await fetchJsonFromMirrors(`/v1/api/danh-sach/phim-moi-cap-nhat?page=${page}&sort_field=modified.time&sort_type=desc`);
+      const payload = await fetchJsonFromMirrors(provider, provider.listPath(page));
       for (const item of listItems(payload)) {
         if (item.slug && !candidates.has(item.slug)) candidates.set(item.slug, item);
       }
@@ -496,18 +524,18 @@ serve(async (req) => {
     for (const slug of slugs) {
       stats.scanned += 1;
       try {
-        const detail = await fetchDetail(slug);
+        const detail = await fetchDetail(provider, slug);
         if (!detail) {
           stats.skipped += 1;
           stats.errors.push(`[${slug}] detail not found`);
           continue;
         }
         if (dryRun) continue;
-        const result = await upsertMovie(supabase, detail);
+        const result = await upsertMovie(supabase, provider, detail);
         if (result.created) stats.created += 1;
         if (result.updated) stats.updated += 1;
         if (includeEpisodes) {
-          stats.episodesInserted += await insertEpisodes(supabase, result.id, detail);
+          stats.episodesInserted += await insertEpisodes(supabase, provider, result.id, detail);
         }
       } catch (error) {
         stats.errors.push(`[${slug}] ${error instanceof Error ? error.message : String(error)}`);
@@ -520,9 +548,10 @@ serve(async (req) => {
     }
 
     const elapsedMs = Date.now() - started;
-    await writeLog(supabase, stats, elapsedMs, { pages, limit, dry_run: dryRun, include_episodes: includeEpisodes });
+    await writeLog(supabase, stats, elapsedMs, { provider: provider.sourceSite, pages, limit, dry_run: dryRun, include_episodes: includeEpisodes });
     return json({
       success: stats.errors.length === 0,
+      provider: provider.sourceSite,
       scanned: stats.scanned,
       created: stats.created,
       updated: stats.updated,
@@ -535,7 +564,7 @@ serve(async (req) => {
   } catch (error) {
     const elapsedMs = Date.now() - started;
     stats.errors.push(error instanceof Error ? error.message : String(error));
-    await writeLog(supabase, stats, elapsedMs, { pages, limit, dry_run: dryRun, include_episodes: includeEpisodes });
+    await writeLog(supabase, stats, elapsedMs, { provider: provider.sourceSite, pages, limit, dry_run: dryRun, include_episodes: includeEpisodes });
     return json({ success: false, error: stats.errors[0], elapsed_ms: elapsedMs }, 500);
   }
 });

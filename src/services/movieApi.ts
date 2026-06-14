@@ -203,8 +203,8 @@ export async function fetchNewMoviesMultiSource(page = 1): Promise<MovieListResp
    OPTIMIZED: chỉ 2 nguồn nhanh nhất để giảm latency
    ════════════════════════════════════════════ */
 const SEARCH_SOURCES = [
-  { base: 'https://ophim1.com',  name: 'OPhim',  site: 'ophim', timeout: 2200, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://ophim.tv' },
-  { base: 'https://phimapi.com', name: 'KKPhim', site: 'phimapi', timeout: 2200, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://phimapi.net' },
+  { base: 'https://ophim1.com',  name: 'OPhim',  site: 'ophim', timeout: 1400, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://ophim.tv' },
+  { base: 'https://phimapi.com', name: 'KKPhim', site: 'phimapi', timeout: 1400, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://phimapi.net' },
 ] as const;
 
 async function fetchSearchJSON<T>(url: string, timeoutMs: number, signal?: AbortSignal): Promise<T> {
@@ -439,8 +439,8 @@ const inflightMap = new Map<string, Promise<unknown>>();
 /* ════════════════════════════════════════════
    FETCH with RETRY + exponential backoff
    ════════════════════════════════════════════ */
-const MAX_RETRIES = 3;
-const BACKOFF_BASE_MS = 500;
+const MAX_RETRIES = 1;
+const BACKOFF_BASE_MS = 350;
 
 async function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
@@ -742,7 +742,93 @@ function sortListItems(
   return [...items].sort((a, b) => (valueOf(a) - valueOf(b)) * direction);
 }
 
+const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+const SUPABASE_LIST_PAGE_SIZE = 30;
+
+function typeFilterValues(type?: string): string[] {
+  if (!type || type === 'phim-moi-cap-nhat') return [];
+  if (type === 'phim-le') return ['single', 'phim-le'];
+  if (type === 'phim-bo') return ['series', 'phim-bo'];
+  if (type === 'hoat-hinh') return ['hoathinh'];
+  if (type === 'tv-shows') return ['tvshows', 'tv-shows'];
+  return [type];
+}
+
+async function fetchMoviesFromSupabaseList(params: {
+  type?: string;
+  category?: string;
+  country?: string;
+  year?: string;
+  page?: number;
+  keyword?: string;
+  sortField?: string;
+  sortType?: 'asc' | 'desc';
+}): Promise<MovieListResponse | null> {
+  if (!ENABLE_SUPABASE_TEXT_SEARCH) return null;
+  if (params.type === 'phim-chieu-rap') return null;
+  const page = Math.max(1, params.page ?? 1);
+  const from = (page - 1) * SUPABASE_LIST_PAGE_SIZE;
+  const to = from + SUPABASE_LIST_PAGE_SIZE - 1;
+
+  try {
+    let query = supabase
+      .from('movies')
+      .select(SUPABASE_LIST_SELECT, { count: 'exact' })
+      .eq('is_published', true);
+
+    const typeValues = typeFilterValues(params.type);
+    if (typeValues.length === 1) {
+      query = query.eq('type', typeValues[0]);
+    } else if (typeValues.length > 1) {
+      query = query.in('type', typeValues);
+    }
+
+    if (params.category) query = query.filter('category', 'cs', JSON.stringify([{ slug: params.category }]));
+    if (params.country) query = query.filter('country', 'cs', JSON.stringify([{ slug: params.country }]));
+    if (params.year) query = query.eq('year', Number(params.year));
+    if (params.keyword?.trim()) {
+      const safeKw = escapePostgrestIlike(params.keyword.trim());
+      const normalizedKw = escapePostgrestIlike(normalizeSearchText(params.keyword.trim()));
+      query = query.or([
+        `name.ilike.%${safeKw}%`,
+        `origin_name.ilike.%${safeKw}%`,
+        `title_vi.ilike.%${safeKw}%`,
+        `title_en.ilike.%${safeKw}%`,
+        `slug.ilike.%${normalizedKw.replace(/\s+/g, '-')}%`,
+        `normalized_name.ilike.%${normalizedKw}%`,
+      ].join(','));
+    }
+
+    const orderColumn = params.sortField === 'year' ? 'year' : 'updated_at';
+    query = query.order(orderColumn, { ascending: params.sortType === 'asc', nullsFirst: false }).range(from, to);
+    const { data, count, error } = await query;
+    if (error || !data || data.length === 0) return null;
+
+    const items = sortListItems(
+      (data as Record<string, unknown>[]).map(toSupabaseMovieItem),
+      params.sortField,
+      params.sortType,
+    ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer');
+    const totalItems = count ?? items.length;
+
+    return {
+      status: true,
+      items,
+      pagination: {
+        currentPage: page,
+        totalItems,
+        totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE,
+        totalPages: Math.max(1, Math.ceil(totalItems / SUPABASE_LIST_PAGE_SIZE)),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchNewMovies(page = 1): Promise<MovieListResponse> {
+  const supabaseResult = await fetchMoviesFromSupabaseList({ page, sortField: 'modified.time', sortType: 'desc' });
+  if (supabaseResult) return supabaseResult;
   return fetchNewMoviesMultiSource(page);
 }
 
@@ -752,6 +838,9 @@ export async function fetchMoviesByType(
   sortField?: string,
   sortType: 'asc' | 'desc' = 'desc'
 ): Promise<MovieListResponse> {
+  const supabaseResult = await fetchMoviesFromSupabaseList({ type, page, sortField, sortType });
+  if (supabaseResult) return supabaseResult;
+
   const q = new URLSearchParams({ page: String(page) });
   if (sortField) { q.set('sort_field', sortField); q.set('sort_type', sortType); }
 
@@ -792,6 +881,9 @@ export async function fetchMoviesByCategory(params: {
   sortField?: string;
   sortType?: 'asc' | 'desc';
 }): Promise<MovieListResponse> {
+  const supabaseResult = await fetchMoviesFromSupabaseList(params);
+  if (supabaseResult) return supabaseResult;
+
   const q = new URLSearchParams();
   if (params.category)  q.set('category', params.category);
   if (params.country)   q.set('country', params.country);
@@ -834,18 +926,27 @@ export async function searchMovies(keyword: string, page = 1, signal?: AbortSign
     return { status: true, items: [], pagination: { currentPage: 1, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
   }
 
-  const [apiResult, supabaseResult, queerResult] = await Promise.allSettled([
-    searchMoviesMultiSource(kw, page, signal),
-    searchMoviesInSupabase(kw, { limit: 36, timeoutMs: 1800, minLength: 2, signal }),
-    page === 1
-      ? searchQueerUniverseMovies(kw, { limit: 24, timeoutMs: 2200, minLength: 2, signal })
-      : Promise.resolve([]),
-  ]);
+  const fallbackApiData: MovieListResponse = {
+    status: true,
+    items: [],
+    pagination: { currentPage: page, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 },
+  };
+  const supabaseItems = await searchMoviesInSupabase(kw, { limit: 36, timeoutMs: 950, minLength: 2, signal }).catch(() => []);
+  const queerIntent = page === 1 && isQueerSearchIntent(kw);
+  const needsExternal = page > 1 || supabaseItems.length < 10 || queerIntent;
+  const [apiResult, queerResult] = needsExternal
+    ? await Promise.allSettled([
+        searchMoviesMultiSource(kw, page, signal),
+        page === 1
+          ? searchQueerUniverseMovies(kw, { limit: 24, timeoutMs: queerIntent ? 1800 : 950, minLength: 2, signal })
+          : Promise.resolve([]),
+      ])
+    : [
+        { status: 'fulfilled', value: fallbackApiData } as PromiseFulfilledResult<MovieListResponse>,
+        { status: 'fulfilled', value: [] } as PromiseFulfilledResult<MovieItem[]>,
+      ];
 
-  const apiData = apiResult.status === 'fulfilled'
-    ? apiResult.value
-    : { status: true, items: [], pagination: { currentPage: page, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
-  const supabaseItems = supabaseResult.status === 'fulfilled' ? supabaseResult.value : [];
+  const apiData = apiResult.status === 'fulfilled' ? apiResult.value : fallbackApiData;
   const queerItems = queerResult.status === 'fulfilled' ? queerResult.value : [];
   const items = sortMoviesForSearch(
     mergeMoviesUnique([...(page === 1 ? queerItems : []), ...supabaseItems, ...(apiData.items ?? [])]),
@@ -904,6 +1005,8 @@ const SUPABASE_URL = typeof import.meta.env !== 'undefined' ? (import.meta.env.V
 
 const ENABLE_SUPABASE_TEXT_SEARCH =
   typeof import.meta.env === 'undefined' || import.meta.env.VITE_DISABLE_SUPABASE_TEXT_SEARCH !== 'true';
+const ENABLE_SUPABASE_SEARCH_RPC =
+  typeof import.meta.env !== 'undefined' && import.meta.env.VITE_ENABLE_SUPABASE_SEARCH_RPC === 'true';
 async function fetchMovieDetailFromProxy(slug: string): Promise<MovieDetailResponse | null> {
   if (!SUPABASE_URL) return null;
   try {
@@ -1411,6 +1514,8 @@ function escapePostgrestIlike(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/[(),]/g, ' ');
 }
 
+let supabaseSearchRpcUnavailable = false;
+
 export async function searchMoviesInSupabase(
   keyword: string,
   options: { limit?: number; timeoutMs?: number; minLength?: number; signal?: AbortSignal } = {}
@@ -1428,11 +1533,50 @@ export async function searchMoviesInSupabase(
     options.signal?.addEventListener('abort', abortFromParent, { once: true });
   }
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 2500);
+  try {
+    if (ENABLE_SUPABASE_SEARCH_RPC && !supabaseSearchRpcUnavailable) {
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('search_movies_fast', {
+          search_query: kw,
+          result_limit: limit,
+        })
+        .abortSignal(controller.signal);
+
+      if (!rpcError && Array.isArray(rpcData)) {
+        return sortMoviesForSearch(
+          mergeMoviesUnique((rpcData as Record<string, unknown>[]).map(toSupabaseMovieItem)),
+          kw,
+          'relevance',
+        ).slice(0, limit);
+      }
+
+      const message = (rpcError?.message ?? '').toLowerCase();
+      if (
+        rpcError?.code === 'PGRST202' ||
+        rpcError?.code === '42883' ||
+        message.includes('search_movies_fast') ||
+        message.includes('function') ||
+        message.includes('schema cache')
+      ) {
+        supabaseSearchRpcUnavailable = true;
+      }
+    }
+  } catch (e) {
+    if ((e as Error)?.name === 'AbortError') {
+      supabaseSearchRpcUnavailable = true;
+    }
+  }
+
   const safeKw = escapePostgrestIlike(kw);
   const normalizedKw = normalizeSearchText(kw);
   const safeNormalizedKw = escapePostgrestIlike(normalizedKw);
   const safeSlugKw = escapePostgrestIlike(normalizedKw.replace(/\s+/g, '-'));
   const queryLimit = Math.max(limit * 4, 48);
+  const queryTokens = Array.from(new Set(normalizedKw
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 || /^\d+$/.test(token))
+  )).slice(0, 8);
   const searchFilters = Array.from(new Set([
     `name.ilike.%${safeKw}%`,
     `origin_name.ilike.%${safeKw}%`,
@@ -1445,6 +1589,7 @@ export async function searchMoviesInSupabase(
     ...(safeNormalizedKw
       ? [
           `normalized_name.ilike.%${safeNormalizedKw}%`,
+          `normalized_name.ilike.%${safeSlugKw}%`,
           `slug.ilike.%${safeSlugKw}%`,
           `name.ilike.%${safeNormalizedKw}%`,
           `origin_name.ilike.%${safeNormalizedKw}%`,
@@ -1466,49 +1611,40 @@ export async function searchMoviesInSupabase(
       console.warn('[searchMoviesInSupabase] Error:', error?.message);
       return [];
     }
-    const items: MovieItem[] = (data as Record<string, unknown>[]).map((m) => ({
-      _id: (m.id as string) || '',
-      name: getMovieDisplayName({
-        name: (m.name as string) || '',
-        title_vi: (m.title_vi as string) || '',
-        title_en: (m.title_en as string) || '',
-        title_zh: (m.title_zh as string) || '',
-        origin_name: (m.origin_name as string) || '',
-      }),
-      slug: (m.slug as string) || '',
-      origin_name: (m.origin_name as string) || '',
-      type: (m.type as string) || 'phim-le',
-      thumb_url: (m.thumb_url as string) || (m.poster_url as string) || '',
-      poster_url: (m.poster_url as string) || '',
-      quality: (m.quality as string) || 'HD',
-      lang: (m.lang as string) || 'Vietsub',
-      year: (m.year as number) || 0,
-      episode_current: (m.episode_current as string) || '',
-      episode_total: (m.episode_total as string) || '',
-      current_episode: Number(m.current_episode || 0) || undefined,
-      total_episodes: Number(m.total_episodes || 0) || undefined,
-      schedule_type: (m.schedule_type as MovieItem['schedule_type']) || '',
-      release_time: (m.release_time as string) || undefined,
-      release_day: m.release_day === null || m.release_day === undefined ? undefined : Number(m.release_day),
-      schedule_timezone: (m.schedule_timezone as string) || undefined,
-      category: normalizeTaxonomy<MovieCategory>(m.category),
-      country: normalizeTaxonomy<MovieCountry>(m.country),
-      sub_docquyen: false,
-      chieurap: false,
-      time: '',
-      modified: { time: (m.updated_at as string) || new Date().toISOString() },
-      ophim_id: (m.ophim_id as string) || undefined,
-      tmdb_id: (m.tmdb_id as string) || undefined,
-      source_site: (m.source_site as string) || 'supabase',
-      source_name: (m.source_name as string) || 'Supabase',
-      title_vi: (m.title_vi as string) || undefined,
-      title_en: (m.title_en as string) || undefined,
-      title_zh: (m.title_zh as string) || undefined,
-      release_at: (m.release_at as string) || undefined,
-      next_episode_at: (m.next_episode_at as string) || undefined,
-      next_episode_name: (m.next_episode_name as string) || undefined,
-      schedule_note: (m.schedule_note as string) || undefined,
-    }));
+    const recordsById = new Map<string, Record<string, unknown>>();
+    const addRecords = (rows: Record<string, unknown>[]) => {
+      for (const row of rows) {
+        const id = String(row.id || row.slug || '');
+        if (id && !recordsById.has(id)) recordsById.set(id, row);
+      }
+    };
+    addRecords(data as Record<string, unknown>[]);
+
+    if (recordsById.size < Math.min(8, limit) && queryTokens.length >= 3) {
+      const tokenFields = ['normalized_name', 'slug', 'title_en', 'origin_name', 'title_vi', 'name'];
+      const tokenQueries = tokenFields.map(async (field) => {
+        let query = supabase
+          .from('movies')
+          .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, is_published, updated_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note')
+          .eq('is_published', true)
+          .limit(Math.max(limit, 24))
+          .abortSignal(controller.signal);
+
+        for (const token of queryTokens) {
+          query = query.ilike(field, `%${escapePostgrestIlike(token)}%`);
+        }
+
+        const { data: tokenData } = await query;
+        return (tokenData ?? []) as Record<string, unknown>[];
+      });
+
+      const tokenResults = await Promise.allSettled(tokenQueries);
+      for (const result of tokenResults) {
+        if (result.status === 'fulfilled') addRecords(result.value);
+      }
+    }
+
+    const items: MovieItem[] = Array.from(recordsById.values()).map(toSupabaseMovieItem);
     return sortMoviesForSearch(mergeMoviesUnique(items), kw, 'relevance').slice(0, limit);
   } catch (e) {
     if ((e as Error)?.name !== 'AbortError') {
@@ -1521,7 +1657,7 @@ export async function searchMoviesInSupabase(
   }
 }
 
-const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v2';
+const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v3';
 const SUPABASE_SEARCH_INDEX_TTL = 30 * 60 * 1000;
 let supabaseSearchIndexInflight: Promise<MovieItem[]> | null = null;
 
