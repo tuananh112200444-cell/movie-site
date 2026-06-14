@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMovies } from '../../services/movieApi';
+import { fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMoviesInSupabase } from '../../services/movieApi';
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -52,7 +52,12 @@ function getMovieSearchText(movie: Movie): string {
     movie.origin_name,
     movie.title_vi,
     movie.title_en,
+    movie.title_zh,
     movie.slug,
+    movie.episode_current,
+    movie.episode_total,
+    movie.current_episode ? `tap ${movie.current_episode}` : '',
+    movie.total_episodes ? `season ${movie.total_episodes}` : '',
     movie.category?.map((c) => c.name).join(' '),
   ].filter(Boolean).join(' '));
 }
@@ -132,7 +137,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
     setSuggestions(instantItems);
     setHighlightIndex(-1);
     setLoading(instantItems.length === 0);
-    const cacheKey = `kp_suggest_v8_${q.trim().toLowerCase()}`;
+    const cacheKey = `kp_suggest_v9_${q.trim().toLowerCase()}`;
     try {
       const raw = sessionStorage.getItem(cacheKey);
       if (raw) {
@@ -147,21 +152,9 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
     } catch { /* ignore cache */ }
 
     try {
-      // Query all lightweight search sources after debounce, then merge by relevance.
       let items = instantItems;
-      const [indexedResult, apiResult] = await Promise.allSettled([
-        ensureSearchIndexLoaded(),
-        searchMovies(q.trim(), 1, ctrl.signal).then((res) => res.items ?? []),
-      ]);
-
+      const apiItems = await searchMoviesInSupabase(q.trim(), { limit: 12, timeoutMs: 800, minLength: 2, signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
-
-      const indexedItems = indexedResult.status === 'fulfilled' ? indexedResult.value : [];
-      const apiItems = apiResult.status === 'fulfilled' ? apiResult.value : [];
-
-      if (indexedItems.length > 0) {
-        items = mergeMoviesUnique([...items, ...getInstantLocalHits(indexedItems, q, 8)]);
-      }
       items = mergeMoviesUnique([...items, ...apiItems]);
 
       // Dedupe cross-source results before ranking.
@@ -177,6 +170,15 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
           }
         } catch { /* quota */ }
       }
+
+      ensureSearchIndexLoaded()
+        .then((indexedItems) => {
+          if (ctrl.signal.aborted || indexedItems.length === 0) return;
+          const indexedHits = getInstantLocalHits(indexedItems, q, 8);
+          if (indexedHits.length === 0) return;
+          setSuggestions((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...indexedHits]), q.trim(), 'relevance').slice(0, 8));
+        })
+        .catch(() => {});
     } catch {
       if (!ctrl.signal.aborted) {
         setSuggestions([]);
