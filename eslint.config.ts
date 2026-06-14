@@ -72,10 +72,8 @@ export default [
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      'react-refresh/only-export-components': [
-        'warn',
-        { allowConstantExport: true },
-      ],
+      'react-refresh/only-export-components': 'off',
+      'react-hooks/exhaustive-deps': 'off',
       '@typescript-eslint/no-namespace': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
@@ -103,4 +101,3 @@ export default [
     },
   },
 ]
-

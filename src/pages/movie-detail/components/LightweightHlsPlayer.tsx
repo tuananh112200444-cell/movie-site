@@ -77,6 +77,7 @@ export default function LightweightHlsPlayer({
   const [selectedLevel, setSelectedLevel] = useState(-1);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [pipActive, setPipActive] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   useEffect(() => {
@@ -258,7 +259,7 @@ export default function LightweightHlsPlayer({
     setHasError(true);
     setErrorMsg('Trình duyệt không hỗ trợ HLS');
     return undefined;
-  }, [src, autoPlay, initialTime, onFatalError]);
+  }, [src, autoPlay, initialTime, onFatalError, retryNonce]);
 
   /* ── Video events ── */
   useEffect(() => {
@@ -554,6 +555,13 @@ export default function LightweightHlsPlayer({
         <div className="text-center px-6">
           <i className="ri-wifi-off-line text-3xl text-red-400/40 mb-2 block" />
           <p className="text-white/50 text-sm">{errorMsg || 'Không thể tải video'}</p>
+          <button
+            type="button"
+            onClick={() => setRetryNonce((value) => value + 1)}
+            className="mt-3 rounded-lg border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold text-white/70 hover:bg-white/15 hover:text-white"
+          >
+            Thử lại stream
+          </button>
         </div>
       </div>
     );
@@ -730,7 +738,7 @@ export default function LightweightHlsPlayer({
             {subtitleUrl && (
               <button
                 onClick={() => setCaptionsEnabled((value) => !value)}
-                title="Phu de tieng Viet"
+                title="Phụ đề tiếng Việt"
                 className={`w-9 h-9 flex items-center justify-center cursor-pointer flex-shrink-0 ${
                   captionsEnabled ? 'text-cyan-300' : 'text-white/45 hover:text-white'
                 }`}

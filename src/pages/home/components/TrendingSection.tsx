@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getOptimizedImageUrl, getPosterUrl } from '../../../services/movieApi';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
@@ -101,8 +101,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
     setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
   }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useMemo(() => {
+  useEffect(() => {
     checkScroll();
   }, [filtered, checkScroll]);
 

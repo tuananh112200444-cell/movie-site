@@ -556,7 +556,6 @@ export default function GenrePage() {
     setSearchParams({});
     fetchMovies(1, true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, fetchMovies, setSearchParams]);
 
   const handleSortChange = (newSort: string) => {
