@@ -119,11 +119,11 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#080a10] to-transparent pointer-events-none" />
 
       {/* Content */}
-      <div className="absolute inset-0 flex items-center px-3 sm:px-8 md:px-12 lg:px-16 pt-16 sm:pt-20 md:pt-24 pb-10 sm:pb-6 md:pb-4">
-        <div key={contentKey} className="w-full flex items-center justify-between gap-3 md:gap-8 hero-content-enter">
+      <div className="absolute inset-0 flex items-center px-3 pt-16 pb-10 sm:px-8 sm:pt-20 sm:pb-6 md:px-12 md:pt-24 md:pb-4 lg:px-8">
+        <div key={contentKey} className="hero-content-enter mx-auto flex w-full max-w-[1760px] items-center justify-between gap-3 md:gap-8 2xl:px-2">
 
           {/* Left: Text info */}
-          <div className="flex-1 max-w-lg">
+          <div className="max-w-lg flex-1 xl:max-w-2xl 2xl:max-w-3xl">
             <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3 flex-wrap">
               {active.category?.slice(0, 2).map((c) => (
                 <Link key={c.slug} to={`/the-loai/${c.slug}`}
@@ -137,7 +137,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
               </span>
             </div>
 
-            <h2 className="hero-title-enter text-white font-black text-xl sm:text-2xl md:text-4xl lg:text-5xl leading-snug sm:leading-tight mb-1 sm:mb-1.5 line-clamp-2 tracking-tight">
+            <h2 className="hero-title-enter mb-1 text-xl font-black leading-snug tracking-tight text-white line-clamp-2 sm:mb-1.5 sm:text-2xl sm:leading-tight md:text-4xl lg:text-5xl 2xl:text-6xl">
               {active.name}
             </h2>
 
@@ -209,7 +209,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
           </div>
 
           {/* Right: Poster card */}
-          <div className="hidden lg:block flex-shrink-0">
+          <div className="hidden flex-shrink-0 lg:block">
             <MemoHeroPosterCard
               src={activePosterUrl}
               alt={active.name ?? ''}
@@ -221,7 +221,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       </div>
 
       {/* Slide counter */}
-      <div className="absolute top-20 right-6 hidden lg:flex flex-col items-end gap-2" style={{ right: '220px' }}>
+      <div className="absolute top-20 right-[240px] hidden flex-col items-end gap-2 lg:flex 2xl:right-[320px]">
         <div className="flex items-center gap-1.5 bg-black/40 px-3 py-1.5 rounded-full border border-white/[0.08]">
           <span className="text-white text-sm font-bold">{activeIndex + 1}</span>
           <span className="text-white/30 text-xs">/</span>
@@ -317,7 +317,7 @@ const MemoHeroPosterCard = memo(function HeroPosterCard({ src, alt, href, qualit
   const [loaded, setLoaded] = useState(isImagePreloaded(src));
   const [imgError, setImgError] = useState(false);
   return (
-    <Link to={href} className="relative block w-[140px] xl:w-[160px] group" style={{ aspectRatio: '2/3' }}>
+    <Link to={href} className="group relative block w-[160px] xl:w-[190px] 2xl:w-[220px]" style={{ aspectRatio: '2/3' }}>
       <div className="relative w-full h-full rounded-2xl overflow-hidden bg-[#16192a]" style={{ boxShadow: '0 16px 40px rgba(0,0,0,0.6), 0 6px 16px rgba(0,0,0,0.4)' }}>
         {/* BLUR PLACEHOLDER — hiển thị NGAY LẬP TỨC */}
         <div className={`absolute inset-0 blur-placeholder z-[1] transition-opacity duration-700 ${loaded ? 'opacity-0' : 'opacity-100'}`} />

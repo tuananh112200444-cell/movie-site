@@ -75,7 +75,7 @@ export default function CountryHeroBanner({ config, page }: Props) {
         ))}
       </div>
 
-      <div className="relative max-w-[1400px] mx-auto px-4 pt-6 sm:pt-10 pb-6 sm:pb-10">
+      <div className="relative max-w-[1760px] mx-auto px-4 pt-6 sm:pt-10 pb-6 sm:pb-10">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 mb-4 sm:mb-6 text-xs">
           <Link to="/" className="text-white/30 hover:text-white/60 transition-colors">Trang chủ</Link>

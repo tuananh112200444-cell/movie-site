@@ -69,7 +69,7 @@ function prefetchMovieDetailApi(slug: string): void {
   activeDetailPrefetches.add(slug);
   fetch(`${supabaseUrl}/functions/v1/movie-detail-proxy?slug=${encodeURIComponent(slug)}`, {
     signal: controller.signal,
-    cache: 'force-cache',
+    cache: 'no-store',
   })
     .catch(() => {})
     .finally(() => {

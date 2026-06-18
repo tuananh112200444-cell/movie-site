@@ -66,7 +66,7 @@ export default function ActorListPage() {
           <div className="absolute top-4 right-80 w-20 h-28 bg-white rounded-2xl" />
         </div>
 
-        <div className="relative max-w-[1400px] mx-auto px-4 pt-10 pb-8">
+        <div className="relative max-w-[1760px] mx-auto px-4 pt-10 pb-8">
           <nav className="flex items-center gap-1.5 mb-5 text-xs">
             <Link to="/" className="text-white/30 hover:text-white/60 transition-colors">Trang chủ</Link>
             <i className="ri-arrow-right-s-line text-white/20" />
@@ -109,7 +109,7 @@ export default function ActorListPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-4 pb-16">
+      <main className="max-w-[1760px] mx-auto px-4 pb-16">
 
         {/* ── Filter Bar ── */}
         <div className="mb-6 space-y-3">

@@ -27,6 +27,15 @@ if (typeof document !== 'undefined') {
 const ENABLE_SERVICE_WORKER = false;
 
 // Service worker is disabled temporarily to recover visitors stuck on old cached builds.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type !== 'KHOPHIM_SW_REMOVED') return;
+    if (sessionStorage.getItem('kp_sw_removed_reload_v1') === '1') return;
+    sessionStorage.setItem('kp_sw_removed_reload_v1', '1');
+    window.location.reload();
+  });
+}
+
 if (ENABLE_SERVICE_WORKER && 'serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker

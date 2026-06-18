@@ -438,7 +438,7 @@ export default function MyNamPage() {
         </div>
 
         {/* Content */}
-        <div className="relative z-10 h-full flex flex-col justify-end max-w-[1400px] mx-auto px-4 pb-6 sm:pb-8">
+        <div className="relative z-10 h-full flex flex-col justify-end max-w-[1760px] mx-auto px-4 pb-6 sm:pb-8">
           <nav className="flex items-center gap-1.5 mb-3 sm:mb-4 text-[11px] sm:text-xs text-white/40 flex-wrap">
             <Link to="/" className="hover:text-white/70 transition-colors">Trang chủ</Link>
             <i className="ri-arrow-right-s-line" />
@@ -491,7 +491,7 @@ export default function MyNamPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-4 pb-16">
+      <main className="max-w-[1760px] mx-auto px-4 pb-16">
         {/* ─── Country Filters ─── */}
         <div className="flex items-center gap-2 py-4 sm:py-5 border-b border-white/5 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1">
           <span className="text-xs text-white/30 mr-1 flex-shrink-0">Quốc gia:</span>
