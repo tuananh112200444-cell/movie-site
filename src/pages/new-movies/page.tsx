@@ -270,7 +270,7 @@ export default function NewMoviesPage() {
         <div className="absolute top-0 right-1/4 w-72 h-72 bg-red-600/8 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/3 w-48 h-48 bg-rose-500/6 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative max-w-[1400px] mx-auto px-4 pt-20 sm:pt-28 pb-6 sm:pb-10">
+        <div className="relative max-w-[1760px] mx-auto px-4 pt-20 sm:pt-28 pb-6 sm:pb-10">
           <nav className="flex items-center gap-1.5 mb-5 text-xs text-white/30">
             <Link to="/" className="hover:text-white/60 transition-colors">Trang chủ</Link>
             <i className="ri-arrow-right-s-line" />
@@ -316,7 +316,7 @@ export default function NewMoviesPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-4 pb-14">
+      <main className="max-w-[1760px] mx-auto px-4 pb-14">
 
         {/* ── Filter Tabs ── */}
         <div className="mb-6 -mt-1">

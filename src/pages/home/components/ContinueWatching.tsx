@@ -11,8 +11,8 @@ export default function ContinueWatching() {
   if (history.length === 0) return null;
 
   return (
-    <section className="mb-10">
-      <div className="flex items-center justify-between mb-5">
+    <section className="mb-8 md:mb-10">
+      <div className="mb-3 flex items-center justify-between md:mb-5">
         <div className="flex items-center gap-3">
           <div className="w-1 h-5 bg-orange-500 rounded-full" />
           <h3 className="text-lg font-bold text-white">🕐 Xem Tiếp</h3>
@@ -22,7 +22,7 @@ export default function ContinueWatching() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6 md:gap-3">
         {history.slice(0, 6).map((entry) => (
           <HistoryCard key={entry._id} entry={entry} onRemove={removeEntry} />
         ))}
@@ -52,7 +52,7 @@ function HistoryCard({ entry, onRemove }: HistoryCardProps) {
   return (
     <div className="relative group">
       <Link to={watchUrl} className="block cursor-pointer">
-        <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-[#1a1d27]">
+        <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-[#1a1d27] shadow-[0_10px_24px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.05]">
         {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton" />}
         {imgError && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">
@@ -71,8 +71,8 @@ function HistoryCard({ entry, onRemove }: HistoryCardProps) {
           {/* Continue overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="w-10 h-10 flex items-center justify-center bg-orange-500/90 rounded-full">
-              <i className="ri-play-fill text-white text-lg ml-0.5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/90 sm:h-10 sm:w-10">
+              <i className="ri-play-fill ml-0.5 text-base text-white sm:text-lg" />
             </div>
           </div>
           {/* Last episode badge */}
@@ -100,7 +100,7 @@ function HistoryCard({ entry, onRemove }: HistoryCardProps) {
             </div>
           )}
         </div>
-        <p className="mt-2 text-white text-xs font-semibold line-clamp-2 group-hover:text-orange-400 transition-colors leading-tight">
+        <p className="mt-1.5 min-h-[34px] text-[11px] font-semibold leading-snug text-white/90 line-clamp-2 transition-colors group-hover:text-orange-400 md:mt-2 md:text-xs">
           {entry.name}
         </p>
       </Link>

@@ -343,8 +343,10 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
 
 const ALL_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
 const HOME_CACHE_KEY = 'kp_home_proxy_v4';
+const LEGACY_HOME_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', HOME_CACHE_KEY];
 const HOME_PORTAL_KEY = 'kp_active_home_portal_v1';
-const HOME_CACHE_TTL = 6 * 60 * 60 * 1000;
+const HOME_CACHE_TTL = 5 * 60 * 1000;
+const HOME_REFRESH_ON_RETURN_MS = 2 * 60 * 1000;
 const EMPTY_MOVIES: MovieItem[] = [];
 
 const HOME_SEED_TRENDING: MovieItem[] = [
@@ -452,11 +454,14 @@ const HOME_SEED_TRENDING: MovieItem[] = [
 
 function readCachedHomeData(): { sections: Record<string, MovieItem[]>; isSeed: boolean } {
   try {
-    const raw = localStorage.getItem(HOME_CACHE_KEY) || sessionStorage.getItem(HOME_CACHE_KEY);
+    for (const key of LEGACY_HOME_CACHE_KEYS) {
+      localStorage.removeItem(key);
+      if (key !== HOME_CACHE_KEY) sessionStorage.removeItem(key);
+    }
+    const raw = sessionStorage.getItem(HOME_CACHE_KEY);
     if (!raw) return { sections: { trending: HOME_SEED_TRENDING }, isSeed: true };
     const entry = JSON.parse(raw) as { sections?: Record<string, MovieItem[]>; ts?: number };
     if (!entry.sections || !entry.ts || Date.now() - entry.ts > HOME_CACHE_TTL) {
-      localStorage.removeItem(HOME_CACHE_KEY);
       sessionStorage.removeItem(HOME_CACHE_KEY);
       return { sections: { trending: HOME_SEED_TRENDING }, isSeed: true };
     }
@@ -467,7 +472,6 @@ function readCachedHomeData(): { sections: Record<string, MovieItem[]>; isSeed: 
 
 function writeCachedHomeData(sections: Record<string, MovieItem[]>): void {
   const payload = JSON.stringify({ sections, ts: Date.now() });
-  try { localStorage.setItem(HOME_CACHE_KEY, payload); } catch { /* quota */ }
   try { sessionStorage.setItem(HOME_CACHE_KEY, payload); } catch { /* quota */ }
 }
 function readActivePortal(): 'movies' | 'queer' {
@@ -489,16 +493,26 @@ export default function Home() {
   const [homeData, setHomeData] = useState<Record<string, MovieItem[]>>(initialHome.sections);
   const [homeLoading, setHomeLoading] = useState(initialHome.isSeed);
   const [homeError, setHomeError] = useState(false);
+  const homeDataRef = useRef(homeData);
+  const lastHomeFetchRef = useRef(0);
+
+  useEffect(() => {
+    homeDataRef.current = homeData;
+  }, [homeData]);
 
   // ── Fetch home data ONCE via home-proxy ──
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const fetchHome = () => {
-      const hadPlaceholder = Object.keys(homeData).length > 0;
-      if (!hadPlaceholder) setHomeLoading(true);
+    let controller: AbortController | null = null;
+    const fetchHome = (showLoading = false) => {
+      const hadPlaceholder = Object.keys(homeDataRef.current).length > 0;
+      if (!hadPlaceholder || showLoading) setHomeLoading(true);
 
-      fetchHomePageData(ALL_SECTIONS)
+      controller?.abort();
+      controller = new AbortController();
+      lastHomeFetchRef.current = Date.now();
+
+      fetchHomePageData(ALL_SECTIONS, { signal: controller.signal })
         .then((res) => {
           if (cancelled) return;
           if (res.status) {
@@ -507,8 +521,8 @@ export default function Home() {
             writeCachedHomeData(res.sections);
           }
         })
-        .catch(() => {
-          if (cancelled) return;
+        .catch((err) => {
+          if (cancelled || (err as Error)?.name === 'AbortError') return;
           setHomeError(true);
         })
         .finally(() => {
@@ -516,15 +530,30 @@ export default function Home() {
         });
     };
 
-    if (initialHome.isSeed) {
-      fetchHome();
-    } else {
-      timer = setTimeout(fetchHome, 2500);
-    }
+    fetchHome(initialHome.isSeed);
+
+    const refreshIfStale = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastHomeFetchRef.current < HOME_REFRESH_ON_RETURN_MS) return;
+      fetchHome(false);
+    };
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted || Date.now() - lastHomeFetchRef.current >= HOME_REFRESH_ON_RETURN_MS) {
+        fetchHome(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', refreshIfStale);
+    window.addEventListener('focus', refreshIfStale);
+    window.addEventListener('pageshow', handlePageShow);
 
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      controller?.abort();
+      document.removeEventListener('visibilitychange', refreshIfStale);
+      window.removeEventListener('focus', refreshIfStale);
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, []);
 
@@ -633,7 +662,7 @@ export default function Home() {
         <HeroBanner movies={trendingMovies} loading={bannerLoading} />
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-3 md:px-4 pt-3 md:pt-8">
+      <main className="mx-auto max-w-[1760px] px-3 pt-3 md:px-5 md:pt-8 2xl:px-8">
         <VietnamPoetryBanner />
         <MobileQuickMovies movies={mobileQuickMovies} loading={homeLoading} />
         <MobileQuickCategories />

@@ -319,7 +319,7 @@ export default function MovieDetailPage() {
     <div className="min-h-screen bg-[#080a10] text-white">
       <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
       <Navbar />
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 pt-24 pb-10">
+      <div className="max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">
         <div className="flex flex-row gap-3 sm:gap-8 mb-8">
           <div className="flex-shrink-0 w-24 sm:w-40 md:w-52 skeleton rounded-xl" style={{ aspectRatio: '2/3' }} />
           <div className="flex-1 space-y-3 pt-2">
@@ -421,7 +421,7 @@ export default function MovieDetailPage() {
       />
 
       {/* Bottom sections — deferred + lazy loaded */}
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 pb-12">
+      <div className="max-w-[1760px] mx-auto px-3 sm:px-4 pb-12">
         {showBottom ? (
           <>
             {related.length > 0 && (

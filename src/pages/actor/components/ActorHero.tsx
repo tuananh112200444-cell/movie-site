@@ -46,7 +46,7 @@ export default function ActorHero({ actor }: ActorHeroProps) {
 
       {/* Content */}
       <div
-        className={`relative z-10 max-w-[1400px] mx-auto px-4 flex items-end pb-10 md:pb-14 transition-all duration-700 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+        className={`relative z-10 max-w-[1760px] mx-auto px-4 flex items-end pb-10 md:pb-14 transition-all duration-700 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
         style={{ minHeight: '520px' }}
       >
         <div className="flex flex-col md:flex-row items-start md:items-end gap-6 w-full">
