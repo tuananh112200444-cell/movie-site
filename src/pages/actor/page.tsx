@@ -93,7 +93,7 @@ export default function ActorPage() {
           noIndex
         />
         <Navbar />
-        <main className="max-w-[1400px] mx-auto px-4 pt-32 pb-20 flex flex-col items-center justify-center min-h-[60vh]">
+        <main className="max-w-[1760px] mx-auto px-4 pt-32 pb-20 flex flex-col items-center justify-center min-h-[60vh]">
           <i className="ri-user-unfollow-line text-6xl text-white/20 mb-4" />
           <h1 className="text-2xl font-bold text-white/60 mb-2">Không tìm thấy diễn viên</h1>
           <p className="text-white/35 text-sm mb-6">Diễn viên này chưa có trong cơ sở dữ liệu của KhoPhim.</p>
@@ -133,7 +133,7 @@ export default function ActorPage() {
         </div>
 
         {/* Main content */}
-        <div className="max-w-[1400px] mx-auto px-4 py-10">
+        <div className="max-w-[1760px] mx-auto px-4 py-10">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-white/35 mb-8" aria-label="Breadcrumb">
             <Link to="/" className="hover:text-white transition-colors cursor-pointer">Trang Chủ</Link>

@@ -267,7 +267,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
       />
       <Navbar />
 
-      <main className="max-w-[1400px] mx-auto px-4 pb-12 pt-8">
+      <main className="max-w-[1760px] mx-auto px-4 pb-12 pt-8">
         {/* ── Breadcrumb + Title ── */}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
           <nav className="flex items-center gap-1.5 text-xs text-white/25">

@@ -159,7 +159,7 @@ export default function AboutPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-[#080a10]/80 via-transparent to-[#080a10]/80" />
         </div>
 
-        <div className="relative max-w-[1400px] mx-auto px-4 md:px-6 text-center">
+        <div className="relative max-w-[1760px] mx-auto px-4 md:px-6 text-center">
           {/* Breadcrumb */}
           <nav className="flex items-center justify-center gap-1.5 mb-8 text-xs text-white/30">
             <Link to="/" className="hover:text-white/60 transition-colors">Trang Chủ</Link>
@@ -196,7 +196,7 @@ export default function AboutPage() {
       </section>
 
       {/* Stats */}
-      <section className="max-w-[1400px] mx-auto px-4 md:px-6 pb-16">
+      <section className="max-w-[1760px] mx-auto px-4 md:px-6 pb-16">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {STATS.map(({ value, label, icon, desc }) => (
             <div key={label} className="bg-[#0d0f18] border border-white/[0.06] rounded-2xl p-5 text-center group hover:border-red-500/20 transition-all">
@@ -212,7 +212,7 @@ export default function AboutPage() {
       </section>
 
       {/* About content */}
-      <section className="max-w-[1400px] mx-auto px-4 md:px-6 pb-16">
+      <section className="max-w-[1760px] mx-auto px-4 md:px-6 pb-16">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -260,7 +260,7 @@ export default function AboutPage() {
       </section>
 
       {/* Features */}
-      <section className="max-w-[1400px] mx-auto px-4 md:px-6 pb-16">
+      <section className="max-w-[1760px] mx-auto px-4 md:px-6 pb-16">
         <div className="text-center mb-10">
           <div className="flex items-center justify-center gap-2 mb-3">
             <span className="w-1 h-5 bg-red-500 rounded-full inline-block" />
@@ -282,7 +282,7 @@ export default function AboutPage() {
       </section>
 
       {/* Categories */}
-      <section className="max-w-[1400px] mx-auto px-4 md:px-6 pb-16">
+      <section className="max-w-[1760px] mx-auto px-4 md:px-6 pb-16">
         <div className="flex items-center gap-2 mb-6">
           <span className="w-1 h-5 bg-red-500 rounded-full inline-block" />
           <h2 className="text-xl font-bold text-white">Danh Mục Phim Tại KhoPhim</h2>
@@ -305,7 +305,7 @@ export default function AboutPage() {
       </section>
 
       {/* FAQ */}
-      <section className="max-w-[1400px] mx-auto px-4 md:px-6 pb-16">
+      <section className="max-w-[1760px] mx-auto px-4 md:px-6 pb-16">
         <div className="flex items-center gap-2 mb-6">
           <span className="w-1 h-5 bg-red-500 rounded-full inline-block" />
           <h2 className="text-xl font-bold text-white">Câu Hỏi Thường Gặp</h2>
@@ -326,7 +326,7 @@ export default function AboutPage() {
       </section>
 
       {/* Contact / CTA */}
-      <section className="max-w-[1400px] mx-auto px-4 md:px-6 pb-20">
+      <section className="max-w-[1760px] mx-auto px-4 md:px-6 pb-20">
         <div className="bg-[#0d0f18] border border-white/[0.06] rounded-2xl p-8 md:p-12 text-center relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-transparent" />
           <div className="relative">

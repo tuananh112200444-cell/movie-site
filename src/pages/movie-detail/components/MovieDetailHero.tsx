@@ -305,7 +305,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
           <div className="absolute inset-0 bg-gradient-to-b from-[#0f1117]/50 to-[#0f1117]" />
         </div>
 
-        <div className="relative max-w-[1400px] mx-auto px-3 sm:px-4 pt-8 sm:pt-12 pb-4 sm:pb-6">
+        <div className="relative max-w-[1760px] mx-auto px-3 sm:px-4 pt-8 sm:pt-12 pb-4 sm:pb-6">
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 mb-3 sm:mb-4 flex-wrap">
             <Link to="/" className="text-white/30 text-xs hover:text-white/60">Trang chủ</Link>

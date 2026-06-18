@@ -109,7 +109,7 @@ export default function HotMovies2026Page() {
               aria-hidden="true"
             />
           </div>
-          <div className="max-w-[1400px] mx-auto px-4 lg:px-6 relative">
+          <div className="max-w-[1760px] mx-auto px-4 lg:px-6 relative">
             <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start lg:items-center">
               {/* Poster */}
               <div className="flex-shrink-0 w-[200px] sm:w-[240px] lg:w-[260px] xl:w-[280px]">
@@ -185,7 +185,7 @@ export default function HotMovies2026Page() {
 
       {/* Filters */}
       <section className="sticky top-16 z-40 bg-[#080a10]/95 border-y border-white/[0.06] py-4">
-        <div className="max-w-[1400px] mx-auto px-4 lg:px-6">
+        <div className="max-w-[1760px] mx-auto px-4 lg:px-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             {/* Hype Filter */}
             <div className="flex flex-wrap gap-2">
@@ -226,7 +226,7 @@ export default function HotMovies2026Page() {
       </section>
 
       {/* Movies Grid */}
-      <main className="max-w-[1400px] mx-auto px-4 lg:px-6 py-8">
+      <main className="max-w-[1760px] mx-auto px-4 lg:px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-white">
             Danh Sách Phim Hot 2026
@@ -330,7 +330,7 @@ export default function HotMovies2026Page() {
       </main>
 
       {/* CTA Section */}
-      <section className="max-w-[1400px] mx-auto px-4 lg:px-6 py-12">
+      <section className="max-w-[1760px] mx-auto px-4 lg:px-6 py-12">
         <div className="bg-gradient-to-r from-red-500/10 via-orange-500/5 to-red-500/10 border border-red-500/20 rounded-2xl p-4 sm:p-6 md:p-8 text-center">
           <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-3">
             Đừng Bỏ Lỡ Phim Hot 2026!

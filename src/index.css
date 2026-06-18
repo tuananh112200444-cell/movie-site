@@ -247,16 +247,16 @@ input::placeholder, textarea::placeholder {
 }
 
 .home-poster-item {
-  flex: 0 0 24%;
-  width: 24%;
-  max-width: 210px;
+  flex: 0 0 30%;
+  width: 30%;
+  max-width: 240px;
   min-width: 0;
 }
 
 @media (min-width: 640px) {
   .home-poster-item {
-    flex-basis: 24%;
-    width: 24%;
+    flex-basis: 22.5%;
+    width: 22.5%;
   }
 }
 
@@ -269,22 +269,22 @@ input::placeholder, textarea::placeholder {
 
 @media (min-width: 1024px) {
   .home-poster-item {
-    flex-basis: 16%;
-    width: 16%;
+    flex-basis: 15%;
+    width: 15%;
   }
 }
 
 @media (min-width: 1280px) {
   .home-poster-item {
-    flex-basis: 13%;
-    width: 13%;
+    flex-basis: 12.5%;
+    width: 12.5%;
   }
 }
 
 @media (min-width: 1536px) {
   .home-poster-item {
-    flex-basis: 11.5%;
-    width: 11.5%;
+    flex-basis: 11.25%;
+    width: 11.25%;
   }
 }
 

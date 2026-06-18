@@ -255,7 +255,7 @@ export default function Navbar() {
           <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
         )}
 
-        <div className="max-w-[1400px] mx-auto px-4 lg:px-6 h-14 lg:h-16 flex items-center justify-between gap-3">
+        <div className="mx-auto flex h-14 max-w-[1760px] items-center justify-between gap-3 px-4 lg:h-16 lg:px-8 2xl:px-10">
 
           {/* ── Logo ── */}
           <Link to="/" className="flex items-center gap-3 flex-shrink-0 group">

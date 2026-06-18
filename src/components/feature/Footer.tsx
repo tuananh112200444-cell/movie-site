@@ -79,7 +79,7 @@ function Footer() {
 
       {/* Stats strip */}
       <div className="border-b border-white/[0.04]">
-        <div className="max-w-[1400px] mx-auto px-6 py-5">
+        <div className="mx-auto max-w-[1760px] px-6 py-5 lg:px-8 2xl:px-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {STATS.map(({ value, label }) => (
               <div key={label} className="flex flex-col items-center gap-1 text-center group">
@@ -94,8 +94,8 @@ function Footer() {
       </div>
 
       {/* Main content */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6 md:gap-8">
+      <div className="mx-auto max-w-[1760px] px-4 py-8 sm:px-6 sm:py-12 lg:px-8 2xl:px-10">
+        <div className="grid grid-cols-2 gap-6 md:grid-cols-4 md:gap-8 xl:grid-cols-[1.25fr_0.8fr_0.8fr_1fr] 2xl:gap-12">
 
           {/* Brand */}
           <div className="col-span-2 md:col-span-1 lg:col-span-1">
@@ -230,7 +230,7 @@ function Footer() {
 
       {/* Bottom bar */}
       <div className="border-t border-white/[0.04]">
-        <div className="max-w-[1400px] mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="mx-auto flex max-w-[1760px] flex-col items-center justify-between gap-3 px-6 py-4 sm:flex-row lg:px-8 2xl:px-10">
           <p className="text-[12px] text-white/25 font-medium">
             © 2026 <span className="text-white/40">KhoPhim</span> · Tất cả quyền được bảo lưu.
           </p>

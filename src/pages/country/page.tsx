@@ -594,7 +594,7 @@ export default function CountryPage({ countrySlug }: Props) {
       {/* Hero Banner */}
       <CountryHeroBanner config={config} page={page} />
 
-      <main className="max-w-[1400px] mx-auto px-4 pb-12">
+      <main className="max-w-[1760px] mx-auto px-4 pb-12">
 
         {/* Sort Bar */}
         <div className="flex items-center justify-between mb-5 gap-3 py-3 flex-col sm:flex-row">

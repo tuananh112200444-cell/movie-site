@@ -89,6 +89,47 @@ function extractEpNumber(text: string): number {
   return 0;
 }
 
+function getExpectedEpisodeNumber(movie: Record<string, unknown> | null | undefined): number {
+  if (!movie) return 0;
+  return Math.max(
+    Number(movie.current_episode || 0) || 0,
+    extractEpNumber(String(movie.episode_current || movie.episodeCurrent || '')),
+    extractEpNumber(String(movie.episode_total || movie.episodeTotal || '')),
+  );
+}
+
+function getMaxEpisodeNumberFromServers(servers: Array<{ server_data?: unknown[] }> = []): number {
+  return servers.reduce((max, server) => {
+    const serverMax = (server.server_data ?? []).reduce((innerMax, raw) => {
+      const ep = raw as Record<string, unknown>;
+      return Math.max(innerMax, extractEpNumber(String(ep.slug || ep.name || '')));
+    }, 0);
+    return Math.max(max, serverMax);
+  }, 0);
+}
+
+function getMaxEpisodeNumberFromServerMap(serverMap: Map<string, unknown[]>): number {
+  let max = 0;
+  for (const [, episodes] of serverMap) {
+    for (const raw of episodes) {
+      const ep = raw as Record<string, unknown>;
+      max = Math.max(max, extractEpNumber(String(ep.slug || ep.name || '')));
+    }
+  }
+  return max;
+}
+
+function isDetailEpisodeIncomplete(payload: Record<string, unknown>): boolean {
+  const movie = payload.movie as Record<string, unknown> | undefined;
+  const expected = getExpectedEpisodeNumber(movie);
+  if (expected <= 1) return false;
+  const episodes = Array.isArray(payload.episodes)
+    ? payload.episodes as Array<{ server_data?: unknown[] }>
+    : [];
+  const actual = getMaxEpisodeNumberFromServers(episodes);
+  return actual > 0 && actual < expected;
+}
+
 function normalizeEpisodeKeyPart(value: string): string {
   return value.trim().toLowerCase().normalize('NFC');
 }
@@ -576,7 +617,7 @@ serve(async (req) => {
 
     if (!forceRefresh) {
       const cachedDetail = await readCachedDetail(supabase, slug);
-      if (cachedDetail?.status) {
+      if (cachedDetail?.status && !isDetailEpisodeIncomplete(cachedDetail)) {
         return jsonResponse(cachedDetail, 200, {
           'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800',
           'X-Cache': 'DB-HIT',
@@ -776,7 +817,17 @@ serve(async (req) => {
     /* ── 3. Fetch external if no DB episodes or no DB movie ── */
     let externalMovieData: Record<string, unknown> | null = null;
 
-    if (serverMap.size === 0 || !useSupabase) {
+    const dbMaxEpisode = getMaxEpisodeNumberFromServerMap(serverMap);
+    const expectedEpisode = Math.max(
+      getExpectedEpisodeNumber(movieData),
+      getExpectedEpisodeNumber(movie),
+    );
+    const shouldFetchExternal =
+      serverMap.size === 0 ||
+      !useSupabase ||
+      (expectedEpisode > 1 && dbMaxEpisode > 0 && dbMaxEpisode < expectedEpisode);
+
+    if (shouldFetchExternal) {
       let detailSlug = slug;
       let external = await fetchExternalMovieDetail(detailSlug);
 
@@ -909,13 +960,30 @@ serve(async (req) => {
       episodes: episodeServers,
     };
 
+    const liveMaxEpisode = getMaxEpisodeNumberFromServers(episodeServers);
+    const advertisedMaxEpisode = Math.max(
+      getExpectedEpisodeNumber(response.movie as Record<string, unknown>),
+      getExpectedEpisodeNumber(externalMovieData),
+    );
+    if (liveMaxEpisode > advertisedMaxEpisode) {
+      response.movie.episode_current = liveMaxEpisode > 0 ? `Tập ${liveMaxEpisode}` : response.movie.episode_current;
+      response.movie.current_episode = liveMaxEpisode;
+      if (!response.movie.total_episodes || Number(response.movie.total_episodes) < liveMaxEpisode) {
+        response.movie.total_episodes = undefined;
+        response.movie.episode_total = '';
+      }
+    }
+
     // Cache successful responses for repeat opens; episode metadata rarely changes minute by minute.
+    const responseMaxEpisode = getMaxEpisodeNumberFromServers(episodeServers);
+    const responseExpectedEpisode = getExpectedEpisodeNumber(response.movie as Record<string, unknown>);
+    const isIncomplete = responseExpectedEpisode > 1 && responseMaxEpisode > 0 && responseMaxEpisode < responseExpectedEpisode;
     const hasEpisodes = episodeServers.length > 0;
     const cacheControl = hasEpisodes
-      ? 'public, max-age=300, stale-while-revalidate=1800'
+      ? (isIncomplete ? 'no-store' : 'public, max-age=300, stale-while-revalidate=1800')
       : 'no-store';
 
-    if (hasEpisodes) {
+    if (hasEpisodes && !isIncomplete) {
       await writeCachedDetail(supabase, slug, response);
       const responseSlug = String(response.movie.slug || '');
       if (responseSlug && responseSlug !== slug) {

@@ -60,7 +60,7 @@ export default function NotFound() {
       />
       <Navbar />
 
-      <main className="flex-1 px-4 pt-24 pb-16 max-w-[1400px] mx-auto w-full">
+      <main className="flex-1 px-4 pt-24 pb-16 max-w-[1760px] mx-auto w-full">
 
         {/* Hero 404 */}
         <div className="flex flex-col items-center text-center mb-12">

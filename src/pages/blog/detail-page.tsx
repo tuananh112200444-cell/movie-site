@@ -176,7 +176,7 @@ export default function BlogDetailPage() {
 
       {/* Breadcrumb */}
       <div className="pt-20 pb-4 border-b border-white/[0.06]">
-        <div className="max-w-[1400px] mx-auto px-4 lg:px-6">
+        <div className="max-w-[1760px] mx-auto px-4 lg:px-6">
           <nav className="flex items-center gap-2 text-xs text-white/40">
             <Link to="/" className="hover:text-white transition-colors">
               Trang Chủ
@@ -191,7 +191,7 @@ export default function BlogDetailPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-4 lg:px-6 py-8">
+      <main className="max-w-[1760px] mx-auto px-4 lg:px-6 py-8">
         <div className="grid lg:grid-cols-[1fr_320px] gap-8">
           {/* Main Content */}
           <article>

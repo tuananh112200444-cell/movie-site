@@ -321,7 +321,7 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
     <>
       <QueerUniverseHero movies={recommendedMovies.length ? recommendedMovies : allMovies} loading={loading} />
 
-      <main className="mx-auto max-w-[1400px] px-3 pb-16 pt-6 md:px-4 md:pt-8">
+      <main className="mx-auto max-w-[1760px] px-3 pb-16 pt-6 md:px-5 md:pt-8 2xl:px-8">
         <PortalGateway onSelect={onSelectPortal} compact />
 
         <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">

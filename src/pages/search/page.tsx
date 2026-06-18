@@ -841,7 +841,7 @@ export default function SearchPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-4 pb-12">
+      <main className="max-w-[1760px] mx-auto px-4 pb-12">
 
         {/* ── Quick Categories (only when no query) ── */}
         {!q && (

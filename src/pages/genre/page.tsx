@@ -679,7 +679,7 @@ export default function GenrePage() {
         <div className={`absolute inset-0 bg-gradient-to-r ${meta.color} ${meta.colorTo} opacity-20`} />
 
         {/* Content */}
-        <div className="relative z-10 h-full flex flex-col justify-end max-w-[1400px] mx-auto px-4 pb-6 sm:pb-8">
+        <div className="relative z-10 h-full flex flex-col justify-end max-w-[1760px] mx-auto px-4 pb-6 sm:pb-8">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-1.5 mb-3 sm:mb-4 text-[11px] sm:text-xs text-white/40 flex-wrap">
             <Link to="/" className="hover:text-white/70 transition-colors">Trang chủ</Link>
@@ -731,7 +731,7 @@ export default function GenrePage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-4 pb-16">
+      <main className="max-w-[1760px] mx-auto px-4 pb-16">
         {/* ─── Sort & Filter Bar ─── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 py-4 sm:py-5 border-b border-white/5">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1">

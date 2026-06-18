@@ -11,9 +11,8 @@ import { useServerNow } from '@/hooks/useServerNow';
 import { getMovieCountdownInfo } from '@/utils/movieSchedule';
 import PlayerBox from './PlayerBox';
 
-const EP_GROUP = 50;
-const MOBILE_COLLAPSED_EPISODES = 12;
-const DESKTOP_COLLAPSED_EPISODES = 36;
+const EP_GROUP = 100;
+const MOBILE_COLLAPSED_EPISODES = 24;
 
 interface MergedEpisode {
   ep: EpisodeData;
@@ -162,16 +161,17 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       () => currentGroup.filter(episodeHasSelectedServerType),
       [currentGroup, episodeHasSelectedServerType]
     );
-    const collapsedEpisodeLimit = isDesktopEpisodeLayout ? DESKTOP_COLLAPSED_EPISODES : MOBILE_COLLAPSED_EPISODES;
+    const collapsedEpisodeLimit = MOBILE_COLLAPSED_EPISODES;
     const shownEpisodes = useMemo(() => {
+      if (isDesktopEpisodeLayout) return currentTypeGroup;
       if (!episodesCollapsed) return currentTypeGroup;
       const compact = currentTypeGroup.slice(0, collapsedEpisodeLimit);
       const activeKey = activeEp ? getEpisodeMergeKey(activeEp) : '';
       if (!activeKey || compact.some((item) => item.key === activeKey)) return compact;
       const activeItem = currentTypeGroup.find((item) => item.key === activeKey);
       return activeItem ? [...compact.slice(0, collapsedEpisodeLimit - 1), activeItem] : compact;
-    }, [episodesCollapsed, currentTypeGroup, activeEp, collapsedEpisodeLimit]);
-    const canCollapseEpisodes = currentTypeGroup.length > collapsedEpisodeLimit;
+    }, [isDesktopEpisodeLayout, episodesCollapsed, currentTypeGroup, activeEp, collapsedEpisodeLimit]);
+    const canCollapseEpisodes = !isDesktopEpisodeLayout && currentTypeGroup.length > collapsedEpisodeLimit;
     const visibleServerOptions = useMemo(() => {
       return episodes.map((srv, idx) => ({
         srv,
@@ -205,12 +205,21 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     }, [activeEp, activeServer, onSwitchServer, serverTypeTab, visibleServerOptions]);
 
     useEffect(() => {
-      const query = window.matchMedia('(min-width: 640px)');
+      const query = window.matchMedia('(min-width: 1024px)');
       const updateLayout = () => setIsDesktopEpisodeLayout(query.matches);
       updateLayout();
       query.addEventListener('change', updateLayout);
       return () => query.removeEventListener('change', updateLayout);
     }, []);
+
+    useEffect(() => {
+      if (!activeEp || groups.length <= 1) return;
+      const activeKey = getEpisodeMergeKey(activeEp);
+      const activeIndex = mergedEpisodes.findIndex((item) => item.key === activeKey);
+      if (activeIndex < 0) return;
+      const nextGroup = Math.floor(activeIndex / EP_GROUP);
+      setEpGroup((current) => (current === nextGroup ? current : nextGroup));
+    }, [activeEp, groups.length, mergedEpisodes]);
 
     const currentEpIdx = useMemo(() => {
       const activeKey = activeEp ? getEpisodeMergeKey(activeEp) : '';
@@ -219,6 +228,11 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     const activeEpisodeKey = activeEp ? getEpisodeMergeKey(activeEp) : '';
     const hasPrev = currentEpIdx > 0;
     const hasNext = currentEpIdx >= 0 && currentEpIdx < navigableEpisodes.length - 1;
+    const groupOptions = useMemo(() => groups.map((_, i) => ({
+      index: i,
+      start: i * EP_GROUP + 1,
+      end: Math.min((i + 1) * EP_GROUP, mergedEpisodes.length),
+    })), [groups, mergedEpisodes.length]);
 
     const handleSelectMergedEp = useCallback((item: MergedEpisode) => {
       if (item.ep.is_scheduled) {
@@ -291,7 +305,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     return (
       <div
         ref={forwardedRef}
-        className={`max-w-[1400px] mx-auto px-3 sm:px-4 pb-10 sm:pb-12 ${cinemaMode ? 'relative z-[101]' : ''}`}
+        className={`max-w-[1760px] mx-auto px-3 sm:px-4 pb-10 sm:pb-12 ${cinemaMode ? 'relative z-[101]' : ''}`}
       >
         {cinemaMode && (
           <div className="fixed inset-0 z-[100] bg-black pointer-events-none" aria-hidden="true" />
@@ -560,8 +574,28 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
 
               {/* Episode group pagination */}
               {groups.length > 1 && (
-                <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.08] bg-[#11131b] p-3 sm:p-4">
+                <div className="mt-3 rounded-xl border border-white/[0.08] bg-[#11131b] p-3 sm:p-4">
                   <span className="text-white/40 text-xs">Nhóm:</span>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-white/60 text-xs font-bold uppercase tracking-wider">Chọn khoảng tập</p>
+                      <p className="mt-0.5 text-white/30 text-[11px]">
+                        {mergedEpisodes.length} tập, chia {groups.length} nhóm để tìm nhanh
+                      </p>
+                    </div>
+                    <select
+                      value={epGroup}
+                      onChange={(e) => setEpGroup(Number(e.target.value))}
+                      className="h-9 rounded-lg border border-white/[0.1] bg-black/30 px-3 text-xs font-semibold text-white/75 outline-none focus:border-red-500/60"
+                    >
+                      {groupOptions.map((group) => (
+                        <option key={group.index} value={group.index}>
+                          Tập {group.start}-{group.end}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
                   {groups.map((_, i) => (
                     <button
                       key={i}
@@ -575,6 +609,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       {i * EP_GROUP + 1}–{Math.min((i + 1) * EP_GROUP, mergedEpisodes.length)}
                     </button>
                   ))}
+                  </div>
                 </div>
               )}
 
@@ -601,7 +636,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     </div>
                   )}
                   <div className={`${episodesCollapsed ? '' : 'sm:max-h-[360px] sm:overflow-y-auto sm:pr-1'}`}>
-                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12">
+                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12 xl:grid-cols-[repeat(16,minmax(0,1fr))] 2xl:grid-cols-[repeat(20,minmax(0,1fr))]">
                     {shownEpisodes.map((item) => (
                       <button
                         key={item.key}

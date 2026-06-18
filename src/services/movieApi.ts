@@ -334,6 +334,7 @@ const TTL_CONFIG = {
 } as const;
 
 function resolveTTL(url: string): number {
+  if (url.includes('home-proxy'))         return TTL_CONFIG.newMovies;
   if (url.includes('tim-kiem'))           return TTL_CONFIG.search;
   if (url.includes('phim-moi-cap-nhat'))  return TTL_CONFIG.newMovies;
   if (url.includes('/phim/'))             return TTL_CONFIG.detail;
@@ -1006,16 +1007,19 @@ const ENABLE_SUPABASE_TEXT_SEARCH =
   typeof import.meta.env === 'undefined' || import.meta.env.VITE_DISABLE_SUPABASE_TEXT_SEARCH !== 'true';
 const ENABLE_SUPABASE_SEARCH_RPC =
   typeof import.meta.env !== 'undefined' && import.meta.env.VITE_ENABLE_SUPABASE_SEARCH_RPC === 'true';
-async function fetchMovieDetailFromProxy(slug: string): Promise<MovieDetailResponse | null> {
+async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false): Promise<MovieDetailResponse | null> {
   if (!SUPABASE_URL) return null;
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
+    const url = new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`);
+    url.searchParams.set('slug', slug);
+    if (forceRefresh) url.searchParams.set('refresh', '1');
     const res = await fetch(
-      `${SUPABASE_URL}/functions/v1/movie-detail-proxy?slug=${encodeURIComponent(slug)}`,
+      url.toString(),
       {
         signal: controller.signal,
-        cache: 'force-cache',
+        cache: 'no-store',
       
       }
     );
@@ -2788,7 +2792,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     if (preferOphim) {
       const ophimPromise = fetchMovieDetailFromOPhim(slug, false);
       const sbPromise = fetchMovieDetailFromSupabase(slug);
-      const proxyPromise = fetchMovieDetailFromProxy(slug);
+      const proxyPromise = fetchMovieDetailFromProxy(slug, forceRefresh);
       externalPromise = fetchMovieDetailFromExternal(slug);
       blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
       const quickPlayable = await raceFirstValidWithTimeout(
@@ -2820,7 +2824,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     } else {
       // Default path: let the edge proxy serve DB/cache first. Direct Supabase is a fallback
       // so a large click burst does not double the database queries for every movie open.
-      const proxyPromise = fetchMovieDetailFromProxy(slug);
+      const proxyPromise = fetchMovieDetailFromProxy(slug, forceRefresh);
       externalPromise = fetchMovieDetailFromExternal(slug);
 
       const quickPlayable = await raceFirstValidWithTimeout(
@@ -2901,7 +2905,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     // For OPhim source: prioritize OPhim data
     if (preferOphim && ophim && detailHasPlayableEpisodes(ophim)) {
       if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using OPhim as priority source for "${slug}" (source=ophim/CJK)`);
-      void fetchMovieDetailFromProxy(slug).catch(() => null);
+      void fetchMovieDetailFromProxy(slug, true).catch(() => null);
       setCached(cacheKey, ophim);
       return ophim;
     }
@@ -4013,7 +4017,10 @@ export function evictAllMovieCaches(slug: string): void {
 // Alias backward-compatible
 export { evictAllMovieCaches as evictDetailCache };
 
-export async function fetchHomePageData(sections: string[]): Promise<{
+export async function fetchHomePageData(
+  sections: string[],
+  options: { signal?: AbortSignal } = {},
+): Promise<{
   status: boolean;
   source: 'cache' | 'stale' | 'fresh';
   sections: Record<string, Movie[]>;
@@ -4028,12 +4035,15 @@ export async function fetchHomePageData(sections: string[]): Promise<{
   const url = new URL(`${supabaseUrl}/functions/v1/home-proxy`);
   url.searchParams.set('sections', sections.join(','));
   const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(options.signal?.reason);
+  if (options.signal?.aborted) controller.abort(options.signal.reason);
+  else options.signal?.addEventListener('abort', abortFromCaller, { once: true });
   const timer = setTimeout(() => controller.abort(), 6000);
 
   try {
     const res = await fetch(url.toString(), {
       signal: controller.signal,
-      cache: 'default',
+      cache: 'no-store',
       
     });
     clearTimeout(timer);
@@ -4066,6 +4076,8 @@ export async function fetchHomePageData(sections: string[]): Promise<{
     clearTimeout(timer);
     console.warn('[fetchHomePageData] Failed:', (err as Error).message);
     throw err;
+  } finally {
+    options.signal?.removeEventListener('abort', abortFromCaller);
   }
 }
 

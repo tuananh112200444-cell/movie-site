@@ -190,7 +190,7 @@ export default function FilterPage() {
       {/* ── Page Header ── */}
       <div className="relative pt-16 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
-        <div className="max-w-[1400px] mx-auto px-4 pt-8 pb-5">
+        <div className="max-w-[1760px] mx-auto px-4 pt-8 pb-5">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <nav className="flex items-center gap-1.5 mb-2 text-xs">
@@ -237,7 +237,7 @@ export default function FilterPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-4 pb-16">
+      <main className="max-w-[1760px] mx-auto px-4 pb-16">
         <div className="flex gap-5 items-start">
           {/* Sidebar */}
           <FilterSidebar

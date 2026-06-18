@@ -93,7 +93,7 @@ export default function BlogPage() {
       {/* Hero Section */}
       <div className="relative pt-24 pb-12 lg:pt-28 lg:pb-16">
         <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent" />
-        <div className="max-w-[1400px] mx-auto px-4 lg:px-6 relative">
+        <div className="max-w-[1760px] mx-auto px-4 lg:px-6 relative">
           <div className="text-center max-w-2xl mx-auto">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full mb-4">
               <i className="ri-article-line text-red-400 text-sm" />
@@ -113,7 +113,7 @@ export default function BlogPage() {
 
       {/* Search & Filter */}
       <div className={`sticky top-16 z-40 bg-[#080a10]/95 border-b border-white/[0.06] py-4`}>
-        <div className="max-w-[1400px] mx-auto px-4 lg:px-6">
+        <div className="max-w-[1760px] mx-auto px-4 lg:px-6">
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
             {/* Search */}
             <div className="relative flex-1 max-w-md">
@@ -159,7 +159,7 @@ export default function BlogPage() {
       </div>
 
       {/* Blog Posts Grid */}
-      <main className="max-w-[1400px] mx-auto px-4 lg:px-6 py-8">
+      <main className="max-w-[1760px] mx-auto px-4 lg:px-6 py-8">
         <h2 className="sr-only">Danh Sách Bài Viết KhoPhim Blog</h2>
         {filteredPosts.length === 0 ? (
           <div className="text-center py-16">
@@ -266,7 +266,7 @@ export default function BlogPage() {
       </main>
 
       {/* CTA Section */}
-      <section className="max-w-[1400px] mx-auto px-4 lg:px-6 py-12">
+      <section className="max-w-[1760px] mx-auto px-4 lg:px-6 py-12">
         <div className="bg-gradient-to-r from-red-500/10 to-amber-500/5 border border-red-500/20 rounded-2xl p-6 md:p-8 text-center">
           <h3 className="text-lg md:text-xl font-bold text-white mb-2">
             Xem Phim Miễn Phí Tại KhoPhim

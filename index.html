@@ -3,7 +3,7 @@
   <head>
     <script>
       (function () {
-        var RESET_KEY = 'kp_emergency_cache_reset_20260604';
+        var RESET_KEY = 'kp_emergency_cache_reset_20260616_sw_kill_v2';
         function hasReset() {
           try { return localStorage.getItem(RESET_KEY) === '1'; }
           catch (e) { return window.name.indexOf(RESET_KEY) !== -1; }
@@ -14,6 +14,12 @@
         }
         if (hasReset()) return;
         markReset();
+        try {
+          ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4'].forEach(function (key) {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+          });
+        } catch (e) {}
 
         var work = [];
         if ('serviceWorker' in navigator) {
@@ -87,7 +93,7 @@
     <script>
       (function() {
         'use strict';
-        var CACHE_KEY = 'kp_home_proxy_v2';
+        var CACHE_KEY = 'kp_home_proxy_v4';
         var IMG_BASE = 'https://img.ophim.live/uploads/movies/';
         function getImgUrl(p) { return (!p || p.indexOf('http') === 0) ? (p || '') : IMG_BASE + p; }
         function injectPreload(url) {
