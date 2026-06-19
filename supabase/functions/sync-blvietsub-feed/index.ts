@@ -12,6 +12,13 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const BLVIETSUB_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 KhoPhim-Sync/1.0',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+  'Referer': 'https://blvietsub.com/',
+};
+
 type SupabaseClient = ReturnType<typeof createClient>;
 
 interface BloggerEntry {
@@ -315,6 +322,10 @@ function getMovieCurrentEpisode(movie: MovieRow): number {
   );
 }
 
+function playableEpisodeCount(episodes: ParsedEpisode[]): number {
+  return new Set(episodes.map((episode) => episode.episode_number).filter((episode) => episode > 0)).size;
+}
+
 function buildEntryIndexes(entries: ParsedEntry[]) {
   const byPostId = new Map<string, ParsedEntry>();
   const byTitle = new Map<string, ParsedEntry>();
@@ -396,7 +407,7 @@ async function fetchBloggerEntries(limit: number, pageSize: number, offset: numb
   const seen = new Set<string>();
   for (let startIndex = offset + 1; entries.length < limit; startIndex += pageSize) {
     const feedResponse = await fetch(buildFeedPageUrl(startIndex, pageSize), {
-      headers: { 'User-Agent': 'KhoPhim-BLVietsub-Sync/1.0' },
+      headers: BLVIETSUB_HEADERS,
       signal: AbortSignal.timeout(25000),
     });
     if (!feedResponse.ok) throw new Error(`BLVietsub feed ${feedResponse.status}`);
@@ -433,15 +444,18 @@ function getWordPressMovieSlug(movieUrl: string): string {
 
 function parseWordPressEpisodes(html: string, movieSlug: string): ParsedEpisode[] {
   const episodes = new Map<string, ParsedEpisode>();
-  const watchUrlPattern = new RegExp(`https?:\\/\\/blvietsub\\.com\\/+(?:xem-phim)\\/${movieSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/tap-([0-9]+)-sv-([0-9]+)`, 'gi');
-  for (const match of html.matchAll(watchUrlPattern)) {
-    const episodeNumber = Number(match[1] || 0);
-    const serverNumber = Number(match[2] || 1);
-    if (!episodeNumber) continue;
+  const escapedSlug = movieSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const watchUrlPattern = new RegExp(`https?:\\/\\/blvietsub\\.com\\/+(?:xem-phim)\\/${escapedSlug}\\/tap-([0-9]+)-sv-([0-9]+)`, 'gi');
+  const relativeWatchUrlPattern = new RegExp(`(?:^|["'\\s])((?:\\/\\/?)?xem-phim\\/${escapedSlug}\\/tap-([0-9]+)-sv-([0-9]+))`, 'gi');
+  const addEpisode = (episodeNumber: number, serverNumber: number, rawLink: string) => {
+    if (!episodeNumber) return;
     const serverName = `SV ${serverNumber || 1}`;
-    const link = match[0].replace(/^http:\/\//i, 'https://');
+    let link = rawLink.replace(/^http:\/\//i, 'https://').replace(/&amp;/g, '&');
+    if (link.startsWith('//')) link = `https:${link}`;
+    if (link.startsWith('/')) link = `https://blvietsub.com${link}`;
+    if (!/^https?:\/\//i.test(link)) link = `https://blvietsub.com/${link.replace(/^\/+/, '')}`;
     const key = `${serverName}|${episodeNumber}`;
-    if (episodes.has(key)) continue;
+    if (episodes.has(key)) return;
     episodes.set(key, {
       episode_number: episodeNumber,
       episode_name: `${TAP_LABEL} ${episodeNumber}`,
@@ -449,11 +463,26 @@ function parseWordPressEpisodes(html: string, movieSlug: string): ParsedEpisode[
       link_embed: link,
       server_name: serverName,
     });
+  };
+
+  for (const match of html.matchAll(watchUrlPattern)) {
+    const episodeNumber = Number(match[1] || 0);
+    const serverNumber = Number(match[2] || 1);
+    addEpisode(episodeNumber, serverNumber, match[0]);
+  }
+  for (const match of html.matchAll(relativeWatchUrlPattern)) {
+    const episodeNumber = Number(match[2] || 0);
+    const serverNumber = Number(match[3] || 1);
+    addEpisode(episodeNumber, serverNumber, match[1]);
   }
   return [...episodes.values()].sort((a, b) => a.episode_number - b.episode_number || a.server_name.localeCompare(b.server_name));
 }
 
-function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: string): ParsedEntry | null {
+function firstWordPressWatchUrl(html: string, movieSlug: string): string {
+  return parseWordPressEpisodes(html, movieSlug)[0]?.link_embed || '';
+}
+
+function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: string, playerHtml = ''): ParsedEntry | null {
   const movieSlug = getWordPressMovieSlug(movieUrl);
   if (!movieSlug) return null;
   const title = getMetaContent(html, 'og:title')
@@ -462,7 +491,7 @@ function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: stri
   const image = getMetaContent(html, 'og:image');
   const content = getMetaContent(html, 'og:description');
   const postId = firstMatch(html, /https?:\/\/blvietsub\.com\/\?p=(\d+)/i) || movieSlug;
-  const episodes = parseWordPressEpisodes(html, movieSlug);
+  const episodes = parseWordPressEpisodes(`${html}\n${playerHtml}`, movieSlug);
   if (!title || episodes.length === 0) return null;
   const year = Number(html.match(/\b((?:19|20)\d{2})\b/)?.[1] || 0) || new Date(updatedAt || Date.now()).getFullYear();
   const maxEpisode = Math.max(...episodes.map((episode) => episode.episode_number));
@@ -491,7 +520,7 @@ function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: stri
 
 async function fetchWordPressEntries(limit: number, offset: number): Promise<ParsedEntry[]> {
   const response = await fetch(FEED_URL, {
-    headers: { 'User-Agent': 'KhoPhim-BLVietsub-WordPress-Sync/1.0' },
+    headers: BLVIETSUB_HEADERS,
     signal: AbortSignal.timeout(25000),
   });
   if (!response.ok) throw new Error(`BLVietsub sitemap ${response.status}`);
@@ -503,11 +532,26 @@ async function fetchWordPressEntries(limit: number, offset: number): Promise<Par
     const parsed = await Promise.all(batch.map(async (item) => {
       try {
         const page = await fetch(item.url, {
-          headers: { 'User-Agent': 'KhoPhim-BLVietsub-WordPress-Sync/1.0' },
+          headers: BLVIETSUB_HEADERS,
           signal: AbortSignal.timeout(20000),
         });
         if (!page.ok) return null;
-        return parseWordPressMoviePage(item.url, item.updatedAt, await page.text());
+        const html = await page.text();
+        let playerHtml = '';
+        const movieSlug = getWordPressMovieSlug(item.url);
+        const firstWatchUrl = movieSlug ? firstWordPressWatchUrl(html, movieSlug) : '';
+        if (firstWatchUrl) {
+          try {
+            const playerPage = await fetch(firstWatchUrl, {
+              headers: BLVIETSUB_HEADERS,
+              signal: AbortSignal.timeout(20000),
+            });
+            if (playerPage.ok) playerHtml = await playerPage.text();
+          } catch {
+            /* detail page still has at least one playable link */
+          }
+        }
+        return parseWordPressMoviePage(item.url, item.updatedAt, html, playerHtml);
       } catch {
         return null;
       }
@@ -547,7 +591,7 @@ async function createMovieFromEntry(
   supabase: SupabaseClient,
   entry: ParsedEntry,
 ): Promise<MovieRow> {
-  const maxEpisode = Math.max(...entry.episodes.map((episode) => episode.episode_number));
+  const episodeCount = Math.max(1, playableEpisodeCount(entry.episodes));
   const slug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
   const normalizedName = slugify([entry.title, entry.originName].filter(Boolean).join(' '));
   const payload = {
@@ -566,10 +610,10 @@ async function createMovieFromEntry(
     quality: 'HD',
     lang: 'Vietsub',
     time: '',
-    episode_current: `${TAP_LABEL} ${maxEpisode}`,
+    episode_current: `${TAP_LABEL} ${episodeCount}`,
     episode_total: '',
-    current_episode: maxEpisode,
-    total_episodes: maxEpisode,
+    current_episode: episodeCount,
+    total_episodes: episodeCount,
     year: entry.year || new Date().getFullYear(),
     actor: [],
     director: [],
@@ -649,7 +693,7 @@ async function updateMovieMetadata(
   movie: MovieRow,
   entry: ParsedEntry,
 ): Promise<boolean> {
-  const liveMax = Math.max(...entry.episodes.map((episode) => episode.episode_number));
+  const episodeCount = Math.max(1, playableEpisodeCount(entry.episodes));
   const current = getMovieCurrentEpisode(movie);
   const update: Record<string, unknown> = {
     showtimes: entry.sourceUrl || `https://www.blvietsub.top/?p=${entry.postId}`,
@@ -657,10 +701,10 @@ async function updateMovieMetadata(
     source_name: movie.slug.startsWith('blvietsub-') ? SOURCE_NAME : undefined,
   };
 
-  if (liveMax > current) {
-    update.episode_current = `${TAP_LABEL} ${liveMax}`;
-    update.current_episode = liveMax;
-    if (!movie.total_episodes || movie.total_episodes < liveMax) update.total_episodes = liveMax;
+  if (episodeCount !== current || Number(movie.total_episodes || 0) !== episodeCount) {
+    update.episode_current = `${TAP_LABEL} ${episodeCount}`;
+    update.current_episode = episodeCount;
+    update.total_episodes = episodeCount;
   }
 
   Object.keys(update).forEach((key) => update[key] === undefined && delete update[key]);
@@ -726,6 +770,36 @@ serve(async (req) => {
   const errors: string[] = [];
 
   try {
+    const directUrl = url.searchParams.get('movie_url')?.trim();
+    if (directUrl && /^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(directUrl)) {
+      const page = await fetch(directUrl, {
+        headers: BLVIETSUB_HEADERS,
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!page.ok) throw new Error(`BLVietsub movie ${page.status}`);
+      const html = await page.text();
+      const movieSlug = getWordPressMovieSlug(directUrl);
+      const firstWatchUrl = movieSlug ? firstWordPressWatchUrl(html, movieSlug) : '';
+      let playerHtml = '';
+      if (firstWatchUrl) {
+        const playerPage = await fetch(firstWatchUrl, {
+          headers: BLVIETSUB_HEADERS,
+          signal: AbortSignal.timeout(20000),
+        });
+        if (playerPage.ok) playerHtml = await playerPage.text();
+      }
+      const entry = parseWordPressMoviePage(directUrl, new Date().toISOString(), html, playerHtml);
+      return json({
+        success: Boolean(entry),
+        movie_url: directUrl,
+        title: entry?.title || '',
+        episodes: entry?.episodes.length || 0,
+        max_episode: entry ? Math.max(...entry.episodes.map((episode) => episode.episode_number)) : 0,
+        servers: entry ? Array.from(new Set(entry.episodes.map((episode) => episode.server_name))) : [],
+        elapsed_ms: Date.now() - started,
+      }, entry ? 200 : 404);
+    }
+
     const entries = await fetchSourceEntries(limit, pageSize, offset);
     const entryIndexes = buildEntryIndexes(entries);
 

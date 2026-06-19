@@ -294,9 +294,9 @@ serve(async (req) => {
   try {
     // ─── Fetch movies that have ophim_id ───
     // Order by oldest updated first so every movie gets synced eventually
-    // INCREASED LIMIT: 50 instead of 15 for faster coverage
     const targetSlug = url.searchParams.get('slug')?.trim() || '';
-    const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 100);
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 80), 1), 200);
+    const delayMs = Math.min(Math.max(Number(url.searchParams.get('delay_ms') || 250), 0), 1000);
 
     let moviesQuery = supabase
       .from('movies')
@@ -477,7 +477,7 @@ serve(async (req) => {
           .eq('id', movie.id);
 
         // Be nice to OPhim API — small delay between movies
-        await new Promise((r) => setTimeout(r, 600));
+        if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
 
       } catch (movieErr) {
         const msg = movieErr instanceof Error ? movieErr.message : String(movieErr);
