@@ -8,7 +8,6 @@
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   Cross-Origin-Resource-Policy: same-site
   X-DNS-Prefetch-Control: off
-  Accept-CH:
   Vary: Origin
   Cache-Control: public, max-age=0, must-revalidate
 

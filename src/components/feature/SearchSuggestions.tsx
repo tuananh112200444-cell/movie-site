@@ -44,7 +44,12 @@ function addToHistory(term: string): void {
 }
 
 function normalizeSearchText(value: string): string {
-  return value.toLowerCase().replace(/[đĐ]/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return value
+    .toLowerCase()
+    .replace(/\u0111/g, 'd')
+    .replace(/\u0110/g, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 function getMovieSearchText(movie: Movie): string {
@@ -161,7 +166,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
 
     try {
       let items = instantItems;
-      const apiItems = await searchMoviesInSupabase(q.trim(), { limit: 12, timeoutMs: 800, minLength: 2, signal: ctrl.signal });
+      const apiItems = await searchMoviesInSupabase(q.trim(), { limit: 16, timeoutMs: 1400, minLength: 2, signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       items = mergeMoviesUnique([...items, ...apiItems]);
 

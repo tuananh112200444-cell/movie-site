@@ -4,6 +4,8 @@ const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functio
 
 const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://kit.fontawesome.com https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests; worker-src 'self' blob:; manifest-src 'self'",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'SAMEORIGIN',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -13,15 +15,35 @@ const SECURITY_HEADERS = {
 const BOT_PATTERNS = [
   'googlebot',
   'google-inspectiontool',
+  'google-inspection-tool',
+  'apis-google',
+  'mediapartners-google',
+  'adsbot-google',
+  'chrome-lighthouse',
   'bingbot',
   'slurp',
   'duckduckbot',
+  'baiduspider',
   'yandexbot',
+  'sogou',
+  'exabot',
+  'facebot',
+  'ia_archiver',
   'applebot',
   'facebookexternalhit',
   'twitterbot',
   'linkedinbot',
+  'whatsapp',
   'telegrambot',
+  'semrushbot',
+  'ahrefsbot',
+  'mj12bot',
+  'rogerbot',
+  'screaming frog',
+  'sitebulb',
+  'dotbot',
+  'petalbot',
+  'bytespider',
 ];
 
 const STATIC_META = {
@@ -103,6 +125,7 @@ const PRERENDER_PATHS = [
   /^\/phim-chieu-rap(\/|$)/,
   /^\/hoat-hinh(\/|$)/,
   /^\/tv-shows(\/|$)/,
+  /^\/phim-sap-chieu(\/|$)/,
   /^\/phim-han-quoc(\/|$)/,
   /^\/phim-trung-quoc(\/|$)/,
   /^\/phim-au-my(\/|$)/,
@@ -110,6 +133,7 @@ const PRERENDER_PATHS = [
   /^\/phim-thai-lan(\/|$)/,
   /^\/phim-viet-nam(\/|$)/,
   /^\/the-loai\//,
+  /^\/filter/,
   /^\/dien-vien/,
   /^\/about(\/|$)/,
   /^\/policy(\/|$)/,
@@ -118,6 +142,9 @@ const PRERENDER_PATHS = [
 
 const NOINDEX_PATHS = [
   /^\/admin/,
+  /^\/admin-ping/,
+  /^\/admin-seo/,
+  /^\/admin-reviews/,
   /^\/search/,
   /^\/yeu-thich/,
   /^\/login/,
@@ -305,6 +332,26 @@ async function fetchOphimMovie(slug) {
   return null;
 }
 
+async function fetchSupabaseMovie(slug) {
+  try {
+    const url = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
+    url.searchParams.set('slug', slug);
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'KhoPhimBot/1.0 SEO-Prerender',
+      },
+      signal: AbortSignal.timeout(5500),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data || !data.status || !data.movie || !data.movie.slug) return null;
+    return data.movie;
+  } catch {
+    return null;
+  }
+}
+
 function renderMoviePrerender(pathname, movie, slug) {
   const name = String(movie.name || slug);
   const origin = String(movie.origin_name || '');
@@ -313,7 +360,8 @@ function renderMoviePrerender(pathname, movie, slug) {
   const quality = String(movie.quality || 'HD');
   const lang = String(movie.lang || 'Vietsub');
   const poster = getImageUrl(movie.poster_url || movie.thumb_url || '');
-  const canonical = `${SITE_URL}${pathname}`;
+  const cleanPath = pathname.replace(/\/+$/, '') || `/phim/${slug}`;
+  const canonical = `${SITE_URL}${cleanPath}`;
   const genres = taxonomyNames(movie.category);
   const countries = taxonomyNames(movie.country);
   const title = `Xem Phim ${name} Vietsub HD | KhoPhim`;
@@ -347,6 +395,18 @@ function renderMoviePrerender(pathname, movie, slug) {
       countryOfOrigin: countries.map((country) => ({ '@type': 'Country', name: country })),
       inLanguage: lang,
       potentialAction: { '@type': 'WatchAction', target: canonical },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'VideoObject',
+      '@id': `${canonical}#video`,
+      name: `Xem phim ${name} ${lang} ${quality}`,
+      description,
+      thumbnailUrl: poster,
+      uploadDate: year ? `${year}-01-01T00:00:00+07:00` : new Date().toISOString(),
+      embedUrl: canonical,
+      url: canonical,
+      inLanguage: lang,
     },
   ];
   const body = `${origin ? `<p>${escapeHtml(origin)}</p>` : ''}
@@ -423,7 +483,7 @@ export async function onRequest(context) {
     const movieMatch = /^\/phim\/([^/?#]+)/.exec(pathname);
     if (movieMatch) {
       const slug = decodeURIComponent(movieMatch[1]);
-      const movie = await fetchOphimMovie(slug);
+      const movie = await fetchSupabaseMovie(slug) || await fetchOphimMovie(slug);
       if (movie) return renderMoviePrerender(pathname, movie, slug);
       return renderMoviePrerender(pathname, {
         name: titleFromSlug(slug),

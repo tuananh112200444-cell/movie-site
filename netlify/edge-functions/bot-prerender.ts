@@ -2,19 +2,20 @@ import type { Context } from "https://edge.netlify.com";
 
 const SITE_URL = 'https://khophim.org';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
+const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1';
 
-// Security headers — inject vào MỌI response (kể cả non-bot)
+// Security headers â€” inject vÃ o Má»ŒI response (ká»ƒ cáº£ non-bot)
 const SECURITY_HEADERS: Record<string, string> = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
   'Content-Security-Policy':
-    "default-src 'self'; script-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://kit.fontawesome.com https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://kit.fontawesome.com https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'SAMEORIGIN',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
 
-// Tất cả bot patterns — lowercase để match
+// Táº¥t cáº£ bot patterns â€” lowercase Ä‘á»ƒ match
 const BOT_PATTERNS = [
   'googlebot',
   'google-inspectiontool',
@@ -49,7 +50,7 @@ const BOT_PATTERNS = [
   'bytespider',
 ];
 
-// Các path cần prerender cho bot
+// CÃ¡c path cáº§n prerender cho bot
 const PRERENDER_PATHS = [
   /^\/$/,
   /^\/phim-moi-cap-nhat(\/|$)/,
@@ -76,7 +77,7 @@ const PRERENDER_PATHS = [
   /^\/blog(\/|$)/,
 ];
 
-// Các path KHÔNG được index — thêm X-Robots-Tag: noindex, nofollow vào header
+// CÃ¡c path KHÃ”NG Ä‘Æ°á»£c index â€” thÃªm X-Robots-Tag: noindex, nofollow vÃ o header
 const NOINDEX_PATHS = [
   /^\/admin/,
   /^\/admin-ping/,
@@ -463,6 +464,26 @@ async function fetchOphimMovie(slug: string): Promise<Record<string, unknown> | 
   return null;
 }
 
+async function fetchSupabaseMovie(slug: string): Promise<Record<string, unknown> | null> {
+  try {
+    const url = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
+    url.searchParams.set('slug', slug);
+    const res = await fetch(url.toString(), {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'KhoPhimBot/1.0 SEO-Prerender',
+      },
+      signal: AbortSignal.timeout(5500),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { status?: boolean; movie?: Record<string, unknown> };
+    if (!data.status || !data.movie?.slug) return null;
+    return data.movie;
+  } catch {
+    return null;
+  }
+}
+
 function taxonomyNames(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -478,15 +499,16 @@ function renderMoviePrerender(pathname: string, movie: Record<string, unknown>, 
   const quality = String(movie.quality || 'HD');
   const lang = String(movie.lang || 'Vietsub');
   const poster = getImageUrl(String(movie.poster_url || movie.thumb_url || ''));
-  const canonical = `${SITE_URL}${pathname}`;
+  const cleanPath = pathname.replace(/\/+$/, '') || `/phim/${slug}`;
+  const canonical = `${SITE_URL}${cleanPath}`;
   const genres = taxonomyNames(movie.category);
   const countries = taxonomyNames(movie.country);
   const title = `Xem Phim ${name} Vietsub HD | KhoPhim`;
   const description = [
-    `Xem phim ${name}${origin ? ` (${origin})` : ''} online ${lang} ${quality} miễn phí tại KhoPhim.`,
+    `Xem phim ${name}${origin ? ` (${origin})` : ''} online ${lang} ${quality} mien phi tai KhoPhim.`,
     content.slice(0, 140),
-    genres.length ? `Thể loại: ${genres.join(', ')}.` : '',
-    year ? `Năm phát hành: ${year}.` : '',
+    genres.length ? `The loai: ${genres.join(', ')}.` : '',
+    year ? `Nam phat hanh: ${year}.` : '',
   ].filter(Boolean).join(' ').slice(0, 300);
   const schema = [
     {
@@ -566,7 +588,7 @@ function renderMoviePrerender(pathname: string, movie: Record<string, unknown>, 
   });
 }
 
-/** Inject security + robots headers vào response object */
+/** Inject security + robots headers vÃ o response object */
 function injectHeaders(response: Response, pathname: string): Response {
   const newHeaders = new Headers(response.headers);
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
@@ -575,7 +597,7 @@ function injectHeaders(response: Response, pathname: string): Response {
     }
   }
   // Double protection: X-Robots-Tag cho trang noindex
-  // (Googlebot có thể đọc header này mà không cần render HTML)
+  // (Googlebot cÃ³ thá»ƒ Ä‘á»c header nÃ y mÃ  khÃ´ng cáº§n render HTML)
   if (isNoIndexPath(pathname)) {
     newHeaders.set('X-Robots-Tag', 'noindex, nofollow');
   }
@@ -591,12 +613,12 @@ export default async function handler(request: Request, context: Context) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // Bỏ qua file tĩnh (js, css, images...)
+  // Bá» qua file tÄ©nh (js, css, images...)
   if (pathname.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|map|json|txt|xml)$/i)) {
     return context.next();
   }
 
-  // Không phải bot → serve SPA bình thường nhưng vẫn inject security + robots headers
+  // KhÃ´ng pháº£i bot â†’ serve SPA bÃ¬nh thÆ°á»ng nhÆ°ng váº«n inject security + robots headers
   if (!isBot(userAgent) || !shouldPrerender(pathname)) {
     const response = await context.next();
     return injectHeaders(response, pathname);
@@ -605,7 +627,7 @@ export default async function handler(request: Request, context: Context) {
   const movieMatch = /^\/phim\/([^/?#]+)/.exec(pathname);
   if (movieMatch) {
     const slug = decodeURIComponent(movieMatch[1]);
-    const movie = await fetchOphimMovie(slug);
+    const movie = await fetchSupabaseMovie(slug) || await fetchOphimMovie(slug);
     if (movie) return renderMoviePrerender(pathname, movie, slug);
   }
 
@@ -622,7 +644,7 @@ export default async function handler(request: Request, context: Context) {
       signal: AbortSignal.timeout(12000),
     });
 
-    // Handle redirect từ prerender
+    // Handle redirect tá»« prerender
     if (response.status === 301 || response.status === 302) {
       const location = response.headers.get('Location') ?? '';
       return new Response(null, {
@@ -645,7 +667,7 @@ export default async function handler(request: Request, context: Context) {
         'Link': `<https://khophim.org${pathname}>; rel="canonical"`,
         ...SECURITY_HEADERS,
       };
-      // Nếu là trang noindex → thêm X-Robots-Tag vào header
+      // Náº¿u lÃ  trang noindex â†’ thÃªm X-Robots-Tag vÃ o header
       if (isNoIndexPath(pathname)) {
         extraHeaders['X-Robots-Tag'] = 'noindex, nofollow';
       } else {
@@ -657,7 +679,7 @@ export default async function handler(request: Request, context: Context) {
       });
     }
   } catch {
-    // Nếu prerender lỗi/timeout → fallback về SPA bình thường
+    // Náº¿u prerender lá»—i/timeout â†’ fallback vá» SPA bÃ¬nh thÆ°á»ng
   }
   */
 

@@ -108,11 +108,9 @@
   force = false
   conditions = {Query = {country = "viet-nam"}}
 
-# Temporarily disabled while moving hosting from Readdy to Netlify.
-# Re-enable after the public site renders normally on khophim.org.
-# [[edge_functions]]
-#   path = "/*"
-#   function = "bot-prerender"
+[[edge_functions]]
+  path = "/*"
+  function = "bot-prerender"
 
 [[headers]]
   for = "/*"
@@ -126,7 +124,6 @@
     Cross-Origin-Opener-Policy = "same-origin-allow-popups"
     Cross-Origin-Resource-Policy = "same-site"
     X-DNS-Prefetch-Control = "off"
-    Accept-CH = ""
     Vary = "Origin"
     Cache-Control = "public, max-age=0, must-revalidate"
 
