@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const FEED_URL = 'https://www.blogger.com/feeds/6087760537213062341/posts/default';
+const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://blvietsub.com/ophim-sitemap.xml';
 const SOURCE_SITE = 'blvietsub';
 const SOURCE_NAME = 'BLVietsub';
 const TAP_LABEL = 'T\u1eadp';
@@ -33,6 +33,7 @@ interface ParsedEpisode {
   episode_name: string;
   slug: string;
   link_embed: string;
+  server_name: string;
 }
 
 interface MovieRow {
@@ -65,6 +66,11 @@ interface ParsedEntry {
   sourceUrl: string;
   updatedAt: string;
   episodes: ParsedEpisode[];
+}
+
+interface WordPressMovieUrl {
+  url: string;
+  updatedAt: string;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -108,8 +114,28 @@ function stripTags(html = ''): string {
     .trim();
 }
 
+function decodeHtml(value = ''): string {
+  return value
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#038;/g, '&')
+    .replace(/&hellip;/g, '...')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function firstMatch(html = '', pattern: RegExp): string {
   return pattern.exec(html)?.[1] || '';
+}
+
+function buildFeedPageUrl(startIndex: number, pageSize: number): string {
+  const url = new URL(FEED_URL);
+  url.searchParams.set('alt', 'json');
+  url.searchParams.set('max-results', String(pageSize));
+  url.searchParams.set('start-index', String(startIndex));
+  return url.toString();
 }
 
 function getPostId(entry: BloggerEntry): string {
@@ -118,6 +144,14 @@ function getPostId(entry: BloggerEntry): string {
 
 function getAlternateLink(entry: BloggerEntry): string {
   return entry.link?.find((link) => link.rel === 'alternate')?.href || '';
+}
+
+function getMetaContent(html = '', key: string): string {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return decodeHtml(
+    firstMatch(html, new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']*)["'][^>]*>`, 'i')) ||
+    firstMatch(html, new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${escaped}["'][^>]*>`, 'i')),
+  );
 }
 
 function getOriginName(content = ''): string {
@@ -143,6 +177,24 @@ function getEntryYear(entry: BloggerEntry): number {
   const categoryYear = terms.find((term) => /^(19|20)\d{2}$/.test(term));
   const titleYear = entry.title?.$t?.match(/\b(19|20)\d{2}\b/)?.[0];
   return Number(categoryYear || titleYear || 0);
+}
+
+function inferServerName(rawServerName: string, embedUrl: string): string {
+  const raw = rawServerName.trim();
+  const upper = raw.toUpperCase();
+  try {
+    const host = new URL(embedUrl.replace(/&amp;/g, '&')).hostname.toLowerCase();
+    if (upper === 'VK' && host.includes('ssplay')) return 'SS';
+    if (['SS', 'HX', 'OK', 'DL', 'VK'].includes(upper)) return upper;
+    if (host.includes('ssplay')) return 'SS';
+    if (host.includes('ok.ru') || host.includes('odnoklassniki')) return 'OK';
+    if (host.includes('vk.com') || host.includes('vkvideo')) return 'VK';
+    if (host.includes('abyssplayer') || host.includes('short.icu')) return 'HX';
+    if (host.includes('dailymotion')) return 'DM';
+  } catch {
+    // Keep the raw server label when the embed URL is not parseable.
+  }
+  return raw || SOURCE_NAME;
 }
 
 function getTerms(entry: BloggerEntry): string[] {
@@ -198,30 +250,38 @@ function buildTaxonomy(entry: BloggerEntry): {
 }
 
 function parseEpisodes(content = ''): ParsedEpisode[] {
-  const byNumber = new Map<number, ParsedEpisode>();
-  for (const match of content.matchAll(/data-embed=["']([^"']+)["'][\s\S]*?<span>([^<]+)<\/span>/gi)) {
-    const embed = match[1].replace(/&amp;/g, '&').trim();
-    const label = match[2].trim();
-    const episodeNumber = Number(label.match(/\d+/)?.[0] || 0);
-    if (!episodeNumber || !embed) continue;
+  const episodes = new Map<string, ParsedEpisode>();
+  const serverBlocks = Array.from(content.matchAll(/<ul[^>]+id=["']([^"']+)["'][^>]*class=["']serverEpisode["'][^>]*>([\s\S]*?)<\/ul>/gi));
+  const blocks = serverBlocks.length
+    ? serverBlocks.map((match) => ({ serverName: match[1], html: match[2] }))
+    : [{ serverName: SOURCE_NAME, html: content }];
 
-    let host = '';
-    try {
-      host = new URL(embed).hostname.toLowerCase();
-    } catch {
-      continue;
+  for (const block of blocks) {
+    for (const match of block.html.matchAll(/data-embed=["']([^"']+)["'][\s\S]*?<span>([^<]+)<\/span>/gi)) {
+      const embed = match[1].replace(/&amp;/g, '&').trim();
+      const label = match[2].trim();
+      const episodeNumber = Number(label.match(/\d+/)?.[0] || 0);
+      if (!episodeNumber || !embed) continue;
+
+      try {
+        new URL(embed);
+      } catch {
+        continue;
+      }
+
+      const serverName = inferServerName(block.serverName, embed);
+      const key = `${serverName}|${episodeNumber}`;
+      if (episodes.has(key)) continue;
+      episodes.set(key, {
+        episode_number: episodeNumber,
+        episode_name: `${TAP_LABEL} ${episodeNumber}`,
+        slug: `tap-${episodeNumber}`,
+        link_embed: embed,
+        server_name: serverName,
+      });
     }
-
-    if (!host.includes('ssplay')) continue;
-    if (byNumber.has(episodeNumber)) continue;
-    byNumber.set(episodeNumber, {
-      episode_number: episodeNumber,
-      episode_name: `${TAP_LABEL} ${episodeNumber}`,
-      slug: `tap-${episodeNumber}`,
-      link_embed: embed,
-    });
   }
-  return [...byNumber.values()].sort((a, b) => a.episode_number - b.episode_number);
+  return [...episodes.values()].sort((a, b) => a.episode_number - b.episode_number || a.server_name.localeCompare(b.server_name));
 }
 
 function parseEntry(entry: BloggerEntry): ParsedEntry | null {
@@ -312,6 +372,160 @@ function buildMovieIndexes(movies: MovieRow[]) {
   return { byPostId, byTitle, bySlug, bySourceUrl };
 }
 
+async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<MovieRow[]> {
+  const rows: MovieRow[] = [];
+  const pageSize = 1000;
+  for (let from = 0; from < 10000; from += pageSize) {
+    const { data, error } = await supabase
+      .from('movies')
+      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes, year')
+      .eq('is_published', true)
+      .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`movies select: ${error.message}`);
+    const batch = (data || []) as MovieRow[];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return rows;
+}
+
+async function fetchBloggerEntries(limit: number, pageSize: number, offset: number): Promise<ParsedEntry[]> {
+  const entries: ParsedEntry[] = [];
+  const seen = new Set<string>();
+  for (let startIndex = offset + 1; entries.length < limit; startIndex += pageSize) {
+    const feedResponse = await fetch(buildFeedPageUrl(startIndex, pageSize), {
+      headers: { 'User-Agent': 'KhoPhim-BLVietsub-Sync/1.0' },
+      signal: AbortSignal.timeout(25000),
+    });
+    if (!feedResponse.ok) throw new Error(`BLVietsub feed ${feedResponse.status}`);
+
+    const feed = (await feedResponse.json()) as BloggerFeedResponse;
+    const rawEntries = feed.feed?.entry || [];
+    if (rawEntries.length === 0) break;
+
+    for (const parsed of rawEntries.map(parseEntry).filter(Boolean) as ParsedEntry[]) {
+      if (seen.has(parsed.postId)) continue;
+      seen.add(parsed.postId);
+      entries.push(parsed);
+      if (entries.length >= limit) break;
+    }
+
+    if (rawEntries.length < pageSize) break;
+  }
+  return entries;
+}
+
+function parseWordPressSitemap(xml = ''): WordPressMovieUrl[] {
+  const urls: WordPressMovieUrl[] = [];
+  for (const match of xml.matchAll(/<url>\s*<loc>([\s\S]*?)<\/loc>(?:[\s\S]*?<lastmod>([\s\S]*?)<\/lastmod>)?[\s\S]*?<\/url>/gi)) {
+    const url = decodeHtml(match[1]);
+    if (!/^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(url)) continue;
+    urls.push({ url: url.replace(/^http:\/\//i, 'https://'), updatedAt: decodeHtml(match[2] || '') });
+  }
+  return urls;
+}
+
+function getWordPressMovieSlug(movieUrl: string): string {
+  return movieUrl.match(/\/phim\/([^/]+)\/?$/i)?.[1] || '';
+}
+
+function parseWordPressEpisodes(html: string, movieSlug: string): ParsedEpisode[] {
+  const episodes = new Map<string, ParsedEpisode>();
+  const watchUrlPattern = new RegExp(`https?:\\/\\/blvietsub\\.com\\/+(?:xem-phim)\\/${movieSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/tap-([0-9]+)-sv-([0-9]+)`, 'gi');
+  for (const match of html.matchAll(watchUrlPattern)) {
+    const episodeNumber = Number(match[1] || 0);
+    const serverNumber = Number(match[2] || 1);
+    if (!episodeNumber) continue;
+    const serverName = `SV ${serverNumber || 1}`;
+    const link = match[0].replace(/^http:\/\//i, 'https://');
+    const key = `${serverName}|${episodeNumber}`;
+    if (episodes.has(key)) continue;
+    episodes.set(key, {
+      episode_number: episodeNumber,
+      episode_name: `${TAP_LABEL} ${episodeNumber}`,
+      slug: `tap-${episodeNumber}`,
+      link_embed: link,
+      server_name: serverName,
+    });
+  }
+  return [...episodes.values()].sort((a, b) => a.episode_number - b.episode_number || a.server_name.localeCompare(b.server_name));
+}
+
+function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: string): ParsedEntry | null {
+  const movieSlug = getWordPressMovieSlug(movieUrl);
+  if (!movieSlug) return null;
+  const title = getMetaContent(html, 'og:title')
+    .replace(/\s*-\s*BLVietsub\s*$/i, '')
+    || decodeHtml(stripTags(firstMatch(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i)));
+  const image = getMetaContent(html, 'og:image');
+  const content = getMetaContent(html, 'og:description');
+  const postId = firstMatch(html, /https?:\/\/blvietsub\.com\/\?p=(\d+)/i) || movieSlug;
+  const episodes = parseWordPressEpisodes(html, movieSlug);
+  if (!title || episodes.length === 0) return null;
+  const year = Number(html.match(/\b((?:19|20)\d{2})\b/)?.[1] || 0) || new Date(updatedAt || Date.now()).getFullYear();
+  const maxEpisode = Math.max(...episodes.map((episode) => episode.episode_number));
+  const taxonomy = {
+    category: [
+      { id: 'bl-gl', name: 'BL / GL', slug: 'bl-gl' },
+      { id: 'dam-my', name: '\u0110am m\u1ef9', slug: 'dam-my' },
+    ],
+    country: [] as Array<{ id: string; name: string; slug: string }>,
+    type: maxEpisode > 1 ? 'phim-bo' : 'phim-le',
+    status: 'ongoing',
+  };
+  return {
+    postId,
+    title,
+    originName: '',
+    content,
+    image,
+    year,
+    ...taxonomy,
+    sourceUrl: movieUrl,
+    updatedAt: updatedAt || getMetaContent(html, 'article:modified_time') || new Date().toISOString(),
+    episodes,
+  };
+}
+
+async function fetchWordPressEntries(limit: number, offset: number): Promise<ParsedEntry[]> {
+  const response = await fetch(FEED_URL, {
+    headers: { 'User-Agent': 'KhoPhim-BLVietsub-WordPress-Sync/1.0' },
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!response.ok) throw new Error(`BLVietsub sitemap ${response.status}`);
+  const urls = parseWordPressSitemap(await response.text()).slice(offset, offset + limit);
+  const entries: ParsedEntry[] = [];
+  const concurrency = 6;
+  for (let index = 0; index < urls.length && entries.length < limit; index += concurrency) {
+    const batch = urls.slice(index, index + concurrency);
+    const parsed = await Promise.all(batch.map(async (item) => {
+      try {
+        const page = await fetch(item.url, {
+          headers: { 'User-Agent': 'KhoPhim-BLVietsub-WordPress-Sync/1.0' },
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!page.ok) return null;
+        return parseWordPressMoviePage(item.url, item.updatedAt, await page.text());
+      } catch {
+        return null;
+      }
+    }));
+    for (const entry of parsed) {
+      if (!entry) continue;
+      entries.push(entry);
+      if (entries.length >= limit) break;
+    }
+  }
+  return entries;
+}
+
+async function fetchSourceEntries(limit: number, pageSize: number, offset: number): Promise<ParsedEntry[]> {
+  if (/feeds\/posts\/default/i.test(FEED_URL)) return fetchBloggerEntries(limit, pageSize, offset);
+  return fetchWordPressEntries(limit, offset);
+}
+
 function findMovieForEntry(
   entry: ParsedEntry,
   indexes: ReturnType<typeof buildMovieIndexes>,
@@ -400,21 +614,21 @@ async function insertMissingEpisodes(
 ): Promise<number> {
   const { data: existingRows, error } = await supabase
     .from('movie_episodes')
-    .select('episode_number')
+    .select('episode_number, server_name')
     .eq('movie_id', movie.id)
-    .eq('server_name', 'SS');
+    .eq('source', SOURCE_SITE);
 
   if (error) throw new Error(`movie_episodes select ${movie.slug}: ${error.message}`);
 
-  const existing = new Set((existingRows || []).map((row) => Number(row.episode_number || 0)));
+  const existing = new Set((existingRows || []).map((row) => `${String(row.server_name || '').trim()}|${Number(row.episode_number || 0)}`));
   const rows = entry.episodes
-    .filter((episode) => !existing.has(episode.episode_number))
+    .filter((episode) => !existing.has(`${episode.server_name}|${episode.episode_number}`))
     .map((episode) => ({
       movie_id: movie.id,
       episode_number: episode.episode_number,
       episode_name: episode.episode_name,
       slug: episode.slug,
-      server_name: 'SS',
+      server_name: episode.server_name,
       link_m3u8: '',
       link_embed: episode.link_embed,
       subtitle_url: '',
@@ -478,44 +692,44 @@ async function writeSyncLog(
   }
 }
 
+async function refreshSearchIndex(supabaseUrl: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/search-index-proxy?limit=5000&refresh=1`, {
+      signal: AbortSignal.timeout(60000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   const url = new URL(req.url);
   const secret = url.searchParams.get('secret') || req.headers.get('x-cron-secret') || '';
   const cronSecret = Deno.env.get('CRON_SECRET') || '';
-  if (cronSecret && secret !== cronSecret) return json({ success: false, error: 'Unauthorized' }, 401);
+  const syncSecret = Deno.env.get('BLVIETSUB_SYNC_SECRET') || '';
+  if ((cronSecret || syncSecret) && secret !== cronSecret && secret !== syncSecret) {
+    return json({ success: false, error: 'Unauthorized' }, 401);
+  }
 
   const started = Date.now();
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!supabaseUrl || !serviceKey) return json({ success: false, error: 'Missing Supabase env' }, 500);
 
-  const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 500), 500));
+  const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 2000), 5000));
+  const pageSize = Math.max(1, Math.min(Number(url.searchParams.get('page_size') || 500), 500));
+  const offset = Math.max(0, Number(url.searchParams.get('offset') || 0) || 0);
   const supabase = createClient(supabaseUrl, serviceKey);
   const errors: string[] = [];
 
   try {
-    const feedResponse = await fetch(`${FEED_URL}?alt=json&max-results=${limit}`, {
-      headers: { 'User-Agent': 'KhoPhim-BLVietsub-Sync/1.0' },
-      signal: AbortSignal.timeout(20000),
-    });
-    if (!feedResponse.ok) throw new Error(`BLVietsub feed ${feedResponse.status}`);
-
-    const feed = (await feedResponse.json()) as BloggerFeedResponse;
-    const entries = (feed.feed?.entry || []).map(parseEntry).filter(Boolean) as ParsedEntry[];
+    const entries = await fetchSourceEntries(limit, pageSize, offset);
     const entryIndexes = buildEntryIndexes(entries);
 
-    const { data: movies, error: moviesError } = await supabase
-      .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes, year')
-      .eq('is_published', true)
-      .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
-      .limit(500);
-
-    if (moviesError) throw new Error(`movies select: ${moviesError.message}`);
-
-    const movieRows = (movies || []) as MovieRow[];
+    const movieRows = await fetchExistingQueerMovies(supabase);
     const movieIndexes = buildMovieIndexes(movieRows);
     let matched = 0;
     let created = 0;
@@ -552,8 +766,14 @@ serve(async (req) => {
       if (!findEntryForMovie(movie, entryIndexes)) missing.push(movie.slug);
     }
 
+    const shouldRefreshSearch = url.searchParams.get('refresh_search') === '1';
+    const searchIndexRefreshed = shouldRefreshSearch
+      ? await refreshSearchIndex(supabaseUrl)
+      : false;
+
     const result = {
       success: errors.length === 0,
+      offset,
       feed_entries: entries.length,
       scanned: movieRows.length,
       matched,
@@ -561,6 +781,7 @@ serve(async (req) => {
       missing,
       inserted,
       updated,
+      search_index_refreshed: searchIndexRefreshed,
       errors,
       elapsed_ms: Date.now() - started,
     };
