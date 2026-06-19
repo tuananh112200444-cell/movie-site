@@ -1,13 +1,23 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
-const FEED_URL = 'https://www.blvietsub.top/feeds/posts/default?alt=json';
-const POST_URL = 'https://www.blogger.com/feeds/6087760537213062341/posts/default';
+const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://www.blvietsub.top/feeds/posts/default?alt=json';
+const POST_URL = Deno.env.get('BLVIETSUB_POST_URL') || 'https://www.blogger.com/feeds/6087760537213062341/posts/default';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+function buildUpstreamUrl(baseUrl: string, params: Record<string, string | number | undefined>): string {
+  const url = new URL(baseUrl);
+  url.searchParams.set('alt', 'json');
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === '') continue;
+    url.searchParams.set(key, String(value));
+  }
+  return url.toString();
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -29,10 +39,15 @@ serve(async (req) => {
     const url = new URL(req.url);
     const postId = url.searchParams.get('postId')?.trim();
     const maxResults = Math.max(1, Math.min(Number(url.searchParams.get('maxResults') ?? 120), 500));
+    const startIndex = Math.max(1, Number(url.searchParams.get('startIndex') ?? 1) || 1);
     const query = url.searchParams.get('q')?.trim();
     const target = postId
-      ? `${POST_URL}/${encodeURIComponent(postId)}?alt=json`
-      : `${FEED_URL}&max-results=${maxResults}${query ? `&q=${encodeURIComponent(query)}` : ''}`;
+      ? buildUpstreamUrl(`${POST_URL.replace(/\/$/, '')}/${encodeURIComponent(postId)}`, {})
+      : buildUpstreamUrl(FEED_URL, {
+        'max-results': maxResults,
+        'start-index': startIndex,
+        q: query || undefined,
+      });
 
     const upstream = await fetch(target, {
       headers: {

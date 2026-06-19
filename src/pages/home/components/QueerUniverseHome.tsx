@@ -240,7 +240,7 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    fetchQueerUniverseSections({ signal: controller.signal, limit: 120 })
+    fetchQueerUniverseSections({ signal: controller.signal, limit: 1000, timeoutMs: 9000 })
       .then((data) => {
         const newUpdates = sortNewestFirst(data.newUpdates);
         setSections({

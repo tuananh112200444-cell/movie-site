@@ -1722,8 +1722,6 @@ const QUEER_UNIVERSE_TERMS = [
   'lesbian',
 ];
 const QUEER_SOURCE_TERMS = ['blvietsub', 'bl vietsub', 'bl-vietsub', 'vu tru dam my'];
-const BLVIETSUB_FEED_URL = 'https://www.blvietsub.top/feeds/posts/default?alt=json';
-const BLVIETSUB_BLOGGER_FEED = 'https://www.blogger.com/feeds/6087760537213062341/posts/default';
 const BLVIETSUB_SLUG_PREFIX = 'blvietsub-';
 const BLVIETSUB_SEARCH_TERMS = [
   'bl',
@@ -1770,11 +1768,12 @@ interface BloggerFeedResponse {
   entry?: BloggerEntry;
 }
 
-function getBlvietsubFeedProxyUrl(params: { postId?: string; limit?: number; query?: string } = {}): string | null {
+function getBlvietsubFeedProxyUrl(params: { postId?: string; limit?: number; query?: string; startIndex?: number } = {}): string | null {
   if (!SUPABASE_URL) return null;
   const url = new URL(`${SUPABASE_URL}/functions/v1/blvietsub-feed-proxy`);
   if (params.postId) url.searchParams.set('postId', params.postId);
   if (params.limit) url.searchParams.set('maxResults', String(params.limit));
+  if (params.startIndex) url.searchParams.set('startIndex', String(params.startIndex));
   if (params.query) url.searchParams.set('q', params.query);
   return url.toString();
 }
@@ -2106,13 +2105,29 @@ function bloggerEntryToMovieItem(entry: BloggerEntry): MovieItem | null {
 }
 
 async function fetchBlvietsubEntries(options: { limit?: number; timeoutMs?: number; signal?: AbortSignal; query?: string } = {}): Promise<BloggerEntry[]> {
-  const limit = Math.max(1, Math.min(options.limit ?? 25, 500));
+  const limit = Math.max(1, Math.min(options.limit ?? 25, 3000));
   const query = options.query?.trim();
-  const proxyUrl = getBlvietsubFeedProxyUrl({ limit, query });
-  const directUrl = `${BLVIETSUB_FEED_URL}&max-results=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}`;
-  const data = await fetchJSON<BloggerFeedResponse>(proxyUrl ?? directUrl, options.timeoutMs ?? 4500, options.signal)
-    .catch(() => fetchJSON<BloggerFeedResponse>(directUrl, options.timeoutMs ?? 4500, options.signal));
-  return data.feed?.entry ?? [];
+  const pageSize = Math.min(limit, 500);
+  const entries: BloggerEntry[] = [];
+  const seen = new Set<string>();
+
+  for (let startIndex = 1; entries.length < limit; startIndex += pageSize) {
+    const proxyUrl = getBlvietsubFeedProxyUrl({ limit: pageSize, query, startIndex });
+    if (!proxyUrl) break;
+    const data = await fetchJSON<BloggerFeedResponse>(proxyUrl, options.timeoutMs ?? 4500, options.signal);
+    const batch = data.feed?.entry ?? [];
+    if (!batch.length) break;
+    for (const entry of batch) {
+      const key = getBloggerPostId(entry) || entry.id?.$t || entry.title?.$t || '';
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      entries.push(entry);
+      if (entries.length >= limit) break;
+    }
+    if (batch.length < pageSize) break;
+  }
+
+  return entries;
 }
 
 const BLVIETSUB_MOVIES_CACHE_TTL = 5 * 60 * 1000;
@@ -2123,7 +2138,7 @@ let blvietsubMoviesCache: {
 } | null = null;
 
 async function fetchBlvietsubMovies(options: { limit?: number; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<MovieItem[]> {
-  const limit = Math.max(1, Math.min(options.limit ?? 25, 600));
+  const limit = Math.max(1, Math.min(options.limit ?? 25, 3000));
   if (!options.signal && blvietsubMoviesCache && blvietsubMoviesCache.limit >= limit && blvietsubMoviesCache.expiresAt > Date.now()) {
     const cached = await blvietsubMoviesCache.promise;
     return cached.slice(0, limit);
@@ -2234,12 +2249,9 @@ async function fetchMovieDetailFromBlvietsub(slug: string): Promise<MovieDetailR
   const postId = extractBlvietsubPostIdFromSlug(slug);
   if (!postId) return null;
   try {
-    const directUrl = `${BLVIETSUB_BLOGGER_FEED}/${postId}?alt=json`;
     const proxyUrl = getBlvietsubFeedProxyUrl({ postId });
-    const data = await fetchJSON<BloggerFeedResponse>(
-      directUrl,
-      5500
-    ).catch(() => proxyUrl ? fetchJSON<BloggerFeedResponse>(proxyUrl, 5500) : Promise.reject(new Error('BLVietsub detail fetch failed')));
+    if (!proxyUrl) return null;
+    const data = await fetchJSON<BloggerFeedResponse>(proxyUrl, 5500);
     const entry = data.entry;
     return entry ? buildBlvietsubDetail(entry) : null;
   } catch (e) {
@@ -2554,6 +2566,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
   byYear: Record<string, MovieItem[]>;
 }> {
   const limit = options.limit ?? 18;
+  const poolLimit = Math.max(limit, 1000);
   const controller = new AbortController();
   const abortFromParent = () => controller.abort();
   if (options.signal?.aborted) {
@@ -2565,7 +2578,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
 
   try {
     const feedMoviesPromise = fetchBlvietsubMovies({
-      limit: Math.max(limit, 240),
+      limit: poolLimit,
       timeoutMs: options.timeoutMs ?? 4500,
       signal: controller.signal,
     }).catch(() => []);
@@ -2576,7 +2589,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
       .eq('is_published', true)
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
       .order('updated_at', { ascending: false })
-      .limit(Math.max(limit, 120))
+      .limit(poolLimit)
       .abortSignal(controller.signal);
 
     const markedMovies = ((markedRows ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);

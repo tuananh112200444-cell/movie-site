@@ -184,7 +184,7 @@ export default function SearchPage() {
 
   const ensureSearchIndexLoaded = useCallback(() => {
     if (searchIndexLoadRef.current) return searchIndexLoadRef.current;
-    searchIndexLoadRef.current = fetchSupabaseSearchIndex({ limit: 3000 })
+    searchIndexLoadRef.current = fetchSupabaseSearchIndex({ limit: 5000 })
       .then((items) => {
         if (items.length > 0) {
           setLocalPool((prev) => mergeMoviesUnique([...items, ...prev]));
