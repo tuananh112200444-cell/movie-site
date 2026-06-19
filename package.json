@@ -42,6 +42,8 @@
     "seo:audit": "node scripts/seo-audit.mjs",
     "seo:generate": "node scripts/generate-seo-sitemap.mjs",
     "search:test": "node scripts/search-regression.mjs",
+    "sync:blvietsub": "node scripts/sync-blvietsub-external.mjs",
+    "sync:blvietsub:dry": "node scripts/sync-blvietsub-external.mjs --dry-run",
     "prebuild": "npm run seo:generate && npm run seo:audit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
