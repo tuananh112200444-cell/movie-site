@@ -119,7 +119,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
 
   const ensureSearchIndexLoaded = useCallback(() => {
     if (indexLoadRef.current) return indexLoadRef.current;
-    indexLoadRef.current = fetchSupabaseSearchIndex({ limit: 2000 })
+    indexLoadRef.current = fetchSupabaseSearchIndex({ limit: 5000 })
       .then((items) => {
         const movies = items as unknown as Movie[];
         if (movies.length > 0) setLocalPool((prev) => mergeMoviesUnique([...movies, ...prev]));
