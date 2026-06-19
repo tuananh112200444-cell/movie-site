@@ -112,14 +112,14 @@ async function fetchSupabaseMovies(): Promise<MovieItem[]> {
     auth: { persistSession: false },
   });
   const pageSize = 1000;
-  const maxRows = 5000;
+  const maxRows = 50000;
   const rows: MovieItem[] = [];
 
   for (let from = 0; from < maxRows; from += pageSize) {
     const to = from + pageSize - 1;
     const { data, error } = await supabase
       .from('movies')
-      .select('slug,name,thumb_url,poster_url,modified,updated_at,episode_current,is_published,seo_catalog_status,catalog_source,release_at,tmdb_popularity')
+      .select('slug,name,thumb_url,poster_url,updated_at,episode_current,is_published,seo_catalog_status,catalog_source,release_at,tmdb_popularity')
       .eq('is_published', true)
       .not('slug', 'is', null)
       .order('updated_at', { ascending: false })
@@ -149,7 +149,7 @@ async function buildMovieSitemap(): Promise<{ xml: string; count: number }> {
       seen.add(slug);
       return movie.is_published !== false;
     })
-    .slice(0, 5000);
+    .slice(0, 50000);
 
   const urls = movies.map((movie) => {
     const slug = movie.slug ?? '';
