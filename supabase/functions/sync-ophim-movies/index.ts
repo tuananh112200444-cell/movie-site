@@ -195,6 +195,38 @@ function getCurrentEpisode(movie: OPhimMovie, episodes: OPhimServer[]): number {
   return Math.max(fromText, fromEpisodes);
 }
 
+function chunks<T>(items: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
+}
+
+async function readCursorPage(supabase: SupabaseClient, key: string, fallbackPage: number): Promise<number> {
+  try {
+    const { data } = await supabase
+      .from('sync_cursors')
+      .select('page')
+      .eq('key', key)
+      .maybeSingle();
+    const page = Number(data?.page || fallbackPage);
+    return Number.isFinite(page) && page > 0 ? page : fallbackPage;
+  } catch {
+    return fallbackPage;
+  }
+}
+
+async function writeCursorPage(supabase: SupabaseClient, key: string, page: number): Promise<void> {
+  try {
+    await supabase
+      .from('sync_cursors')
+      .upsert({ key, page, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  } catch {
+    /* cursor is best-effort; sync should still succeed if cursor write fails */
+  }
+}
+
 async function fetchJsonFromMirrors(provider: ProviderConfig, path: string, timeoutMs = 12000): Promise<Record<string, unknown> | null> {
   for (const base of provider.bases) {
     const controller = new AbortController();
@@ -373,8 +405,16 @@ async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, d
 }
 
 async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig, movieId: string, detail: ParsedDetail): Promise<number> {
-  let inserted = 0;
   const sourceId = provider.trackOphimIdentity ? String(detail.movie._id || detail.movie.id || '') : '';
+  const parsedEpisodes: Array<{
+    number: number;
+    epName: string;
+    epSlug: string;
+    serverName: string;
+    linkM3u8: string;
+    linkEmbed: string;
+    raw: OPhimEpisode;
+  }> = [];
 
   for (const server of detail.episodes) {
     const serverName = String(server.server_name || 'OPhim');
@@ -386,82 +426,110 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
       const linkM3u8 = String(ep.link_m3u8 || '');
       const linkEmbed = String(ep.link_embed || '');
       if (!linkM3u8 && !linkEmbed) continue;
-
-      const { data: existingAdmin } = await supabase
-        .from('movie_episodes')
-        .select('id')
-        .eq('movie_id', movieId)
-        .eq('source', provider.sourceSite)
-        .eq('episode_number', number)
-        .limit(1)
-        .maybeSingle();
-
-      if (!existingAdmin) {
-        const { error } = await supabase.from('movie_episodes').insert({
-          movie_id: movieId,
-          ophim_id: sourceId,
-          episode_number: number,
-          episode_name: epName,
-          slug: epSlug,
-          server_name: serverName,
-          link_m3u8: linkM3u8,
-          link_embed: linkEmbed,
-          thumbnail_url: '',
-          duration: '',
-          source: provider.sourceSite,
-          is_backup: false,
-        });
-        if (!error) inserted += 1;
-      }
-
-      const { data: existingEpisode } = await supabase
-        .from('episodes')
-        .select('id')
-        .eq('movie_id', movieId)
-        .eq('server_name', serverName)
-        .eq('episode_number', number)
-        .limit(1)
-        .maybeSingle();
-
-      if (!existingEpisode) {
-        await supabase.from('episodes').insert({
-          movie_id: movieId,
-          ophim_id: sourceId,
-          server_name: serverName,
-          episode_number: number,
-          episode_name: epName,
-          episode_slug: epSlug,
-          link_m3u8: linkM3u8,
-          link_embed: linkEmbed,
-          server_data: ep,
-        });
-      }
-
-      const { data: existingStream } = await supabase
-        .from('streams')
-        .select('id')
-        .eq('movie_id', movieId)
-        .eq('server_name', serverName)
-        .eq('episode_slug', epSlug)
-        .limit(1)
-        .maybeSingle();
-
-      if (!existingStream) {
-        await supabase.from('streams').insert({
-          movie_id: movieId,
-          ophim_id: sourceId,
-          server_name: serverName,
-          episode_slug: epSlug,
-          stream_url: linkM3u8,
-          embed_url: linkEmbed,
-          source: provider.sourceSite,
-          is_active: true,
-        });
-      }
+      parsedEpisodes.push({ number, epName, epSlug, serverName, linkM3u8, linkEmbed, raw: ep });
     }
   }
 
-  return inserted;
+  if (parsedEpisodes.length === 0) return 0;
+
+  const [{ data: existingAdminRows, error: adminSelectError }, { data: existingEpisodeRows, error: episodeSelectError }, { data: existingStreamRows, error: streamSelectError }] = await Promise.all([
+    supabase
+      .from('movie_episodes')
+      .select('episode_number, server_name')
+      .eq('movie_id', movieId)
+      .eq('source', provider.sourceSite),
+    supabase
+      .from('episodes')
+      .select('episode_number, server_name, episode_slug')
+      .eq('movie_id', movieId),
+    supabase
+      .from('streams')
+      .select('server_name, episode_slug, source')
+      .eq('movie_id', movieId)
+      .eq('source', provider.sourceSite),
+  ]);
+
+  if (adminSelectError) throw new Error(`movie_episodes select ${detail.movie.slug}: ${adminSelectError.message}`);
+  if (episodeSelectError) throw new Error(`episodes select ${detail.movie.slug}: ${episodeSelectError.message}`);
+  if (streamSelectError) throw new Error(`streams select ${detail.movie.slug}: ${streamSelectError.message}`);
+
+  const existingAdmin = new Set((existingAdminRows || []).map((row) => `${String(row.server_name || '').trim().toLowerCase()}|${Number(row.episode_number || 0)}`));
+  const existingEpisodes = new Set((existingEpisodeRows || []).map((row) => `${String(row.server_name || '').trim().toLowerCase()}|${Number(row.episode_number || 0)}|${String(row.episode_slug || '').trim().toLowerCase()}`));
+  const existingStreams = new Set((existingStreamRows || []).map((row) => `${String(row.server_name || '').trim().toLowerCase()}|${String(row.episode_slug || '').trim().toLowerCase()}|${String(row.source || '').trim().toLowerCase()}`));
+  const plannedAdmin = new Set<string>();
+  const plannedEpisodes = new Set<string>();
+  const plannedStreams = new Set<string>();
+
+  const movieEpisodeRows = [];
+  const episodeRows = [];
+  const streamRows = [];
+
+  for (const ep of parsedEpisodes) {
+    const adminKey = `${ep.serverName.trim().toLowerCase()}|${ep.number}`;
+    if (!existingAdmin.has(adminKey) && !plannedAdmin.has(adminKey)) {
+      plannedAdmin.add(adminKey);
+      movieEpisodeRows.push({
+        movie_id: movieId,
+        ophim_id: sourceId,
+        episode_number: ep.number,
+        episode_name: ep.epName,
+        slug: ep.epSlug,
+        server_name: ep.serverName,
+        link_m3u8: ep.linkM3u8,
+        link_embed: ep.linkEmbed,
+        thumbnail_url: '',
+        duration: '',
+        source: provider.sourceSite,
+        is_backup: false,
+      });
+    }
+
+    const episodeKey = `${ep.serverName.trim().toLowerCase()}|${ep.number}|${ep.epSlug.trim().toLowerCase()}`;
+    if (!existingEpisodes.has(episodeKey) && !plannedEpisodes.has(episodeKey)) {
+      plannedEpisodes.add(episodeKey);
+      episodeRows.push({
+        movie_id: movieId,
+        ophim_id: sourceId,
+        server_name: ep.serverName,
+        episode_number: ep.number,
+        episode_name: ep.epName,
+        episode_slug: ep.epSlug,
+        link_m3u8: ep.linkM3u8,
+        link_embed: ep.linkEmbed,
+        server_data: ep.raw,
+      });
+    }
+
+    const streamKey = `${ep.serverName.trim().toLowerCase()}|${ep.epSlug.trim().toLowerCase()}|${provider.sourceSite.toLowerCase()}`;
+    if (!existingStreams.has(streamKey) && !plannedStreams.has(streamKey)) {
+      plannedStreams.add(streamKey);
+      streamRows.push({
+        movie_id: movieId,
+        ophim_id: sourceId,
+        server_name: ep.serverName,
+        episode_slug: ep.epSlug,
+        stream_url: ep.linkM3u8,
+        embed_url: ep.linkEmbed,
+        source: provider.sourceSite,
+        is_active: true,
+      });
+    }
+  }
+
+  for (const batch of chunks(movieEpisodeRows, 500)) {
+    const { error } = await supabase.from('movie_episodes').insert(batch);
+    if (error) throw new Error(`movie_episodes insert ${detail.movie.slug}: ${error.message}`);
+  }
+  for (const batch of chunks(episodeRows, 500)) {
+    const { error } = await supabase.from('episodes').insert(batch);
+    if (error) throw new Error(`episodes insert ${detail.movie.slug}: ${error.message}`);
+  }
+  for (const batch of chunks(streamRows, 500)) {
+    const { error } = await supabase.from('streams').insert(batch);
+    if (error) throw new Error(`streams insert ${detail.movie.slug}: ${error.message}`);
+  }
+
+  return movieEpisodeRows.length;
 }
 
 async function writeLog(supabase: SupabaseClient, stats: SyncStats, elapsedMs: number, metadata: Record<string, unknown>): Promise<void> {
@@ -503,7 +571,7 @@ serve(async (req) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!supabaseUrl || !serviceKey) return json({ success: false, error: 'Missing Supabase env' }, 500);
 
-  const pages = Math.max(1, Math.min(Number(url.searchParams.get('pages') || 2), 10));
+  const pages = Math.max(1, Math.min(Number(url.searchParams.get('pages') || 2), 20));
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 48), 200));
   const dryRun = url.searchParams.get('dry_run') === '1';
   const includeEpisodes = url.searchParams.get('episodes') === '1';
@@ -512,10 +580,19 @@ serve(async (req) => {
   const stats: SyncStats = { scanned: 0, created: 0, updated: 0, episodesInserted: 0, skipped: 0, errors: [] };
 
   try {
+    const requestedStartPage = Math.max(1, Number(url.searchParams.get('start_page') || url.searchParams.get('page') || 1) || 1);
+    const maxPage = Math.max(1, Number(url.searchParams.get('max_page') || 5000) || 5000);
+    const useCursor = url.searchParams.get('cursor') === '1' || url.searchParams.get('backfill') === '1';
+    const cursorKey = String(url.searchParams.get('cursor_key') || `sync-ophim-movies:${provider.sourceSite}:backfill`);
+    const startPage = useCursor ? await readCursorPage(supabase, cursorKey, requestedStartPage) : requestedStartPage;
     const candidates = new Map<string, OPhimMovie>();
-    for (let page = 1; page <= pages; page += 1) {
+    let pagesWithItems = 0;
+
+    for (let page = startPage; page < startPage + pages; page += 1) {
       const payload = await fetchJsonFromMirrors(provider, provider.listPath(page));
-      for (const item of listItems(payload)) {
+      const items = listItems(payload);
+      if (items.length > 0) pagesWithItems += 1;
+      for (const item of items) {
         if (item.slug && !candidates.has(item.slug)) candidates.set(item.slug, item);
       }
     }
@@ -547,11 +624,27 @@ serve(async (req) => {
       await clearCaches(supabase);
     }
 
+    const nextPage = pagesWithItems === 0 || startPage + pages > maxPage ? 1 : startPage + pages;
+    if (useCursor && !dryRun) await writeCursorPage(supabase, cursorKey, nextPage);
+
     const elapsedMs = Date.now() - started;
-    await writeLog(supabase, stats, elapsedMs, { provider: provider.sourceSite, pages, limit, dry_run: dryRun, include_episodes: includeEpisodes });
+    const metadata = {
+      provider: provider.sourceSite,
+      pages,
+      limit,
+      start_page: startPage,
+      next_page: nextPage,
+      pages_with_items: pagesWithItems,
+      dry_run: dryRun,
+      include_episodes: includeEpisodes,
+      cursor: useCursor ? cursorKey : null,
+    };
+    await writeLog(supabase, stats, elapsedMs, metadata);
     return json({
       success: stats.errors.length === 0,
       provider: provider.sourceSite,
+      start_page: startPage,
+      next_page: nextPage,
       scanned: stats.scanned,
       created: stats.created,
       updated: stats.updated,
