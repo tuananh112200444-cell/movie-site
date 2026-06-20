@@ -1,16 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- khophim.org sitemap index - Last updated: 2026-05-27 -->
+<!-- khophim.org sitemap index - Last updated: 2026-06-20 -->
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
     <loc>https://khophim.org/sitemap-static.xml</loc>
-    <lastmod>2026-05-27</lastmod>
+    <lastmod>2026-06-20</lastmod>
   </sitemap>
   <sitemap>
     <loc>https://khophim.org/sitemap-seo-landing.xml</loc>
-    <lastmod>2026-05-27</lastmod>
+    <lastmod>2026-06-20</lastmod>
   </sitemap>
   <sitemap>
     <loc>https://khophim.org/sitemap-movies.xml</loc>
-    <lastmod>2026-05-27</lastmod>
+    <lastmod>2026-06-20</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-recent.xml</loc>
+    <lastmod>2026-06-20</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-upcoming.xml</loc>
+    <lastmod>2026-06-20</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-1.xml</loc>
+    <lastmod>2026-06-20</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-2.xml</loc>
+    <lastmod>2026-06-20</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-3.xml</loc>
+    <lastmod>2026-06-20</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-4.xml</loc>
+    <lastmod>2026-06-20</lastmod>
   </sitemap>
 </sitemapindex>

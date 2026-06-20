@@ -30,6 +30,13 @@ function addWarning(message) {
   warnings.push(message);
 }
 
+function isDynamicMovieSitemap(fileName) {
+  return fileName === 'sitemap-movies.xml'
+    || fileName === 'sitemap-movies-recent.xml'
+    || fileName === 'sitemap-movies-upcoming.xml'
+    || /^sitemap-movies-\d+\.xml$/.test(fileName);
+}
+
 const robots = await read('public/robots.txt');
 if (!robots.includes(`Sitemap: ${SITE_URL}/sitemap.xml`)) {
   addError('robots.txt must point to the canonical sitemap index.');
@@ -55,7 +62,7 @@ for (const loc of childSitemaps) {
   }
   const fileName = loc.replace(`${SITE_URL}/`, '');
   if (!fileName.endsWith('.xml')) continue;
-  if (fileName === 'sitemap-movies.xml') {
+  if (isDynamicMovieSitemap(fileName)) {
     continue;
   }
   if (!(await exists(resolve('public', fileName)))) {

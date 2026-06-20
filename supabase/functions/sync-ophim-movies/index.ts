@@ -176,6 +176,22 @@ function escapePostgrestIlike(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/[(),]/g, ' ');
 }
 
+function dbErrorMessage(error: unknown): string {
+  if (!error) return 'unknown database error';
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    return String(record.message || record.details || record.hint || record.code || JSON.stringify(record));
+  }
+  return String(error);
+}
+
+function isDuplicateError(error: unknown): boolean {
+  const record = (error && typeof error === 'object') ? error as Record<string, unknown> : {};
+  const text = dbErrorMessage(error).toLowerCase();
+  return record.code === '23505' || text.includes('duplicate key') || text.includes('unique constraint');
+}
+
 function episodeNumber(ep: OPhimEpisode): number {
   const text = `${ep.name || ''} ${ep.slug || ''}`.toLowerCase();
   if (text.includes('full')) return 1;
@@ -395,12 +411,33 @@ async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, d
       }
     }
     const { error } = await supabase.from('movies').update(update).eq('id', existing.id as string);
-    if (error) throw new Error(`movies update ${payload.slug}: ${error.message}`);
+    if (error) {
+      if (isDuplicateError(error) && (update.ophim_id || update.ophim_slug)) {
+        const retryUpdate = { ...update };
+        delete retryUpdate.ophim_id;
+        delete retryUpdate.ophim_slug;
+        const { error: retryError } = await supabase.from('movies').update(retryUpdate).eq('id', existing.id as string);
+        if (!retryError) return { id: String(existing.id), created: false, updated: true };
+        throw new Error(`movies update ${payload.slug}: ${dbErrorMessage(retryError)}`);
+      }
+      throw new Error(`movies update ${payload.slug}: ${dbErrorMessage(error)}`);
+    }
     return { id: String(existing.id), created: false, updated: true };
   }
 
   const { data, error } = await supabase.from('movies').insert(payload).select('id').single();
-  if (error) throw new Error(`movies insert ${payload.slug}: ${error.message}`);
+  if (error) {
+    if (isDuplicateError(error)) {
+      const duplicate = await findExistingMovie(supabase, payload);
+      if (duplicate?.id) {
+        const update = updatePayloadForExisting(duplicate, payload);
+        const { error: updateError } = await supabase.from('movies').update(update).eq('id', duplicate.id as string);
+        if (!updateError) return { id: String(duplicate.id), created: false, updated: true };
+        throw new Error(`movies insert duplicate update ${payload.slug}: ${dbErrorMessage(updateError)}`);
+      }
+    }
+    throw new Error(`movies insert ${payload.slug}: ${dbErrorMessage(error)}`);
+  }
   return { id: String(data.id), created: true, updated: false };
 }
 
