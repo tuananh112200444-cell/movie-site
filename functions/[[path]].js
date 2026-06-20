@@ -82,6 +82,31 @@ const STATIC_META = {
     description: 'Xem anime vietsub, hoat hinh Nhat Ban, Trung Quoc va phim gia dinh HD cap nhat moi tai KhoPhim.',
     h1: 'Anime va hoat hinh vietsub',
   },
+  '/anime': {
+    title: 'Anime Vietsub HD - Anime Moi Nhat 2026 | KhoPhim',
+    description: 'Xem anime vietsub HD, anime mua moi, anime hanh dong, tinh cam, isekai va hoat hinh Nhat Ban cap nhat tren KhoPhim.',
+    h1: 'Anime vietsub HD',
+  },
+  '/my-nam': {
+    title: 'Phim My Nam Vietsub HD - BL, Ngon Tinh, Than Tuong | KhoPhim',
+    description: 'Xem phim my nam vietsub HD, phim BL, ngon tinh, than tuong va phim tinh cam co dan dien vien dep tren KhoPhim.',
+    h1: 'Phim my nam vietsub HD',
+  },
+  '/phim-ma': {
+    title: 'Phim Ma Kinh Di Vietsub HD - Phim Kinh Di Hay | KhoPhim',
+    description: 'Xem phim ma, phim kinh di, giat gan, tam linh va thriller vietsub HD cap nhat moi tren KhoPhim.',
+    h1: 'Phim ma va kinh di vietsub HD',
+  },
+  '/tv-shows': {
+    title: 'TV Shows Vietsub HD - Show Truyen Hinh Moi | KhoPhim',
+    description: 'Xem TV shows vietsub HD, reality show, series truyen hinh va show giai tri cap nhat hang ngay tren KhoPhim.',
+    h1: 'TV Shows vietsub HD',
+  },
+  '/phim-sap-chieu': {
+    title: 'Phim Sap Chieu 2026 - Trailer Va Lich Chieu | KhoPhim',
+    description: 'Theo doi phim sap chieu 2026, trailer phim moi, lich chieu, noi dung va thong tin dien vien tren KhoPhim.',
+    h1: 'Phim sap chieu va trailer moi',
+  },
   '/phim-han-quoc': {
     title: 'Phim Han Quoc Vietsub HD - Drama Han | KhoPhim',
     description: 'Xem phim Han Quoc vietsub HD, drama tinh cam, hanh dong, hai huoc va series moi cap nhat tren KhoPhim.',
@@ -124,6 +149,9 @@ const PRERENDER_PATHS = [
   /^\/phim-bo(\/|$)/,
   /^\/phim-chieu-rap(\/|$)/,
   /^\/hoat-hinh(\/|$)/,
+  /^\/anime(\/|$)/,
+  /^\/my-nam(\/|$)/,
+  /^\/phim-ma(\/|$)/,
   /^\/tv-shows(\/|$)/,
   /^\/phim-sap-chieu(\/|$)/,
   /^\/phim-han-quoc(\/|$)/,
@@ -184,10 +212,25 @@ function isStaticAsset(pathname) {
   return /\.(js|css|png|jpg|jpeg|gif|webp|ico|svg|woff|woff2|ttf|eot|map|json|txt|xml|m3u8|ts)$/i.test(pathname);
 }
 
+function isAllowedBlvietsubProxyUrl(targetUrl) {
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.protocol !== 'https:' || parsed.hostname !== 'blvietsub.com') return false;
+    return parsed.pathname === '/ophim-sitemap.xml'
+      || /^\/phim\/[^/]+\/?$/i.test(parsed.pathname)
+      || /^\/xem-phim\/[^/]+\/tap-\d+-sv-\d+\/?$/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
 function withHeaders(response, pathname) {
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     if (!headers.has(key)) headers.set(key, value);
+  }
+  if (!headers.has('Cache-Control')) {
+    headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
   }
   if (isNoIndexPath(pathname)) {
     headers.set('X-Robots-Tag', 'noindex, nofollow');
@@ -214,6 +257,38 @@ function taxonomyNames(value) {
   return value
     .map((item) => (item && typeof item === 'object' ? String(item.name || '') : ''))
     .filter(Boolean);
+}
+
+function normalizeLower(value) {
+  return String(value || '').toLowerCase().trim();
+}
+
+function normalizeSearchText(value) {
+  return normalizeLower(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u0111/g, 'd')
+    .replace(/đ/g, 'd');
+}
+
+function isTrailerOnlyMovie(movie) {
+  const ep = normalizeSearchText(movie.episode_current);
+  return ep === 'trailer' || ep.includes('trailer') || Boolean(movie.trailer_url);
+}
+
+function isUpcomingMovie(movie) {
+  const ep = normalizeSearchText(movie.episode_current);
+  const status = normalizeSearchText(movie.seo_catalog_status || movie.status);
+  const releaseAt = movie.release_at ? new Date(movie.release_at).getTime() : 0;
+  if (status === 'upcoming' || ep.includes('sap chieu') || releaseAt > Date.now()) return true;
+  return status === 'upcoming' || ep.includes('sap chieu') || ep.includes('sắp chiếu') || releaseAt > Date.now();
+}
+
+function formatVietnamDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 }
 
 function titleFromSlug(slug) {
@@ -364,9 +439,23 @@ function renderMoviePrerender(pathname, movie, slug) {
   const canonical = `${SITE_URL}${cleanPath}`;
   const genres = taxonomyNames(movie.category);
   const countries = taxonomyNames(movie.country);
-  const title = `Xem Phim ${name} Vietsub HD | KhoPhim`;
+  const isTrailerOnly = isTrailerOnlyMovie(movie);
+  const isUpcoming = isUpcomingMovie(movie);
+  const releaseDateText = formatVietnamDate(movie.release_at);
+  const episodeText = String(movie.episode_current || '').trim();
+  const title = isUpcoming
+    ? `${name} - Trailer, Lich Chieu, Noi Dung | KhoPhim`
+    : isTrailerOnly
+      ? `${name} - Trailer Vietsub, Thong Tin Phim | KhoPhim`
+      : `Xem Phim ${name} Vietsub HD | KhoPhim`;
   const description = [
-    `Xem phim ${name}${origin ? ` (${origin})` : ''} online ${lang} ${quality} mien phi tai KhoPhim.`,
+    isUpcoming
+      ? `${name}${origin ? ` (${origin})` : ''} la phim sap chieu dang duoc cap nhat trailer, lich chieu, noi dung va thong tin dien vien tren KhoPhim.`
+      : isTrailerOnly
+        ? `Xem trailer ${name}${origin ? ` (${origin})` : ''}, thong tin phim, noi dung, the loai va lich cap nhat tap moi tren KhoPhim.`
+        : `Xem phim ${name}${origin ? ` (${origin})` : ''} online ${lang} ${quality} mien phi tai KhoPhim.`,
+    releaseDateText ? `Du kien phat hanh: ${releaseDateText}.` : '',
+    episodeText ? `Trang thai: ${episodeText}.` : '',
     content.slice(0, 140),
     genres.length ? `The loai: ${genres.join(', ')}.` : '',
     year ? `Nam phat hanh: ${year}.` : '',
@@ -391,6 +480,12 @@ function renderMoviePrerender(pathname, movie, slug) {
       thumbnailUrl: poster,
       description,
       datePublished: year ? `${year}-01-01` : undefined,
+      dateModified: movie.updated_at || movie.modified?.time || undefined,
+      releasedEvent: movie.release_at ? {
+        '@type': 'PublicationEvent',
+        startDate: movie.release_at,
+        name: `Lich chieu ${name}`,
+      } : undefined,
       genre: genres,
       countryOfOrigin: countries.map((country) => ({ '@type': 'Country', name: country })),
       inLanguage: lang,
@@ -407,12 +502,21 @@ function renderMoviePrerender(pathname, movie, slug) {
       embedUrl: canonical,
       url: canonical,
       inLanguage: lang,
+      isFamilyFriendly: true,
     },
   ];
   const body = `${origin ? `<p>${escapeHtml(origin)}</p>` : ''}
     <img src="${escapeHtml(poster)}" alt="${escapeHtml(name)}">
+    <p>${escapeHtml(isUpcoming ? 'Phim sap chieu' : isTrailerOnly ? 'Trailer va thong tin phim' : 'Xem phim online')}</p>
+    ${releaseDateText ? `<p>Lich chieu du kien: ${escapeHtml(releaseDateText)}</p>` : ''}
+    ${episodeText ? `<p>Trang thai hien tai: ${escapeHtml(episodeText)}</p>` : ''}
     <p>${escapeHtml(description)}</p>
-    <a href="${escapeHtml(canonical)}">Xem phim ${escapeHtml(name)}</a>`;
+    <nav>
+      <a href="${escapeHtml(canonical)}">${escapeHtml(isUpcoming || isTrailerOnly ? `Xem trailer va thong tin ${name}` : `Xem phim ${name}`)}</a>
+      <a href="${SITE_URL}/phim-moi-nhat">Phim moi nhat</a>
+      <a href="${SITE_URL}/phim-sap-chieu">Phim sap chieu</a>
+      ${genres.slice(0, 2).map((genre) => `<span>${escapeHtml(genre)}</span>`).join('')}
+    </nav>`;
   return new Response(renderHtml({
     title,
     description,
@@ -433,31 +537,176 @@ function renderMoviePrerender(pathname, movie, slug) {
   });
 }
 
-async function proxySitemap(pathname, request) {
-  const target =
-    pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic'
-      ? `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml`
-      : `${SUPABASE_FUNCTION_BASE}/sitemap-index`;
+async function proxySitemap(pathname, request, context) {
+  const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
+  let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=20260620-seo-upcoming-v2`;
+  if (pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic') {
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml`;
+  } else if (pathname === '/sitemap-movies-recent.xml') {
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=2000`;
+  } else if (pathname === '/sitemap-movies-upcoming.xml') {
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?upcoming=1&page_size=5000`;
+  } else if (movieChunkMatch) {
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=10000`;
+  }
+  const cacheKey = new Request(target, { method: 'GET' });
 
   try {
+    if ((request.method === 'GET' || request.method === 'HEAD') && typeof caches !== 'undefined') {
+      const cached = await caches.default.match(cacheKey);
+      if (cached) {
+        const headers = new Headers(cached.headers);
+        headers.set('X-Sitemap-Proxy', 'cloudflare-pages');
+        headers.set('X-Sitemap-Cache', 'HIT');
+        const cachedCount = Number(headers.get('X-Movie-Count') || '0');
+        if (movieChunkMatch && cachedCount === 0) {
+          headers.set('Cache-Control', 'no-store');
+          return new Response(null, {
+            status: 404,
+            headers,
+          });
+        }
+        return new Response(request.method === 'HEAD' ? null : cached.body, {
+          status: cached.status,
+          statusText: cached.statusText,
+          headers,
+        });
+      }
+    }
+
     const response = await fetch(target, {
       headers: { 'Accept': 'application/xml', 'User-Agent': request.headers.get('user-agent') || 'KhoPhimBot/1.0' },
       cf: { cacheTtl: 1800, cacheEverything: true },
-      signal: AbortSignal.timeout(9000),
+      signal: AbortSignal.timeout(30000),
     });
     if (!response.ok) throw new Error(`Sitemap upstream ${response.status}`);
     const headers = new Headers(response.headers);
     headers.set('Content-Type', 'application/xml; charset=utf-8');
     headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600');
     headers.set('X-Sitemap-Proxy', 'cloudflare-pages');
-    return new Response(response.body, {
+    headers.set('X-Sitemap-Cache', 'MISS');
+    headers.delete('Set-Cookie');
+    const movieCount = Number(headers.get('X-Movie-Count') || '0');
+    if (movieChunkMatch && movieCount === 0) {
+      headers.set('Cache-Control', 'no-store');
+      return new Response(request.method === 'HEAD' ? null : '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
+        status: 404,
+        headers,
+      });
+    }
+    const sitemapResponse = new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers,
     });
-  } catch {
-    return null;
+    if (request.method === 'GET' && typeof caches !== 'undefined') {
+      contextWaitUntil(context, caches.default.put(cacheKey, sitemapResponse.clone()));
+    }
+    return sitemapResponse;
+  } catch (error) {
+    const message = escapeHtml(error instanceof Error ? error.message : 'Sitemap upstream failed');
+    return new Response(`<?xml version="1.0" encoding="UTF-8"?><error>${message}</error>`, {
+      status: 503,
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Sitemap-Proxy': 'cloudflare-pages-error',
+        ...SECURITY_HEADERS,
+      },
+    });
   }
+}
+
+async function proxyBlvietsub(request, context) {
+  const url = new URL(request.url);
+  const target = url.searchParams.get('url') || '';
+  if (!isAllowedBlvietsubProxyUrl(target)) {
+    return new Response('Bad Request', {
+      status: 400,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+        ...SECURITY_HEADERS,
+      },
+    });
+  }
+
+  const targetUrl = new URL(target);
+  const cacheKey = new Request(targetUrl.toString(), { method: 'GET' });
+  try {
+    if (request.method === 'GET' && typeof caches !== 'undefined') {
+      const cached = await caches.default.match(cacheKey);
+      if (cached) {
+        const headers = new Headers(cached.headers);
+        headers.set('X-BLVietsub-Proxy', 'HIT');
+        return new Response(cached.body, {
+          status: cached.status,
+          statusText: cached.statusText,
+          headers,
+        });
+      }
+    }
+
+    const upstream = await fetch(targetUrl.toString(), {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 KhoPhim-Sync/1.0',
+        'Accept': targetUrl.pathname.endsWith('.xml') ? 'application/xml,text/xml,*/*;q=0.8' : 'text/html,application/xhtml+xml,*/*;q=0.8',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+        'Referer': 'https://blvietsub.com/',
+      },
+      cf: { cacheTtl: targetUrl.pathname.endsWith('.xml') ? 900 : 3600, cacheEverything: true },
+      signal: AbortSignal.timeout(25000),
+    });
+    if (!upstream.ok) throw new Error(`BLVietsub upstream ${upstream.status}`);
+
+    const headers = new Headers(upstream.headers);
+    headers.set('Access-Control-Allow-Origin', '*');
+    headers.set('Cache-Control', targetUrl.pathname.endsWith('.xml') ? 'public, max-age=900, s-maxage=1800' : 'public, max-age=3600, s-maxage=86400');
+    headers.set('X-BLVietsub-Proxy', 'MISS');
+    headers.delete('Set-Cookie');
+
+    const response = new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers,
+    });
+    if (request.method === 'GET' && typeof caches !== 'undefined') {
+      contextWaitUntil(context, caches.default.put(cacheKey, response.clone()));
+    }
+    return response;
+  } catch (error) {
+    return new Response(error instanceof Error ? error.message : 'BLVietsub proxy failed', {
+      status: 502,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+        ...SECURITY_HEADERS,
+      },
+    });
+  }
+}
+
+function contextWaitUntil(context, promise) {
+  try {
+    if (context && typeof context.waitUntil === 'function') {
+      context.waitUntil(promise);
+      return;
+    }
+  } catch {
+    // Fall through to a regular awaited promise below.
+  }
+  return promise.catch(() => undefined);
+}
+
+function isLegacySitemapAlias(pathname) {
+  return (
+    pathname === '/xml' ||
+    pathname === '/sitemap_index.xml' ||
+    pathname === '/post-sitemap.xml' ||
+    pathname === '/page-sitemap.xml' ||
+    pathname === '/category-sitemap.xml' ||
+    pathname === '/movie-sitemap.xml'
+  );
 }
 
 export async function onRequest(context) {
@@ -469,9 +718,21 @@ export async function onRequest(context) {
     return Response.redirect(`${SITE_URL}${pathname}${url.search}`, 301);
   }
 
-  if (pathname === '/sitemap.xml' || pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic') {
-    const sitemapResponse = await proxySitemap(pathname, request);
+  if (
+    pathname === '/sitemap.xml' ||
+    isLegacySitemapAlias(pathname) ||
+    pathname === '/sitemap-movies.xml' ||
+    pathname === '/sitemap-movies-dynamic' ||
+    pathname === '/sitemap-movies-recent.xml' ||
+    pathname === '/sitemap-movies-upcoming.xml' ||
+    /^\/sitemap-movies-\d+\.xml$/.test(pathname)
+  ) {
+    const sitemapResponse = await proxySitemap(pathname, request, context);
     if (sitemapResponse) return sitemapResponse;
+  }
+
+  if (pathname === '/internal/blvietsub-proxy') {
+    return proxyBlvietsub(request, context);
   }
 
   if (isStaticAsset(pathname)) {

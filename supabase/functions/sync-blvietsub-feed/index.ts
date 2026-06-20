@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://blvietsub.com/ophim-sitemap.xml';
+const BLVIETSUB_PROXY_URL = Deno.env.get('BLVIETSUB_PROXY_URL') || 'https://khophim.org/internal/blvietsub-proxy';
 const SOURCE_SITE = 'blvietsub';
 const SOURCE_NAME = 'BLVietsub';
 const TAP_LABEL = 'T\u1eadp';
@@ -85,6 +86,19 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   });
+}
+
+function proxiedBlvietsubUrl(rawUrl: string): string {
+  if (!BLVIETSUB_PROXY_URL) return rawUrl;
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== 'https:' || url.hostname !== 'blvietsub.com') return rawUrl;
+    const proxy = new URL(BLVIETSUB_PROXY_URL);
+    proxy.searchParams.set('url', url.toString());
+    return proxy.toString();
+  } catch {
+    return rawUrl;
+  }
 }
 
 function normalizeText(value = ''): string {
@@ -519,19 +533,25 @@ function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: stri
 }
 
 async function fetchWordPressEntries(limit: number, offset: number): Promise<ParsedEntry[]> {
-  const response = await fetch(FEED_URL, {
+  const result = await fetchWordPressEntriesWithMeta(limit, offset);
+  return result.entries;
+}
+
+async function fetchWordPressEntriesWithMeta(limit: number, offset: number): Promise<{ entries: ParsedEntry[]; scanned: number; total: number }> {
+  const response = await fetch(proxiedBlvietsubUrl(FEED_URL), {
     headers: BLVIETSUB_HEADERS,
     signal: AbortSignal.timeout(25000),
   });
   if (!response.ok) throw new Error(`BLVietsub sitemap ${response.status}`);
-  const urls = parseWordPressSitemap(await response.text()).slice(offset, offset + limit);
+  const allUrls = parseWordPressSitemap(await response.text());
+  const urls = allUrls.slice(offset, offset + limit);
   const entries: ParsedEntry[] = [];
   const concurrency = 6;
   for (let index = 0; index < urls.length && entries.length < limit; index += concurrency) {
     const batch = urls.slice(index, index + concurrency);
     const parsed = await Promise.all(batch.map(async (item) => {
       try {
-        const page = await fetch(item.url, {
+      const page = await fetch(proxiedBlvietsubUrl(item.url), {
           headers: BLVIETSUB_HEADERS,
           signal: AbortSignal.timeout(20000),
         });
@@ -542,7 +562,7 @@ async function fetchWordPressEntries(limit: number, offset: number): Promise<Par
         const firstWatchUrl = movieSlug ? firstWordPressWatchUrl(html, movieSlug) : '';
         if (firstWatchUrl) {
           try {
-            const playerPage = await fetch(firstWatchUrl, {
+            const playerPage = await fetch(proxiedBlvietsubUrl(firstWatchUrl), {
               headers: BLVIETSUB_HEADERS,
               signal: AbortSignal.timeout(20000),
             });
@@ -562,12 +582,24 @@ async function fetchWordPressEntries(limit: number, offset: number): Promise<Par
       if (entries.length >= limit) break;
     }
   }
-  return entries;
+  return { entries, scanned: urls.length, total: allUrls.length };
 }
 
 async function fetchSourceEntries(limit: number, pageSize: number, offset: number): Promise<ParsedEntry[]> {
   if (/feeds\/posts\/default/i.test(FEED_URL)) return fetchBloggerEntries(limit, pageSize, offset);
   return fetchWordPressEntries(limit, offset);
+}
+
+async function fetchSourceEntriesWithMeta(limit: number, pageSize: number, offset: number): Promise<{ entries: ParsedEntry[]; scanned: number; total: number }> {
+  if (/feeds\/posts\/default/i.test(FEED_URL)) {
+    const entries = await fetchBloggerEntries(limit, pageSize, offset);
+    return {
+      entries,
+      scanned: entries.length,
+      total: offset + entries.length + (entries.length >= limit ? limit : 0),
+    };
+  }
+  return fetchWordPressEntriesWithMeta(limit, offset);
 }
 
 function findMovieForEntry(
@@ -747,6 +779,34 @@ async function refreshSearchIndex(supabaseUrl: string): Promise<boolean> {
   }
 }
 
+async function readCursorOffset(supabase: SupabaseClient, cursorKey: string, limit: number): Promise<number> {
+  if (!cursorKey) return 0;
+  const { data, error } = await supabase
+    .from('sync_cursors')
+    .select('page')
+    .eq('key', cursorKey)
+    .maybeSingle();
+  if (error) throw new Error(`sync_cursors select ${cursorKey}: ${error.message}`);
+  const page = Math.max(1, Number(data?.page || 1) || 1);
+  return (page - 1) * limit;
+}
+
+async function advanceCursor(
+  supabase: SupabaseClient,
+  cursorKey: string,
+  payload: { limit: number; offset: number; scanned: number; total: number },
+): Promise<void> {
+  if (!cursorKey) return;
+  const nextOffset = payload.total > 0 && payload.scanned > 0 && payload.offset + payload.scanned < payload.total
+    ? payload.offset + payload.limit
+    : 0;
+  const nextPage = Math.floor(nextOffset / payload.limit) + 1;
+  const { error } = await supabase
+    .from('sync_cursors')
+    .upsert({ key: cursorKey, page: nextPage, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  if (error) throw new Error(`sync_cursors upsert ${cursorKey}: ${error.message}`);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
@@ -766,13 +826,15 @@ serve(async (req) => {
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 2000), 5000));
   const pageSize = Math.max(1, Math.min(Number(url.searchParams.get('page_size') || 500), 500));
   const offset = Math.max(0, Number(url.searchParams.get('offset') || 0) || 0);
+  const useCursor = url.searchParams.get('use_cursor') === '1';
+  const cursorKey = url.searchParams.get('cursor_key') || 'blvietsub_sitemap_external';
   const supabase = createClient(supabaseUrl, serviceKey);
   const errors: string[] = [];
 
   try {
     const directUrl = url.searchParams.get('movie_url')?.trim();
     if (directUrl && /^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(directUrl)) {
-      const page = await fetch(directUrl, {
+      const page = await fetch(proxiedBlvietsubUrl(directUrl), {
         headers: BLVIETSUB_HEADERS,
         signal: AbortSignal.timeout(20000),
       });
@@ -782,7 +844,7 @@ serve(async (req) => {
       const firstWatchUrl = movieSlug ? firstWordPressWatchUrl(html, movieSlug) : '';
       let playerHtml = '';
       if (firstWatchUrl) {
-        const playerPage = await fetch(firstWatchUrl, {
+        const playerPage = await fetch(proxiedBlvietsubUrl(firstWatchUrl), {
           headers: BLVIETSUB_HEADERS,
           signal: AbortSignal.timeout(20000),
         });
@@ -800,7 +862,9 @@ serve(async (req) => {
       }, entry ? 200 : 404);
     }
 
-    const entries = await fetchSourceEntries(limit, pageSize, offset);
+    const effectiveOffset = useCursor ? await readCursorOffset(supabase, cursorKey, limit) : offset;
+    const sourceResult = await fetchSourceEntriesWithMeta(limit, pageSize, effectiveOffset);
+    const entries = sourceResult.entries;
     const entryIndexes = buildEntryIndexes(entries);
 
     const movieRows = await fetchExistingQueerMovies(supabase);
@@ -847,18 +911,31 @@ serve(async (req) => {
 
     const result = {
       success: errors.length === 0,
-      offset,
+      offset: effectiveOffset,
+      cursor_key: useCursor ? cursorKey : null,
+      next_cursor_enabled: useCursor,
+      total_urls: sourceResult.total,
+      source_scanned: sourceResult.scanned,
       feed_entries: entries.length,
       scanned: movieRows.length,
       matched,
       created,
-      missing,
+      missing_count: missing.length,
+      missing_sample: missing.slice(0, 20),
       inserted,
       updated,
       search_index_refreshed: searchIndexRefreshed,
       errors,
       elapsed_ms: Date.now() - started,
     };
+    if (useCursor) {
+      await advanceCursor(supabase, cursorKey, {
+        limit,
+        offset: effectiveOffset,
+        scanned: sourceResult.scanned,
+        total: sourceResult.total,
+      });
+    }
     await writeSyncLog(supabase, result);
     return json(result, errors.length ? 207 : 200);
   } catch (error) {

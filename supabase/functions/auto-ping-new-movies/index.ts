@@ -7,12 +7,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
  */
 
 interface PingRequest {
-  urls: string[];
-  type: 'URL_UPDATED' | 'URL_DELETED';
+  urls?: string[];
+  type?: 'URL_UPDATED' | 'URL_DELETED';
+  withinHours?: number;
+  limit?: number;
 }
 
 const GOOGLE_INDEXING_API = 'https://indexing.googleapis.com/v3/urlNotifications:publish';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const SITE_URL = 'https://khophim.org';
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowed = ['https://khophim.org', 'http://localhost:5173'];
@@ -29,6 +32,14 @@ function verifyAdminToken(req: Request): boolean {
   if (!auth.startsWith('Bearer ')) return false;
   const token = auth.slice(7).trim();
   return token.length > 20;
+}
+
+function verifyCronSecret(req: Request): boolean {
+  const expected = Deno.env.get('CRON_SECRET') || '';
+  if (!expected) return false;
+  const url = new URL(req.url);
+  const provided = url.searchParams.get('secret') || req.headers.get('x-cron-secret') || '';
+  return provided === expected;
 }
 
 async function checkRateLimit(supabase: ReturnType<typeof createClient>, ipHash: string, endpoint: string): Promise<{ ok: boolean }> {
@@ -156,31 +167,58 @@ async function pingGoogleIndexing(url: string, type: 'URL_UPDATED' | 'URL_DELETE
   return await response.json();
 }
 
-async function logPingResults(urls: string[], successful: number, failed: number) {
+function slugFromMovieUrl(url: string): string {
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    return decodeURIComponent(new URL(url).pathname.match(/^\/phim\/([^/]+)/)?.[1] || url);
+  } catch {
+    return url;
+  }
+}
 
-    if (!supabaseUrl || !supabaseServiceKey) return;
-
-    await fetch(`${supabaseUrl}/rest/v1/google_ping_logs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': supabaseServiceKey,
-        'Authorization': `Bearer ${supabaseServiceKey}`,
-      },
-      body: JSON.stringify({
-        urls_pinged: urls.length,
-        successful,
-        failed,
-        url_list: urls,
-        pinged_at: new Date().toISOString(),
-      }),
+async function logPingResults(
+  supabase: ReturnType<typeof createClient>,
+  urls: string[],
+  successful: number,
+  failed: number,
+  triggeredBy: string,
+  failedUrls: string[] = [],
+) {
+  try {
+    await supabase.from('google_ping_logs').insert({
+      run_at: new Date().toISOString(),
+      total_movies: urls.length,
+      pinged_ok: successful,
+      pinged_fail: failed,
+      failed_slugs: failedUrls.slice(0, 50).map(slugFromMovieUrl),
+      triggered_by: triggeredBy || 'manual',
     });
   } catch (e) {
     console.error('Failed to log ping results:', e);
   }
+}
+
+async function getRecentMovieUrls(
+  supabase: ReturnType<typeof createClient>,
+  withinHours = 26,
+  limit = 50,
+): Promise<string[]> {
+  const safeHours = Math.max(1, Math.min(Number(withinHours || 26), 168));
+  const safeLimit = Math.max(1, Math.min(Number(limit || 50), 100));
+  const since = new Date(Date.now() - safeHours * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('movies')
+    .select('slug')
+    .eq('is_published', true)
+    .not('slug', 'is', null)
+    .gte('updated_at', since)
+    .order('updated_at', { ascending: false })
+    .limit(safeLimit);
+
+  if (error) throw new Error(`movies select for Google ping: ${error.message}`);
+  return Array.from(new Set((data || [])
+    .map((row: { slug?: string }) => String(row.slug || '').trim())
+    .filter(Boolean)
+    .map((slug) => `${SITE_URL}/phim/${encodeURIComponent(slug)}`)));
 }
 
 serve(async (req) => {
@@ -195,7 +233,7 @@ serve(async (req) => {
     const triggeredBy = req.headers.get('x-triggered-by') ?? '';
     // Cron jobs (from Supabase) don't send admin tokens but have their own auth
     // Only enforce admin token for manual triggers from the browser
-    const isCron = triggeredBy.includes('cron') || !triggeredBy;
+    const isCron = triggeredBy.includes('cron') && verifyCronSecret(req);
     if (!isCron && !verifyAdminToken(req)) {
       return new Response(JSON.stringify({ error: 'Unauthorized – admin login required' }), {
         status: 401,
@@ -203,29 +241,29 @@ serve(async (req) => {
       });
     }
 
-    const clientEmail = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
-    const privateKey = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY');
-
-    if (!clientEmail || !privateKey) {
-      return new Response(
-        JSON.stringify({ error: 'Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_SERVICE_ACCOUNT_KEY in secrets' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { urls, type = 'URL_UPDATED' }: PingRequest = await req.json();
-
-    if (!urls || !Array.isArray(urls) || urls.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid request: urls array required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+
+    const body = await req.json().catch(() => ({})) as PingRequest;
+    const type = body.type || 'URL_UPDATED';
+    let urls = Array.isArray(body.urls) ? body.urls : [];
+    if (urls.length === 0) {
+      urls = await getRecentMovieUrls(supabase, body.withinHours || 26, body.limit || 50);
+    }
+
+    urls = Array.from(new Set(urls
+      .map((item) => String(item || '').trim())
+      .filter((item) => item.startsWith(`${SITE_URL}/phim/`))))
+      .slice(0, 100);
+
+    if (urls.length === 0) {
+      return new Response(
+        JSON.stringify({ success: true, message: 'No movie URLs to ping', urls: [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // ─── Rate Limit (stricter for Google API) ───
     const clientIp = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown';
@@ -238,6 +276,23 @@ serve(async (req) => {
       });
     }
 
+    const clientEmail = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+    const privateKey = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY');
+
+    if (!clientEmail || !privateKey) {
+      await logPingResults(supabase, urls, 0, urls.length, triggeredBy || 'cron-missing-credentials', urls);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          status: 'credentials_missing',
+          message: 'Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_SERVICE_ACCOUNT_KEY in Supabase Secrets',
+          queued_urls: urls.length,
+          sample_urls: urls.slice(0, 5),
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const accessToken = await getGoogleAccessToken(clientEmail, privateKey);
 
     const results = await Promise.allSettled(
@@ -245,9 +300,12 @@ serve(async (req) => {
     );
 
     const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    const failedResults = results
+      .map((result, index) => ({ result, url: urls[index] }))
+      .filter(({ result }) => result.status === 'rejected');
+    const failed = failedResults.length;
 
-    await logPingResults(urls, successful, failed);
+    await logPingResults(supabase, urls, successful, failed, triggeredBy || 'manual', failedResults.map((item) => item.url));
 
     return new Response(
       JSON.stringify({
@@ -255,7 +313,7 @@ serve(async (req) => {
         message: `Pinged ${urls.length} URLs to Google`,
         successful,
         failed,
-        urls,
+        sample_urls: urls.slice(0, 10),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

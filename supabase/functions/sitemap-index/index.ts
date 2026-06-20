@@ -16,6 +16,30 @@ Deno.serve(() => {
     <loc>https://khophim.org/sitemap-movies.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-recent.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-upcoming.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-1.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-2.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-3.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-4.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
 </sitemapindex>`;
 
   return new Response(xml, {
