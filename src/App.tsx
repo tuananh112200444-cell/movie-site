@@ -126,7 +126,9 @@ function AnimatedContent() {
       style={{ paddingTop: 'var(--kp-header-height, 140px)' }}
     >
       <SkipToContent />
-      <AppRoutes />
+      <div id="main-content" tabIndex={-1}>
+        <AppRoutes />
+      </div>
     </div>
   );
 }

@@ -83,10 +83,10 @@ function Footer() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {STATS.map(({ value, label }) => (
               <div key={label} className="flex flex-col items-center gap-1 text-center group">
-                <span className="text-xl md:text-2xl font-black text-white tracking-tight group-hover:text-red-400 transition-colors duration-300">
+                <span className="text-xl md:text-2xl font-black text-white tracking-tight group-hover:text-red-300 transition-colors duration-300">
                   {value}
                 </span>
-                <span className="text-[11px] text-white/30 font-medium uppercase tracking-wider">{label}</span>
+                <span className="text-[11px] text-white/55 font-medium uppercase tracking-wider">{label}</span>
               </div>
             ))}
           </div>
@@ -109,21 +109,21 @@ function Footer() {
                 <span className="font-black text-lg sm:text-xl tracking-tight">
                   <span className="text-white">Kho</span><span className="text-red-500">Phim</span>
                 </span>
-                <span className="text-[9px] text-white/30 font-medium tracking-[0.15em] uppercase">Cinematic Experience</span>
+                <span className="text-[9px] text-white/55 font-medium tracking-[0.15em] uppercase">Cinematic Experience</span>
               </div>
             </div>
-            <p className="text-white/40 text-sm leading-relaxed mb-2">
+            <p className="text-white/60 text-sm leading-relaxed mb-2">
               <span className="text-white/60 font-medium">KhoPhim</span> — kho phim online miễn phí lớn nhất Việt Nam.
             </p>
-            <p className="text-white/30 text-xs leading-relaxed mb-4 sm:mb-5">
-              Truy cập <a href="https://khophim.org" className="text-red-400/70 hover:text-red-400 transition-colors">khophim.org</a> để xem hơn 50,000 bộ phim vietsub HD, Full HD không quảng cáo, cập nhật hàng ngày.
+            <p className="text-white/55 text-xs leading-relaxed mb-4 sm:mb-5">
+              Truy cập <a href="https://khophim.org" className="text-red-300 underline decoration-red-300/60 underline-offset-2 hover:text-red-300 transition-colors">khophim.org</a> để xem hơn 50,000 bộ phim vietsub HD, Full HD không quảng cáo, cập nhật hàng ngày.
             </p>
 
             {/* Quick search box */}
             <Link to="/search"
               className="flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5 mb-4 sm:mb-5 hover:border-red-500/30 hover:bg-white/[0.07] transition-all group cursor-pointer active:scale-[0.98]">
-              <i className="ri-search-line text-sm text-white/30 group-hover:text-red-400 transition-colors" />
-              <span className="text-[13px] text-white/30 group-hover:text-white/60 transition-colors">Tìm kiếm phim...</span>
+              <i className="ri-search-line text-sm text-white/55 group-hover:text-red-300 transition-colors" />
+              <span className="text-[13px] text-white/55 group-hover:text-white/80 transition-colors">Tìm kiếm phim...</span>
             </Link>
 
             {/* Social */}
@@ -131,7 +131,7 @@ function Footer() {
               {SOCIAL_LINKS.map(({ href, icon, label, color }) => (
                 <a key={href} href={href} target="_blank" rel="noopener noreferrer nofollow"
                   title={label}
-                  className={`w-9 h-9 flex items-center justify-center bg-white/[0.04] text-white/40 border border-white/[0.06] rounded-xl transition-all cursor-pointer active:scale-90 active:opacity-70 ${color}`}>
+                  className={`w-9 h-9 flex items-center justify-center bg-white/[0.04] text-white/60 border border-white/[0.06] rounded-xl transition-all cursor-pointer active:scale-90 active:opacity-70 ${color}`}>
                   <i className={`${icon} text-sm`} />
                   <span className="sr-only">{label}</span>
                 </a>
@@ -149,9 +149,9 @@ function Footer() {
               {CAT_LINKS.map((item) => (
                 <li key={item.to}>
                   <Link to={item.to}
-                    className="text-[12px] sm:text-[13px] text-white/40 hover:text-red-400 active:text-red-400 transition-colors flex items-center gap-2 group active:scale-[0.98]">
+                    className="text-[12px] sm:text-[13px] text-white/60 hover:text-red-300 active:text-red-300 transition-colors flex items-center gap-2 group active:scale-[0.98]">
                     <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                      <i className={`${item.icon} text-[10px] sm:text-xs text-white/20 group-hover:text-red-400 transition-colors`} />
+                      <i className={`${item.icon} text-[10px] sm:text-xs text-white/45 group-hover:text-red-300 transition-colors`} />
                     </span>
                     {item.label}
                   </Link>
@@ -170,7 +170,7 @@ function Footer() {
               {COUNTRY_LINKS.map((item) => (
                 <li key={item.to}>
                   <Link to={item.to}
-                    className="text-[12px] sm:text-[13px] text-white/40 hover:text-red-400 active:text-red-400 transition-colors flex items-center gap-2.5 group active:scale-[0.98]">
+                    className="text-[12px] sm:text-[13px] text-white/60 hover:text-red-300 active:text-red-300 transition-colors flex items-center gap-2.5 group active:scale-[0.98]">
                     <span className="text-sm sm:text-base leading-none">{item.flag}</span>
                     {item.label}
                   </Link>
@@ -189,9 +189,9 @@ function Footer() {
               {GENRE_LINKS.map((item) => (
                 <li key={item.to}>
                   <Link to={item.to}
-                    className="text-[12px] sm:text-[13px] text-white/40 hover:text-red-400 active:text-red-400 transition-colors flex items-center gap-2 group active:scale-[0.98]">
+                    className="text-[12px] sm:text-[13px] text-white/60 hover:text-red-300 active:text-red-300 transition-colors flex items-center gap-2 group active:scale-[0.98]">
                     <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                      <i className={`${item.icon} text-[10px] sm:text-xs text-white/20 group-hover:text-red-400 transition-colors`} />
+                      <i className={`${item.icon} text-[10px] sm:text-xs text-white/45 group-hover:text-red-300 transition-colors`} />
                     </span>
                     {item.label}
                   </Link>
@@ -208,9 +208,9 @@ function Footer() {
               {SEO_LANDING_LINKS.map((item) => (
                 <li key={item.to}>
                   <Link to={item.to}
-                    className="text-[12px] sm:text-[13px] text-white/40 hover:text-amber-400 active:text-amber-400 transition-colors flex items-center gap-2 group active:scale-[0.98]">
+                    className="text-[12px] sm:text-[13px] text-white/60 hover:text-amber-300 active:text-amber-300 transition-colors flex items-center gap-2 group active:scale-[0.98]">
                     <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                      <i className={`${item.icon} text-[10px] sm:text-xs text-white/20 group-hover:text-amber-400 transition-colors`} />
+                      <i className={`${item.icon} text-[10px] sm:text-xs text-white/45 group-hover:text-amber-300 transition-colors`} />
                     </span>
                     {item.label}
                   </Link>
@@ -220,7 +220,7 @@ function Footer() {
 
             {/* Disclaimer */}
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-2.5 sm:p-3">
-              <p className="text-[10px] sm:text-[11px] text-white/25 leading-relaxed">
+              <p className="text-[10px] sm:text-[11px] text-white/55 leading-relaxed">
                 Nội dung được tổng hợp từ các nguồn công khai. Chúng tôi không lưu trữ bất kỳ tệp bản quyền nào trên máy chủ.
               </p>
             </div>
@@ -231,24 +231,24 @@ function Footer() {
       {/* Bottom bar */}
       <div className="border-t border-white/[0.04]">
         <div className="mx-auto flex max-w-[1760px] flex-col items-center justify-between gap-3 px-6 py-4 sm:flex-row lg:px-8 2xl:px-10">
-          <p className="text-[12px] text-white/25 font-medium">
-            © 2026 <span className="text-white/40">KhoPhim</span> · Tất cả quyền được bảo lưu.
+          <p className="text-[12px] text-white/55 font-medium">
+            © 2026 <span className="text-white/60">KhoPhim</span> · Tất cả quyền được bảo lưu.
           </p>
           <div className="flex items-center gap-4 flex-wrap justify-center">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 flex items-center justify-center">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse inline-block" />
               </span>
-              <span className="text-[11px] text-white/25">Hệ thống hoạt động bình thường</span>
+              <span className="text-[11px] text-white/55">Hệ thống hoạt động bình thường</span>
             </div>
-            <div className="flex items-center gap-3 text-[11px] text-white/20">
-              <Link to="/about" className="hover:text-white/50 transition-colors">Giới Thiệu</Link>
+            <div className="flex items-center gap-3 text-[11px] text-white/45">
+              <Link to="/about" className="hover:text-white/80 transition-colors">Giới Thiệu</Link>
               <span>·</span>
-              <Link to="/policy" className="hover:text-white/50 transition-colors">Chính Sách</Link>
+              <Link to="/policy" className="hover:text-white/80 transition-colors">Chính Sách</Link>
               <span>·</span>
-              <Link to="/policy" className="hover:text-white/50 transition-colors">Điều Khoản</Link>
+              <Link to="/policy" className="hover:text-white/80 transition-colors">Điều Khoản</Link>
               <span>·</span>
-              <Link to="/policy#dmca" className="hover:text-white/50 transition-colors">DMCA</Link>
+              <Link to="/policy#dmca" className="hover:text-white/80 transition-colors">DMCA</Link>
             </div>
           </div>
         </div>

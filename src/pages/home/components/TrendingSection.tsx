@@ -171,6 +171,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
         {/* Prev */}
         <button
           onClick={() => scroll('left')}
+          aria-label="Cuộn danh sách phim thịnh hành sang trái"
           className={`
             absolute left-0 top-1/2 -translate-y-1/2 z-20
             w-9 h-9 md:w-10 md:h-10 rounded-full
@@ -190,6 +191,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
         {/* Next */}
         <button
           onClick={() => scroll('right')}
+          aria-label="Cuộn danh sách phim thịnh hành sang phải"
           className={`
             absolute right-0 top-1/2 -translate-y-1/2 z-20
             w-9 h-9 md:w-10 md:h-10 rounded-full
