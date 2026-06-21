@@ -97,6 +97,11 @@ const STATIC_META = {
     description: 'Xem phim ma, phim kinh di, giat gan, tam linh va thriller vietsub HD cap nhat moi tren KhoPhim.',
     h1: 'Phim ma va kinh di vietsub HD',
   },
+  '/vu-tru-dam-my': {
+    title: 'Vu Tru Dam My / BL / GL Vietsub HD | KhoPhim',
+    description: 'Khong gian phim Dam My, BL, GL va Bach Hop vietsub HD tren KhoPhim, cap nhat phim moi va tap moi tu BLVietsub.',
+    h1: 'Vu Tru Dam My / BL / GL vietsub HD',
+  },
   '/tv-shows': {
     title: 'TV Shows Vietsub HD - Show Truyen Hinh Moi | KhoPhim',
     description: 'Xem TV shows vietsub HD, reality show, series truyen hinh va show giai tri cap nhat hang ngay tren KhoPhim.',
@@ -152,6 +157,7 @@ const PRERENDER_PATHS = [
   /^\/anime(\/|$)/,
   /^\/my-nam(\/|$)/,
   /^\/phim-ma(\/|$)/,
+  /^\/vu-tru-dam-my(\/|$)/,
   /^\/tv-shows(\/|$)/,
   /^\/phim-sap-chieu(\/|$)/,
   /^\/phim-han-quoc(\/|$)/,
@@ -632,9 +638,10 @@ async function proxyBlvietsub(request, context) {
   }
 
   const targetUrl = new URL(target);
+  const fresh = url.searchParams.get('fresh') === '1' || url.searchParams.get('fresh') === 'true';
   const cacheKey = new Request(targetUrl.toString(), { method: 'GET' });
   try {
-    if (request.method === 'GET' && typeof caches !== 'undefined') {
+    if (!fresh && request.method === 'GET' && typeof caches !== 'undefined') {
       const cached = await caches.default.match(cacheKey);
       if (cached) {
         const headers = new Headers(cached.headers);
@@ -661,8 +668,9 @@ async function proxyBlvietsub(request, context) {
 
     const headers = new Headers(upstream.headers);
     headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Cache-Control', targetUrl.pathname.endsWith('.xml') ? 'public, max-age=900, s-maxage=1800' : 'public, max-age=3600, s-maxage=86400');
+    headers.set('Cache-Control', fresh ? 'no-store' : (targetUrl.pathname.endsWith('.xml') ? 'public, max-age=300, s-maxage=600' : 'public, max-age=300, s-maxage=900'));
     headers.set('X-BLVietsub-Proxy', 'MISS');
+    if (fresh) headers.set('X-BLVietsub-Proxy-Fresh', '1');
     headers.delete('Set-Cookie');
 
     const response = new Response(upstream.body, {
@@ -670,7 +678,7 @@ async function proxyBlvietsub(request, context) {
       statusText: upstream.statusText,
       headers,
     });
-    if (request.method === 'GET' && typeof caches !== 'undefined') {
+    if (!fresh && request.method === 'GET' && typeof caches !== 'undefined') {
       contextWaitUntil(context, caches.default.put(cacheKey, response.clone()));
     }
     return response;

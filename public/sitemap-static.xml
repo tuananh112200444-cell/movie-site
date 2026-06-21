@@ -66,6 +66,30 @@
     <changefreq>daily</changefreq>
     <priority>0.85</priority>
   </url>
+  <url>
+    <loc>https://khophim.org/anime</loc>
+    <lastmod>2026-06-21</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://khophim.org/my-nam</loc>
+    <lastmod>2026-06-21</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.86</priority>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim-ma</loc>
+    <lastmod>2026-06-21</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.86</priority>
+  </url>
+  <url>
+    <loc>https://khophim.org/vu-tru-dam-my</loc>
+    <lastmod>2026-06-21</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
 
   <!-- ═══ PHIM THEO QUỐC GIA ═══ -->
   <url>

@@ -41,6 +41,7 @@
     "dev": "vite",
     "seo:audit": "node scripts/seo-audit.mjs",
     "seo:generate": "node scripts/generate-seo-sitemap.mjs",
+    "watch:test": "node scripts/watch-page-regression.mjs",
     "search:test": "node scripts/search-regression.mjs",
     "sync:blvietsub": "node scripts/sync-blvietsub-external.mjs",
     "sync:blvietsub:dry": "node scripts/sync-blvietsub-external.mjs --dry-run",
