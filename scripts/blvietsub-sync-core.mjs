@@ -79,39 +79,95 @@ function getMovieSlug(movieUrl = '') {
   return String(movieUrl).match(/\/phim\/([^/]+)\/?$/i)?.[1] || '';
 }
 
-function parseEpisodes(html = '', movieSlug = '') {
+function normalizeBlvietsubWatchUrl(rawLink = '') {
+  let link = String(rawLink || '').replace(/^http:\/\//i, 'https://').replace(/&amp;/g, '&').trim();
+  if (!link) return '';
+  if (link.startsWith('//')) link = `https:${link}`;
+  if (link.startsWith('/')) link = `https://blvietsub.com${link}`;
+  if (!/^https?:\/\//i.test(link)) link = `https://blvietsub.com/${link.replace(/^\/+/, '')}`;
+  return link;
+}
+
+function isBlvietsubWatchUrl(url = '') {
+  try {
+    const parsed = new URL(String(url || '').replace(/&amp;/g, '&'));
+    return /(^|\.)blvietsub\.com$/i.test(parsed.hostname) && /\/+xem-phim\//i.test(parsed.pathname);
+  } catch {
+    return /blvietsub\.com\/+xem-phim\//i.test(String(url || ''));
+  }
+}
+
+function extractAttr(tag = '', name = '') {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return decodeHtml(tag.match(new RegExp(`${escaped}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1] || '').trim();
+}
+
+function addParsedEpisode(episodes, episodeNumber, serverNumber, rawLink, type = 'embed') {
+  if (!episodeNumber) return;
+  const link = decodeHtml(String(rawLink || '').replace(/&amp;/g, '&')).trim();
+  if (!link || isBlvietsubWatchUrl(link)) return;
+  try {
+    new URL(link);
+  } catch {
+    return;
+  }
+  const serverName = `SV ${serverNumber || 1}`;
+  const key = `${serverName}|${episodeNumber}`;
+  if (episodes.has(key)) return;
+  const isHls = type.toLowerCase() === 'm3u8' || /\.m3u8(?:[?#].*)?$/i.test(link);
+  episodes.set(key, {
+    episode_number: episodeNumber,
+    episode_name: `${TAP_LABEL} ${episodeNumber}`,
+    slug: `tap-${episodeNumber}`,
+    server_name: serverName,
+    link_embed: isHls ? '' : link,
+    link_m3u8: isHls ? link : '',
+  });
+}
+
+function parseStreamingServerEpisodes(html = '') {
   const episodes = new Map();
+  const perEpisodeCount = new Map();
+  for (const match of html.matchAll(/<[^>]+class=["'][^"']*\bstreaming-server\b[^"']*["'][^>]*>/gi)) {
+    const tag = match[0];
+    const link = extractAttr(tag, 'data-link');
+    const type = extractAttr(tag, 'data-type') || 'embed';
+    const episodeId = extractAttr(tag, 'data-id');
+    const episodeNumber = Number(episodeId.match(/\d+/)?.[0] || 0);
+    if (!episodeNumber || !link) continue;
+    const nextServer = (perEpisodeCount.get(episodeNumber) || 0) + 1;
+    perEpisodeCount.set(episodeNumber, nextServer);
+    addParsedEpisode(episodes, episodeNumber, nextServer, link, type);
+  }
+  return episodes;
+}
+
+function getWatchUrls(html = '', movieSlug = '') {
+  const urls = new Map();
   if (!movieSlug) return [];
   const escapedSlug = movieSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const absolutePattern = new RegExp(`https?:\\/\\/blvietsub\\.com\\/+(?:xem-phim)\\/${escapedSlug}\\/tap-([0-9]+)-sv-([0-9]+)`, 'gi');
   const relativePattern = new RegExp(`(?:^|["'\\s])((?:\\/\\/?)?xem-phim\\/${escapedSlug}\\/tap-([0-9]+)-sv-([0-9]+))`, 'gi');
 
-  const addEpisode = (episodeNumber, serverNumber, rawLink) => {
+  const addUrl = (episodeNumber, serverNumber, rawLink) => {
     if (!episodeNumber) return;
-    const serverName = `SV ${serverNumber || 1}`;
-    let link = String(rawLink || '').replace(/^http:\/\//i, 'https://').replace(/&amp;/g, '&');
-    if (link.startsWith('//')) link = `https:${link}`;
-    if (link.startsWith('/')) link = `https://blvietsub.com${link}`;
-    if (!/^https?:\/\//i.test(link)) link = `https://blvietsub.com/${link.replace(/^\/+/, '')}`;
-    const key = `${serverName}|${episodeNumber}`;
-    if (episodes.has(key)) return;
-    episodes.set(key, {
-      episode_number: episodeNumber,
-      episode_name: `${TAP_LABEL} ${episodeNumber}`,
-      slug: `tap-${episodeNumber}`,
-      server_name: serverName,
-      link_embed: link,
-    });
+    const link = normalizeBlvietsubWatchUrl(rawLink);
+    if (!link) return;
+    urls.set(`${episodeNumber}|${serverNumber || 1}`, { episodeNumber, serverNumber: serverNumber || 1, url: link });
   };
 
-  for (const match of html.matchAll(absolutePattern)) addEpisode(Number(match[1] || 0), Number(match[2] || 1), match[0]);
-  for (const match of html.matchAll(relativePattern)) addEpisode(Number(match[2] || 0), Number(match[3] || 1), match[1]);
+  for (const match of html.matchAll(absolutePattern)) addUrl(Number(match[1] || 0), Number(match[2] || 1), match[0]);
+  for (const match of html.matchAll(relativePattern)) addUrl(Number(match[2] || 0), Number(match[3] || 1), match[1]);
+  return [...urls.values()].sort((a, b) => a.episodeNumber - b.episodeNumber || a.serverNumber - b.serverNumber);
+}
 
+function parseEpisodes(html = '', movieSlug = '') {
+  const episodes = parseStreamingServerEpisodes(html);
   return [...episodes.values()].sort((a, b) => a.episode_number - b.episode_number || a.server_name.localeCompare(b.server_name));
 }
 
 function firstWatchUrl(html, movieSlug) {
-  return parseEpisodes(html, movieSlug)[0]?.link_embed || '';
+  return getWatchUrls(html, movieSlug)[0]?.url || '';
 }
 
 async function fetchText(url, timeoutMs = 25000) {
@@ -161,15 +217,20 @@ export function parseMoviePage(movieUrl, updatedAt, html, playerHtml = '') {
 export async function fetchMovieEntry(movieUrl, updatedAt = '') {
   const html = await fetchText(movieUrl, 22000);
   const movieSlug = getMovieSlug(movieUrl);
-  const watchUrl = firstWatchUrl(html, movieSlug);
-  let playerHtml = '';
-  if (watchUrl) {
-    try {
-      playerHtml = await fetchText(watchUrl, 22000);
-    } catch {
-      playerHtml = '';
-    }
+  const watchUrls = getWatchUrls(html, movieSlug).slice(0, 120);
+  const playerPages = [];
+  for (let index = 0; index < watchUrls.length; index += 4) {
+    const batch = watchUrls.slice(index, index + 4);
+    const pages = await Promise.all(batch.map(async (item) => {
+      try {
+        return await fetchText(item.url, 22000);
+      } catch {
+        return '';
+      }
+    }));
+    playerPages.push(...pages.filter(Boolean));
   }
+  const playerHtml = playerPages.join('\n');
   return parseMoviePage(movieUrl, updatedAt, html, playerHtml);
 }
 
@@ -313,12 +374,12 @@ async function updateMovie(supabase, movie, entry) {
 async function insertMissingEpisodes(supabase, movie, entry) {
   const { data, error } = await supabase
     .from('movie_episodes')
-    .select('episode_number, server_name')
+    .select('id, episode_number, server_name, link_embed, link_m3u8')
     .eq('movie_id', movie.id)
     .eq('source', SOURCE_SITE);
   if (error) throw new Error(`movie_episodes select ${movie.slug}: ${error.message}`);
 
-  const existing = new Set((data || []).map((row) => `${String(row.server_name || '').trim()}|${Number(row.episode_number || 0)}`));
+  const existing = new Map((data || []).map((row) => [`${String(row.server_name || '').trim()}|${Number(row.episode_number || 0)}`, row]));
   const rows = entry.episodes
     .filter((episode) => !existing.has(`${episode.server_name}|${episode.episode_number}`))
     .map((episode) => ({
@@ -327,7 +388,7 @@ async function insertMissingEpisodes(supabase, movie, entry) {
       episode_name: episode.episode_name,
       slug: episode.slug,
       server_name: episode.server_name,
-      link_m3u8: '',
+      link_m3u8: episode.link_m3u8 || '',
       link_embed: episode.link_embed,
       subtitle_url: '',
       thumbnail_url: '',
@@ -335,10 +396,28 @@ async function insertMissingEpisodes(supabase, movie, entry) {
       source: SOURCE_SITE,
       is_backup: false,
     }));
-  if (rows.length === 0) return 0;
-  const { error: insertError } = await supabase.from('movie_episodes').insert(rows);
-  if (insertError) throw new Error(`movie_episodes insert ${movie.slug}: ${insertError.message}`);
-  return rows.length;
+  let repaired = 0;
+  for (const episode of entry.episodes) {
+    const row = existing.get(`${episode.server_name}|${episode.episode_number}`);
+    if (!row) continue;
+    const nextEmbed = episode.link_embed || '';
+    const nextHls = episode.link_m3u8 || '';
+    const currentEmbed = String(row.link_embed || '');
+    const currentHls = String(row.link_m3u8 || '');
+    if (!isBlvietsubWatchUrl(currentEmbed) && (currentEmbed || currentHls)) continue;
+    if (currentEmbed === nextEmbed && currentHls === nextHls) continue;
+    const { error: updateError } = await supabase
+      .from('movie_episodes')
+      .update({ link_embed: nextEmbed, link_m3u8: nextHls })
+      .eq('id', row.id);
+    if (updateError) throw new Error(`movie_episodes repair ${movie.slug}: ${updateError.message}`);
+    repaired += 1;
+  }
+  if (rows.length > 0) {
+    const { error: insertError } = await supabase.from('movie_episodes').insert(rows);
+    if (insertError) throw new Error(`movie_episodes insert ${movie.slug}: ${insertError.message}`);
+  }
+  return rows.length + repaired;
 }
 
 async function writeSyncLog(supabase, payload) {
