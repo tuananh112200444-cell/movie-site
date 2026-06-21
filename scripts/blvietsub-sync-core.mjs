@@ -217,13 +217,22 @@ export function parseMoviePage(movieUrl, updatedAt, html, playerHtml = '') {
 export async function fetchMovieEntry(movieUrl, updatedAt = '') {
   const html = await fetchText(movieUrl, 22000);
   const movieSlug = getMovieSlug(movieUrl);
-  const watchUrls = getWatchUrls(html, movieSlug).slice(0, 120);
+  const watchUrls = getWatchUrls(html, movieSlug);
   const playerPages = [];
-  for (let index = 0; index < watchUrls.length; index += 4) {
-    const batch = watchUrls.slice(index, index + 4);
+  const seenWatchUrls = new Set();
+  for (let index = 0; index < watchUrls.length && index < 120; index += 4) {
+    const batch = watchUrls.slice(index, Math.min(index + 4, 120)).filter((item) => {
+      if (seenWatchUrls.has(item.url)) return false;
+      seenWatchUrls.add(item.url);
+      return true;
+    });
     const pages = await Promise.all(batch.map(async (item) => {
       try {
-        return await fetchText(item.url, 22000);
+        const page = await fetchText(item.url, 22000);
+        for (const discovered of getWatchUrls(page, movieSlug)) {
+          if (!seenWatchUrls.has(discovered.url) && watchUrls.length < 120) watchUrls.push(discovered);
+        }
+        return page;
       } catch {
         return '';
       }
