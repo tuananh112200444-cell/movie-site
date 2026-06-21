@@ -194,6 +194,31 @@ export default function MovieDetailPage() {
     return filteredEpisodes.length > 0 && filteredEpisodes.some((s) => (s.server_data?.length ?? 0) > 0);
   }, [filteredEpisodes]);
 
+  useEffect(() => {
+    if (!hasEpisodes) return;
+    void import('./components/LightweightHlsPlayer');
+
+    const firstPlayableUrl = filteredEpisodes
+      .flatMap((server) => server.server_data ?? [])
+      .find((ep) => hasPlayableUrl(ep))?.link_m3u8;
+    if (!firstPlayableUrl) return;
+
+    try {
+      const origin = new URL(firstPlayableUrl).origin;
+      const existing = document.querySelector<HTMLLinkElement>(`link[rel="preconnect"][href="${origin}"]`);
+      if (existing) return;
+
+      const link = document.createElement('link');
+      link.rel = 'preconnect';
+      link.href = origin;
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+      return () => link.remove();
+    } catch {
+      return;
+    }
+  }, [filteredEpisodes, hasEpisodes]);
+
   const activeFilteredIndex = useMemo(() => {
     if (!detail?.episodes || activeServer < 0) return -1;
     const activeSrv = detail.episodes[activeServer];

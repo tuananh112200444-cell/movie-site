@@ -21,6 +21,8 @@ interface HlsQualityLevel {
 }
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
+const MAX_STREAM_RECOVERY_ATTEMPTS = 5;
+const STALL_RECOVERY_DELAY_MS = 5000;
 
 function fmtTime(s: number): string {
   if (!isFinite(s) || s < 0) return '0:00';
@@ -30,6 +32,47 @@ function fmtTime(s: number): string {
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
+
+function getBufferedAhead(video: HTMLVideoElement): number {
+  for (let i = 0; i < video.buffered.length; i++) {
+    if (video.buffered.start(i) <= video.currentTime && video.currentTime <= video.buffered.end(i)) {
+      return video.buffered.end(i) - video.currentTime;
+    }
+  }
+  return 0;
+}
+
+function pickStableStartLevel(levels: Hls['levels']): number {
+  if (!levels.length) return -1;
+  const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 768;
+  const maxHeight = isSmallScreen ? 720 : 1080;
+  const maxBitrate = isSmallScreen ? 2_800_000 : 4_500_000;
+  let bestIndex = 0;
+  let bestScore = 0;
+
+  levels.forEach((level, index) => {
+    const height = level.height || 0;
+    const bitrate = level.bitrate || 0;
+    if ((height && height > maxHeight) || (bitrate && bitrate > maxBitrate)) return;
+    const score = height * 10_000 + bitrate;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
+}
+
+function capToLowerAutoLevel(hls: Hls): boolean {
+  if (hls.levels.length <= 1) return false;
+  const current = hls.currentLevel >= 0 ? hls.currentLevel : hls.nextLoadLevel;
+  const next = Math.max(0, (current > 0 ? current : hls.levels.length - 1) - 1);
+  hls.autoLevelCapping = next;
+  hls.nextLevel = next;
+  return true;
+}
+
 function srtToVtt(text: string): string {
   const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const body = normalized
@@ -55,8 +98,10 @@ export default function LightweightHlsPlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTimeRef = useRef(0);
   const fatalRetryRef = useRef(0);
+  const streamRecoveryRef = useRef(0);
   const pseudoFsRef = useRef(false);
 
   const [loaded, setLoaded] = useState(false);
@@ -174,19 +219,36 @@ export default function LightweightHlsPlayer({
     setErrorMsg('');
     setIsBuffering(false);
     fatalRetryRef.current = 0;
+    streamRecoveryRef.current = 0;
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = null;
+    }
 
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
-        maxBufferLength: 15,
-        maxMaxBufferLength: 30,
-        maxBufferSize: 15_000_000,
+        maxBufferLength: 45,
+        maxMaxBufferLength: 90,
+        maxBufferSize: 70_000_000,
+        backBufferLength: 30,
+        maxBufferHole: 0.75,
+        nudgeOffset: 0.1,
+        nudgeMaxRetry: 5,
         capLevelToPlayerSize: true,
         startLevel: -1,
-        fragLoadingTimeOut: 12000,
-        manifestLoadingTimeOut: 8000,
-        levelLoadingTimeOut: 8000,
+        testBandwidth: true,
+        fragLoadingTimeOut: 20000,
+        manifestLoadingTimeOut: 10000,
+        levelLoadingTimeOut: 10000,
+        fragLoadingMaxRetry: 6,
+        manifestLoadingMaxRetry: 4,
+        levelLoadingMaxRetry: 4,
+        fragLoadingRetryDelay: 1000,
+        levelLoadingRetryDelay: 1000,
+        manifestLoadingRetryDelay: 1000,
+        fragLoadingMaxRetryTimeout: 8000,
       });
       hlsRef.current = hls;
 
@@ -205,7 +267,12 @@ export default function LightweightHlsPlayer({
           .filter((level) => level.height > 0 || level.bitrate > 0)
           .sort((a, b) => b.height - a.height || b.bitrate - a.bitrate);
         setLevels(parsedLevels);
-        setSelectedLevel(hls.currentLevel);
+        const startLevel = pickStableStartLevel(hls.levels);
+        if (startLevel >= 0) {
+          hls.startLevel = startLevel;
+          hls.nextLevel = startLevel;
+        }
+        setSelectedLevel(-1);
         setLoaded(true);
         video.playbackRate = playbackRate;
         if (initialTime > 0) video.currentTime = initialTime;
@@ -213,11 +280,27 @@ export default function LightweightHlsPlayer({
       });
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) {
+          const details = String(data.details || '');
+          if (data.type === 'networkError' && /frag|level|manifest/i.test(details)) {
+            setIsBuffering(true);
+            setErrorMsg('Đang tải lại đoạn phim...');
+            hls.startLoad(video.currentTime);
+          }
+          return;
+        }
         if (data.fatal) {
           if (data.type === 'networkError' && fatalRetryRef.current < 3) {
             fatalRetryRef.current += 1;
             setErrorMsg(`Đang thử lại (${fatalRetryRef.current}/3)...`);
-            setTimeout(() => hls.startLoad(), 1500 * fatalRetryRef.current);
+            capToLowerAutoLevel(hls);
+            setIsBuffering(true);
+            setErrorMsg(`Đang kết nối lại nguồn phim (${fatalRetryRef.current}/3)...`);
+            setTimeout(() => hls.startLoad(video.currentTime), 1500 * fatalRetryRef.current);
+          } else if (data.type === 'mediaError' && fatalRetryRef.current < 3) {
+            fatalRetryRef.current += 1;
+            setErrorMsg(`Đang sửa lỗi giải mã (${fatalRetryRef.current}/3)...`);
+            setTimeout(() => hls.recoverMediaError(), 500);
           } else {
             setHasError(true);
             setErrorMsg('Không thể tải video');
@@ -227,6 +310,10 @@ export default function LightweightHlsPlayer({
       });
 
       return () => {
+        if (stallTimerRef.current) {
+          clearTimeout(stallTimerRef.current);
+          stallTimerRef.current = null;
+        }
         hls.destroy();
         hlsRef.current = null;
         setLevels([]);
@@ -250,6 +337,10 @@ export default function LightweightHlsPlayer({
       video.addEventListener('loadedmetadata', onMeta);
       video.addEventListener('error', onErr);
       return () => {
+        if (stallTimerRef.current) {
+          clearTimeout(stallTimerRef.current);
+          stallTimerRef.current = null;
+        }
         video.removeEventListener('loadedmetadata', onMeta);
         video.removeEventListener('error', onErr);
         video.src = '';
@@ -268,8 +359,43 @@ export default function LightweightHlsPlayer({
 
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
-    const onWaiting = () => setIsBuffering(true);
-    const onPlaying = () => setIsBuffering(false);
+    const clearStallTimer = () => {
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
+      }
+    };
+    const recoverStalledStream = () => {
+      const hls = hlsRef.current;
+      if (!hls || video.paused || video.ended) return;
+      if (getBufferedAhead(video) > 1.5) return;
+
+      streamRecoveryRef.current += 1;
+      if (streamRecoveryRef.current > MAX_STREAM_RECOVERY_ATTEMPTS) {
+        setHasError(true);
+        setErrorMsg('Nguồn phim phản hồi chậm');
+        onFatalError?.();
+        return;
+      }
+
+      const didLowerQuality = capToLowerAutoLevel(hls);
+      setIsBuffering(true);
+      setErrorMsg(didLowerQuality ? 'Mạng chậm, đang giảm chất lượng và tải lại...' : 'Đang kết nối lại nguồn phim...');
+      hls.stopLoad();
+      hls.startLoad(video.currentTime);
+      video.play().catch(() => {});
+    };
+    const onWaiting = () => {
+      setIsBuffering(true);
+      clearStallTimer();
+      stallTimerRef.current = setTimeout(recoverStalledStream, STALL_RECOVERY_DELAY_MS);
+    };
+    const onPlaying = () => {
+      setIsBuffering(false);
+      setErrorMsg('');
+      streamRecoveryRef.current = 0;
+      clearStallTimer();
+    };
     const onTime = () => {
       const now = Date.now();
       if (now - lastTimeRef.current < 300) return;
@@ -277,6 +403,10 @@ export default function LightweightHlsPlayer({
       setCurrentTime(video.currentTime);
       setDuration(video.duration || 0);
       onTimeUpdate?.(video.currentTime, video.duration || 0);
+      if (getBufferedAhead(video) > 2) {
+        setErrorMsg('');
+        streamRecoveryRef.current = 0;
+      }
     };
     const onVol = () => {
       setVolume(video.volume);
@@ -304,7 +434,9 @@ export default function LightweightHlsPlayer({
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('waiting', onWaiting);
+    video.addEventListener('stalled', onWaiting);
     video.addEventListener('playing', onPlaying);
+    video.addEventListener('canplay', onPlaying);
     video.addEventListener('timeupdate', onTime);
     video.addEventListener('volumechange', onVol);
     video.addEventListener('ended', onEnd);
@@ -319,7 +451,9 @@ export default function LightweightHlsPlayer({
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('waiting', onWaiting);
+      video.removeEventListener('stalled', onWaiting);
       video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('canplay', onPlaying);
       video.removeEventListener('timeupdate', onTime);
       video.removeEventListener('volumechange', onVol);
       video.removeEventListener('ended', onEnd);
@@ -329,8 +463,9 @@ export default function LightweightHlsPlayer({
       video.removeEventListener('webkitendfullscreen', onIOSEnd);
       document.removeEventListener('fullscreenchange', onFS);
       document.removeEventListener('webkitfullscreenchange', onFS);
+      clearStallTimer();
     };
-  }, [onTimeUpdate, onEnded, onVideoEnded]);
+  }, [onTimeUpdate, onEnded, onVideoEnded, onFatalError]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -389,6 +524,7 @@ export default function LightweightHlsPlayer({
   const setQualityLevel = useCallback((levelIndex: number) => {
     const hls = hlsRef.current;
     if (!hls) return;
+    hls.autoLevelCapping = -1;
     hls.currentLevel = levelIndex;
     setSelectedLevel(levelIndex);
     setShowQualityMenu(false);
@@ -582,7 +718,7 @@ export default function LightweightHlsPlayer({
         poster={poster}
         title={title}
         playsInline
-        preload="metadata"
+        preload="auto"
         crossOrigin="anonymous"
       >
         {subtitleUrl && (

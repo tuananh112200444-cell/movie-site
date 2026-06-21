@@ -632,25 +632,35 @@ serve(async (req) => {
     });
   }
 
-  /* 6. Persist to cache (fire-and-forget within function lifetime) */
+  /* 6. Persist to cache.
+     Avoid PostgREST upsert here: the large JSONB sections payload has shown high
+     temp I/O on small Supabase instances. Updating the fixed cache row is cheaper. */
   try {
     const expiresAt = new Date(Date.now() + CACHE_TTL_MIN * 60 * 1000).toISOString();
-    // Upsert: merge with existing sections to avoid losing data from other sections
     let mergedSections = freshSections;
     if (cacheRow) {
       const existing = (cacheRow.sections as Record<string, unknown[]>) ?? {};
       mergedSections = { ...existing, ...freshSections };
     }
-    await supabase
+    const payload = {
+      sections: mergedSections as unknown as object,
+      updated_at: now,
+      expires_at: expiresAt,
+      source: 'ophim',
+    };
+    const { data: updatedRows, error: updateError } = await supabase
       .from('home_page_cache')
-      .upsert({
-        id: CACHE_KEY,
-        sections: mergedSections as unknown as object,
-        updated_at: now,
-        expires_at: expiresAt,
-        source: 'ophim',
-      })
+      .update(payload)
+      .eq('id', CACHE_KEY)
+      .select('id')
       .abortSignal(timeoutSignal(1000));
+
+    if (!updateError && (!updatedRows || updatedRows.length === 0)) {
+      await supabase
+        .from('home_page_cache')
+        .insert({ id: CACHE_KEY, ...payload })
+        .abortSignal(timeoutSignal(1000));
+    }
   } catch {
     /* ignore cache write errors */
   }

@@ -698,6 +698,25 @@ function contextWaitUntil(context, promise) {
   return promise.catch(() => undefined);
 }
 
+async function getCachedPrerender(cacheKey, request) {
+  if ((request.method !== 'GET' && request.method !== 'HEAD') || typeof caches === 'undefined') return null;
+  const cached = await caches.default.match(cacheKey);
+  if (!cached) return null;
+  const headers = new Headers(cached.headers);
+  headers.set('X-Prerender-Cache', 'HIT');
+  return new Response(request.method === 'HEAD' ? null : cached.body, {
+    status: cached.status,
+    statusText: cached.statusText,
+    headers,
+  });
+}
+
+function putCachedPrerender(context, cacheKey, response, request) {
+  if (request.method !== 'GET' || typeof caches === 'undefined' || response.status !== 200) return;
+  const cachedResponse = response.clone();
+  contextWaitUntil(context, caches.default.put(cacheKey, cachedResponse));
+}
+
 function isLegacySitemapAlias(pathname) {
   return (
     pathname === '/xml' ||
@@ -744,15 +763,21 @@ export async function onRequest(context) {
     const movieMatch = /^\/phim\/([^/?#]+)/.exec(pathname);
     if (movieMatch) {
       const slug = decodeURIComponent(movieMatch[1]);
+      const cacheKey = new Request(`${SITE_URL}/__seo-prerender/phim/${encodeURIComponent(slug)}`, { method: 'GET' });
+      const cachedMovieResponse = await getCachedPrerender(cacheKey, request);
+      if (cachedMovieResponse) return cachedMovieResponse;
       const movie = await fetchSupabaseMovie(slug) || await fetchOphimMovie(slug);
-      if (movie) return renderMoviePrerender(pathname, movie, slug);
-      return renderMoviePrerender(pathname, {
+      const movieResponse = movie
+        ? renderMoviePrerender(pathname, movie, slug)
+        : renderMoviePrerender(pathname, {
         name: titleFromSlug(slug),
         slug,
         content: 'Thong tin phim dang duoc cap nhat tai KhoPhim. Trang nay duoc tao de theo doi lich chieu, noi dung va nguon phim khi co san.',
         quality: 'HD',
         lang: 'Vietsub',
       }, slug);
+      putCachedPrerender(context, cacheKey, movieResponse, request);
+      return movieResponse;
     }
     const staticResponse = renderStaticPrerender(pathname);
     if (staticResponse) return staticResponse;

@@ -53,15 +53,22 @@ function normalizeText(value: string): string {
 
 function getEpisodeNumber(movie: MovieItem): number {
   const match = (movie.episode_current || '').match(/(\d+)/);
-  return match ? Number(match[1]) : 0;
+  return Math.max(Number(movie.current_episode || 0), match ? Number(match[1]) : 0);
+}
+
+function getEpisodeLabel(movie: MovieItem): string {
+  const episodeNumber = getEpisodeNumber(movie);
+  const textNumber = (movie.episode_current || '').match(/(\d+)/);
+  if (episodeNumber > (textNumber ? Number(textNumber[1]) : 0)) return `Tập ${episodeNumber}`;
+  return movie.episode_current || (episodeNumber ? `Tập ${episodeNumber}` : '');
 }
 
 function isOngoing(movie: MovieItem): boolean {
-  return movie.status === 'ongoing' || normalizeText(movie.episode_current || '').includes('dang chieu');
+  return movie.status === 'ongoing' || normalizeText(getEpisodeLabel(movie)).includes('dang chieu');
 }
 
 function isCompleted(movie: MovieItem): boolean {
-  const text = normalizeText(`${movie.status || ''} ${movie.episode_current || ''}`);
+  const text = normalizeText(`${movie.status || ''} ${getEpisodeLabel(movie)}`);
   return text.includes('completed') || text.includes('hoan tat') || text.includes('end') || text.includes('full');
 }
 
@@ -83,7 +90,7 @@ function matchesSearch(movie: MovieItem, query: string): boolean {
     movie.title_zh,
     movie.slug,
     movie.content,
-    movie.episode_current,
+    getEpisodeLabel(movie),
     movie.year ? String(movie.year) : '',
     ...(movie.category ?? []).flatMap((item) => [item.name, item.slug]),
     ...(movie.country ?? []).flatMap((item) => [item.name, item.slug]),
@@ -100,7 +107,7 @@ function filterByStatus(movie: MovieItem, status: StatusFilter): boolean {
 function getMetaText(movie: MovieItem): string {
   return [
     movie.year > 0 ? String(movie.year) : '',
-    movie.episode_current,
+    getEpisodeLabel(movie),
     movie.country?.[0]?.name,
   ].filter(Boolean).join('  ');
 }
@@ -108,6 +115,7 @@ function getMetaText(movie: MovieItem): string {
 function MoviePosterCard({ movie, priority }: { movie: MovieItem; priority?: boolean }) {
   const image = getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 420, 84);
   const href = getMovieHref(movie);
+  const episodeLabel = getEpisodeLabel(movie);
 
   return (
     <Link to={href} className="group block">
@@ -123,9 +131,9 @@ function MoviePosterCard({ movie, priority }: { movie: MovieItem; priority?: boo
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
           <div className="absolute left-2 top-2 z-[2] flex flex-col items-start gap-1">
             <MovieCountdown movie={movie} />
-            {movie.episode_current && (
+            {episodeLabel && (
               <span className="rounded-md bg-cyan-300 px-2 py-1 text-[10px] font-black text-[#041416] shadow-lg shadow-cyan-950/25">
-                {movie.episode_current}
+                {episodeLabel}
               </span>
             )}
             {isCompleted(movie) && (

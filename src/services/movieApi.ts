@@ -2348,6 +2348,13 @@ async function fetchMovieDetailFromOPhimForMovie(movie?: Partial<MovieDetail> | 
   return null;
 }
 function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
+  const currentEpisode = Number(m.current_episode || 0) || undefined;
+  const episodeCurrent = (m.episode_current as string) || '';
+  const episodeTextNumber = getEpisodeNumberFromText(episodeCurrent);
+  const normalizedEpisodeCurrent =
+    currentEpisode && currentEpisode > episodeTextNumber
+      ? `Tập ${currentEpisode}`
+      : episodeCurrent;
   const item: MovieItem = {
     _id: (m.id as string) || '',
     name: getMovieDisplayName({
@@ -2365,9 +2372,9 @@ function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
     quality: (m.quality as string) || 'HD',
     lang: (m.lang as string) || 'Vietsub',
     year: (m.year as number) || 0,
-    episode_current: (m.episode_current as string) || '',
+    episode_current: normalizedEpisodeCurrent,
     episode_total: (m.episode_total as string) || '',
-    current_episode: Number(m.current_episode || 0) || undefined,
+    current_episode: currentEpisode || episodeTextNumber || undefined,
     total_episodes: Number(m.total_episodes || 0) || undefined,
     schedule_type: (m.schedule_type as MovieItem['schedule_type']) || '',
     release_time: (m.release_time as string) || undefined,
@@ -2392,6 +2399,50 @@ function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
     schedule_note: (m.schedule_note as string) || undefined,
   };
   return normalizeMovieEpisodeCounts(item);
+}
+
+async function enrichMoviesWithSupabaseEpisodeCounts(items: MovieItem[], signal?: AbortSignal): Promise<MovieItem[]> {
+  const ids = Array.from(new Set(items.map((item) => item._id).filter(Boolean)));
+  if (ids.length === 0) return items;
+
+  try {
+    const maxByMovieId = new Map<string, number>();
+    const chunkSize = 200;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const { data, error } = await supabase
+        .from('movie_episodes')
+        .select('movie_id, episode_number, source')
+        .in('movie_id', chunk)
+        .order('episode_number', { ascending: false })
+        .abortSignal(signal);
+      if (error) continue;
+
+      for (const row of (data ?? []) as Record<string, unknown>[]) {
+        if (String(row.source || '').toLowerCase() === 'hidden') continue;
+        const movieId = String(row.movie_id || '');
+        const episodeNumber = Number(row.episode_number || 0);
+        if (!movieId || !Number.isFinite(episodeNumber) || episodeNumber <= 0) continue;
+        maxByMovieId.set(movieId, Math.max(maxByMovieId.get(movieId) || 0, episodeNumber));
+      }
+    }
+
+    if (maxByMovieId.size === 0) return items;
+    return items.map((item) => {
+      const liveMax = maxByMovieId.get(item._id) || 0;
+      const currentMax = Math.max(Number(item.current_episode || 0), getEpisodeNumberFromText(item.episode_current));
+      if (!liveMax || liveMax <= currentMax) return item;
+      return normalizeMovieEpisodeCounts({
+        ...item,
+        episode_current: `Tập ${liveMax}`,
+        current_episode: liveMax,
+        episode_total: Number(item.total_episodes || 0) >= liveMax ? item.episode_total : '',
+        total_episodes: Number(item.total_episodes || 0) >= liveMax ? item.total_episodes : undefined,
+      });
+    });
+  } catch {
+    return items;
+  }
 }
 export async function searchQueerUniverseMovies(
   keyword: string,
@@ -2447,7 +2498,10 @@ export async function searchQueerUniverseMovies(
         .limit(limit)
         .abortSignal(controller.signal);
 
-      return ((data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);
+      return enrichMoviesWithSupabaseEpisodeCounts(
+        ((data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem),
+        controller.signal
+      );
     })().catch(() => []);
 
     const [directSearchItems, feedItems, supabaseQueerItems] = await Promise.all([
@@ -2503,7 +2557,10 @@ export async function searchQueerUniverseMovies(
     return sortMoviesForSearch(
       mergeMoviesUnique([
         ...supabaseQueerItems,
-        ...((fallbackResult.data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem),
+        ...await enrichMoviesWithSupabaseEpisodeCounts(
+          ((fallbackResult.data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem),
+          controller.signal
+        ),
       ]),
       kw,
       'relevance'
@@ -2592,7 +2649,10 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
       .limit(poolLimit)
       .abortSignal(controller.signal);
 
-    const markedMovies = ((markedRows ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);
+    const markedMovies = await enrichMoviesWithSupabaseEpisodeCounts(
+      ((markedRows ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem),
+      controller.signal
+    );
     const feedMovies = await feedMoviesPromise;
     const combinedQueerMovies = mergeMoviesUnique([...markedMovies, ...feedMovies]).sort((a, b) => {
       const ta = getMovieUpdateTime(a);
@@ -2631,12 +2691,12 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
 
     const results = await Promise.all(keywordQueries);
     const rawRows = results.flatMap((result) => result.data ?? []) as Record<string, unknown>[];
-    const movies = uniqueMoviesBySlug(
+    const movies = await enrichMoviesWithSupabaseEpisodeCounts(uniqueMoviesBySlug(
       rawRows
         .map((row) => ({ row, movie: toSupabaseMovieItem(row) }))
         .filter(({ movie, row }) => movieMatchesQueerUniverse(movie, row))
         .map(({ movie }) => movie)
-    );
+    ), controller.signal);
 
     const sorted = [...movies].sort((a, b) => {
       const ta = getMovieUpdateTime(a);
