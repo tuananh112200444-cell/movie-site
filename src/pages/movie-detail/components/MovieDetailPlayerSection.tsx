@@ -284,7 +284,10 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
         return;
       }
       if (mergedEpisodes.length === 0) return;
-      handleSelectMergedEp(mergedEpisodes[0]);
+      const latestPlayableEpisode = [...mergedEpisodes]
+        .filter((item) => !item.ep.is_scheduled)
+        .sort((a, b) => epSortKey(b.ep) - epSortKey(a.ep))[0];
+      handleSelectMergedEp(latestPlayableEpisode ?? mergedEpisodes[0]);
       (forwardedRef as React.RefObject<HTMLDivElement | null>)?.current?.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
@@ -453,6 +456,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   {/* Player */}
                   <PlayerBox
                     episode={activeEp}
+                    movieSlug={slug}
                     movieTitle={movie.name}
                     quality={movie.quality ?? ''}
                     lang={movie.lang ?? ''}

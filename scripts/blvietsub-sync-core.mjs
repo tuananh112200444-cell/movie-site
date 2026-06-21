@@ -220,7 +220,9 @@ function buildMovieIndexes(movies) {
     const source = String(movie.showtimes || movie.source_url || '');
     const postId = source.match(/(?:p=|post-|blvietsub-)([^/?#&]+)/)?.[1] || '';
     if (postId) byPostId.set(postId, movie);
-    if (source) bySourceUrl.set(source.replace(/\/+$/, ''), movie);
+    for (const sourceUrl of [movie.showtimes, movie.source_url].map((value) => String(value || '').trim()).filter(Boolean)) {
+      bySourceUrl.set(sourceUrl.replace(/\/+$/, ''), movie);
+    }
     if (movie.slug) bySlug.set(movie.slug, movie);
     for (const title of [movie.name, movie.origin_name, movie.title_vi, movie.title_en]) {
       const key = canonicalDuplicateTitle(title);
