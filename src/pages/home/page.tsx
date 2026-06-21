@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef, lazy, Suspense, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../../components/feature/Navbar';
 import Footer from '../../components/feature/Footer';
 import HeroBanner from './components/HeroBanner';
@@ -344,7 +344,7 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
 const ALL_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
 const HOME_CACHE_KEY = 'kp_home_proxy_v4';
 const LEGACY_HOME_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', HOME_CACHE_KEY];
-const HOME_PORTAL_KEY = 'kp_active_home_portal_v1';
+const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
 const HOME_CACHE_TTL = 5 * 60 * 1000;
 const HOME_REFRESH_ON_RETURN_MS = 2 * 60 * 1000;
 const EMPTY_MOVIES: MovieItem[] = [];
@@ -474,19 +474,15 @@ function writeCachedHomeData(sections: Record<string, MovieItem[]>): void {
   const payload = JSON.stringify({ sections, ts: Date.now() });
   try { sessionStorage.setItem(HOME_CACHE_KEY, payload); } catch { /* quota */ }
 }
-function readActivePortal(): 'movies' | 'queer' {
-  return 'movies';
-}
 export default function Home() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { ref: bottomRef, visible: bottomVisible } = useInViewOnce('300px');
-  const [activePortal, setActivePortalState] = useState<'movies' | 'queer'>(readActivePortal);
+  const activePortal: 'movies' | 'queer' = location.pathname === QUEER_PORTAL_PATH ? 'queer' : 'movies';
 
   const setActivePortal = (portal: 'movies' | 'queer' | null) => {
     const nextPortal = portal ?? 'movies';
-    setActivePortalState(nextPortal);
-    try {
-      localStorage.setItem(HOME_PORTAL_KEY, nextPortal);
-    } catch { /* ignore */ }
+    navigate(nextPortal === 'queer' ? QUEER_PORTAL_PATH : '/');
   };
   // ── SINGLE REQUEST: all homepage data from home-proxy ──
   const [initialHome] = useState(readCachedHomeData);
@@ -634,7 +630,7 @@ export default function Home() {
         <SEO
           title="Vu Tru Dam My / GL - KhoPhim"
           description="Khong gian phim Dam My, BL, GL va Bach Hop tren KhoPhim, lay du lieu tu Supabase."
-          canonical="/"
+          canonical={QUEER_PORTAL_PATH}
           ogType="website"
         />
         <Navbar />
