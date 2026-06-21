@@ -340,6 +340,10 @@ function playableEpisodeCount(episodes: ParsedEpisode[]): number {
   return new Set(episodes.map((episode) => episode.episode_number).filter((episode) => episode > 0)).size;
 }
 
+function maxPlayableEpisodeNumber(episodes: ParsedEpisode[]): number {
+  return episodes.reduce((max, episode) => Math.max(max, Number(episode.episode_number || 0)), 0);
+}
+
 function buildEntryIndexes(entries: ParsedEntry[]) {
   const byPostId = new Map<string, ParsedEntry>();
   const byTitle = new Map<string, ParsedEntry>();
@@ -623,7 +627,7 @@ async function createMovieFromEntry(
   supabase: SupabaseClient,
   entry: ParsedEntry,
 ): Promise<MovieRow> {
-  const episodeCount = Math.max(1, playableEpisodeCount(entry.episodes));
+  const maxEpisode = Math.max(1, maxPlayableEpisodeNumber(entry.episodes) || playableEpisodeCount(entry.episodes));
   const slug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
   const normalizedName = slugify([entry.title, entry.originName].filter(Boolean).join(' '));
   const payload = {
@@ -642,10 +646,10 @@ async function createMovieFromEntry(
     quality: 'HD',
     lang: 'Vietsub',
     time: '',
-    episode_current: `${TAP_LABEL} ${episodeCount}`,
+    episode_current: `${TAP_LABEL} ${maxEpisode}`,
     episode_total: '',
-    current_episode: episodeCount,
-    total_episodes: episodeCount,
+    current_episode: maxEpisode,
+    total_episodes: maxEpisode,
     year: entry.year || new Date().getFullYear(),
     actor: [],
     director: [],
@@ -725,7 +729,16 @@ async function updateMovieMetadata(
   movie: MovieRow,
   entry: ParsedEntry,
 ): Promise<boolean> {
-  const episodeCount = Math.max(1, playableEpisodeCount(entry.episodes));
+  const parsedMaxEpisode = Math.max(1, maxPlayableEpisodeNumber(entry.episodes) || playableEpisodeCount(entry.episodes));
+  const { data: storedRows } = await supabase
+    .from('movie_episodes')
+    .select('episode_number')
+    .eq('movie_id', movie.id)
+    .eq('source', SOURCE_SITE)
+    .order('episode_number', { ascending: false })
+    .limit(1);
+  const storedMaxEpisode = Number(storedRows?.[0]?.episode_number || 0);
+  const episodeCount = Math.max(parsedMaxEpisode, storedMaxEpisode, getMovieCurrentEpisode(movie), 1);
   const current = getMovieCurrentEpisode(movie);
   const update: Record<string, unknown> = {
     showtimes: entry.sourceUrl || `https://www.blvietsub.top/?p=${entry.postId}`,

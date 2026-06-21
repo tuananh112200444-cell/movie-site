@@ -961,11 +961,13 @@ serve(async (req) => {
     };
 
     const liveMaxEpisode = getMaxEpisodeNumberFromServers(episodeServers);
-    const advertisedMaxEpisode = Math.max(
-      getExpectedEpisodeNumber(response.movie as Record<string, unknown>),
-      getExpectedEpisodeNumber(externalMovieData),
+    const currentAdvertisedEpisode = Math.max(
+      Number(response.movie.current_episode || 0) || 0,
+      extractEpNumber(String(response.movie.episode_current || '')),
+      Number(externalMovieData?.current_episode || 0) || 0,
+      extractEpNumber(String(externalMovieData?.episode_current || externalMovieData?.episodeCurrent || '')),
     );
-    if (liveMaxEpisode > advertisedMaxEpisode) {
+    if (liveMaxEpisode > currentAdvertisedEpisode) {
       response.movie.episode_current = liveMaxEpisode > 0 ? `Tập ${liveMaxEpisode}` : response.movie.episode_current;
       response.movie.current_episode = liveMaxEpisode;
       if (!response.movie.total_episodes || Number(response.movie.total_episodes) < liveMaxEpisode) {
