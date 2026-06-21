@@ -599,6 +599,39 @@ function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: stri
   };
 }
 
+async function fetchWordPressPlayerPages(html: string, movieSlug: string): Promise<string> {
+  const watchUrls = getWordPressWatchUrls(html, movieSlug);
+  const seenWatchUrls = new Set<string>();
+  const playerPages: string[] = [];
+  for (let watchIndex = 0; watchIndex < watchUrls.length && watchIndex < 120; watchIndex += 4) {
+    const batch = watchUrls.slice(watchIndex, Math.min(watchIndex + 4, 120)).filter((watch) => {
+      if (seenWatchUrls.has(watch.url)) return false;
+      seenWatchUrls.add(watch.url);
+      return true;
+    });
+    const pages = await Promise.all(batch.map(async (watch) => {
+      try {
+        const playerPage = await fetch(proxiedBlvietsubUrl(watch.url), {
+          headers: BLVIETSUB_HEADERS,
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!playerPage.ok) return '';
+        const pageHtml = await playerPage.text();
+        for (const discovered of getWordPressWatchUrls(pageHtml, movieSlug)) {
+          if (!seenWatchUrls.has(discovered.url) && watchUrls.length < 120) watchUrls.push(discovered);
+        }
+        return pageHtml;
+      } catch {
+        return '';
+      }
+    }));
+    for (const pageHtml of pages) {
+      if (pageHtml) playerPages.push(pageHtml);
+    }
+  }
+  return playerPages.join('\n');
+}
+
 async function fetchWordPressEntries(limit: number, offset: number): Promise<ParsedEntry[]> {
   const result = await fetchWordPressEntriesWithMeta(limit, offset);
   return result.entries;
@@ -624,27 +657,9 @@ async function fetchWordPressEntriesWithMeta(limit: number, offset: number): Pro
         });
         if (!page.ok) return null;
         const html = await page.text();
-        const playerPages: string[] = [];
         const movieSlug = getWordPressMovieSlug(item.url);
-        const watchUrls = movieSlug ? getWordPressWatchUrls(html, movieSlug).slice(0, 120) : [];
-        for (let watchIndex = 0; watchIndex < watchUrls.length; watchIndex += 4) {
-          const batch = watchUrls.slice(watchIndex, watchIndex + 4);
-          const pages = await Promise.all(batch.map(async (watch) => {
-            try {
-              const playerPage = await fetch(proxiedBlvietsubUrl(watch.url), {
-                headers: BLVIETSUB_HEADERS,
-                signal: AbortSignal.timeout(20000),
-              });
-              return playerPage.ok ? await playerPage.text() : '';
-            } catch {
-              return '';
-            }
-          }));
-          for (const pageHtml of pages) {
-            if (pageHtml) playerPages.push(pageHtml);
-          }
-        }
-        return parseWordPressMoviePage(item.url, item.updatedAt, html, playerPages.join('\n'));
+        const playerHtml = movieSlug ? await fetchWordPressPlayerPages(html, movieSlug) : '';
+        return parseWordPressMoviePage(item.url, item.updatedAt, html, playerHtml);
       } catch {
         return null;
       }
@@ -819,15 +834,7 @@ async function updateMovieMetadata(
   entry: ParsedEntry,
 ): Promise<boolean> {
   const parsedMaxEpisode = Math.max(1, maxPlayableEpisodeNumber(entry.episodes) || playableEpisodeCount(entry.episodes));
-  const { data: storedRows } = await supabase
-    .from('movie_episodes')
-    .select('episode_number')
-    .eq('movie_id', movie.id)
-    .eq('source', SOURCE_SITE)
-    .order('episode_number', { ascending: false })
-    .limit(1);
-  const storedMaxEpisode = Number(storedRows?.[0]?.episode_number || 0);
-  const episodeCount = Math.max(parsedMaxEpisode, storedMaxEpisode, getMovieCurrentEpisode(movie), 1);
+  const episodeCount = Math.max(parsedMaxEpisode, 1);
   const current = getMovieCurrentEpisode(movie);
   const update: Record<string, unknown> = {
     showtimes: entry.sourceUrl || `https://www.blvietsub.top/?p=${entry.postId}`,
@@ -1056,26 +1063,8 @@ serve(async (req) => {
       if (!page.ok) throw new Error(`BLVietsub movie ${page.status}`);
       const html = await page.text();
       const movieSlug = getWordPressMovieSlug(directUrl);
-      const watchUrls = movieSlug ? getWordPressWatchUrls(html, movieSlug).slice(0, 120) : [];
-      const playerPages: string[] = [];
-      for (let watchIndex = 0; watchIndex < watchUrls.length; watchIndex += 4) {
-        const batch = watchUrls.slice(watchIndex, watchIndex + 4);
-        const pages = await Promise.all(batch.map(async (watch) => {
-          try {
-            const playerPage = await fetch(proxiedBlvietsubUrl(watch.url), {
-              headers: BLVIETSUB_HEADERS,
-              signal: AbortSignal.timeout(20000),
-            });
-            return playerPage.ok ? await playerPage.text() : '';
-          } catch {
-            return '';
-          }
-        }));
-        for (const pageHtml of pages) {
-          if (pageHtml) playerPages.push(pageHtml);
-        }
-      }
-      const entry = parseWordPressMoviePage(directUrl, new Date().toISOString(), html, playerPages.join('\n'));
+      const playerHtml = movieSlug ? await fetchWordPressPlayerPages(html, movieSlug) : '';
+      const entry = parseWordPressMoviePage(directUrl, new Date().toISOString(), html, playerHtml);
       if (!entry) {
         return json({
           success: false,
