@@ -49,9 +49,25 @@ export function prefetchRoute(path: string): void {
  */
 export function prefetchCriticalRoutes(): void {
   const criticalRoutes = ['/search', '/filter', '/phim-le', '/phim-bo', '/phim-han-quoc'];
-  criticalRoutes.forEach((route) => {
-    setTimeout(() => prefetchRoute(route), 3000 + criticalRoutes.indexOf(route) * 500);
-  });
+  const connection = (navigator as Navigator & {
+    connection?: { saveData?: boolean; effectiveType?: string };
+  }).connection;
+  if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType ?? '')) return;
+
+  const startPrefetch = () => {
+    criticalRoutes.forEach((route, index) => {
+      setTimeout(() => prefetchRoute(route), index * 700);
+    });
+  };
+
+  if (document.readyState === 'complete') {
+    setTimeout(startPrefetch, 8000);
+    return;
+  }
+
+  window.addEventListener('load', () => {
+    setTimeout(startPrefetch, 8000);
+  }, { once: true });
 }
 
 /** Prefetch movie detail API data khi hover card */

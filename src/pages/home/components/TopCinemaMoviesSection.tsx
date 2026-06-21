@@ -159,6 +159,7 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
         {/* Prev */}
         <button
           onClick={() => scroll('left')}
+          aria-label="Cuộn danh sách phim chiếu rạp sang trái"
           className={`
             absolute left-0 top-1/2 -translate-y-1/2 z-20
             w-9 h-9 md:w-10 md:h-10 rounded-full
@@ -178,6 +179,7 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
         {/* Next */}
         <button
           onClick={() => scroll('right')}
+          aria-label="Cuộn danh sách phim chiếu rạp sang phải"
           className={`
             absolute right-0 top-1/2 -translate-y-1/2 z-20
             w-9 h-9 md:w-10 md:h-10 rounded-full
