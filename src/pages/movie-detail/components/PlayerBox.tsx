@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { EpisodeData, EpisodeServer } from '@/types/movie';
 import { pickBestEpisodeByPriority } from '@/services/movieApi';
+import { getSourceHost, reportPlayerIssue, type PlayerIssuePayload } from '@/services/playerDiagnostics';
 import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
 import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
@@ -98,6 +99,7 @@ function getPlayerMode(ep: EpisodeData | null): 'hls' | 'embed' | 'video' {
 
 interface PlayerBoxProps {
   episode: EpisodeData | null;
+  movieSlug?: string;
   movieTitle: string;
   quality: string;
   lang: string;
@@ -120,6 +122,7 @@ const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
 
 export default function PlayerBox({
   episode,
+  movieSlug,
   movieTitle,
   quality,
   hasPrev,
@@ -186,6 +189,23 @@ export default function PlayerBox({
   const hlsSrc = useMemo(() => getHlsProxyUrl(episode?.link_m3u8 ?? ''), [episode?.link_m3u8]);
   const streamIsHls = Boolean(episode?.link_m3u8 && isHlsUrl(episode.link_m3u8));
   const scheduledLeft = episode?.scheduled_target_at ? getTimeLeft(episode.scheduled_target_at, serverNow) : null;
+  const activeServerName = allServers[activeServer]?.server_name ?? '';
+  const activeSourceHost = useMemo(
+    () => getSourceHost(episode?.link_m3u8 || episode?.link_embed || ''),
+    [episode?.link_m3u8, episode?.link_embed]
+  );
+  const reportIssue = useCallback((issue: Pick<PlayerIssuePayload, 'event_type' | 'playback_time' | 'duration' | 'buffered_ahead' | 'error_message'>) => {
+    reportPlayerIssue({
+      movie_slug: movieSlug,
+      movie_title: movieTitle,
+      episode_slug: episode?.slug,
+      episode_name: episode?.name,
+      server_name: activeServerName,
+      player_mode: playerMode,
+      source_host: activeSourceHost,
+      ...issue,
+    });
+  }, [activeServerName, activeSourceHost, episode?.name, episode?.slug, movieSlug, movieTitle, playerMode]);
   useEffect(() => {
     if (directVideoRef.current) directVideoRef.current.playbackRate = directVideoSpeed;
   }, [directVideoSpeed, directVideoSrc]);
@@ -260,27 +280,42 @@ export default function PlayerBox({
   }, [allServers, activeServer, episode?.slug, onSwitchServer]);
 
   const handleHlsFatal = useCallback(() => {
+    reportIssue({
+      event_type: 'hls_fatal',
+      error_message: 'HLS fatal callback reached PlayerBox',
+    });
     const embedUrl = episode?.link_embed;
     if (embedUrl && playerMode === 'hls') {
       setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
       return;
     }
     switchToFallbackServer();
-  }, [episode?.link_embed, playerMode, switchToFallbackServer]);
+  }, [episode?.link_embed, playerMode, reportIssue, switchToFallbackServer]);
 
   const handleDirectVideoError = useCallback(() => {
+    const video = directVideoRef.current;
+    reportIssue({
+      event_type: 'direct_video_error',
+      playback_time: video?.currentTime ?? 0,
+      duration: video?.duration ?? 0,
+      error_message: 'direct video element error',
+    });
     const embedUrl = episode?.link_embed ?? '';
     if (embedUrl && isIframeSource(embedUrl) && playerMode !== 'embed') {
       setPlayerMode('embed');
       return;
     }
     switchToFallbackServer();
-  }, [episode?.link_embed, playerMode, switchToFallbackServer]);
+  }, [episode?.link_embed, playerMode, reportIssue, switchToFallbackServer]);
 
   useEffect(() => {
     if (!iframeBlocked || playerMode !== 'embed') return;
+    reportIssue({
+      event_type: 'iframe_blocked',
+      error_message: 'embed iframe load timed out or failed',
+    });
     switchToFallbackServer();
-  }, [iframeBlocked, playerMode, switchToFallbackServer]);
+  }, [iframeBlocked, playerMode, reportIssue, switchToFallbackServer]);
 
   return (
     <div className="mb-2 relative">
@@ -410,6 +445,7 @@ export default function PlayerBox({
               onEnded={handleEnded}
               onVideoEnded={onVideoEnded}
               onFatalError={handleHlsFatal}
+              onPlayerIssue={reportIssue}
               subtitleUrl={episode?.subtitle_url || ''}
             />
           </Suspense>

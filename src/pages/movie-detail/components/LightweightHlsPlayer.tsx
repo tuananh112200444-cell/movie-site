@@ -12,6 +12,13 @@ interface Props {
   onEnded?: () => void;
   onVideoEnded?: () => void;
   onFatalError?: () => void;
+  onPlayerIssue?: (issue: {
+    event_type: 'hls_retry' | 'hls_fatal_retry' | 'hls_media_retry' | 'hls_fatal' | 'stall_recovery' | 'stall_fatal' | 'native_hls_error';
+    playback_time?: number;
+    duration?: number;
+    buffered_ahead?: number;
+    error_message?: string;
+  }) => void;
 }
 
 interface HlsQualityLevel {
@@ -93,6 +100,7 @@ export default function LightweightHlsPlayer({
   onEnded,
   onVideoEnded,
   onFatalError,
+  onPlayerIssue,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -285,6 +293,13 @@ export default function LightweightHlsPlayer({
           if (data.type === 'networkError' && /frag|level|manifest/i.test(details)) {
             setIsBuffering(true);
             setErrorMsg('Đang tải lại đoạn phim...');
+            onPlayerIssue?.({
+              event_type: 'hls_retry',
+              playback_time: video.currentTime,
+              duration: video.duration || 0,
+              buffered_ahead: getBufferedAhead(video),
+              error_message: details,
+            });
             hls.startLoad(video.currentTime);
           }
           return;
@@ -296,14 +311,35 @@ export default function LightweightHlsPlayer({
             capToLowerAutoLevel(hls);
             setIsBuffering(true);
             setErrorMsg(`Đang kết nối lại nguồn phim (${fatalRetryRef.current}/3)...`);
+            onPlayerIssue?.({
+              event_type: 'hls_fatal_retry',
+              playback_time: video.currentTime,
+              duration: video.duration || 0,
+              buffered_ahead: getBufferedAhead(video),
+              error_message: String(data.details || data.type || 'fatal network error'),
+            });
             setTimeout(() => hls.startLoad(video.currentTime), 1500 * fatalRetryRef.current);
           } else if (data.type === 'mediaError' && fatalRetryRef.current < 3) {
             fatalRetryRef.current += 1;
             setErrorMsg(`Đang sửa lỗi giải mã (${fatalRetryRef.current}/3)...`);
+            onPlayerIssue?.({
+              event_type: 'hls_media_retry',
+              playback_time: video.currentTime,
+              duration: video.duration || 0,
+              buffered_ahead: getBufferedAhead(video),
+              error_message: String(data.details || data.type || 'fatal media error'),
+            });
             setTimeout(() => hls.recoverMediaError(), 500);
           } else {
             setHasError(true);
             setErrorMsg('Không thể tải video');
+            onPlayerIssue?.({
+              event_type: 'hls_fatal',
+              playback_time: video.currentTime,
+              duration: video.duration || 0,
+              buffered_ahead: getBufferedAhead(video),
+              error_message: String(data.details || data.type || 'fatal hls error'),
+            });
             onFatalError?.();
           }
         }
@@ -333,6 +369,13 @@ export default function LightweightHlsPlayer({
       const onErr = () => {
         setHasError(true);
         setErrorMsg('Không thể phát stream');
+        onPlayerIssue?.({
+          event_type: 'native_hls_error',
+          playback_time: video.currentTime,
+          duration: video.duration || 0,
+          buffered_ahead: getBufferedAhead(video),
+          error_message: 'native hls video error',
+        });
       };
       video.addEventListener('loadedmetadata', onMeta);
       video.addEventListener('error', onErr);
@@ -350,7 +393,7 @@ export default function LightweightHlsPlayer({
     setHasError(true);
     setErrorMsg('Trình duyệt không hỗ trợ HLS');
     return undefined;
-  }, [src, autoPlay, initialTime, onFatalError, retryNonce]);
+  }, [src, autoPlay, initialTime, onFatalError, onPlayerIssue, retryNonce]);
 
   /* ── Video events ── */
   useEffect(() => {
@@ -374,6 +417,13 @@ export default function LightweightHlsPlayer({
       if (streamRecoveryRef.current > MAX_STREAM_RECOVERY_ATTEMPTS) {
         setHasError(true);
         setErrorMsg('Nguồn phim phản hồi chậm');
+        onPlayerIssue?.({
+          event_type: 'stall_fatal',
+          playback_time: video.currentTime,
+          duration: video.duration || 0,
+          buffered_ahead: getBufferedAhead(video),
+          error_message: 'stream stalled after max recovery attempts',
+        });
         onFatalError?.();
         return;
       }
@@ -381,6 +431,13 @@ export default function LightweightHlsPlayer({
       const didLowerQuality = capToLowerAutoLevel(hls);
       setIsBuffering(true);
       setErrorMsg(didLowerQuality ? 'Mạng chậm, đang giảm chất lượng và tải lại...' : 'Đang kết nối lại nguồn phim...');
+      onPlayerIssue?.({
+        event_type: 'stall_recovery',
+        playback_time: video.currentTime,
+        duration: video.duration || 0,
+        buffered_ahead: getBufferedAhead(video),
+        error_message: didLowerQuality ? 'stall recovery lowered quality' : 'stall recovery restarted load',
+      });
       hls.stopLoad();
       hls.startLoad(video.currentTime);
       video.play().catch(() => {});
@@ -465,7 +522,7 @@ export default function LightweightHlsPlayer({
       document.removeEventListener('webkitfullscreenchange', onFS);
       clearStallTimer();
     };
-  }, [onTimeUpdate, onEnded, onVideoEnded, onFatalError]);
+  }, [onTimeUpdate, onEnded, onVideoEnded, onFatalError, onPlayerIssue]);
 
   useEffect(() => {
     const video = videoRef.current;

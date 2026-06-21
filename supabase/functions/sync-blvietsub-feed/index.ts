@@ -54,6 +54,7 @@ interface MovieRow {
   source_site?: string | null;
   source_name?: string | null;
   showtimes?: string | null;
+  source_url?: string | null;
   episode_current?: string | null;
   current_episode?: number | null;
   total_episodes?: number | null;
@@ -95,6 +96,7 @@ function proxiedBlvietsubUrl(rawUrl: string): string {
     if (url.protocol !== 'https:' || url.hostname !== 'blvietsub.com') return rawUrl;
     const proxy = new URL(BLVIETSUB_PROXY_URL);
     proxy.searchParams.set('url', url.toString());
+    proxy.searchParams.set('fresh', '1');
     return proxy.toString();
   } catch {
     return rawUrl;
@@ -386,12 +388,12 @@ function buildMovieIndexes(movies: MovieRow[]) {
     bySlug.set(movie.slug, movie);
     const postId = extractPostIdFromMovie(movie);
     if (postId) byPostId.set(postId, movie);
-    const sourceUrl = String(movie.showtimes || '').trim();
-    if (sourceUrl) {
-      const existing = bySourceUrl.get(sourceUrl);
+    for (const sourceUrl of [movie.showtimes, movie.source_url].map((value) => String(value || '').trim()).filter(Boolean)) {
+      const normalizedSourceUrl = sourceUrl.replace(/\/+$/, '');
+      const existing = bySourceUrl.get(normalizedSourceUrl);
       const isAdminQueer = String(movie.source_site || '').includes('admin-queer');
       const existingIsAdminQueer = String(existing?.source_site || '').includes('admin-queer');
-      if (!existing || (isAdminQueer && !existingIsAdminQueer)) bySourceUrl.set(sourceUrl, movie);
+      if (!existing || (isAdminQueer && !existingIsAdminQueer)) bySourceUrl.set(normalizedSourceUrl, movie);
     }
     for (const key of getMovieTitleKeys(movie)) {
       if (!byTitle.has(key)) byTitle.set(key, movie);
@@ -407,7 +409,7 @@ async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<Movie
   for (let from = 0; from < 10000; from += pageSize) {
     const { data, error } = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes, year')
+      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year')
       .eq('is_published', true)
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
       .range(from, from + pageSize - 1);
@@ -612,7 +614,8 @@ function findMovieForEntry(
 ): MovieRow | null {
   const generatedSlug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
   if (indexes.byPostId.has(entry.postId)) return indexes.byPostId.get(entry.postId) || null;
-  if (entry.sourceUrl && indexes.bySourceUrl.has(entry.sourceUrl)) return indexes.bySourceUrl.get(entry.sourceUrl) || null;
+  const entrySourceUrl = String(entry.sourceUrl || '').replace(/\/+$/, '');
+  if (entrySourceUrl && indexes.bySourceUrl.has(entrySourceUrl)) return indexes.bySourceUrl.get(entrySourceUrl) || null;
   if (indexes.bySlug.has(generatedSlug)) return indexes.bySlug.get(generatedSlug) || null;
 
   for (const key of [entry.title, entry.originName].map(canonicalDuplicateTitle).filter(Boolean)) {
@@ -670,14 +673,14 @@ async function createMovieFromEntry(
   const { data, error } = await supabase
     .from('movies')
     .insert(payload)
-    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes, year')
+    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year')
     .single();
 
   if (error) {
     if (error.code === '23505' || error.message.toLowerCase().includes('duplicate')) {
       const { data: existing, error: existingError } = await supabase
         .from('movies')
-        .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, episode_current, current_episode, total_episodes, year')
+        .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year')
         .eq('slug', slug)
         .single();
       if (!existingError && existing) return existing as MovieRow;
@@ -742,6 +745,7 @@ async function updateMovieMetadata(
   const current = getMovieCurrentEpisode(movie);
   const update: Record<string, unknown> = {
     showtimes: entry.sourceUrl || `https://www.blvietsub.top/?p=${entry.postId}`,
+    source_url: entry.sourceUrl || `https://www.blvietsub.top/?p=${entry.postId}`,
     source_site: movie.slug.startsWith('blvietsub-') ? SOURCE_SITE : undefined,
     source_name: movie.slug.startsWith('blvietsub-') ? SOURCE_NAME : undefined,
   };
@@ -864,15 +868,56 @@ serve(async (req) => {
         if (playerPage.ok) playerHtml = await playerPage.text();
       }
       const entry = parseWordPressMoviePage(directUrl, new Date().toISOString(), html, playerHtml);
-      return json({
-        success: Boolean(entry),
+      if (!entry) {
+        return json({
+          success: false,
+          movie_url: directUrl,
+          title: '',
+          episodes: 0,
+          max_episode: 0,
+          inserted: 0,
+          updated: false,
+          elapsed_ms: Date.now() - started,
+        }, 404);
+      }
+      const movieRows = await fetchExistingQueerMovies(supabase);
+      const movieIndexes = buildMovieIndexes(movieRows);
+      let movie = findMovieForEntry(entry, movieIndexes);
+      let created = false;
+      if (!movie) {
+        movie = await createMovieFromEntry(supabase, entry);
+        created = true;
+      }
+      const inserted = await insertMissingEpisodes(supabase, movie, entry);
+      const updated = await updateMovieMetadata(supabase, movie, entry);
+      const shouldRefreshSearch = url.searchParams.get('refresh_search') === '1';
+      const searchIndexRefreshed = shouldRefreshSearch
+        ? await refreshSearchIndex(supabaseUrl)
+        : false;
+      const result = {
+        success: true,
         movie_url: directUrl,
-        title: entry?.title || '',
-        episodes: entry?.episodes.length || 0,
-        max_episode: entry ? Math.max(...entry.episodes.map((episode) => episode.episode_number)) : 0,
-        servers: entry ? Array.from(new Set(entry.episodes.map((episode) => episode.server_name))) : [],
+        movie_slug: movie.slug,
+        created,
+        title: entry.title,
+        episodes: entry.episodes.length,
+        max_episode: Math.max(...entry.episodes.map((episode) => episode.episode_number)),
+        servers: Array.from(new Set(entry.episodes.map((episode) => episode.server_name))),
+        inserted,
+        updated,
+        search_index_refreshed: searchIndexRefreshed,
         elapsed_ms: Date.now() - started,
-      }, entry ? 200 : 404);
+      };
+      await writeSyncLog(supabase, {
+        ...result,
+        scanned: 1,
+        matched: created ? 0 : 1,
+        inserted,
+        errors: [],
+      });
+      return json({
+        ...result,
+      }, 200);
     }
 
     const effectiveOffset = useCursor ? await readCursorOffset(supabase, cursorKey, limit) : offset;

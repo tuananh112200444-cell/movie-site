@@ -18,6 +18,7 @@ import {
   pickBestServerIndex,
   hasPlayableUrl,
   pickBestEpisodeByPriority,
+  epSortKey,
 } from '@/services/movieApi';
 
 const UserComments = lazy(() => import('./components/UserComments'));
@@ -54,6 +55,20 @@ function getHighestEpisodeFromServers(episodes: EpisodeServer[]): number {
     }, 0);
     return Math.max(highest, serverHighest);
   }, 0);
+}
+
+function getLatestPlayableEpisodeSlug(episodes: EpisodeServer[]): string | undefined {
+  const latest = episodes
+    .flatMap((server) => server.server_data ?? [])
+    .filter((ep) => hasPlayableUrl(ep) && !ep.is_scheduled)
+    .sort((a, b) => epSortKey(b) - epSortKey(a))[0];
+  return latest?.slug || latest?.name;
+}
+
+function getLatestPlayableEpisode(episodes: EpisodeData[]): EpisodeData | null {
+  return [...episodes]
+    .filter((ep) => hasPlayableUrl(ep) && !ep.is_scheduled)
+    .sort((a, b) => epSortKey(b) - epSortKey(a))[0] ?? null;
 }
 
 export default function MovieDetailPage() {
@@ -182,7 +197,7 @@ export default function MovieDetailPage() {
     const currentEpisode =
       detail.movie.current_episode ??
       Number((detail.movie.episode_current || '').match(/\d+/)?.[0] ?? 0);
-    if (!highestEpisode || highestEpisode <= currentEpisode) return detail.movie;
+    if (!highestEpisode || highestEpisode === currentEpisode) return detail.movie;
     return {
       ...detail.movie,
       current_episode: highestEpisode,
@@ -273,7 +288,7 @@ export default function MovieDetailPage() {
         const epNumber = ep.episode_number ?? Number((ep.slug || ep.name || '').match(/\d+/)?.[0] ?? 0);
         const epKey = epNumber > 0 ? `num:${epNumber}` : `text:${ep.slug || ep.name}`;
         return epKey === activeKey;
-      }) ?? newServerData[0] ?? null;
+      }) ?? getLatestPlayableEpisode(newServerData);
       setActiveEp(newEp);
     }
   }, [filteredEpisodes, detail?.episodes, activeEp]);
@@ -409,10 +424,8 @@ export default function MovieDetailPage() {
             playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
           }
-          const firstEpSlug = filteredEpisodes
-            .flatMap((server) => server.server_data ?? [])
-            .find((ep) => hasPlayableUrl(ep))?.slug;
-          const best = pickBestEpisodeByPriority(filteredEpisodes, firstEpSlug);
+          const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
+          const best = pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
           if (best) {
             handleSwitchServer(best.serverIndex);
             handleSelectEp(best.episode);
