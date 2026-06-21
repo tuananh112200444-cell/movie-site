@@ -111,6 +111,7 @@ const routes: RouteObject[] = [
   // TRANG CHỦ
   // ═══════════════════════════════════════════
   { path: '/', element: <Home /> },
+  { path: '/vu-tru-dam-my', element: <Home /> },
 
   // ═══════════════════════════════════════════
   // PHIM (chi tiết + tìm kiếm + lọc)
