@@ -67,7 +67,19 @@ const MOVIE_DETAIL_SELECT = [
   'updated_at',
 ].join(',');
 
+function isBlvietsubWatchPageUrl(url: string): boolean {
+  const raw = String(url || '').replace(/&amp;/g, '&').trim();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw);
+    return /(^|\.)blvietsub\.com$/i.test(parsed.hostname) && /\/+xem-phim\//i.test(parsed.pathname);
+  } catch {
+    return /blvietsub\.com\/+xem-phim\//i.test(raw);
+  }
+}
+
 function normalizeDailymotionUrl(url: string): string {
+  if (isBlvietsubWatchPageUrl(url)) return '';
   const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/video\/([a-zA-Z0-9]+)/i.exec(url);
   if (dm) return `https://www.dailymotion.com/embed/video/${dm[1]}`;
   const short = /^https?:\/\/dai\.ly\/([a-zA-Z0-9]+)/i.exec(url);

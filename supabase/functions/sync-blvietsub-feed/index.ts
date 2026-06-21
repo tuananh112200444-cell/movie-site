@@ -882,6 +882,100 @@ async function refreshSearchIndex(supabaseUrl: string): Promise<boolean> {
   }
 }
 
+function pickPlayableFromWatchPage(html: string, episodeNumber: number): { link_embed: string; link_m3u8: string } | null {
+  const tags = Array.from(html.matchAll(/<[^>]+class=["'][^"']*\bstreaming-server\b[^"']*["'][^>]*>/gi))
+    .map((match) => match[0]);
+  const tag = tags.find((candidate) => Number(extractAttr(candidate, 'data-id').match(/\d+/)?.[0] || 0) === episodeNumber) || tags[0] || '';
+  const rawLink = extractAttr(tag, 'data-link');
+  if (!rawLink || isBlvietsubWatchUrl(rawLink)) return null;
+  try {
+    new URL(rawLink);
+  } catch {
+    return null;
+  }
+  const type = extractAttr(tag, 'data-type').toLowerCase();
+  const isHls = type === 'm3u8' || /\.m3u8(?:[?#].*)?$/i.test(rawLink);
+  return {
+    link_embed: isHls ? '' : rawLink,
+    link_m3u8: isHls ? rawLink : '',
+  };
+}
+
+async function repairBadBlvietsubEmbeds(
+  supabase: SupabaseClient,
+  limit: number,
+): Promise<{ scanned: number; repaired: number; unresolved: number; remaining: number; errors: string[] }> {
+  const cappedLimit = Math.max(1, Math.min(limit, 500));
+  const { data: rows, error } = await supabase
+    .from('movie_episodes')
+    .select('id, episode_number, link_embed')
+    .eq('source', SOURCE_SITE)
+    .ilike('link_embed', '%blvietsub.com%xem-phim%')
+    .order('id', { ascending: true })
+    .limit(cappedLimit);
+  if (error) throw new Error(`bad embeds select: ${error.message}`);
+
+  let repaired = 0;
+  let unresolved = 0;
+  const errors: string[] = [];
+  const badRows = rows || [];
+  for (let index = 0; index < badRows.length; index += 6) {
+    const batch = badRows.slice(index, index + 6);
+    await Promise.all(batch.map(async (row) => {
+      const id = Number(row.id || 0);
+      const watchUrl = String(row.link_embed || '').replace(/&amp;/g, '&').trim();
+      const episodeNumber = Number(row.episode_number || 0);
+      if (!id || !watchUrl || !episodeNumber) {
+        unresolved += 1;
+        return;
+      }
+      try {
+        const response = await fetch(proxiedBlvietsubUrl(watchUrl), {
+          headers: BLVIETSUB_HEADERS,
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!response.ok) {
+          unresolved += 1;
+          return;
+        }
+        const playable = pickPlayableFromWatchPage(await response.text(), episodeNumber);
+        if (!playable || (!playable.link_embed && !playable.link_m3u8)) {
+          unresolved += 1;
+          return;
+        }
+        const { error: updateError } = await supabase
+          .from('movie_episodes')
+          .update(playable)
+          .eq('id', id);
+        if (updateError) {
+          errors.push(`episode ${id}: ${updateError.message}`);
+          unresolved += 1;
+          return;
+        }
+        repaired += 1;
+      } catch (error) {
+        unresolved += 1;
+        errors.push(`episode ${id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }));
+  }
+
+  const { count, error: countError } = await supabase
+    .from('movie_episodes')
+    .select('id', { count: 'exact', head: true })
+    .eq('source', SOURCE_SITE)
+    .ilike('link_embed', '%blvietsub.com%xem-phim%');
+  if (countError) throw new Error(`bad embeds count: ${countError.message}`);
+
+  return {
+    scanned: badRows.length,
+    repaired,
+    unresolved,
+    remaining: count || 0,
+    errors: errors.slice(0, 20),
+  };
+}
+
 async function readCursorOffset(supabase: SupabaseClient, cursorKey: string, limit: number): Promise<number> {
   if (!cursorKey) return 0;
   const { data, error } = await supabase
@@ -935,6 +1029,24 @@ serve(async (req) => {
   const errors: string[] = [];
 
   try {
+    if (url.searchParams.get('repair_bad_embeds') === '1') {
+      const repairLimit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 200), 500));
+      const result = await repairBadBlvietsubEmbeds(supabase, repairLimit);
+      await writeSyncLog(supabase, {
+        function_name: 'sync-blvietsub-feed-repair-embeds',
+        scanned: result.scanned,
+        inserted: result.repaired,
+        matched: 0,
+        errors: result.errors,
+        elapsed_ms: Date.now() - started,
+      });
+      return json({
+        success: result.errors.length === 0,
+        ...result,
+        elapsed_ms: Date.now() - started,
+      }, result.errors.length ? 207 : 200);
+    }
+
     const directUrl = url.searchParams.get('movie_url')?.trim();
     if (directUrl && /^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(directUrl)) {
       const page = await fetch(proxiedBlvietsubUrl(directUrl), {
