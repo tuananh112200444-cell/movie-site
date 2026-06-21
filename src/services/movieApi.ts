@@ -569,19 +569,24 @@ export function getImageUrl(path: string): string {
 }
 
 /**
- * Optimized image URL for homepage cards.
- * Uses wsrv.nl free proxy, but requests a 2x source so posters stay sharp on mobile retina screens.
- * Falls back to original URL if proxy fails.
+ * Optimized image URL for cards and hero images.
+ * Desktop gets a denser source for sharper large screens; mobile stays lighter but still retina-friendly.
  */
 const OPTIMIZE_ENABLED = true;
 export function getOptimizedImageUrl(path: string, width = 360, quality = 82): string {
   const original = getImageUrl(path);
   if (!OPTIMIZE_ENABLED || !original || original === FALLBACK_IMG) return original;
-  // Skip optimization for non-OPhim images (already optimized or external)
-  if (!original.includes('img.ophim.live') && !original.includes('ophim')) return original;
+  if (original.includes('wsrv.nl/?url=')) return original;
   // wsrv.nl free image proxy — resize + compress + WebP auto
-  const safeWidth = Math.max(240, Math.min(Math.round(width * 2), 1800));
-  const safeQuality = Math.max(82, Math.min(quality, 92));
+  const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth || 1440;
+  const dpr = typeof window === 'undefined' ? 2 : Math.min(window.devicePixelRatio || 1, 3);
+  const isDesktop = viewportWidth >= 1024;
+  const density = isDesktop ? Math.max(2.35, dpr) : Math.max(2, Math.min(dpr, 2.25));
+  const maxWidth = isDesktop ? 2600 : 1700;
+  const minQuality = isDesktop ? 88 : 84;
+  const maxQuality = isDesktop ? 95 : 90;
+  const safeWidth = Math.max(320, Math.min(Math.round(width * density), maxWidth));
+  const safeQuality = Math.max(minQuality, Math.min(quality, maxQuality));
   const encoded = encodeURIComponent(original);
   return `https://wsrv.nl/?url=${encoded}&w=${safeWidth}&q=${safeQuality}&output=webp&fit=cover&we`;
 }
@@ -596,20 +601,20 @@ export function getImageFallbacks(primaryPath?: string, altPath?: string): strin
 }
 
 export function getPosterUrl(path: string): string {
-  return getImageUrl(path);
+  return getOptimizedImageUrl(path, 620, 88);
 }
 export function getThumbUrl(path: string): string {
-  return getImageUrl(path);
+  return getOptimizedImageUrl(path, 1280, 88);
 }
 export function getFeaturedUrl(path: string): string {
-  return getImageUrl(path);
+  return getOptimizedImageUrl(path, 1180, 88);
 }
 export function getHeroUrl(path: string): string {
-  return getImageUrl(path);
+  return getOptimizedImageUrl(path, 1680, 90);
 }
 
 export function getSmallThumbUrl(path: string): string {
-  return getImageUrl(path);
+  return getOptimizedImageUrl(path, 420, 84);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

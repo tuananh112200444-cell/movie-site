@@ -3,6 +3,13 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  [role="tablist"] > button {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
