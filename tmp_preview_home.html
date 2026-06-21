@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <script>
+      (function () {
+        var RESET_KEY = 'kp_emergency_cache_reset_20260621_episode_fix_v1';
+        function hasReset() {
+          try { return localStorage.getItem(RESET_KEY) === '1'; }
+          catch (e) { return window.name.indexOf(RESET_KEY) !== -1; }
+        }
+        function markReset() {
+          try { localStorage.setItem(RESET_KEY, '1'); }
+          catch (e) { window.name = (window.name || '') + ' ' + RESET_KEY; }
+        }
+        if (hasReset()) return;
+        markReset();
+        try {
+          ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_supabase_search_index_v3'].forEach(function (key) {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+          });
+          Object.keys(sessionStorage).forEach(function (key) {
+            if (key.indexOf('detail_') === 0 || key.indexOf('search_v') === 0 || key.indexOf('kp_suggest_') === 0) {
+              sessionStorage.removeItem(key);
+            }
+          });
+        } catch (e) {}
+
+        var work = [];
+        if ('serviceWorker' in navigator) {
+          work.push(
+            navigator.serviceWorker.getRegistrations()
+              .then(function (registrations) {
+                return Promise.all(registrations.map(function (registration) {
+                  return registration.unregister();
+                }));
+              })
+              .catch(function () {})
+          );
+        }
+        if ('caches' in window) {
+          work.push(
+            caches.keys()
+              .then(function (names) {
+                return Promise.all(names.map(function (name) {
+                  return name.indexOf('khophim') === 0 ? caches.delete(name) : Promise.resolve(false);
+                }));
+              })
+              .catch(function () {})
+          );
+        }
+        if (work.length) {
+          Promise.all(work).then(function () {
+            setTimeout(function () { window.location.reload(); }, 150);
+          });
+        }
+      })();
+    </script>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-M7BRFKFQ');</script>
+    <!-- End Google Tag Manager -->
+    <meta charset="UTF-8" />
+    <!-- BUILD_REV: 2026-05-19-v1067-force-rebuild -->
+    <!-- Title is managed by React SEO component - do not add static title here -->
+    <link rel="icon" type="image/png" href="https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover" />
+
+    <!-- Theme color -->
+    <meta name="theme-color" content="#080a10" />
+    <meta name="msapplication-TileColor" content="#080a10" />
+
+    <!-- Preconnect — critical domains -->
+    <link rel="preconnect" href="https://img.ophim.live" crossorigin="anonymous">
+    <link rel="preconnect" href="https://wsrv.nl" crossorigin="anonymous">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin="anonymous">
+    <link rel="preconnect" href="https://public.readdy.ai" crossorigin="anonymous">
+    <link rel="preconnect" href="https://static.readdy.ai" crossorigin="anonymous">
+    <link rel="preconnect" href="https://storage.readdy-site.link" crossorigin="anonymous">
+    <link rel="preconnect" href="https://readdy.ai" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://img.ophim.live">
+    <link rel="dns-prefetch" href="https://wsrv.nl">
+    <link rel="dns-prefetch" href="https://public.readdy.ai">
+    <link rel="dns-prefetch" href="https://static.readdy.ai">
+    <link rel="dns-prefetch" href="https://storage.readdy-site.link">
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;900&display=swap">
+
+    <!-- ========================================================== -->
+    <!-- CRITICAL PRE-REACT SCRIPT: preload hero images before React mounts (from home-proxy cache only) -->
+    <!-- ========================================================== -->
+    <script>
+      (function() {
+        'use strict';
+        var CACHE_KEY = 'kp_home_proxy_v4';
+        var IMG_BASE = 'https://img.ophim.live/uploads/movies/';
+        function getImgUrl(p) { return (!p || p.indexOf('http') === 0) ? (p || '') : IMG_BASE + p; }
+        function injectPreload(url) {
+          if (!url || document.querySelector('link[rel="preload"][href="' + url + '"]')) return;
+          var l = document.createElement('link');
+          l.rel = 'preload'; l.as = 'image'; l.fetchPriority = 'high'; l.href = url;
+          document.head.appendChild(l);
+        }
+        function forceLoad(url) {
+          if (!url) return;
+          var i = new Image(); i.decoding = 'async'; i.loading = 'eager'; i.src = url;
+          i.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+          function attach() {
+            if (!document.body) return;
+            document.body.appendChild(i);
+          }
+          if (document.body) attach();
+          else window.addEventListener('DOMContentLoaded', attach, { once: true });
+          setTimeout(function(){ if (i.parentNode) i.parentNode.removeChild(i); }, 30000);
+        }
+        try {
+          var raw = sessionStorage.getItem(CACHE_KEY);
+          if (raw) {
+            var data = JSON.parse(raw);
+            var sections = data && data.sections ? data.sections : data;
+            var trending = (sections && sections.trending) ? sections.trending : [];
+            var count = 0;
+            for (var i = 0; i < trending.length && count < 1; i++) {
+              var it = trending[i];
+              var ep = String(it.episode_current || '').toLowerCase().trim();
+              if (ep === 'trailer') continue;
+              count++;
+              if (it.thumb_url) {
+                var heroSrc = getImgUrl(it.thumb_url);
+                injectPreload(heroSrc);
+                forceLoad(heroSrc);
+              }
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
+
+    <!-- Icon CSS: defer load -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css"></noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+
+    <!-- Inline critical CSS -->
+    <style>
+      html,body{background:#080a10;color:#fff;margin:0;padding:0;font-family:'Be Vietnam Pro',system-ui,sans-serif}
+      #root{min-height:100vh}
+      .hero-placeholder{width:100%;aspect-ratio:16/7;min-height:280px;background:#0d0f18}
+      .navbar-critical{position:fixed;top:0;left:0;right:0;z-index:50;height:56px}
+      /* Blur placeholder — hiển thị ngay lập tức */
+      .blur-placeholder{
+        position:absolute;inset:0;
+        background:
+          radial-gradient(ellipse at 30% 20%, rgba(45,30,60,0.4) 0%, transparent 50%),
+          radial-gradient(ellipse at 70% 80%, rgba(20,25,45,0.5) 0%, transparent 50%),
+          #13151f;
+      }
+    </style>
+    <meta name="google-site-verification" content="GM4SuQdGYgfPLXKhjCaiAyZOHaH-aSGFZLPNkXS-CI8" />
+
+    <!-- Google tag (gtag.js) -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function(){dataLayer.push(arguments);};
+      gtag('js', new Date());
+      gtag('config', 'G-6B5GLB9W6H');
+    </script>
+    <script defer src="https://www.googletagmanager.com/gtag/js?id=G-6B5GLB9W6H"></script>
+    <script type="module" crossorigin src="/assets/index-BfAfnEG_.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-D6y2VlaL.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-supabase-C7KXewyj.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-router-BGWfs99u.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-i18n-DBAusW8m.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-BrHa3ins.css">
+  <link rel="modulepreload" href="/assets/vendor-react-D6y2VlaL.js" crossorigin>
+    <link rel="modulepreload" href="/assets/vendor-router-BGWfs99u.js" crossorigin>
+    <link rel="modulepreload" href="/assets/vendor-i18n-DBAusW8m.js" crossorigin>
+</head>
+  <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-M7BRFKFQ" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
+    <div id="root"></div>
+    <!-- noscript: fallback for crawlers -->
+    <noscript>
+      <div style="font-family:sans-serif;max-width:900px;margin:0 auto;padding:24px;color:#333">
+        <p class="text-xl font-bold">KhoPhim – Xem Phim Online Vietsub HD Miễn Phí 2026</p>
+        <p>
+          KhoPhim (khophim.org) là website xem phim online miễn phí vietsub hàng đầu Việt Nam với hơn 50,000 bộ phim chất lượng HD Full HD.
+          KhoPhim cung cấp kho phim lẻ vietsub, phim bộ vietsub, phim chiếu rạp, hoạt hình, anime từ Hàn Quốc, Trung Quốc, Âu Mỹ, Nhật Bản, Thái Lan và Việt Nam.
+          Cập nhật hàng ngày, có phụ đề tiếng Việt, không cần đăng ký tài khoản, không quảng cáo. Truy cập KhoPhim ngay hôm nay!
+        </p>
+        <h2>Danh mục xem phim miễn phí</h2>
+        <ul>
+          <li><a href="/phim-le">Xem Phim Lẻ Vietsub – Phim Điện Ảnh HD Mới Nhất 2025</a></li>
+          <li><a href="/phim-bo">Xem Phim Bộ Vietsub – Series Hay Nhất Cập Nhật 2025</a></li>
+          <li><a href="/phim-chieu-rap">Xem Phim Chiếu Rạp – Blockbuster HD Mới Nhất</a></li>
+          <li><a href="/phim-han-quoc">Xem Phim Hàn Quốc Vietsub – Drama Hàn HD 2025</a></li>
+          <li><a href="/phim-trung-quoc">Xem Phim Trung Quốc Vietsub – Cổ Trang, Tiên Hiệp HD</a></li>
+          <li><a href="/phim-au-my">Xem Phim Âu Mỹ Vietsub – Hollywood Blockbuster HD</a></li>
+          <li><a href="/phim-nhat-ban">Xem Anime Vietsub – Phim Nhật Bản HD Mới Nhất</a></li>
+          <li><a href="/phim-thai-lan">Xem Phim Thái Lan Vietsub – Lakorn &amp; BL Drama HD</a></li>
+          <li><a href="/phim-viet-nam">Xem Phim Việt Nam – Chiếu Rạp &amp; Phim Bộ Việt HD</a></li>
+          <li><a href="/hoat-hinh">Xem Hoạt Hình &amp; Anime Online – Miễn Phí HD</a></li>
+          <li><a href="/tv-shows">Xem TV Shows Vietsub – Series Truyền Hình Hay Nhất</a></li>
+          <li><a href="/search">Tìm Kiếm Phim Online – Tìm Phim Nhanh</a></li>
+          <li><a href="/filter">Lọc Phim Theo Thể Loại &amp; Quốc Gia</a></li>
+        </ul>
+        <p>
+          Để xem phim, vui lòng bật JavaScript trong trình duyệt của bạn.
+          Truy cập <a href="https://khophim.org">khophim.org</a> – trang khophim xem phim online miễn phí vietsub không quảng cáo tốt nhất Việt Nam.
+        </p>
+      </div>
+    </noscript>
+  </body>
+</html>
