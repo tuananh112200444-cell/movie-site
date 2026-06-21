@@ -30,6 +30,21 @@ interface HlsQualityLevel {
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 const MAX_STREAM_RECOVERY_ATTEMPTS = 5;
 const STALL_RECOVERY_DELAY_MS = 5000;
+const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
+
+function PlayerWatermark() {
+  return (
+    <div className="pointer-events-none absolute left-2 top-2 z-30 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-white/85 shadow-lg shadow-black/30 backdrop-blur-md sm:left-4 sm:top-4 sm:gap-2 sm:px-2.5">
+      <img
+        src={PLAYER_LOGO_URL}
+        alt=""
+        className="h-5 w-5 rounded object-contain sm:h-6 sm:w-6"
+        draggable={false}
+      />
+      <span className="text-[10px] font-black tracking-wide sm:text-xs">khophim.org</span>
+    </div>
+  );
+}
 
 function fmtTime(s: number): string {
   if (!isFinite(s) || s < 0) return '0:00';
@@ -788,6 +803,7 @@ export default function LightweightHlsPlayer({
           />
         )}
       </video>
+      <PlayerWatermark />
 
       {/* Loading */}
       {!loaded && (

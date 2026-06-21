@@ -22,6 +22,7 @@ function getOriginalDailymotionUrl(url: string): string {
 
 function isIframeSource(url: string): boolean {
   const u = url.toLowerCase();
+  if (isBlvietsubWatchPageUrl(u)) return false;
   return (
     u.includes('youtube.com/embed') ||
     u.includes('youtu.be') ||
@@ -31,6 +32,22 @@ function isIframeSource(url: string): boolean {
     u.includes('vimeo.com') ||
     u.includes('player.vimeo.com')
   );
+}
+
+function isBlvietsubWatchPageUrl(url: string): boolean {
+  const raw = String(url || '').replace(/&amp;/g, '&').trim();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw);
+    return /(^|\.)blvietsub\.com$/i.test(parsed.hostname) && /\/+xem-phim\//i.test(parsed.pathname);
+  } catch {
+    return /blvietsub\.com\/+xem-phim\//i.test(raw);
+  }
+}
+
+function getSafeEmbedUrl(url: string): string {
+  if (isBlvietsubWatchPageUrl(url)) return '';
+  return normalizeDailymotionUrl(url);
 }
 
 function isDirectVideo(url: string): boolean {
@@ -118,7 +135,22 @@ interface PlayerBoxProps {
 }
 
 const DIRECT_VIDEO_SPEEDS = [1, 1.25, 1.5, 2];
+const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
 const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
+
+function PlayerWatermark() {
+  return (
+    <div className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-white/85 shadow-lg shadow-black/30 backdrop-blur-md sm:left-4 sm:top-4 sm:gap-2 sm:px-2.5">
+      <img
+        src={PLAYER_LOGO_URL}
+        alt=""
+        className="h-5 w-5 rounded object-contain sm:h-6 sm:w-6"
+        draggable={false}
+      />
+      <span className="text-[10px] font-black tracking-wide sm:text-xs">khophim.org</span>
+    </div>
+  );
+}
 
 export default function PlayerBox({
   episode,
@@ -179,7 +211,8 @@ export default function PlayerBox({
     }
   }, []);
 
-  const embedSrc = useMemo(() => normalizeDailymotionUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
+  const embedIsSourcePage = useMemo(() => isBlvietsubWatchPageUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
+  const embedSrc = useMemo(() => getSafeEmbedUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
   const dmOriginalUrl = useMemo(() => getOriginalDailymotionUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
   const directVideoSrc = useMemo(() => {
     const streamUrl = episode?.link_m3u8 ?? '';
@@ -285,7 +318,7 @@ export default function PlayerBox({
       error_message: 'HLS fatal callback reached PlayerBox',
     });
     const embedUrl = episode?.link_embed;
-    if (embedUrl && playerMode === 'hls') {
+    if (embedUrl && !isBlvietsubWatchPageUrl(embedUrl) && playerMode === 'hls') {
       setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
       return;
     }
@@ -301,7 +334,7 @@ export default function PlayerBox({
       error_message: 'direct video element error',
     });
     const embedUrl = episode?.link_embed ?? '';
-    if (embedUrl && isIframeSource(embedUrl) && playerMode !== 'embed') {
+    if (embedUrl && !isBlvietsubWatchPageUrl(embedUrl) && isIframeSource(embedUrl) && playerMode !== 'embed') {
       setPlayerMode('embed');
       return;
     }
@@ -377,17 +410,15 @@ export default function PlayerBox({
                 setIframeBlocked(true);
               }}
             />
+            {iframeLoaded && <PlayerWatermark />}
             {/* Overlay fullscreen button on embed video */}
             {iframeLoaded && (
               <button
                 onClick={toggleEmbedFullscreen}
                 title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-                className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white/80 hover:text-white border border-white/10 backdrop-blur-sm transition-all cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                className="absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-lg bg-black/60 text-white/80 border border-white/10 backdrop-blur-sm transition-all hover:bg-black/80 hover:text-white cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
               >
                 <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-base`} />
-                <span className="text-[11px] font-medium hidden sm:inline">
-                  {isEmbedFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}
-                </span>
               </button>
             )}
           </div>
@@ -419,10 +450,25 @@ export default function PlayerBox({
         )}
 
         {playerMode === 'embed' && !embedSrc && !iframeBlocked && (
-          <div className="aspect-video w-full bg-[#0d0f1a] flex items-center justify-center">
-            <div className="text-center">
-              <i className="ri-play-circle-line text-5xl text-white/10 mb-2 block" />
-              <p className="text-white/30 text-sm">Chọn tập để bắt đầu xem</p>
+          <div className="aspect-video w-full bg-[#0d0f1a] flex items-center justify-center px-4">
+            <div className="max-w-sm text-center">
+              <i className={`${embedIsSourcePage ? 'ri-links-line' : 'ri-play-circle-line'} text-5xl text-white/10 mb-2 block`} />
+              <p className="text-white/50 text-sm font-semibold">
+                {embedIsSourcePage ? 'Nguồn phim này đang cần đồng bộ lại player' : 'Chọn tập để bắt đầu xem'}
+              </p>
+              {embedIsSourcePage && (
+                <p className="mt-1 text-xs text-white/30">
+                  Hệ thống đã chặn link trang BLVietsub để không nhúng cả website vào khung xem phim.
+                </p>
+              )}
+              {embedIsSourcePage && onRefetchMovie && (
+                <button
+                  onClick={onRefetchMovie}
+                  className="mt-3 rounded-lg bg-red-500 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-red-600"
+                >
+                  Tải lại nguồn phim
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -476,6 +522,7 @@ export default function PlayerBox({
               )}
               Trình duyệt không hỗ trợ phát video.
             </video>
+            <PlayerWatermark />
           </div>
         )}
 
@@ -501,6 +548,7 @@ export default function PlayerBox({
       </div>
 
       {/* Control bar */}
+      {playerMode !== 'embed' && (
       <div className="mt-1.5 sm:mt-2 flex items-center justify-between gap-2 px-1 flex-wrap">
         <div className="flex items-center gap-1.5">
           <button onClick={onPrev} disabled={!hasPrev} title="Tập trước"
@@ -526,7 +574,7 @@ export default function PlayerBox({
               </button>
               <button onClick={() => setPlayerMode(isIframeSource(episode.link_embed) ? 'embed' : 'video')}
                 className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                  playerMode === 'embed' || playerMode === 'video' ? 'bg-white/15 text-white' : 'text-white/35 hover:text-white/70'
+                  playerMode === 'video' ? 'bg-white/15 text-white' : 'text-white/35 hover:text-white/70'
                 }`}>
                 {isIframeSource(episode.link_embed) ? 'Nhúng' : 'MP4'}
               </button>
@@ -561,7 +609,7 @@ export default function PlayerBox({
           {episode && episode.name !== 'Full' && (
             <span className="text-[11px] bg-white/5 text-white/40 border border-white/8 px-2 py-0.5 rounded-md whitespace-nowrap">{episode.name}</span>
           )}
-          {(playerMode === 'embed' || playerMode === 'video') && (
+          {playerMode === 'video' && (
             <button
               onClick={toggleEmbedFullscreen}
               title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
@@ -572,6 +620,7 @@ export default function PlayerBox({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
