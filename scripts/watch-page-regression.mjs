@@ -36,6 +36,22 @@ function getHighestEpisodeFromServers(episodes) {
   }, 0);
 }
 
+function getAdvertisedCurrentEpisode(detail) {
+  return [detail.movie?.current_episode, detail.movie?.episode_current].reduce((max, value) => {
+    if (value == null) return max;
+    const match = String(value).match(/(\d+)/);
+    const num = match ? Number(match[1]) : Number(value);
+    return Number.isFinite(num) ? Math.max(max, num) : max;
+  }, 0);
+}
+
+function shouldRefreshEpisodeDetail(detail) {
+  const displayedCurrent = getAdvertisedCurrentEpisode(detail);
+  if (displayedCurrent < 2) return false;
+  const playableCurrent = getHighestEpisodeFromServers(detail.episodes ?? []);
+  return playableCurrent < displayedCurrent;
+}
+
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -71,5 +87,18 @@ const playableEpisode = getHighestEpisodeFromServers([
   { server_name: 'Vietsub #1', server_data: [{ name: '50', slug: '50', link_m3u8: 'https://cdn.test/50.m3u8' }] },
 ]);
 assert(playableEpisode < metadataEpisode, 'Regression fixture should cover metadata higher than playable episodes');
+
+const staleTheAirLikeDetail = {
+  movie: { name: 'Gio Thoang Tinh Theo', episode_current: 'Tap 6', current_episode: 6 },
+  episodes: [
+    { server_name: 'stale server', server_data: [{ name: '1', slug: '1', link_m3u8: 'https://cdn.test/1.m3u8' }] },
+  ],
+};
+const freshTheAirLikeDetail = {
+  movie: { name: 'Gio Thoang Tinh Theo', episode_current: 'Tap 6', current_episode: 6 },
+  episodes: servers,
+};
+assert(shouldRefreshEpisodeDetail(staleTheAirLikeDetail), 'Detail page must refresh when badge says episode 6 but only episode 1 is loaded');
+assert(!shouldRefreshEpisodeDetail(freshTheAirLikeDetail), 'Detail page must not refresh when playable episodes already match the badge');
 
 console.log('watch-page regression passed');
