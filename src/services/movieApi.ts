@@ -2823,12 +2823,13 @@ async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailRe
 }
 
 export async function fetchMovieDetail(slug: string, forceRefresh = false, source?: string): Promise<MovieDetailResponse | null> {
-  const cacheKey = `detail_v5_${slug}`;
+  const cacheKey = `detail_v6_${slug}`;
   // Xóa cache key cũ nếu còn sót
   apiCache.delete(`detail_${slug}`);
   apiCache.delete(`detail_v2_${slug}`);
   apiCache.delete(`detail_v3_${slug}`);
   apiCache.delete(`detail_v4_${slug}`);
+  apiCache.delete(`detail_v5_${slug}`);
 
   const ttl = TTL_CONFIG.detail;
   const cached = getCached<MovieDetailResponse>(cacheKey, ttl);
@@ -2844,6 +2845,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     apiCache.delete(`detail_v2_${slug}`);
     apiCache.delete(`detail_v3_${slug}`);
     apiCache.delete(`detail_v4_${slug}`);
+    apiCache.delete(`detail_v5_${slug}`);
     detailInflight.delete(slug);
   }
 
@@ -4051,6 +4053,7 @@ export function evictAllMovieCaches(slug: string): void {
     `detail_v3_${slug}`,
     `detail_v4_${slug}`,
     `detail_v5_${slug}`,
+    `detail_v6_${slug}`,
   ];
   // 1. RAM cache
   cacheKeys.forEach((key) => apiCache.delete(key));

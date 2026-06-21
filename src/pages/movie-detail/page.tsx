@@ -57,6 +57,30 @@ function getHighestEpisodeFromServers(episodes: EpisodeServer[]): number {
   }, 0);
 }
 
+function getAdvertisedCurrentEpisode(detail: MovieDetailResponse): number {
+  const movie = detail.movie as MovieDetailResponse['movie'] & {
+    current_episode?: number | string;
+    total_episodes?: number | string;
+  };
+  const candidates: Array<number | string | undefined> = [
+    movie.current_episode,
+    movie.episode_current,
+  ];
+  return candidates.reduce<number>((max, value) => {
+    if (value == null) return max;
+    const match = String(value).match(/\d+/);
+    const num = match ? Number(match[0]) : Number(value);
+    return Number.isFinite(num) ? Math.max(max, num) : max;
+  }, 0);
+}
+
+function shouldRefreshEpisodeDetail(detail: MovieDetailResponse): boolean {
+  const displayedCurrent = getAdvertisedCurrentEpisode(detail);
+  if (displayedCurrent < 2) return false;
+  const playableCurrent = getHighestEpisodeFromServers(deduplicateAndLimitServers(detail.episodes ?? []));
+  return playableCurrent < displayedCurrent;
+}
+
 function getLatestPlayableEpisodeSlug(episodes: EpisodeServer[]): string | undefined {
   const latest = episodes
     .flatMap((server) => server.server_data ?? [])
@@ -143,24 +167,36 @@ export default function MovieDetailPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     fetchMovieDetail(slug, isFresh, source)
-      .then((data) => {
+      .then(async (data) => {
         if (!data) {
           setError(`Không thể tải thông tin phim "${slug}". Phim không tồn tại hoặc đang được cập nhật.`);
           return;
         }
-        setDetail(data);
-        const deduped = deduplicateAndLimitServers(data.episodes ?? []);
+        let resolvedData = data;
+        if (!isFresh && shouldRefreshEpisodeDetail(data)) {
+          const refreshed = await fetchMovieDetail(slug, true, source).catch(() => null);
+          const oldMax = getHighestEpisodeFromServers(deduplicateAndLimitServers(data.episodes ?? []));
+          const refreshedMax = refreshed
+            ? getHighestEpisodeFromServers(deduplicateAndLimitServers(refreshed.episodes ?? []))
+            : 0;
+          if (refreshed && refreshedMax > oldMax) {
+            resolvedData = refreshed;
+          }
+        }
+
+        setDetail(resolvedData);
+        const deduped = deduplicateAndLimitServers(resolvedData.episodes ?? []);
         if (deduped.length > 0) {
           const bestIdx = pickBestServerIndex(deduped);
-          const origIdx = (data.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
+          const origIdx = (resolvedData.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
           setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
         } else {
           setActiveServer(-1);
         }
 
         // DEFER related movies: only fetch after 2s idle or when user scrolls near bottom
-        const genre = data.movie?.category?.[0]?.slug;
-        const country = data.movie?.country?.[0]?.slug;
+        const genre = resolvedData.movie?.category?.[0]?.slug;
+        const country = resolvedData.movie?.country?.[0]?.slug;
         if ((genre || country) && !relatedFetchedRef.current) {
           relatedFetchedRef.current = true;
           const run = () => {
