@@ -4,7 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const CACHE_ID = 'search_index_v2';
-const CACHE_TTL_MIN = 30;
+const CACHE_TTL_MIN = 240;
 const REFRESH_LOCK_MS = 90 * 1000;
 
 const CORS_HEADERS = {
@@ -30,9 +30,16 @@ function timeoutSignal(ms: number): AbortSignal {
   return controller.signal;
 }
 
+function parsePostgresTimestamp(value: string | null | undefined): number {
+  if (!value) return 0;
+  const direct = Date.parse(value);
+  if (Number.isFinite(direct)) return direct;
+  return Date.parse(value.replace(' ', 'T'));
+}
+
 function clampLimit(value: string | null): number {
-  const parsed = Number(value || 800);
-  if (!Number.isFinite(parsed)) return 800;
+  const parsed = Number(value || 3000);
+  if (!Number.isFinite(parsed)) return 3000;
   return Math.min(Math.max(Math.floor(parsed), 100), 5000);
 }
 
@@ -47,7 +54,7 @@ async function fetchFreshIndex(
     const end = Math.min(offset + chunkSize, limit) - 1;
     const { data, error } = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, imdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note, seo_catalog_status, catalog_source, tmdb_media_type, tmdb_popularity, tmdb_vote_count, tmdb_vote_average, catalog_synced_at')
+      .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, category, country, updated_at, source_site, source_name')
       .eq('is_published', true)
       .order('updated_at', { ascending: false })
       .range(offset, end)
@@ -63,7 +70,7 @@ async function fetchFreshIndex(
 
 function isRefreshLocked(cacheRow: { sections: Record<string, unknown>; updated_at: string; expires_at: string } | null): boolean {
   const lockUntil = String(cacheRow?.sections?.refresh_lock_until ?? '');
-  return Boolean(lockUntil && lockUntil > new Date().toISOString());
+  return Boolean(lockUntil && parsePostgresTimestamp(lockUntil) > Date.now());
 }
 
 async function lockRefresh(
@@ -83,7 +90,7 @@ async function lockRefresh(
       updated_at: cacheRow?.updated_at ?? new Date().toISOString(),
       expires_at: cacheRow?.expires_at ?? new Date(Date.now() + REFRESH_LOCK_MS).toISOString(),
     })
-    .abortSignal(timeoutSignal(700));
+    .abortSignal(timeoutSignal(1500));
 }
 
 serve(async (req) => {
@@ -104,7 +111,7 @@ serve(async (req) => {
       .from('home_page_cache')
       .select('sections, updated_at, expires_at')
       .eq('id', CACHE_ID)
-      .abortSignal(timeoutSignal(800))
+      .abortSignal(timeoutSignal(5000))
       .maybeSingle();
     if (data) cacheRow = data as unknown as typeof cacheRow;
   } catch {
@@ -114,7 +121,8 @@ serve(async (req) => {
   const now = new Date();
   const nowIso = now.toISOString();
   const cachedItems = (cacheRow?.sections?.items ?? []) as unknown[];
-  const cacheValid = cacheRow && cacheRow.expires_at > nowIso && cachedItems.length > 0;
+  const cacheExpiresAt = parsePostgresTimestamp(cacheRow?.expires_at);
+  const cacheValid = cacheRow && Number.isFinite(cacheExpiresAt) && cacheExpiresAt > now.getTime() && cachedItems.length >= limit;
 
   if (cacheValid && !forceRefresh) {
     return jsonResponse(
@@ -127,7 +135,7 @@ serve(async (req) => {
     );
   }
 
-  if (cachedItems.length > 0 && !forceRefresh) {
+  if (cachedItems.length >= Math.min(limit, 800) && !forceRefresh) {
     const runtime = globalThis as unknown as {
       EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
     };
@@ -159,7 +167,8 @@ serve(async (req) => {
     );
   }
 
-  const items = await fetchFreshIndex(supabase, limit);
+  const fetchLimit = Math.max(limit, 3000);
+  const items = await fetchFreshIndex(supabase, fetchLimit);
   if (items.length > 0) {
     try {
       await supabase
@@ -171,14 +180,14 @@ serve(async (req) => {
           updated_at: nowIso,
           expires_at: new Date(now.getTime() + CACHE_TTL_MIN * 60 * 1000).toISOString(),
         })
-        .abortSignal(timeoutSignal(800));
+        .abortSignal(timeoutSignal(5000));
     } catch {
       /* cache write is best-effort */
     }
   }
 
   return jsonResponse(
-    { status: true, source: 'fresh', items, updated_at: nowIso },
+    { status: true, source: 'fresh', items: items.slice(0, limit), updated_at: nowIso },
     200,
     {
       'Cache-Control': 'public, max-age=120, stale-while-revalidate=900',

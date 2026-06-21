@@ -1666,7 +1666,7 @@ let supabaseSearchIndexInflight: Promise<MovieItem[]> | null = null;
 
 export async function fetchSupabaseSearchIndex(options: { limit?: number; signal?: AbortSignal } = {}): Promise<MovieItem[]> {
   if (!ENABLE_SUPABASE_TEXT_SEARCH) return [];
-  const limit = options.limit ?? 800;
+  const limit = options.limit ?? 3000;
   const cacheKey = `${SUPABASE_SEARCH_INDEX_KEY}_${limit}`;
 
   try {

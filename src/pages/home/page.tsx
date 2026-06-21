@@ -557,7 +557,7 @@ export default function Home() {
   useEffect(() => {
     prefetchCriticalRoutes();
     const warmSearchIndex = () => {
-      fetchSupabaseSearchIndex({ limit: 800 }).catch(() => {});
+      fetchSupabaseSearchIndex({ limit: 3000 }).catch(() => {});
     };
     if ('requestIdleCallback' in window) {
       requestIdleCallback(warmSearchIndex, { timeout: 6000 });
