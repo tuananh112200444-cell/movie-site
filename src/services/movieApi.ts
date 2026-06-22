@@ -821,11 +821,11 @@ async function fetchMoviesFromSupabaseList(params: {
     const { data, count, error } = await query;
     if (error || !data || data.length === 0) return null;
 
-    const items = sortListItems(
+    const items = await enrichMoviesWithSupabaseEpisodeCounts(sortListItems(
       (data as Record<string, unknown>[]).map(toSupabaseMovieItem),
       params.sortField,
       params.sortType,
-    ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer');
+    ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer'));
     const totalItems = count ?? items.length;
 
     return {
@@ -1664,7 +1664,10 @@ export async function searchMoviesInSupabase(
       }
     }
 
-    const items: MovieItem[] = Array.from(recordsById.values()).map(toSupabaseMovieItem);
+    const items = await enrichMoviesWithSupabaseEpisodeCounts(
+      Array.from(recordsById.values()).map(toSupabaseMovieItem),
+      controller.signal,
+    );
     return sortMoviesForSearch(mergeMoviesUnique(items), kw, 'relevance').slice(0, limit);
   } catch (e) {
     if ((e as Error)?.name !== 'AbortError') {
@@ -2438,23 +2441,45 @@ async function enrichMoviesWithSupabaseEpisodeCounts(items: MovieItem[], signal?
 
   try {
     const maxByMovieId = new Map<string, number>();
+    const setMaxEpisode = (movieId: string, episodeNumber: number) => {
+      if (!movieId || !Number.isFinite(episodeNumber) || episodeNumber <= 0) return;
+      maxByMovieId.set(movieId, Math.max(maxByMovieId.get(movieId) || 0, episodeNumber));
+    };
     const chunkSize = 200;
     for (let i = 0; i < ids.length; i += chunkSize) {
       const chunk = ids.slice(i, i + chunkSize);
-      const { data, error } = await supabase
-        .from('movie_episodes')
-        .select('movie_id, episode_number, source')
-        .in('movie_id', chunk)
-        .order('episode_number', { ascending: false })
-        .abortSignal(signal);
-      if (error) continue;
+      const [movieEpisodesResult, episodesResult, streamsResult] = await Promise.all([
+        supabase
+          .from('movie_episodes')
+          .select('movie_id, episode_number, source')
+          .in('movie_id', chunk)
+          .order('episode_number', { ascending: false })
+          .abortSignal(signal),
+        supabase
+          .from('episodes')
+          .select('movie_id, episode_number')
+          .in('movie_id', chunk)
+          .order('episode_number', { ascending: false })
+          .abortSignal(signal),
+        supabase
+          .from('streams')
+          .select('movie_id, episode_slug, is_active')
+          .in('movie_id', chunk)
+          .eq('is_active', true)
+          .abortSignal(signal),
+      ]);
 
-      for (const row of (data ?? []) as Record<string, unknown>[]) {
+      for (const row of (movieEpisodesResult.data ?? []) as Record<string, unknown>[]) {
         if (String(row.source || '').toLowerCase() === 'hidden') continue;
-        const movieId = String(row.movie_id || '');
-        const episodeNumber = Number(row.episode_number || 0);
-        if (!movieId || !Number.isFinite(episodeNumber) || episodeNumber <= 0) continue;
-        maxByMovieId.set(movieId, Math.max(maxByMovieId.get(movieId) || 0, episodeNumber));
+        setMaxEpisode(String(row.movie_id || ''), Number(row.episode_number || 0));
+      }
+
+      for (const row of (episodesResult.data ?? []) as Record<string, unknown>[]) {
+        setMaxEpisode(String(row.movie_id || ''), Number(row.episode_number || 0));
+      }
+
+      for (const row of (streamsResult.data ?? []) as Record<string, unknown>[]) {
+        setMaxEpisode(String(row.movie_id || ''), getEpisodeNumberFromText(String(row.episode_slug || '')));
       }
     }
 
@@ -2462,7 +2487,7 @@ async function enrichMoviesWithSupabaseEpisodeCounts(items: MovieItem[], signal?
     return items.map((item) => {
       const liveMax = maxByMovieId.get(item._id) || 0;
       const currentMax = Math.max(Number(item.current_episode || 0), getEpisodeNumberFromText(item.episode_current));
-      if (!liveMax || liveMax <= currentMax) return item;
+      if (!liveMax || !currentMax || liveMax === currentMax) return item;
       return normalizeMovieEpisodeCounts({
         ...item,
         episode_current: `Tập ${liveMax}`,
