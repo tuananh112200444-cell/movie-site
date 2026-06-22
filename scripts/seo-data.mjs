@@ -1,6 +1,20 @@
 export const SITE_URL = 'https://khophim.org';
 
 export const seoLandingUrls = [
+  { path: '/xem-phim-online', changefreq: 'weekly', priority: '0.94' },
+  { path: '/phim-vietsub', changefreq: 'weekly', priority: '0.92' },
+  { path: '/phim-thuyet-minh', changefreq: 'weekly', priority: '0.88' },
+  { path: '/phim-long-tieng', changefreq: 'weekly', priority: '0.86' },
+  { path: '/phim-full-hd', changefreq: 'weekly', priority: '0.88' },
+  { path: '/phim-hay', changefreq: 'weekly', priority: '0.90' },
+  { path: '/phim-2026', changefreq: 'daily', priority: '0.90' },
+  { path: '/phim-2025', changefreq: 'monthly', priority: '0.74' },
+  { path: '/phim-2024', changefreq: 'monthly', priority: '0.70' },
+  { path: '/phim-4k', changefreq: 'weekly', priority: '0.78' },
+  { path: '/phim-hoan-tat', changefreq: 'weekly', priority: '0.86' },
+  { path: '/phim-dang-chieu', changefreq: 'daily', priority: '0.88' },
+  { path: '/phim-trailer', changefreq: 'daily', priority: '0.82' },
+
   { path: '/phim-moi-cap-nhat', changefreq: 'daily', priority: '0.95' },
   { path: '/phim-moi-nhat', changefreq: 'daily', priority: '0.95' },
   { path: '/phim-hot-2026', changefreq: 'daily', priority: '0.90' },

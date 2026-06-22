@@ -77,6 +77,31 @@ const SEO = memo(function SEO({
 
   const finalOgImage = ogImage ?? `${SITE_URL}/og-image.jpg`;
   const schemas = schema ? (Array.isArray(schema) ? schema : [schema]) : [];
+  const siteSchemas = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      '@id': `${SITE_URL}/#website`,
+      name: SITE_NAME_SHORT,
+      alternateName: ['Kho Phim', 'khophim.org'],
+      url: SITE_URL,
+      inLanguage: 'vi-VN',
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: `${SITE_URL}/search?q={search_term_string}`,
+        'query-input': 'required name=search_term_string',
+      },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      '@id': `${SITE_URL}/#organization`,
+      name: SITE_NAME_SHORT,
+      url: SITE_URL,
+      logo: `${SITE_URL}/logo.png`,
+      sameAs: ['https://www.tiktok.com/@khophim.org'],
+    },
+  ];
   const today = new Date().toISOString().split('T')[0];
   const updatedDate = (updatedAt ?? today).split('T')[0];
   const robotsContent = noIndex
@@ -149,7 +174,7 @@ const SEO = memo(function SEO({
       {canonicalUrl && <meta name="twitter:url" content={canonicalUrl} />}
 
       {/* Schema.org JSON-LD */}
-      {schemas.map((s, i) => (
+      {[...siteSchemas, ...schemas].map((s, i) => (
         <script
           key={i}
           type="application/ld+json"
