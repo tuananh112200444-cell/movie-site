@@ -3146,7 +3146,7 @@ interface ServerQualityInfo {
   hasM3u8: boolean;
   hasEmbed: boolean;
 }
-export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'SUPABASE', 'OPHIM', 'DM', 'SS', 'ABYSS', 'VK', 'OK'] as const;
+export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'SUPABASE', 'OPHIM', 'SS', 'ABYSS', 'OK', 'VK', 'DM'] as const;
 const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
 
 function normalizeServerPriorityText(value: string): string {
