@@ -56,13 +56,31 @@ function trackPageView(path: string, title: string, pageType: string): void {
 }
 
 function getPageType(path: string): string {
+  const seoLandingPaths = new Set([
+    '/xem-phim-online',
+    '/phim-vietsub',
+    '/phim-thuyet-minh',
+    '/phim-long-tieng',
+    '/phim-full-hd',
+    '/phim-hay',
+    '/phim-2026',
+    '/phim-2025',
+    '/phim-2024',
+    '/phim-4k',
+    '/phim-hoan-tat',
+    '/phim-dang-chieu',
+    '/phim-trailer',
+  ]);
+
   if (path === '/' || path === '') return 'home';
+  if (seoLandingPaths.has(path)) return 'seo_landing';
   if (path.startsWith('/phim/')) return 'movie_detail';
   if (path.startsWith('/xem-phim/')) return 'movie_player';
+  if (path.startsWith('/search') || path.startsWith('/tim-kiem')) return 'search';
   if (path.startsWith('/the-loai/')) return 'genre';
+  if (path.startsWith('/vu-tru-dam-my')) return 'queer_universe';
   if (path.startsWith('/quoc-gia/') || /^\/phim-[a-z-]+$/.test(path)) return 'country';
   if (path.startsWith('/dien-vien/')) return 'actor';
-  if (path.startsWith('/tim-kiem')) return 'search';
   if (path.startsWith('/filter')) return 'filter';
   if (path.startsWith('/blog')) return 'blog';
   if (path.includes('seo') || path.includes('landing')) return 'seo_landing';
