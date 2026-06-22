@@ -1740,6 +1740,7 @@ const QUEER_UNIVERSE_TERMS = [
 ];
 const QUEER_SOURCE_TERMS = ['blvietsub', 'bl vietsub', 'bl-vietsub', 'vu tru dam my'];
 const BLVIETSUB_SLUG_PREFIX = 'blvietsub-';
+const SUPABASE_QUEER_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
 const BLVIETSUB_SEARCH_TERMS = [
   'bl',
   'boy love',
@@ -1880,6 +1881,19 @@ function isQueerMovieDetail(movie?: Partial<MovieDetail> | Partial<MovieItem> | 
     ...(movie.category ?? []).map((item) => item.slug),
   ].filter(Boolean).join(' '));
   return haystack.includes('admin-queer') || haystack.includes('blvietsub') || haystack.includes('bl vietsub') || haystack.includes('vu tru dam my');
+}
+
+function isBlvietsubMovie(movie?: Partial<MovieDetail> | Partial<MovieItem> | null): boolean {
+  if (!movie) return false;
+  const sourceSite = (movie as Partial<MovieItem>).source_site;
+  const sourceName = (movie as Partial<MovieItem>).source_name;
+  const haystack = normalizeQueerSearchText([
+    movie.slug,
+    sourceSite,
+    sourceName,
+    movie.showtimes,
+  ].filter(Boolean).join(' '));
+  return haystack.includes('blvietsub') || haystack.includes('bl vietsub');
 }
 
 function buildBlvietsubDetail(entry: BloggerEntry): MovieDetailResponse | null {
@@ -2507,7 +2521,7 @@ export async function searchQueerUniverseMovies(
     const supabaseQueerPromise: Promise<MovieItem[]> = (async () => {
       const { data } = await supabase
         .from('movies')
-        .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, content, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note')
+        .select(SUPABASE_QUEER_LIST_SELECT)
         .eq('is_published', true)
         .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%')
         .or(searchFilters)
@@ -2515,55 +2529,22 @@ export async function searchQueerUniverseMovies(
         .limit(limit)
         .abortSignal(controller.signal);
 
-      return enrichMoviesWithSupabaseEpisodeCounts(
-        ((data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem),
-        controller.signal
-      );
+      return ((data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);
     })().catch(() => []);
 
-    const [directSearchItems, feedItems, supabaseQueerItems] = await Promise.all([
-      fetchBlvietsubEntries({
-        query: kw,
-        limit: Math.max(limit * 4, 120),
-        timeoutMs: Math.max(options.timeoutMs ?? 2500, 4500),
-        signal: controller.signal,
-      })
-        .then((entries) => uniqueMoviesBySlug(entries.map(bloggerEntryToMovieItem).filter(Boolean) as MovieItem[]))
-        .catch(() => []),
-      fetchBlvietsubMovies({
-        limit: Math.max(limit * 6, 500),
-        timeoutMs: Math.max(options.timeoutMs ?? 2500, 4500),
-        signal: controller.signal,
-      }).catch(() => []),
-      supabaseQueerPromise,
-    ]);
-
-    const combinedFeedItems = mergeMoviesUnique([...supabaseQueerItems, ...directSearchItems, ...feedItems]);
-    const matchingFeedItems = combinedFeedItems.filter((movie) => matchesBlvietsubSearch(movie, kw));
-    if (directSearchItems.length > 0 || matchingFeedItems.length > 0 || isQueerSearchIntent(kw)) {
+    const supabaseQueerItems = await supabaseQueerPromise;
+    const matchingFeedItems = supabaseQueerItems.filter((movie) => matchesBlvietsubSearch(movie, kw));
+    if (matchingFeedItems.length > 0 || isQueerSearchIntent(kw)) {
       return sortMoviesForSearch(
-        mergeMoviesUnique(matchingFeedItems.length ? matchingFeedItems : combinedFeedItems),
+        mergeMoviesUnique(matchingFeedItems.length ? matchingFeedItems : supabaseQueerItems),
         kw,
         'relevance'
       ).slice(0, limit);
     }
 
-    const broadFeedItems = await fetchBlvietsubEntries({
-      query: kw.split(/\s+/)[0],
-      limit: 500,
-      timeoutMs: Math.max(options.timeoutMs ?? 2500, 4500),
-      signal: controller.signal,
-    })
-      .then((entries) => uniqueMoviesBySlug(entries.map(bloggerEntryToMovieItem).filter(Boolean) as MovieItem[]))
-      .catch(() => []);
-    const broadMatches = broadFeedItems.filter((movie) => matchesBlvietsubSearch(movie, kw));
-    if (broadMatches.length > 0) {
-      return sortMoviesForSearch(mergeMoviesUnique([...supabaseQueerItems, ...broadMatches]), kw, 'relevance').slice(0, limit);
-    }
-
     const fallbackResult = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, content, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note')
+      .select(SUPABASE_QUEER_LIST_SELECT)
       .eq('is_published', true)
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%')
       .or(searchFilters)
@@ -2574,10 +2555,7 @@ export async function searchQueerUniverseMovies(
     return sortMoviesForSearch(
       mergeMoviesUnique([
         ...supabaseQueerItems,
-        ...await enrichMoviesWithSupabaseEpisodeCounts(
-          ((fallbackResult.data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem),
-          controller.signal
-        ),
+        ...((fallbackResult.data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem),
       ]),
       kw,
       'relevance'
@@ -2651,33 +2629,23 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 4500);
 
   try {
-    const feedMoviesPromise = fetchBlvietsubMovies({
-      limit: poolLimit,
-      timeoutMs: options.timeoutMs ?? 4500,
-      signal: controller.signal,
-    }).catch(() => []);
-
     const { data: markedRows } = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, content, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note')
+      .select(SUPABASE_QUEER_LIST_SELECT)
       .eq('is_published', true)
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
       .order('updated_at', { ascending: false })
       .limit(poolLimit)
       .abortSignal(controller.signal);
 
-    const markedMovies = await enrichMoviesWithSupabaseEpisodeCounts(
-      ((markedRows ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem),
-      controller.signal
-    );
-    const feedMovies = await feedMoviesPromise;
-    const combinedQueerMovies = mergeMoviesUnique([...markedMovies, ...feedMovies]).sort((a, b) => {
+    const markedMovies = ((markedRows ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);
+    const combinedQueerMovies = uniqueMoviesBySlug(markedMovies).sort((a, b) => {
       const ta = getMovieUpdateTime(a);
       const tb = getMovieUpdateTime(b);
       if (tb !== ta) return tb - ta;
       if ((b.year || 0) !== (a.year || 0)) return (b.year || 0) - (a.year || 0);
-      return tb - ta;
-    });
+        return tb - ta;
+      });
 
     if (combinedQueerMovies.length > 0) {
       const byYear: Record<string, MovieItem[]> = {};
@@ -2698,7 +2666,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
       const safe = escapePostgrestIlike(term);
       return supabase
         .from('movies')
-        .select('id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, content, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note')
+        .select(SUPABASE_QUEER_LIST_SELECT)
         .eq('is_published', true)
         .or(`name.ilike.%${safe}%,origin_name.ilike.%${safe}%,title_vi.ilike.%${safe}%,title_en.ilike.%${safe}%,title_original.ilike.%${safe}%,content.ilike.%${safe}%,slug.ilike.%${safe}%`)
         .order('updated_at', { ascending: false })
@@ -2708,12 +2676,12 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
 
     const results = await Promise.all(keywordQueries);
     const rawRows = results.flatMap((result) => result.data ?? []) as Record<string, unknown>[];
-    const movies = await enrichMoviesWithSupabaseEpisodeCounts(uniqueMoviesBySlug(
+    const movies = uniqueMoviesBySlug(
       rawRows
         .map((row) => ({ row, movie: toSupabaseMovieItem(row) }))
         .filter(({ movie, row }) => movieMatchesQueerUniverse(movie, row))
         .map(({ movie }) => movie)
-    ), controller.signal);
+    );
 
     const sorted = [...movies].sort((a, b) => {
       const ta = getMovieUpdateTime(a);
@@ -2917,7 +2885,6 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       // Default path: let the edge proxy serve DB/cache first. Direct Supabase is a fallback
       // so a large click burst does not double the database queries for every movie open.
       const proxyPromise = fetchMovieDetailFromProxy(slug, forceRefresh);
-      externalPromise = fetchMovieDetailFromExternal(slug);
 
       const quickPlayable = await raceFirstValidWithTimeout(
         [
@@ -2927,6 +2894,11 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       );
       if (quickPlayable) {
         if (isQueerMovieDetail(quickPlayable.movie)) {
+          if (isBlvietsubMovie(quickPlayable.movie)) {
+            refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, undefined, undefined);
+            setCached(cacheKey, quickPlayable);
+            return quickPlayable;
+          }
           blvietsubPromise = fetchMovieDetailFromBlvietsubForMovie(quickPlayable.movie);
           const queerOphimPromise = fetchMovieDetailFromOPhimForMovie(quickPlayable.movie);
           const freshQueerDetail = await getFreshQueerDetailWithTimeout(quickPlayable, blvietsubPromise, queerOphimPromise, 2200);
@@ -2938,6 +2910,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
           refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, queerOphimPromise);
         }
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using first quick playable source for "${slug}"`);
+        externalPromise = fetchMovieDetailFromExternal(slug);
         const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900);
         setCached(cacheKey, mergedQuick);
         return mergedQuick;
@@ -3173,7 +3146,7 @@ interface ServerQualityInfo {
   hasM3u8: boolean;
   hasEmbed: boolean;
 }
-export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'SUPABASE', 'OPHIM', 'DL', 'SS', 'VK', 'OK'] as const;
+export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'SUPABASE', 'OPHIM', 'DM', 'SS', 'ABYSS', 'VK', 'OK'] as const;
 const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
 
 function normalizeServerPriorityText(value: string): string {
@@ -3212,6 +3185,30 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('MANUAL')
   ) {
     return STREAM_SERVER_PRIORITY.indexOf('SUPABASE');
+  }
+  if (
+    tokens.has('DM') ||
+    tokens.has('DAILYMOTION') ||
+    compact.includes('DAILYMOTION') ||
+    compact.includes('DAILY') ||
+    compact.includes('DAILYLY')
+  ) {
+    return STREAM_SERVER_PRIORITY.indexOf('DM');
+  }
+  if (
+    tokens.has('SS') ||
+    tokens.has('SSPLAY') ||
+    compact.includes('SSPLAY')
+  ) {
+    return STREAM_SERVER_PRIORITY.indexOf('SS');
+  }
+  if (
+    tokens.has('ABYSS') ||
+    tokens.has('ABYSSPLAYER') ||
+    compact.includes('ABYSSPLAYER') ||
+    compact.includes('SHORTICU')
+  ) {
+    return STREAM_SERVER_PRIORITY.indexOf('ABYSS');
   }
 
   const rank = STREAM_SERVER_PRIORITY.findIndex((code) =>

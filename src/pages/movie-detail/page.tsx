@@ -167,22 +167,12 @@ export default function MovieDetailPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     fetchMovieDetail(slug, isFresh, source)
-      .then(async (data) => {
+      .then((data) => {
         if (!data) {
           setError(`Không thể tải thông tin phim "${slug}". Phim không tồn tại hoặc đang được cập nhật.`);
           return;
         }
         let resolvedData = data;
-        if (!isFresh && shouldRefreshEpisodeDetail(data)) {
-          const refreshed = await fetchMovieDetail(slug, true, source).catch(() => null);
-          const oldMax = getHighestEpisodeFromServers(deduplicateAndLimitServers(data.episodes ?? []));
-          const refreshedMax = refreshed
-            ? getHighestEpisodeFromServers(deduplicateAndLimitServers(refreshed.episodes ?? []))
-            : 0;
-          if (refreshed && refreshedMax > oldMax) {
-            resolvedData = refreshed;
-          }
-        }
 
         setDetail(resolvedData);
         const deduped = deduplicateAndLimitServers(resolvedData.episodes ?? []);
@@ -206,6 +196,27 @@ export default function MovieDetailPage() {
           };
           // Defer 3s to prioritize player loading first
           setTimeout(run, 3000);
+        }
+
+        if (!isFresh && shouldRefreshEpisodeDetail(data)) {
+          void fetchMovieDetail(slug, true, source)
+            .then((refreshed) => {
+              const oldMax = getHighestEpisodeFromServers(deduplicateAndLimitServers(data.episodes ?? []));
+              const refreshedMax = refreshed
+                ? getHighestEpisodeFromServers(deduplicateAndLimitServers(refreshed.episodes ?? []))
+                : 0;
+              if (refreshed && refreshedMax > oldMax) {
+                resolvedData = refreshed;
+                setDetail(resolvedData);
+                const deduped = deduplicateAndLimitServers(resolvedData.episodes ?? []);
+                if (deduped.length > 0) {
+                  const bestIdx = pickBestServerIndex(deduped);
+                  const origIdx = (resolvedData.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
+                  setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
+                }
+              }
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {
