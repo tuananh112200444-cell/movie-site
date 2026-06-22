@@ -30,6 +30,10 @@ function addWarning(message) {
   warnings.push(message);
 }
 
+function hasMojibake(value) {
+  return /Ã|Â»|Â¼|â€|Æ°|áº|á»/.test(value);
+}
+
 function isDynamicMovieSitemap(fileName) {
   return fileName === 'sitemap-movies.xml'
     || fileName === 'sitemap-movies-recent.xml'
@@ -47,6 +51,23 @@ if (/crawl-delay\s*:/i.test(robots)) {
 const globalRobotsBlock = robots.split(/\n\s*User-agent:/i)[0];
 if (/Disallow:\s*\/\s*$/im.test(globalRobotsBlock)) {
   addError('robots.txt has a global User-agent: * Disallow: / rule.');
+}
+
+const indexHtml = await read('index.html');
+if (indexHtml.includes("gtag('config', 'G-6B5GLB9W6H');")) {
+  addError('index.html sends an automatic GA page_view before SPA tracking.');
+}
+if (indexHtml.includes('G-XXXXXXXXXX')) {
+  addError('index.html contains a placeholder GA measurement id.');
+}
+const noscriptFallback = indexHtml.match(/<!-- noscript: readable fallback[\s\S]*?<script type="module"/)?.[0] ?? '';
+if (hasMojibake(noscriptFallback)) {
+  addError('index.html noscript SEO fallback contains mojibake text.');
+}
+
+const analyticsTs = await read('src/utils/analytics.ts');
+if (analyticsTs.includes('G-XXXXXXXXXX')) {
+  addError('src/utils/analytics.ts contains a placeholder GA measurement id.');
 }
 
 const sitemapIndex = await read('public/sitemap.xml');

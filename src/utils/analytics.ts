@@ -4,7 +4,7 @@
  */
 
 // GA4 Measurement ID — sẽ được thay bằng ID thực tế của bạn
-const GA_MEASUREMENT_ID = 'G-XXXXXXXXXX';
+const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID || 'G-6B5GLB9W6H';
 
 // Kiểm tra GA đã load chưa
 function isGALoaded(): boolean {
