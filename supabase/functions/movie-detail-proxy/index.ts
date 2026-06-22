@@ -106,7 +106,6 @@ function getExpectedEpisodeNumber(movie: Record<string, unknown> | null | undefi
   return Math.max(
     Number(movie.current_episode || 0) || 0,
     extractEpNumber(String(movie.episode_current || movie.episodeCurrent || '')),
-    extractEpNumber(String(movie.episode_total || movie.episodeTotal || '')),
   );
 }
 
@@ -200,14 +199,14 @@ async function readCachedDetail(
   try {
     const { data } = await supabase
       .from('movie_api_cache')
-      .select('payload, expires_at')
+      .select('detail_json, expires_at')
       .eq('slug', slug)
-      .abortSignal(timeoutSignal(650))
+      .abortSignal(timeoutSignal(1500))
       .maybeSingle();
 
-    const row = data as { payload?: unknown; expires_at?: string } | null;
-    if (!row?.payload || !row.expires_at || row.expires_at <= new Date().toISOString()) return null;
-    return row.payload as Record<string, unknown>;
+    const row = data as { detail_json?: unknown; expires_at?: string } | null;
+    if (!row?.detail_json || !row.expires_at || row.expires_at <= new Date().toISOString()) return null;
+    return row.detail_json as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -223,12 +222,12 @@ async function writeCachedDetail(
       .from('movie_api_cache')
       .upsert({
         slug,
-        payload,
+        detail_json: payload,
         source: 'movie-detail-proxy',
-        updated_at: new Date().toISOString(),
+        cached_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + DETAIL_CACHE_TTL_MIN * 60 * 1000).toISOString(),
       })
-      .abortSignal(timeoutSignal(800));
+      .abortSignal(timeoutSignal(3000));
   } catch {
     /* cache write is best-effort */
   }
@@ -329,7 +328,19 @@ async function fetchExternalMovieDetail(
   });
 
   const results = await Promise.all(promises);
-  const winner = results.find((r) => r !== null);
+  const validResults = results.filter((r): r is {
+    movie: Record<string, unknown>;
+    episodes: Array<{ server_name: string; server_data: unknown[] }>;
+  } => r !== null);
+  const winner = validResults.sort((a, b) => {
+    const aMax = getMaxEpisodeNumberFromServers(a.episodes);
+    const bMax = getMaxEpisodeNumberFromServers(b.episodes);
+    if (bMax !== aMax) return bMax - aMax;
+    const aExpected = getExpectedEpisodeNumber(a.movie);
+    const bExpected = getExpectedEpisodeNumber(b.movie);
+    if (bExpected !== aExpected) return bExpected - aExpected;
+    return (b.episodes?.length ?? 0) - (a.episodes?.length ?? 0);
+  })[0] ?? null;
   if (winner) {
     controllers.forEach((c) => { try { c.abort(); } catch { /* noop */ } });
   }

@@ -498,6 +498,11 @@ export default function Home() {
 
   // ── Fetch home data ONCE via home-proxy ──
   useEffect(() => {
+    if (activePortal === 'queer') {
+      setHomeLoading(false);
+      return;
+    }
+
     let cancelled = false;
     let controller: AbortController | null = null;
     const fetchHome = (showLoading = false) => {
@@ -556,8 +561,9 @@ export default function Home() {
   // ── Prefetch JS chunks sau khi paint xong ──
   useEffect(() => {
     prefetchCriticalRoutes();
-  }, []);
+  }, [activePortal]);
   useEffect(() => {
+    if (activePortal === 'queer') return;
     const priorityMovies = (homeData.trending ?? []).slice(0, 6);
     if (priorityMovies.length === 0) return;
 
@@ -573,7 +579,7 @@ export default function Home() {
       delayBetweenImages: 80,
       limit: 1,
     });
-  }, [homeData.trending]);
+  }, [activePortal, homeData.trending]);
   const trendingMovies = homeData.trending ?? [];
   const topRatedMovies = useMemo(() => {
     const seen = new Set<string>();
