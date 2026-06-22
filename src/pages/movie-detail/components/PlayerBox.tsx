@@ -135,8 +135,30 @@ interface PlayerBoxProps {
 }
 
 const DIRECT_VIDEO_SPEEDS = [1, 1.25, 1.5, 2];
+const EMBED_FALLBACK_TIMEOUT_MS = 6500;
+const EMBED_LAST_SOURCE_TIMEOUT_MS = 10000;
 const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
 const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
+
+function getUrlOrigin(url: string): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+function addTemporaryPreconnect(origin: string): () => void {
+  const existing = document.querySelector<HTMLLinkElement>(`link[rel="preconnect"][href="${origin}"]`);
+  if (existing) return () => {};
+  const link = document.createElement('link');
+  link.rel = 'preconnect';
+  link.href = origin;
+  link.crossOrigin = 'anonymous';
+  document.head.appendChild(link);
+  return () => link.remove();
+}
 
 function PlayerWatermark() {
   return (
@@ -227,6 +249,15 @@ export default function PlayerBox({
     () => getSourceHost(episode?.link_m3u8 || episode?.link_embed || ''),
     [episode?.link_m3u8, episode?.link_embed]
   );
+  useEffect(() => {
+    const origins = Array.from(new Set([
+      getUrlOrigin(hlsSrc),
+      getUrlOrigin(directVideoSrc),
+      getUrlOrigin(embedSrc),
+    ].filter(Boolean) as string[]));
+    const cleanups = origins.map(addTemporaryPreconnect);
+    return () => cleanups.forEach((cleanup) => cleanup());
+  }, [directVideoSrc, embedSrc, hlsSrc]);
   const reportIssue = useCallback((issue: Pick<PlayerIssuePayload, 'event_type' | 'playback_time' | 'duration' | 'buffered_ahead' | 'error_message'>) => {
     reportPlayerIssue({
       movie_slug: movieSlug,
@@ -263,13 +294,14 @@ export default function PlayerBox({
     setIframeLoaded(false);
     setIframeBlocked(false);
     if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
+    const hasFallbackServer = allServers.some((_, index) => index !== activeServer);
     iframeTimerRef.current = setTimeout(() => {
       setIframeBlocked(true);
-    }, 12000);
+    }, hasFallbackServer ? EMBED_FALLBACK_TIMEOUT_MS : EMBED_LAST_SOURCE_TIMEOUT_MS);
     return () => {
       if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
     };
-  }, [playerMode, embedSrc, iframeKey]);
+  }, [activeServer, allServers, playerMode, embedSrc, iframeKey]);
 
   /* Auto-next on ended */
   const handleEnded = useCallback(() => {
