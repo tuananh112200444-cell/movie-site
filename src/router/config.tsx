@@ -33,6 +33,7 @@ const BlogDetailPage    = lazy(() => import('../pages/blog/detail-page'));
 const AnimePage         = lazy(() => import('../pages/anime/page'));
 const MyNamPage         = lazy(() => import('../pages/my-nam/page'));
 const PhimMaPage        = lazy(() => import('../pages/phim-ma/page'));
+const SeoLandingPage    = lazy(() => import('../pages/seo-landing/page'));
 
 /* ─── Search Page ─── */
 const SearchPage        = lazy(() => import('../pages/search/page'));
@@ -105,6 +106,9 @@ function LazyChieuRap()     { return <Suspense fallback={<PageLoader />}><MovieL
 function LazyAnime()        { return <Suspense fallback={<PageLoader />}><AnimePage /></Suspense>; }
 function LazyMyNam()         { return <Suspense fallback={<PageLoader />}><MyNamPage /></Suspense>; }
 function LazyPhimMa()        { return <Suspense fallback={<PageLoader />}><PhimMaPage /></Suspense>; }
+function LazySeoLanding({ landingKey }: { landingKey: string }) {
+  return <Suspense fallback={<PageLoader />}><SeoLandingPage landingKey={landingKey} /></Suspense>;
+}
 
 const routes: RouteObject[] = [
   // ═══════════════════════════════════════════
@@ -164,6 +168,21 @@ const routes: RouteObject[] = [
   // ═══════════════════════════════════════════
   { path: '/blog',       element: <LazyBlog /> },
   { path: '/blog/:slug', element: <LazyBlogDetail /> },
+
+  // SEO LANDING PAGES
+  { path: '/xem-phim-online', element: <LazySeoLanding landingKey="xem-phim-online" /> },
+  { path: '/phim-vietsub', element: <LazySeoLanding landingKey="phim-vietsub" /> },
+  { path: '/phim-thuyet-minh', element: <LazySeoLanding landingKey="phim-thuyet-minh" /> },
+  { path: '/phim-long-tieng', element: <LazySeoLanding landingKey="phim-long-tieng" /> },
+  { path: '/phim-full-hd', element: <LazySeoLanding landingKey="phim-full-hd" /> },
+  { path: '/phim-hay', element: <LazySeoLanding landingKey="phim-hay" /> },
+  { path: '/phim-2026', element: <LazySeoLanding landingKey="phim-2026" /> },
+  { path: '/phim-2025', element: <LazySeoLanding landingKey="phim-2025" /> },
+  { path: '/phim-2024', element: <LazySeoLanding landingKey="phim-2024" /> },
+  { path: '/phim-4k', element: <LazySeoLanding landingKey="phim-4k" /> },
+  { path: '/phim-hoan-tat', element: <LazySeoLanding landingKey="phim-hoan-tat" /> },
+  { path: '/phim-dang-chieu', element: <LazySeoLanding landingKey="phim-dang-chieu" /> },
+  { path: '/phim-trailer', element: <LazySeoLanding landingKey="phim-trailer" /> },
 
   // ═══════════════════════════════════════════
   // THÔNG TIN

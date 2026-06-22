@@ -1,63 +1,66 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import { memo } from 'react';
 
 const STATS = [
-  { value: '50,000+', label: 'Bộ Phim' },
-  { value: 'HD/4K', label: 'Chất Lượng' },
-  { value: '100%', label: 'Miễn Phí' },
-  { value: '0', label: 'Quảng Cáo' },
+  { value: '50,000+', label: 'Bá»™ Phim' },
+  { value: 'HD/4K', label: 'Cháº¥t LÆ°á»£ng' },
+  { value: '100%', label: 'Miá»…n PhÃ­' },
+  { value: '0', label: 'Quáº£ng CÃ¡o' },
 ];
 
 const CAT_LINKS = [
-  { label: 'Phim Mới Cập Nhật', to: '/phim-moi-cap-nhat', icon: 'ri-refresh-line' },
-  { label: 'Phim Mới Nhất 2026', to: '/phim-moi-nhat', icon: 'ri-fire-line' },
-  { label: 'Phim Lẻ', to: '/phim-le', icon: 'ri-movie-2-line' },
-  { label: 'Phim Bộ', to: '/phim-bo', icon: 'ri-tv-2-line' },
-  { label: 'Phim Chiếu Rạp', to: '/phim-chieu-rap', icon: 'ri-building-4-line' },
-  { label: 'Hoạt Hình', to: '/hoat-hinh', icon: 'ri-gamepad-line' },
+  { label: 'Phim Má»›i Cáº­p Nháº­t', to: '/phim-moi-cap-nhat', icon: 'ri-refresh-line' },
+  { label: 'Phim Má»›i Nháº¥t 2026', to: '/phim-moi-nhat', icon: 'ri-fire-line' },
+  { label: 'Phim Láº»', to: '/phim-le', icon: 'ri-movie-2-line' },
+  { label: 'Phim Bá»™', to: '/phim-bo', icon: 'ri-tv-2-line' },
+  { label: 'Phim Chiáº¿u Ráº¡p', to: '/phim-chieu-rap', icon: 'ri-building-4-line' },
+  { label: 'Hoáº¡t HÃ¬nh', to: '/hoat-hinh', icon: 'ri-gamepad-line' },
   { label: 'TV Shows', to: '/tv-shows', icon: 'ri-broadcast-line' },
-  { label: 'Phim Sắp Chiếu', to: '/phim-sap-chieu', icon: 'ri-calendar-event-line' },
-  { label: 'Diễn Viên Nổi Tiếng', to: '/dien-vien', icon: 'ri-user-star-line' },
-  { label: 'Tìm Kiếm Phim', to: '/search', icon: 'ri-search-line' },
-  { label: 'Lọc Phim Nâng Cao', to: '/filter', icon: 'ri-equalizer-2-line' },
+  { label: 'Phim Sáº¯p Chiáº¿u', to: '/phim-sap-chieu', icon: 'ri-calendar-event-line' },
+  { label: 'Diá»…n ViÃªn Ná»•i Tiáº¿ng', to: '/dien-vien', icon: 'ri-user-star-line' },
+  { label: 'TÃ¬m Kiáº¿m Phim', to: '/search', icon: 'ri-search-line' },
+  { label: 'Lá»c Phim NÃ¢ng Cao', to: '/filter', icon: 'ri-equalizer-2-line' },
 ];
 
 const COUNTRY_LINKS = [
-  { label: 'Phim Hàn Quốc', to: '/phim-han-quoc', flag: '🇰🇷' },
-  { label: 'Phim Trung Quốc', to: '/phim-trung-quoc', flag: '🇨🇳' },
-  { label: 'Phim Âu Mỹ', to: '/phim-au-my', flag: '🇺🇸' },
-  { label: 'Phim Nhật Bản', to: '/phim-nhat-ban', flag: '🇯🇵' },
-  { label: 'Phim Thái Lan', to: '/phim-thai-lan', flag: '🇹🇭' },
-  { label: 'Phim Việt Nam', to: '/phim-viet-nam', flag: '🇻🇳' },
+  { label: 'Phim HÃ n Quá»‘c', to: '/phim-han-quoc', flag: 'ðŸ‡°ðŸ‡·' },
+  { label: 'Phim Trung Quá»‘c', to: '/phim-trung-quoc', flag: 'ðŸ‡¨ðŸ‡³' },
+  { label: 'Phim Ã‚u Má»¹', to: '/phim-au-my', flag: 'ðŸ‡ºðŸ‡¸' },
+  { label: 'Phim Nháº­t Báº£n', to: '/phim-nhat-ban', flag: 'ðŸ‡¯ðŸ‡µ' },
+  { label: 'Phim ThÃ¡i Lan', to: '/phim-thai-lan', flag: 'ðŸ‡¹ðŸ‡­' },
+  { label: 'Phim Viá»‡t Nam', to: '/phim-viet-nam', flag: 'ðŸ‡»ðŸ‡³' },
 ];
 
 
 
 const GENRE_LINKS = [
-  { label: 'Hành Động', to: '/the-loai/hanh-dong', icon: 'ri-sword-line' },
-  { label: 'Tình Cảm', to: '/the-loai/tinh-cam', icon: 'ri-heart-3-line' },
-  { label: 'Hài Hước', to: '/the-loai/hai-huoc', icon: 'ri-emotion-laugh-line' },
-  { label: 'Kinh Dị', to: '/the-loai/kinh-di', icon: 'ri-ghost-2-line' },
-  { label: 'Cổ Trang', to: '/the-loai/co-trang', icon: 'ri-ancient-pavilion-line' },
-  { label: 'Viễn Tưởng', to: '/the-loai/vien-tuong', icon: 'ri-rocket-2-line' },
-  { label: 'Hình Sự', to: '/the-loai/hinh-su', icon: 'ri-search-eye-line' },
-  { label: 'Tâm Lý', to: '/the-loai/tam-ly', icon: 'ri-brain-line' },
-  { label: 'Phiêu Lưu', to: '/the-loai/phieu-luu', icon: 'ri-compass-line' },
-  { label: 'Gia Đình', to: '/the-loai/gia-dinh', icon: 'ri-home-heart-line' },
-  { label: 'Âm Nhạc', to: '/the-loai/am-nhac', icon: 'ri-music-2-line' },
-  { label: 'Thể Thao', to: '/the-loai/the-thao', icon: 'ri-trophy-line' },
+  { label: 'HÃ nh Äá»™ng', to: '/the-loai/hanh-dong', icon: 'ri-sword-line' },
+  { label: 'TÃ¬nh Cáº£m', to: '/the-loai/tinh-cam', icon: 'ri-heart-3-line' },
+  { label: 'HÃ i HÆ°á»›c', to: '/the-loai/hai-huoc', icon: 'ri-emotion-laugh-line' },
+  { label: 'Kinh Dá»‹', to: '/the-loai/kinh-di', icon: 'ri-ghost-2-line' },
+  { label: 'Cá»• Trang', to: '/the-loai/co-trang', icon: 'ri-ancient-pavilion-line' },
+  { label: 'Viá»…n TÆ°á»Ÿng', to: '/the-loai/vien-tuong', icon: 'ri-rocket-2-line' },
+  { label: 'HÃ¬nh Sá»±', to: '/the-loai/hinh-su', icon: 'ri-search-eye-line' },
+  { label: 'TÃ¢m LÃ½', to: '/the-loai/tam-ly', icon: 'ri-brain-line' },
+  { label: 'PhiÃªu LÆ°u', to: '/the-loai/phieu-luu', icon: 'ri-compass-line' },
+  { label: 'Gia ÄÃ¬nh', to: '/the-loai/gia-dinh', icon: 'ri-home-heart-line' },
+  { label: 'Ã‚m Nháº¡c', to: '/the-loai/am-nhac', icon: 'ri-music-2-line' },
+  { label: 'Thá»ƒ Thao', to: '/the-loai/the-thao', icon: 'ri-trophy-line' },
 ];
 
 const SEO_LANDING_LINKS = [
+  { label: 'Xem Phim Online', to: '/xem-phim-online', icon: 'ri-play-circle-line' },
+  { label: 'Phim Hay', to: '/phim-hay', icon: 'ri-star-line' },
   { label: 'Phim 2026', to: '/phim-2026', icon: 'ri-calendar-line' },
   { label: 'Phim 2025', to: '/phim-2025', icon: 'ri-calendar-line' },
   { label: 'Phim 2024', to: '/phim-2024', icon: 'ri-calendar-line' },
   { label: 'Phim 4K', to: '/phim-4k', icon: 'ri-4k-line' },
   { label: 'Phim Full HD', to: '/phim-full-hd', icon: 'ri-hd-line' },
   { label: 'Phim Vietsub', to: '/phim-vietsub', icon: 'ri-file-text-line' },
-  { label: 'Phim Lồng Tiếng', to: '/phim-long-tieng', icon: 'ri-volume-up-line' },
-  { label: 'Phim Hoàn Tất', to: '/phim-hoan-tat', icon: 'ri-checkbox-circle-line' },
-  { label: 'Phim Đang Chiếu', to: '/phim-dang-chieu', icon: 'ri-live-line' },
+  { label: 'Phim Thuyet Minh', to: '/phim-thuyet-minh', icon: 'ri-chat-voice-line' },
+  { label: 'Phim Long Tieng', to: '/phim-long-tieng', icon: 'ri-volume-up-line' },
+  { label: 'Phim Hoan Tat', to: '/phim-hoan-tat', icon: 'ri-checkbox-circle-line' },
+  { label: 'Phim Dang Chieu', to: '/phim-dang-chieu', icon: 'ri-live-line' },
   { label: 'Phim Trailer', to: '/phim-trailer', icon: 'ri-time-line' },
 ];
 
@@ -71,7 +74,7 @@ const SOCIAL_LINKS = [
 function Footer() {
   return (
     <footer className="mt-20 relative overflow-hidden bg-[#08090e]">
-      {/* Top gradient border — cinematic */}
+      {/* Top gradient border â€” cinematic */}
       <div className="h-[1px] bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
       
       {/* Ambient glow behind stats */}
@@ -113,17 +116,17 @@ function Footer() {
               </div>
             </div>
             <p className="text-white/60 text-sm leading-relaxed mb-2">
-              <span className="text-white/60 font-medium">KhoPhim</span> — kho phim online miễn phí lớn nhất Việt Nam.
+              <span className="text-white/60 font-medium">KhoPhim</span> â€” kho phim online miá»…n phÃ­ lá»›n nháº¥t Viá»‡t Nam.
             </p>
             <p className="text-white/55 text-xs leading-relaxed mb-4 sm:mb-5">
-              Truy cập <a href="https://khophim.org" className="text-red-300 underline decoration-red-300/60 underline-offset-2 hover:text-red-300 transition-colors">khophim.org</a> để xem hơn 50,000 bộ phim vietsub HD, Full HD không quảng cáo, cập nhật hàng ngày.
+              Truy cáº­p <a href="https://khophim.org" className="text-red-300 underline decoration-red-300/60 underline-offset-2 hover:text-red-300 transition-colors">khophim.org</a> Ä‘á»ƒ xem hÆ¡n 50,000 bá»™ phim vietsub HD, Full HD khÃ´ng quáº£ng cÃ¡o, cáº­p nháº­t hÃ ng ngÃ y.
             </p>
 
             {/* Quick search box */}
             <Link to="/search"
               className="flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5 mb-4 sm:mb-5 hover:border-red-500/30 hover:bg-white/[0.07] transition-all group cursor-pointer active:scale-[0.98]">
               <i className="ri-search-line text-sm text-white/55 group-hover:text-red-300 transition-colors" />
-              <span className="text-[13px] text-white/55 group-hover:text-white/80 transition-colors">Tìm kiếm phim...</span>
+              <span className="text-[13px] text-white/55 group-hover:text-white/80 transition-colors">TÃ¬m kiáº¿m phim...</span>
             </Link>
 
             {/* Social */}
@@ -139,11 +142,11 @@ function Footer() {
             </div>
           </div>
 
-          {/* Danh Mục */}
+          {/* Danh Má»¥c */}
           <div>
             <div className="text-white font-bold text-sm mb-3 sm:mb-5 flex items-center gap-2">
               <span className="w-1 h-4 bg-red-500 rounded-full inline-block" />
-              Danh Mục
+              Danh Má»¥c
             </div>
             <ul className="space-y-1.5 sm:space-y-2.5">
               {CAT_LINKS.map((item) => (
@@ -160,11 +163,11 @@ function Footer() {
             </ul>
           </div>
 
-          {/* Quốc Gia */}
+          {/* Quá»‘c Gia */}
           <div>
             <div className="text-white font-bold text-sm mb-3 sm:mb-5 flex items-center gap-2">
               <span className="w-1 h-4 bg-red-500 rounded-full inline-block" />
-              Quốc Gia
+              Quá»‘c Gia
             </div>
             <ul className="space-y-1.5 sm:space-y-2.5">
               {COUNTRY_LINKS.map((item) => (
@@ -179,11 +182,11 @@ function Footer() {
             </ul>
           </div>
 
-          {/* Thể Loại */}
+          {/* Thá»ƒ Loáº¡i */}
           <div>
             <div className="text-white font-bold text-sm mb-3 sm:mb-5 flex items-center gap-2">
               <span className="w-1 h-4 bg-red-500 rounded-full inline-block" />
-              Thể Loại
+              Thá»ƒ Loáº¡i
             </div>
             <ul className="space-y-1.5 sm:space-y-2.5 mb-4 sm:mb-6">
               {GENRE_LINKS.map((item) => (
@@ -202,7 +205,7 @@ function Footer() {
             {/* SEO Landing Links */}
             <div className="text-white font-bold text-sm mb-3 sm:mb-4 flex items-center gap-2 mt-4 sm:mt-8">
               <span className="w-1 h-4 bg-amber-500 rounded-full inline-block" />
-              Tìm Phim Theo
+              TÃ¬m Phim Theo
             </div>
             <ul className="space-y-1.5 sm:space-y-2.5 mb-4 sm:mb-6">
               {SEO_LANDING_LINKS.map((item) => (
@@ -221,7 +224,7 @@ function Footer() {
             {/* Disclaimer */}
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-2.5 sm:p-3">
               <p className="text-[10px] sm:text-[11px] text-white/55 leading-relaxed">
-                Nội dung được tổng hợp từ các nguồn công khai. Chúng tôi không lưu trữ bất kỳ tệp bản quyền nào trên máy chủ.
+                Ná»™i dung Ä‘Æ°á»£c tá»•ng há»£p tá»« cÃ¡c nguá»“n cÃ´ng khai. ChÃºng tÃ´i khÃ´ng lÆ°u trá»¯ báº¥t ká»³ tá»‡p báº£n quyá»n nÃ o trÃªn mÃ¡y chá»§.
               </p>
             </div>
           </div>
@@ -232,22 +235,22 @@ function Footer() {
       <div className="border-t border-white/[0.04]">
         <div className="mx-auto flex max-w-[1760px] flex-col items-center justify-between gap-3 px-6 py-4 sm:flex-row lg:px-8 2xl:px-10">
           <p className="text-[12px] text-white/55 font-medium">
-            © 2026 <span className="text-white/60">KhoPhim</span> · Tất cả quyền được bảo lưu.
+            Â© 2026 <span className="text-white/60">KhoPhim</span> Â· Táº¥t cáº£ quyá»n Ä‘Æ°á»£c báº£o lÆ°u.
           </p>
           <div className="flex items-center gap-4 flex-wrap justify-center">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 flex items-center justify-center">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse inline-block" />
               </span>
-              <span className="text-[11px] text-white/55">Hệ thống hoạt động bình thường</span>
+              <span className="text-[11px] text-white/55">Há»‡ thá»‘ng hoáº¡t Ä‘á»™ng bÃ¬nh thÆ°á»ng</span>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-white/45">
-              <Link to="/about" className="hover:text-white/80 transition-colors">Giới Thiệu</Link>
-              <span>·</span>
-              <Link to="/policy" className="hover:text-white/80 transition-colors">Chính Sách</Link>
-              <span>·</span>
-              <Link to="/policy" className="hover:text-white/80 transition-colors">Điều Khoản</Link>
-              <span>·</span>
+              <Link to="/about" className="hover:text-white/80 transition-colors">Giá»›i Thiá»‡u</Link>
+              <span>Â·</span>
+              <Link to="/policy" className="hover:text-white/80 transition-colors">ChÃ­nh SÃ¡ch</Link>
+              <span>Â·</span>
+              <Link to="/policy" className="hover:text-white/80 transition-colors">Äiá»u Khoáº£n</Link>
+              <span>Â·</span>
               <Link to="/policy#dmca" className="hover:text-white/80 transition-colors">DMCA</Link>
             </div>
           </div>
