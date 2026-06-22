@@ -51,16 +51,19 @@ const GENRE_NAMES: Record<string, string> = {
 };
 
 const SEO_PAGES = [
-  { name: 'Phim Hàn Quốc SEO', path: '/phim-han-quoc-seo' },
-  { name: 'Phim Trung Quốc SEO', path: '/phim-trung-quoc-seo' },
-  { name: 'Phim Âu Mỹ SEO', path: '/phim-au-my-seo' },
-  { name: 'Phim Hành Động SEO', path: '/phim-hanh-dong-seo' },
-  { name: 'Phim Chiếu Rạp SEO', path: '/phim-chieu-rap-seo' },
-  { name: 'Phim Hot 2026 SEO', path: '/phim-hot-2026-seo' },
-  { name: 'Phim Kinh Dị SEO', path: '/phim-kinh-di-seo' },
-  { name: 'Phim Tình Cảm SEO', path: '/phim-tinh-cam-seo' },
-  { name: 'Phim Hài SEO', path: '/phim-hai-seo' },
-  { name: 'Phim Viễn Tưởng SEO', path: '/phim-vien-tuong-seo' },
+  { name: 'Xem phim online', path: '/xem-phim-online' },
+  { name: 'Phim Vietsub', path: '/phim-vietsub' },
+  { name: 'Phim thuyết minh', path: '/phim-thuyet-minh' },
+  { name: 'Phim lồng tiếng', path: '/phim-long-tieng' },
+  { name: 'Phim Full HD', path: '/phim-full-hd' },
+  { name: 'Phim hay', path: '/phim-hay' },
+  { name: 'Phim 2026', path: '/phim-2026' },
+  { name: 'Phim 2025', path: '/phim-2025' },
+  { name: 'Phim 2024', path: '/phim-2024' },
+  { name: 'Phim 4K', path: '/phim-4k' },
+  { name: 'Phim hoàn tất', path: '/phim-hoan-tat' },
+  { name: 'Phim đang chiếu', path: '/phim-dang-chieu' },
+  { name: 'Trailer phim', path: '/phim-trailer' },
 ];
 
 const schema = {

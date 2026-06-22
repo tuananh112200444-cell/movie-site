@@ -136,6 +136,32 @@ function toIsoDate(movie: MovieDetail): string {
   return new Date().toISOString();
 }
 
+function compactText(value = '', max = 155): string {
+  const clean = stripHtml(value);
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max - 3);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${lastSpace > 90 ? cut.slice(0, lastSpace) : cut}...`;
+}
+
+function getEpisodeSeoLabel(movie: MovieDetail): string {
+  const current = String(movie.episode_current || '').trim();
+  const total = String(movie.episode_total || '').trim();
+  if (current && total && current !== total && !current.toLowerCase().includes(total.toLowerCase())) {
+    return `${current}/${total}`;
+  }
+  return current || (total ? `${total} tập` : '');
+}
+
+function buildCtrMovieTitle(movie: MovieDetail, displayTitle: string): string {
+  const episode = getEpisodeSeoLabel(movie);
+  const quality = movie.quality || 'HD';
+  const lang = movie.lang || 'Vietsub';
+  const year = movie.year ? ` ${movie.year}` : '';
+  if (episode) return `Xem ${displayTitle} ${episode} ${lang} ${quality}${year} | KhoPhim`;
+  return `Xem ${displayTitle} ${lang} ${quality}${year} | KhoPhim`;
+}
+
 function buildMovieSchema({
   movie,
   slug,
@@ -200,6 +226,12 @@ function buildMovieSchema({
       datePublished: movie.year ? `${movie.year}-01-01` : undefined,
       dateModified,
       genre: genres,
+      numberOfEpisodes: movie.episode_total ? Number.parseInt(String(movie.episode_total), 10) || undefined : undefined,
+      episode: getEpisodeSeoLabel(movie) ? {
+        '@type': 'Episode',
+        name: getEpisodeSeoLabel(movie),
+        url: canonical,
+      } : undefined,
       countryOfOrigin: countries.map((name) => ({ '@type': 'Country', name })),
       actor: actors.map((name) => ({ '@type': 'Person', name })),
       director: directors.map((name) => ({ '@type': 'Person', name })),
@@ -262,18 +294,18 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
   const displayOrigin = movie.title_en?.trim() || movie.origin_name;
   const displayChinese = movie.title_zh?.trim();
 
-  const seoTitle = useMemo(() => `Xem Phim ${displayTitle} Vietsub HD | KhoPhim`, [displayTitle]);
+  const seoTitle = useMemo(() => buildCtrMovieTitle(movie, displayTitle), [movie, displayTitle]);
   const seoDesc = useMemo(() => {
     const genreKeywords = movie.category?.map((c) => c.name).join(', ') ?? '';
-    const totalEp = movie.episode_total ? `${movie.episode_total} tập` : '';
-    return [
-      `Xem phim ${displayTitle}${displayOrigin ? ` (${displayOrigin})` : ''} online vietsub Full HD miễn phí tại KhoPhim.`,
-      movie.content ? movie.content.slice(0, 120) + '...' : '',
+    const episode = getEpisodeSeoLabel(movie);
+    const intro = `Xem ${displayTitle}${displayOrigin ? ` (${displayOrigin})` : ''}${episode ? ` ${episode}` : ''} ${movie.lang || 'Vietsub'} ${movie.quality || 'HD'} tại KhoPhim.`;
+    const detail = [
       genreKeywords ? `Thể loại: ${genreKeywords}.` : '',
-      totalEp ? `${totalEp}.` : '',
-      'Không quảng cáo, xem ngay!',
+      movie.year ? `Năm ${movie.year}.` : '',
+      movie.content ? compactText(movie.content, 90) : '',
     ].filter(Boolean).join(' ');
-  }, [displayTitle, displayOrigin, movie.content, movie.category, movie.episode_total]);
+    return compactText(`${intro} ${detail}`, 155);
+  }, [displayTitle, displayOrigin, movie.content, movie.category, movie.episode_current, movie.episode_total, movie.lang, movie.quality, movie.year]);
   const movieSchema = useMemo(() => buildMovieSchema({
     movie,
     slug,
