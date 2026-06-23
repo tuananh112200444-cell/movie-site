@@ -26,6 +26,75 @@ function getLatestPlayableEpisode(episodes) {
     .sort((a, b) => epSortKey(b) - epSortKey(a))[0] ?? null;
 }
 
+const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'DM', 'SUPABASE', 'OPHIM', 'SS', 'OK', 'ABYSS', 'VK'];
+
+function normalizeServerPriorityText(value) {
+  return value
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim();
+}
+
+function getServerPriorityRank(server, episode) {
+  const text = normalizeServerPriorityText([
+    server.server_name,
+    episode?.link_embed,
+    episode?.link_m3u8,
+  ].filter(Boolean).join(' '));
+  const tokens = new Set(text.split(/\s+/).filter(Boolean));
+  const compact = text.replace(/\s+/g, '');
+  const hasDailymotionSource =
+    compact.includes('DAILYMOTION') ||
+    compact.includes('DAILY') ||
+    compact.includes('DAILYLY') ||
+    /(^|[./])dai\.ly/i.test(String(episode?.link_embed || ''));
+  const isOwnHlsSource = Boolean(episode?.link_m3u8) && (
+    compact.includes('KHOPHIM') ||
+    compact.includes('VIDEOKHOPHIMORG') ||
+    compact.includes('SUPABASE')
+  );
+  if (hasDailymotionSource && !isOwnHlsSource) return STREAM_SERVER_PRIORITY.indexOf('DM');
+  if (tokens.has('KHOPHIM') || compact.includes('KHOPHIM') || compact.includes('VIDEOKHOPHIMORG')) {
+    return STREAM_SERVER_PRIORITY.indexOf('KHOPHIM');
+  }
+  if (tokens.has('SUPABASE') || compact.includes('SUPABASE')) return STREAM_SERVER_PRIORITY.indexOf('SUPABASE');
+  if (tokens.has('DM') || tokens.has('DAILYMOTION') || compact.includes('DAILYMOTION') || compact.includes('DAILY')) {
+    return STREAM_SERVER_PRIORITY.indexOf('DM');
+  }
+  if (tokens.has('SS') || compact.includes('SSPLAY')) return STREAM_SERVER_PRIORITY.indexOf('SS');
+  if (tokens.has('ABYSS') || compact.includes('ABYSSPLAYER') || compact.includes('SHORTICU')) {
+    return STREAM_SERVER_PRIORITY.indexOf('ABYSS');
+  }
+  const rank = STREAM_SERVER_PRIORITY.findIndex((code) =>
+    code !== 'SUPABASE' && (
+      tokens.has(code) ||
+      compact.includes(`SERVER${code}`) ||
+      compact.includes(`SV${code}`)
+    )
+  );
+  return rank >= 0 ? rank : STREAM_SERVER_PRIORITY.length;
+}
+
+function pickBestEpisodeByPriority(episodes, targetEpSlug) {
+  const candidates = [];
+  for (let serverIndex = 0; serverIndex < episodes.length; serverIndex++) {
+    const server = episodes[serverIndex];
+    for (const episode of server.server_data ?? []) {
+      if (targetEpSlug && episode.slug !== targetEpSlug && episode.name !== targetEpSlug) continue;
+      if (!hasPlayableUrl(episode)) continue;
+      candidates.push({
+        serverIndex,
+        episode,
+        priorityRank: getServerPriorityRank(server, episode),
+      });
+    }
+  }
+  candidates.sort((a, b) => a.priorityRank - b.priorityRank);
+  return candidates[0] ?? null;
+}
+
 function getHighestEpisodeFromServers(episodes) {
   return episodes.reduce((highest, server) => {
     const serverHighest = (server.server_data ?? []).reduce((max, ep) => {
@@ -81,6 +150,25 @@ const servers = [
 assert(getLatestPlayableEpisodeSlug(servers) === '6', 'Watch now must choose latest playable episode, not episode 1');
 assert(getLatestPlayableEpisode(servers[1].server_data)?.slug === 'tap-06', 'Server fallback must choose latest playable episode');
 assert(getHighestEpisodeFromServers(servers) === 6, 'Display episode count must reflect playable max');
+
+const multiSourceEpisode = [
+  {
+    server_name: 'Server ABYSS',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_embed: 'https://short.icu/slow' }],
+  },
+  {
+    server_name: 'Server Dailymotion',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_embed: 'https://www.dailymotion.com/video/x123456' }],
+  },
+  {
+    server_name: 'Server SS',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_embed: 'https://ssplay.test/embed/x' }],
+  },
+];
+assert(
+  pickBestEpisodeByPriority(multiSourceEpisode, 'tap-24')?.serverIndex === 1,
+  'Dailymotion embed should be preferred over slower third-party embed sources for the same episode'
+);
 
 const metadataEpisode = 148;
 const playableEpisode = getHighestEpisodeFromServers([
