@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { reportClientIssue } from '@/services/playerDiagnostics';
 
 const RECOVERY_KEY = 'kp_chunk_recovery_v1';
 
@@ -37,6 +38,11 @@ export default class AppErrorBoundary extends Component<Props, State> {
     if (import.meta.env.DEV) {
       console.error('[AppErrorBoundary]', error, info);
     }
+
+    reportClientIssue(
+      isChunkLoadError(error) ? 'chunk_load_error' : 'app_error',
+      error instanceof Error ? error.message : String(error ?? 'unknown app error'),
+    );
 
     if (isChunkLoadError(error) && sessionStorage.getItem(RECOVERY_KEY) !== '1') {
       sessionStorage.setItem(RECOVERY_KEY, '1');

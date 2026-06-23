@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { reportClientIssue } from '@/services/playerDiagnostics';
 
 type OfflineStatus = 'online' | 'offline';
 
@@ -10,6 +11,7 @@ export default function OfflineIndicator() {
   useEffect(() => {
     const updateStatus = () => {
       if (!navigator.onLine) {
+        reportClientIssue('offline', 'browser reported offline');
         setStatus('offline');
         setVisible(true);
         setDismissed(false);
@@ -18,6 +20,7 @@ export default function OfflineIndicator() {
 
       setStatus((previous) => {
         if (previous === 'offline') {
+          reportClientIssue('online_recovered', 'browser recovered online');
           setVisible(true);
           window.setTimeout(() => setVisible(false), 3000);
         }

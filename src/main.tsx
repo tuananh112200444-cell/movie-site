@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { reportWebVitals } from './utils/performance'
+import { reportClientIssue } from './services/playerDiagnostics'
 
 const rootElement = document.getElementById('root');
 
@@ -31,6 +32,7 @@ function reloadOnceForFreshShell(reason: string): void {
   if (sessionStorage.getItem(key) === '1') return;
   if (hasActiveMediaPlayback()) return;
   sessionStorage.setItem(key, '1');
+  reportClientIssue(reason === 'bfcache_restore' ? 'bfcache_restore_reload' : 'stale_tab_reload', reason);
   window.location.reload();
 }
 
@@ -68,6 +70,7 @@ async function removeLegacyServiceWorkers(): Promise<void> {
     await clearLegacyKhophimCaches();
 
     if (navigator.serviceWorker.controller) {
+      reportClientIssue('service_worker_removed', 'legacy service worker unregistered');
       reloadOnceForFreshShell('sw_removed');
     }
   } catch {
@@ -92,6 +95,11 @@ if (typeof document !== 'undefined') {
 
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) reloadOnceForFreshShell('bfcache_restore');
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'unknown rejection');
+    reportClientIssue('unhandled_rejection', reason);
   });
 }
 
