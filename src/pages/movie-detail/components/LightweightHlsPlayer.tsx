@@ -30,6 +30,8 @@ interface HlsQualityLevel {
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 const MAX_STREAM_RECOVERY_ATTEMPTS = 5;
 const STALL_RECOVERY_DELAY_MS = 5000;
+const STALL_PROGRESS_CHECK_MS = 2500;
+const STALL_MIN_PROGRESS_SECONDS = 0.05;
 const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
 
 function PlayerWatermark() {
@@ -68,7 +70,7 @@ function pickStableStartLevel(levels: Hls['levels']): number {
   if (!levels.length) return -1;
   const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 768;
   const maxHeight = isSmallScreen ? 720 : 1080;
-  const maxBitrate = isSmallScreen ? 2_800_000 : 4_500_000;
+  const maxBitrate = isSmallScreen ? 2_800_000 : 5_500_000;
   let bestIndex = 0;
   let bestScore = 0;
 
@@ -122,7 +124,9 @@ export default function LightweightHlsPlayer({
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stallMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTimeRef = useRef(0);
+  const lastPlaybackSecondRef = useRef(0);
   const fatalRetryRef = useRef(0);
   const streamRecoveryRef = useRef(0);
   const pseudoFsRef = useRef(false);
@@ -247,6 +251,10 @@ export default function LightweightHlsPlayer({
       clearTimeout(stallTimerRef.current);
       stallTimerRef.current = null;
     }
+    if (stallMonitorRef.current) {
+      clearInterval(stallMonitorRef.current);
+      stallMonitorRef.current = null;
+    }
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -365,6 +373,10 @@ export default function LightweightHlsPlayer({
           clearTimeout(stallTimerRef.current);
           stallTimerRef.current = null;
         }
+        if (stallMonitorRef.current) {
+          clearInterval(stallMonitorRef.current);
+          stallMonitorRef.current = null;
+        }
         hls.destroy();
         hlsRef.current = null;
         setLevels([]);
@@ -399,6 +411,10 @@ export default function LightweightHlsPlayer({
           clearTimeout(stallTimerRef.current);
           stallTimerRef.current = null;
         }
+        if (stallMonitorRef.current) {
+          clearInterval(stallMonitorRef.current);
+          stallMonitorRef.current = null;
+        }
         video.removeEventListener('loadedmetadata', onMeta);
         video.removeEventListener('error', onErr);
         video.src = '';
@@ -415,8 +431,17 @@ export default function LightweightHlsPlayer({
     const video = videoRef.current;
     if (!video) return;
 
+    const stopStallMonitor = () => {
+      if (stallMonitorRef.current) {
+        clearInterval(stallMonitorRef.current);
+        stallMonitorRef.current = null;
+      }
+    };
     const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
+    const onPause = () => {
+      setIsPlaying(false);
+      stopStallMonitor();
+    };
     const clearStallTimer = () => {
       if (stallTimerRef.current) {
         clearTimeout(stallTimerRef.current);
@@ -457,6 +482,22 @@ export default function LightweightHlsPlayer({
       hls.startLoad(video.currentTime);
       video.play().catch(() => {});
     };
+    const ensureStallMonitor = () => {
+      if (stallMonitorRef.current) return;
+      lastPlaybackSecondRef.current = video.currentTime;
+      stallMonitorRef.current = setInterval(() => {
+        if (video.paused || video.ended || !isFinite(video.duration || 0)) {
+          lastPlaybackSecondRef.current = video.currentTime;
+          return;
+        }
+        const progressed = Math.abs(video.currentTime - lastPlaybackSecondRef.current);
+        const lowBuffer = getBufferedAhead(video) < 1.2;
+        if (progressed < STALL_MIN_PROGRESS_SECONDS && lowBuffer) {
+          recoverStalledStream();
+        }
+        lastPlaybackSecondRef.current = video.currentTime;
+      }, STALL_PROGRESS_CHECK_MS);
+    };
     const onWaiting = () => {
       setIsBuffering(true);
       clearStallTimer();
@@ -467,6 +508,7 @@ export default function LightweightHlsPlayer({
       setErrorMsg('');
       streamRecoveryRef.current = 0;
       clearStallTimer();
+      ensureStallMonitor();
     };
     const onTime = () => {
       const now = Date.now();
@@ -486,6 +528,7 @@ export default function LightweightHlsPlayer({
     };
     const onEnd = () => {
       setIsPlaying(false);
+      stopStallMonitor();
       onEnded?.();
       onVideoEnded?.();
     };
@@ -535,6 +578,7 @@ export default function LightweightHlsPlayer({
       video.removeEventListener('webkitendfullscreen', onIOSEnd);
       document.removeEventListener('fullscreenchange', onFS);
       document.removeEventListener('webkitfullscreenchange', onFS);
+      stopStallMonitor();
       clearStallTimer();
     };
   }, [onTimeUpdate, onEnded, onVideoEnded, onFatalError, onPlayerIssue]);

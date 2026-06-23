@@ -56,6 +56,8 @@ interface MovieRow {
   source_name?: string | null;
   showtimes?: string | null;
   source_url?: string | null;
+  thumb_url?: string | null;
+  poster_url?: string | null;
   episode_current?: string | null;
   current_episode?: number | null;
   total_episodes?: number | null;
@@ -410,7 +412,7 @@ async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<Movie
   for (let from = 0; from < 10000; from += pageSize) {
     const { data, error } = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year')
+      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year')
       .eq('is_published', true)
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
       .range(from, from + pageSize - 1);
@@ -755,14 +757,14 @@ async function createMovieFromEntry(
   const { data, error } = await supabase
     .from('movies')
     .insert(payload)
-    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year')
+    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year')
     .single();
 
   if (error) {
     if (error.code === '23505' || error.message.toLowerCase().includes('duplicate')) {
       const { data: existing, error: existingError } = await supabase
         .from('movies')
-        .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year')
+        .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year')
         .eq('slug', slug)
         .single();
       if (!existingError && existing) return existing as MovieRow;
@@ -847,6 +849,11 @@ async function updateMovieMetadata(
     update.episode_current = `${TAP_LABEL} ${episodeCount}`;
     update.current_episode = episodeCount;
     update.total_episodes = episodeCount;
+  }
+
+  if (entry.image) {
+    if (!String(movie.thumb_url || '').trim()) update.thumb_url = entry.image;
+    if (!String(movie.poster_url || '').trim()) update.poster_url = entry.image;
   }
 
   Object.keys(update).forEach((key) => update[key] === undefined && delete update[key]);
