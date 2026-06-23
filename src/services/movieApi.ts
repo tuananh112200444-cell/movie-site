@@ -948,14 +948,14 @@ export async function searchMovies(keyword: string, page = 1, signal?: AbortSign
     items: [],
     pagination: { currentPage: page, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 },
   };
-  const supabaseItems = await searchMoviesInSupabase(kw, { limit: 36, timeoutMs: 950, minLength: 2, signal }).catch(() => []);
+  const supabaseItems = await searchMoviesInSupabase(kw, { limit: 36, timeoutMs: 1600, minLength: 2, signal }).catch(() => []);
   const queerIntent = page === 1 && isQueerSearchIntent(kw);
   const needsExternal = page > 1 || supabaseItems.length < 10 || queerIntent;
   const [apiResult, queerResult] = needsExternal
     ? await Promise.allSettled([
         searchMoviesMultiSource(kw, page, signal),
         page === 1
-          ? searchQueerUniverseMovies(kw, { limit: 24, timeoutMs: queerIntent ? 1800 : 950, minLength: 2, signal })
+          ? searchQueerUniverseMovies(kw, { limit: 24, timeoutMs: queerIntent ? 1800 : 1200, minLength: 2, signal })
           : Promise.resolve([]),
       ])
     : [
@@ -3171,7 +3171,7 @@ interface ServerQualityInfo {
   hasM3u8: boolean;
   hasEmbed: boolean;
 }
-export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'SUPABASE', 'OPHIM', 'SS', 'ABYSS', 'OK', 'VK', 'DM'] as const;
+export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'DM', 'SUPABASE', 'OPHIM', 'SS', 'OK', 'ABYSS', 'VK'] as const;
 const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
 
 function normalizeServerPriorityText(value: string): string {
@@ -3192,6 +3192,19 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
 
   const tokens = new Set(text.split(/\s+/).filter(Boolean));
   const compact = text.replace(/\s+/g, '');
+  const hasDailymotionSource =
+    compact.includes('DAILYMOTION') ||
+    compact.includes('DAILY') ||
+    compact.includes('DAILYLY') ||
+    /(^|[./])dai\.ly/i.test(String(episode?.link_embed || ''));
+  const isOwnHlsSource = Boolean(episode?.link_m3u8) && (
+    compact.includes('KHOPHIM') ||
+    compact.includes('VIDEOKHOPHIMORG') ||
+    compact.includes('SUPABASE')
+  );
+  if (hasDailymotionSource && !isOwnHlsSource) {
+    return STREAM_SERVER_PRIORITY.indexOf('DM');
+  }
   if (
     tokens.has('KHOPHIM') ||
     (tokens.has('KHO') && tokens.has('PHIM')) ||

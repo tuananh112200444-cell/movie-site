@@ -454,12 +454,12 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
   }> = [];
 
   for (const server of detail.episodes) {
-    const serverName = String(server.server_name || 'OPhim');
+    const serverName = String(server.server_name || 'OPhim').trim() || 'OPhim';
     for (const ep of server.server_data || []) {
       const number = episodeNumber(ep);
       if (!number) continue;
       const epName = String(ep.name || (number === 1 ? 'Full' : `Tap ${number}`));
-      const epSlug = String(ep.slug || slugify(epName));
+      const epSlug = String(ep.slug || slugify(epName)).trim() || slugify(epName);
       const linkM3u8 = String(ep.link_m3u8 || '');
       const linkEmbed = String(ep.link_embed || '');
       if (!linkM3u8 && !linkEmbed) continue;
@@ -473,8 +473,7 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
     supabase
       .from('movie_episodes')
       .select('episode_number, server_name')
-      .eq('movie_id', movieId)
-      .eq('source', provider.sourceSite),
+      .eq('movie_id', movieId),
     supabase
       .from('episodes')
       .select('episode_number, server_name, episode_slug')
@@ -491,7 +490,7 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
   if (streamSelectError) throw new Error(`streams select ${detail.movie.slug}: ${streamSelectError.message}`);
 
   const existingAdmin = new Set((existingAdminRows || []).map((row) => `${String(row.server_name || '').trim().toLowerCase()}|${Number(row.episode_number || 0)}`));
-  const existingEpisodes = new Set((existingEpisodeRows || []).map((row) => `${String(row.server_name || '').trim().toLowerCase()}|${Number(row.episode_number || 0)}|${String(row.episode_slug || '').trim().toLowerCase()}`));
+  const existingEpisodes = new Set((existingEpisodeRows || []).map((row) => `${String(row.server_name || '').trim().toLowerCase()}|${String(row.episode_slug || '').trim().toLowerCase()}`));
   const existingStreams = new Set((existingStreamRows || []).map((row) => `${String(row.server_name || '').trim().toLowerCase()}|${String(row.episode_slug || '').trim().toLowerCase()}|${String(row.source || '').trim().toLowerCase()}`));
   const plannedAdmin = new Set<string>();
   const plannedEpisodes = new Set<string>();
@@ -521,7 +520,7 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
       });
     }
 
-    const episodeKey = `${ep.serverName.trim().toLowerCase()}|${ep.number}|${ep.epSlug.trim().toLowerCase()}`;
+    const episodeKey = `${ep.serverName.trim().toLowerCase()}|${ep.epSlug.trim().toLowerCase()}`;
     if (!existingEpisodes.has(episodeKey) && !plannedEpisodes.has(episodeKey)) {
       plannedEpisodes.add(episodeKey);
       episodeRows.push({
@@ -554,16 +553,22 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
   }
 
   for (const batch of chunks(movieEpisodeRows, 500)) {
-    const { error } = await supabase.from('movie_episodes').insert(batch);
-    if (error) throw new Error(`movie_episodes insert ${detail.movie.slug}: ${error.message}`);
+    const { error } = await supabase
+      .from('movie_episodes')
+      .upsert(batch, { onConflict: 'movie_id,server_name,episode_number' });
+    if (error) throw new Error(`movie_episodes upsert ${detail.movie.slug}: ${error.message}`);
   }
   for (const batch of chunks(episodeRows, 500)) {
-    const { error } = await supabase.from('episodes').insert(batch);
-    if (error) throw new Error(`episodes insert ${detail.movie.slug}: ${error.message}`);
+    const { error } = await supabase
+      .from('episodes')
+      .upsert(batch, { onConflict: 'movie_id,server_name,episode_slug' });
+    if (error) throw new Error(`episodes upsert ${detail.movie.slug}: ${error.message}`);
   }
   for (const batch of chunks(streamRows, 500)) {
-    const { error } = await supabase.from('streams').insert(batch);
-    if (error) throw new Error(`streams insert ${detail.movie.slug}: ${error.message}`);
+    const { error } = await supabase
+      .from('streams')
+      .upsert(batch, { onConflict: 'movie_id,episode_slug,source,server_name' });
+    if (error) throw new Error(`streams upsert ${detail.movie.slug}: ${error.message}`);
   }
 
   return movieEpisodeRows.length;

@@ -16,10 +16,82 @@ if (!rootElement) {
 // Report Core Web Vitals sau khi render
 reportWebVitals()
 
+const STALE_TAB_RELOAD_MS = 15 * 60 * 1000;
+const STALE_TAB_RELOAD_KEY = 'kp_stale_tab_reload_v1';
+
+function hasActiveMediaPlayback(): boolean {
+  return Array.from(document.querySelectorAll('video, audio')).some((media) => {
+    const element = media as HTMLMediaElement;
+    return !element.paused && !element.ended && element.readyState > 1;
+  });
+}
+
+function reloadOnceForFreshShell(reason: string): void {
+  const key = `${STALE_TAB_RELOAD_KEY}_${reason}`;
+  if (sessionStorage.getItem(key) === '1') return;
+  if (hasActiveMediaPlayback()) return;
+  sessionStorage.setItem(key, '1');
+  window.location.reload();
+}
+
+async function clearLegacyKhophimCaches(): Promise<void> {
+  try {
+    if (!('caches' in window)) return;
+    const names = await caches.keys();
+    await Promise.all(
+      names
+        .filter((name) => /^khophim|workbox/i.test(name))
+        .map((name) => caches.delete(name))
+    );
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
+async function removeLegacyServiceWorkers(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    if (!registrations.length) {
+      await clearLegacyKhophimCaches();
+      return;
+    }
+
+    await Promise.all(registrations.map(async (registration) => {
+      try {
+        await registration.update();
+      } catch {
+        // Some old workers cannot update; unregister them anyway.
+      }
+      await registration.unregister();
+    }));
+    await clearLegacyKhophimCaches();
+
+    if (navigator.serviceWorker.controller) {
+      reloadOnceForFreshShell('sw_removed');
+    }
+  } catch {
+    // Do not block app startup if a browser blocks service worker APIs.
+  }
+}
+
 // ── Page Visibility: pause heavy animations when tab hidden ──
 if (typeof document !== 'undefined') {
+  let hiddenAt = Date.now();
+
   document.addEventListener('visibilitychange', () => {
     document.body.classList.toggle('tab-hidden', document.hidden);
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      return;
+    }
+    if (Date.now() - hiddenAt > STALE_TAB_RELOAD_MS) {
+      reloadOnceForFreshShell('visible_after_stale');
+    }
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) reloadOnceForFreshShell('bfcache_restore');
   });
 }
 
@@ -28,6 +100,10 @@ const ENABLE_SERVICE_WORKER = false;
 
 // Service worker is disabled temporarily to recover visitors stuck on old cached builds.
 if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void removeLegacyServiceWorkers();
+  });
+
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type !== 'KHOPHIM_SW_REMOVED') return;
     if (sessionStorage.getItem('kp_sw_removed_reload_v1') === '1') return;

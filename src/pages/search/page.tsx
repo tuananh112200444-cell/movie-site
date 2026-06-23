@@ -347,7 +347,7 @@ export default function SearchPage() {
     setLoadingSug(instantItems.length === 0);
     try {
       let items = instantItems;
-      const apiItems = await searchMoviesInSupabase(kw.trim(), { limit: 12, timeoutMs: 800, minLength: 2, signal: ctrl.signal });
+      const apiItems = await searchMoviesInSupabase(kw.trim(), { limit: 12, timeoutMs: 1300, minLength: 2, signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       items = mergeMoviesUnique([...items, ...apiItems]);
 
