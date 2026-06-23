@@ -9,7 +9,15 @@ export type PlayerIssueEventType =
   | 'stall_fatal'
   | 'native_hls_error'
   | 'direct_video_error'
-  | 'iframe_blocked';
+  | 'iframe_blocked'
+  | 'app_error'
+  | 'chunk_load_error'
+  | 'service_worker_removed'
+  | 'stale_tab_reload'
+  | 'bfcache_restore_reload'
+  | 'offline'
+  | 'online_recovered'
+  | 'unhandled_rejection';
 
 export interface PlayerIssuePayload {
   movie_slug?: string;
@@ -42,6 +50,41 @@ export function getSourceHost(url?: string): string {
   }
 }
 
+function getConnectionInfo(): {
+  connection_type: string | null;
+  effective_type: string | null;
+  downlink: number | null;
+} {
+  const nav = navigator as Navigator & {
+    connection?: { type?: string; effectiveType?: string; downlink?: number };
+    mozConnection?: { type?: string; effectiveType?: string; downlink?: number };
+    webkitConnection?: { type?: string; effectiveType?: string; downlink?: number };
+  };
+  const connection = nav.connection || nav.mozConnection || nav.webkitConnection;
+  return {
+    connection_type: connection?.type?.slice(0, 80) || null,
+    effective_type: connection?.effectiveType?.slice(0, 80) || null,
+    downlink: finiteNumber(connection?.downlink),
+  };
+}
+
+function getDeviceInfo(): {
+  device_memory: number | null;
+  hardware_concurrency: number | null;
+  viewport_width: number | null;
+  viewport_height: number | null;
+  visibility_state: string | null;
+} {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  return {
+    device_memory: finiteNumber(nav.deviceMemory),
+    hardware_concurrency: Number.isFinite(navigator.hardwareConcurrency) ? navigator.hardwareConcurrency : null,
+    viewport_width: typeof window !== 'undefined' ? window.innerWidth : null,
+    viewport_height: typeof window !== 'undefined' ? window.innerHeight : null,
+    visibility_state: typeof document !== 'undefined' ? document.visibilityState : null,
+  };
+}
+
 export function reportPlayerIssue(payload: PlayerIssuePayload): void {
   if (!payload.event_type) return;
   const timeBucket = Math.floor((payload.playback_time ?? 0) / 30);
@@ -56,6 +99,12 @@ export function reportPlayerIssue(payload: PlayerIssuePayload): void {
   const last = recentReports.get(key) ?? 0;
   if (now - last < REPORT_THROTTLE_MS) return;
   recentReports.set(key, now);
+  const connectionInfo = typeof navigator !== 'undefined'
+    ? getConnectionInfo()
+    : { connection_type: null, effective_type: null, downlink: null };
+  const deviceInfo = typeof navigator !== 'undefined'
+    ? getDeviceInfo()
+    : { device_memory: null, hardware_concurrency: null, viewport_width: null, viewport_height: null, visibility_state: null };
 
   void supabase.from('player_error_events').insert({
     movie_slug: payload.movie_slug || null,
@@ -72,9 +121,23 @@ export function reportPlayerIssue(payload: PlayerIssuePayload): void {
     error_message: payload.error_message?.slice(0, 500) || null,
     user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 500) : null,
     page_url: typeof location !== 'undefined' ? location.href.slice(0, 800) : null,
+    ...connectionInfo,
+    ...deviceInfo,
   }).then(({ error }) => {
     if (error && import.meta.env.DEV) {
       console.warn('[playerDiagnostics] insert failed:', error.message);
     }
+  });
+}
+
+export function reportClientIssue(
+  eventType: PlayerIssueEventType,
+  errorMessage?: string,
+  extra: Partial<PlayerIssuePayload> = {},
+): void {
+  reportPlayerIssue({
+    ...extra,
+    event_type: eventType,
+    error_message: errorMessage,
   });
 }
