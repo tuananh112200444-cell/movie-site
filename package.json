@@ -42,6 +42,7 @@
     "seo:audit": "node scripts/seo-audit.mjs",
     "seo:generate": "node scripts/generate-seo-sitemap.mjs",
     "watch:test": "node scripts/watch-page-regression.mjs",
+    "diagnostics:test": "node scripts/diagnostics-regression.mjs",
     "search:test": "node scripts/search-regression.mjs",
     "site:excellence": "npm run build && npm run type-check && npm run search:test && npm run watch:test && node scripts/site-excellence-audit.mjs",
     "sync:blvietsub": "node scripts/sync-blvietsub-external.mjs",
