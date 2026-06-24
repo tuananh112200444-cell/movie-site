@@ -99,19 +99,19 @@ export default function NavBanner() {
   if (isCollapsed) {
     return (
       <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/90">
-        <div className="mx-auto w-full max-w-none sm:max-w-[728px] sm:px-3">
+        <div className="mx-auto w-full max-w-[1500px] px-0 sm:px-3 lg:px-5">
           <a
             key={activeBanner.id}
             href={activeBanner.url}
             target="_blank"
             rel="noopener noreferrer nofollow sponsored"
             onClick={() => trackNavBannerClick(location.pathname, activeBanner)}
-            className="block relative active:scale-[0.99] transition-transform cursor-pointer"
+            className="relative mx-auto block w-full max-w-[728px] active:scale-[0.99] transition-transform cursor-pointer lg:max-w-[520px]"
           >
             <img
               src={activeBanner.image}
               alt={activeBanner.alt}
-              className="h-auto w-full object-cover object-center sm:max-h-[52px] sm:object-contain"
+              className="aspect-[728/90] h-auto w-full object-contain object-center"
               loading="eager"
               width={728}
               height={90}
@@ -139,8 +139,8 @@ export default function NavBanner() {
 
   return (
     <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/88">
-      <div className="mx-auto w-full max-w-none sm:max-w-[728px] sm:px-3">
-        <div className="flex min-w-0 flex-col gap-px sm:gap-1.5 sm:py-1">
+      <div className="mx-auto w-full max-w-[1500px] px-0 sm:px-3 lg:px-5">
+        <div className="grid min-w-0 grid-cols-1 gap-px sm:gap-1.5 sm:py-1 lg:grid-cols-2 lg:items-center lg:gap-4">
           {BANNERS.map((banner) => (
             <a
               key={banner.id}
@@ -148,12 +148,12 @@ export default function NavBanner() {
               target="_blank"
               rel="noopener noreferrer nofollow sponsored"
               onClick={() => trackNavBannerClick(location.pathname, banner)}
-              className="block relative active:scale-[0.99] transition-transform cursor-pointer"
+              className="relative block min-w-0 active:scale-[0.99] transition-transform cursor-pointer"
             >
               <img
                 src={banner.image}
                 alt={banner.alt}
-                className="h-auto w-full object-cover object-center sm:max-h-[52px] sm:object-contain"
+                className="aspect-[728/90] h-auto w-full object-contain object-center"
                 loading="eager"
                 width={728}
                 height={90}
@@ -163,7 +163,7 @@ export default function NavBanner() {
               </span>
             </a>
           ))}
-          <div className="flex justify-end px-2 sm:px-0">
+          <div className="flex justify-end px-2 sm:px-0 lg:col-span-2">
             <button
               type="button"
               onClick={toggleCollapsed}
