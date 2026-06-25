@@ -42,7 +42,7 @@ export default function OfflineIndicator() {
   const config = {
     online: {
       icon: 'ri-wifi-line',
-      text: 'Da ket noi lai internet',
+      text: 'Đã kết nối lại internet',
       bg: 'bg-emerald-500/15',
       border: 'border-emerald-500/30',
       textColor: 'text-emerald-400',
@@ -50,7 +50,7 @@ export default function OfflineIndicator() {
     },
     offline: {
       icon: 'ri-wifi-off-line',
-      text: 'Ban dang ngoai tuyen. Vui long kiem tra ket noi internet roi tai lai trang.',
+      text: 'Bạn đang ngoại tuyến. Vui lòng kiểm tra kết nối internet rồi tải lại trang.',
       bg: 'bg-amber-500/15',
       border: 'border-amber-500/30',
       textColor: 'text-amber-400',
@@ -62,6 +62,8 @@ export default function OfflineIndicator() {
     <div
       className={`fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] sm:max-w-md ${config.bg} ${config.border} border rounded-xl px-4 py-3 flex items-center gap-3 shadow-xl`}
       style={{ animation: 'slideDownFade 0.3s ease-out' }}
+      role="status"
+      aria-live="polite"
     >
       <div className={`w-2 h-2 rounded-full ${config.dotColor} animate-pulse flex-shrink-0`} />
       <i className={`${config.icon} ${config.textColor} text-sm flex-shrink-0`} />
@@ -71,7 +73,7 @@ export default function OfflineIndicator() {
       <button
         onClick={() => setDismissed(true)}
         className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-white/30 hover:text-white/60 transition-colors cursor-pointer"
-        aria-label="Dong thong bao"
+        aria-label="Đóng thông báo"
       >
         <i className="ri-close-line text-sm" />
       </button>

@@ -17,45 +17,11 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    // Gzip + Brotli compression — giảm 60-70% bundle size khi transfer
+    // Gzip + Brotli compression giup giam manh dung luong truyen tai.
     compression({
       algorithms: ['gzip', 'brotliCompress'],
       exclude: [/\.(png|jpg|jpeg|gif|webp|svg|ico)$/],
     }),
-    // Auto-inject modulepreload for main entry chunk + vendor chunks — giúp browser tải JS sớm hơn ~200-400ms
-    {
-      name: 'inject-modulepreload',
-      transformIndexHtml(html, context) {
-        const bundle = context.bundle;
-        if (!bundle) return html;
-
-        // Collect all modulepreload targets: main + vendor chunks
-        const preloadChunks: string[] = [];
-
-        // Main entry
-        const mainChunk = Object.keys(bundle).find(
-          name => name.startsWith('assets/main-') && name.endsWith('.js')
-        );
-        if (mainChunk) preloadChunks.push(mainChunk);
-
-        // Vendor chunks — critical for fast hydration
-        const vendorPatterns = ['vendor-react', 'vendor-router', 'vendor-i18n'];
-        for (const pattern of vendorPatterns) {
-          const chunk = Object.keys(bundle).find(
-            name => name.startsWith(`assets/${pattern}-`) && name.endsWith('.js')
-          );
-          if (chunk) preloadChunks.push(chunk);
-        }
-
-        if (preloadChunks.length === 0) return html;
-
-        const links = preloadChunks.map(chunk =>
-          `<link rel="modulepreload" href="${base}${chunk}" crossorigin>`
-        ).join('\n    ');
-
-        return html.replace('</head>', `${links}\n</head>`);
-      },
-    },
     AutoImport({
       imports: [
         {
@@ -108,25 +74,25 @@ export default defineConfig({
   ],
   base,
   build: {
-    /* Sourcemap tắt trong production để giảm size */
+    /* Tat sourcemap trong production de giam size. */
     sourcemap: false,
     outDir: "out",
-    /* Ngưỡng cảnh báo chunk size */
+    /* Nguong canh bao chunk size. */
     chunkSizeWarningLimit: 800,
-    /* CSS code splitting — tách CSS theo chunk để load nhanh hơn */
+    /* Tach CSS theo chunk de load nhanh hon. */
     cssCodeSplit: true,
-    /* Minify: esbuild nhanh hơn terser, kết quả tương đương */
+    /* Minify bang esbuild de build nhanh va size tot. */
     minify: 'esbuild',
-    /* Target modern browsers — giảm polyfill không cần thiết */
+    /* Target modern browsers de giam polyfill khong can thiet. */
     target: ['es2020', 'chrome90', 'firefox88', 'safari14'],
     rollupOptions: {
       output: {
         /**
-         * Tách vendor thành chunks riêng → browser cache lâu dài.
-         * Khi code app thay đổi, vendor chunk vẫn được cache.
+         * Tach vendor thanh chunk rieng de browser cache lau dai.
+         * Khi code app thay doi, vendor chunk van duoc cache.
          */
         manualChunks(id) {
-          // React core — rất ít thay đổi, cache lâu dài
+          // React core rat it thay doi, cache lau dai.
           if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
             return 'vendor-react';
           }
@@ -134,25 +100,25 @@ export default defineConfig({
           if (id.includes('node_modules/react-router')) {
             return 'vendor-router';
           }
-          // i18n — khá nặng, tách riêng
+          // i18n kha nang, tach rieng.
           if (id.includes('node_modules/react-i18next') || id.includes('node_modules/i18next')) {
             return 'vendor-i18n';
           }
-          // Supabase — chỉ load khi cần
+          // Supabase chi load khi can.
           if (id.includes('node_modules/@supabase')) {
             return 'vendor-supabase';
           }
-          // HLS player — chỉ load trên trang phim detail
+          // HLS player chi load tren trang phim detail.
           if (id.includes('node_modules/hls.js')) {
             return 'vendor-hls';
           }
         },
-        /* Asset naming có hash → cache busting hiệu quả */
+        /* Asset co hash de cache busting hieu qua. */
         assetFileNames: 'assets/[name]-[hash][extname]',
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
       },
-      /* Tree-shaking tích cực */
+      /* Tree-shaking tich cuc. */
       treeshake: {
         moduleSideEffects: false,
         propertyReadSideEffects: false,

@@ -714,10 +714,11 @@ serve(async (req) => {
           .order('episode_number', { ascending: true }),
         supabase
           .from('streams')
-          .select('server_name, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active')
+          .select('server_name, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count')
           .eq('movie_id', movieId)
           .eq('is_active', true)
-          .order('priority', { ascending: false }),
+          .order('priority', { ascending: false })
+          .order('response_time_ms', { ascending: true, nullsFirst: false }),
       ]);
 
       if (meErr) {
@@ -817,6 +818,9 @@ serve(async (req) => {
         const streamUrl = String(sm.stream_url || '').trim();
         const embedUrl = String(sm.embed_url || '').trim();
         if (!streamUrl && !embedUrl) continue;
+        const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
+        const failureCount = Number(sm.failure_count || 0);
+        if (healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 5)) continue;
 
         const slugVal = String(sm.episode_slug || 'full');
         const serverName = String(sm.server_name || 'Nguồn');

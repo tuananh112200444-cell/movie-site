@@ -98,20 +98,20 @@ export default function NavBanner() {
 
   if (isCollapsed) {
     return (
-      <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/90">
-        <div className="mx-auto w-full max-w-[1500px] px-0 sm:px-3 lg:px-5">
+      <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/90 lg:py-1">
+        <div className="mx-auto w-full max-w-[1180px] px-0 sm:px-3 lg:px-5">
           <a
             key={activeBanner.id}
             href={activeBanner.url}
             target="_blank"
             rel="noopener noreferrer nofollow sponsored"
             onClick={() => trackNavBannerClick(location.pathname, activeBanner)}
-            className="relative mx-auto block w-full max-w-[728px] active:scale-[0.99] transition-transform cursor-pointer lg:max-w-[520px]"
+            className="relative mx-auto block w-full max-w-[728px] active:scale-[0.99] transition-transform cursor-pointer lg:max-w-[500px]"
           >
             <img
               src={activeBanner.image}
               alt={activeBanner.alt}
-              className="aspect-[728/90] h-auto w-full object-contain object-center"
+              className="aspect-[728/90] h-auto w-full object-contain object-center lg:max-h-[62px]"
               loading="eager"
               width={728}
               height={90}
@@ -138,9 +138,9 @@ export default function NavBanner() {
   }
 
   return (
-    <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/88">
-      <div className="mx-auto w-full max-w-[1500px] px-0 sm:px-3 lg:px-5">
-        <div className="grid min-w-0 grid-cols-1 gap-px sm:gap-1.5 sm:py-1 lg:grid-cols-2 lg:items-center lg:gap-4">
+    <div className="relative z-0 w-full border-t border-white/[0.04] bg-[#0d0f1a]/88 lg:py-1">
+      <div className="mx-auto w-full max-w-[1180px] px-0 sm:px-3 lg:px-5">
+        <div className="grid min-w-0 grid-cols-1 gap-px sm:gap-1.5 sm:py-1 lg:grid-cols-[minmax(0,500px)_minmax(0,500px)_auto] lg:items-center lg:justify-center lg:gap-3 lg:py-0">
           {BANNERS.map((banner) => (
             <a
               key={banner.id}
@@ -153,7 +153,7 @@ export default function NavBanner() {
               <img
                 src={banner.image}
                 alt={banner.alt}
-                className="aspect-[728/90] h-auto w-full object-contain object-center"
+                className="aspect-[728/90] h-auto w-full object-contain object-center lg:max-h-[62px]"
                 loading="eager"
                 width={728}
                 height={90}
@@ -163,12 +163,12 @@ export default function NavBanner() {
               </span>
             </a>
           ))}
-          <div className="flex justify-end px-2 sm:px-0 lg:col-span-2">
+          <div className="flex justify-end px-2 sm:px-0 lg:justify-center">
             <button
               type="button"
               onClick={toggleCollapsed}
               aria-label="Thu gon banner"
-              className="flex h-6 w-9 items-center justify-center rounded-full border border-white/12 bg-black/55 text-amber-200 shadow-sm backdrop-blur transition-colors hover:bg-black/70 hover:text-white sm:h-7 sm:w-10"
+              className="flex h-6 w-9 items-center justify-center rounded-full border border-white/12 bg-black/55 text-amber-200 shadow-sm backdrop-blur transition-colors hover:bg-black/70 hover:text-white sm:h-7 sm:w-10 lg:h-8 lg:w-8"
             >
               <i className="ri-arrow-up-s-line text-lg leading-none" aria-hidden="true" />
             </button>

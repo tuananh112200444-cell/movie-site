@@ -7,11 +7,12 @@ import BackToTop from "./components/base/BackToTop";
 import OfflineIndicator from "./components/base/OfflineIndicator";
 import { ToastProvider } from "./components/base/Toast";
 import AnalyticsProvider from "./components/feature/AnalyticsProvider";
+import CatPawCursor from "./components/feature/CatPawCursor";
 import { ThemeProvider } from "./context/ThemeContext";
 import CWVMonitor from "./components/base/CWVMonitor";
 import AppErrorBoundary from "./components/base/AppErrorBoundary";
 
-// ScrollProgressBar — dùng DOM trực tiếp thay vì setState để tránh re-render mỗi scroll
+// ScrollProgressBar dùng DOM trực tiếp thay vì setState để tránh re-render mỗi scroll.
 function ScrollProgressBar() {
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -164,6 +165,7 @@ function App() {
             <ToastProvider>
               <AnalyticsProvider>
                 <OfflineIndicator />
+                <CatPawCursor />
                 <ScrollProgressBar />
                 <AnimatedContent />
                 <BackToTop />

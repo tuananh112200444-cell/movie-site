@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import SEO, { SITE_URL } from '@/components/base/SEO';
@@ -304,7 +304,7 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={data.title}
         description={data.description}

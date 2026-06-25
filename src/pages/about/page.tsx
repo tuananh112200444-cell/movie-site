@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import SEO, { SITE_URL } from '@/components/base/SEO';
@@ -136,7 +136,7 @@ const FAQS = [
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title="Giới Thiệu KhoPhim – Xem Phim Online Miễn Phí"
         description="KhoPhim (khophim.org) là nền tảng xem phim online miễn phí vietsub HD hàng đầu Việt Nam. Hơn 50,000 bộ phim lẻ, phim bộ, phim chiếu rạp, anime. Không quảng cáo, không đăng ký, cập nhật hàng ngày."

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+﻿import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import ChangePinPanel from './components/ChangePinPanel';
@@ -312,7 +312,7 @@ export default function AdminBannerPage() {
   const vnNow = getVnNowString();
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <title>Admin Banner Stats | KhoPhim</title>
       <meta name="robots" content="noindex, nofollow" />
 
@@ -410,7 +410,7 @@ export default function AdminBannerPage() {
           </div>
           <div className="flex items-center gap-2">
             {testClickStatus && (
-              <span className={`text-[11px] ${testClickStatus.startsWith('✓') ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <span className={`text-[11px] ${testClickStatus.startsWith('âœ“') ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {testClickStatus}
               </span>
             )}

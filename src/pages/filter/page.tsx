@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
@@ -13,7 +13,7 @@ type ViewMode = 'grid' | 'list';
 const VIRTUAL_GENRE_KEYWORDS: Record<string, string[]> = {
 };
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 36;
 
 function getMovieKey(movie: MovieItem): string {
   return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
@@ -176,7 +176,7 @@ export default function FilterPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={`${seoTitle} – Lọc Phim | KhoPhim`}
         description={`Lọc phim online theo thể loại, quốc gia, năm sản xuất tại KhoPhim. ${seoTitle} – xem phim HD vietsub miễn phí, không quảng cáo, cập nhật hàng ngày.`}
@@ -341,7 +341,7 @@ export default function FilterPage() {
             ) : (
               <>
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+                  <div className="grid movie-grid-desktop">
                     {movies.map(m => (
                       <MovieCard key={getMovieKey(m)} movie={m} />
                     ))}
@@ -518,7 +518,7 @@ function LoadingSkeleton({ viewMode }: { viewMode: ViewMode }) {
     );
   }
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+    <div className="grid movie-grid-desktop">
       {Array.from({ length: PAGE_SIZE }).map((_, i) => (
         <div key={i}>
           <div className="aspect-[2/3] skeleton rounded-xl" />

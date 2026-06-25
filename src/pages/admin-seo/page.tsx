@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 
 const SITE_URL = 'https://khophim.org';
@@ -218,7 +218,7 @@ export default function AdminSEOPage() {
   const warningChecks = HEALTH_CHECKS.filter((c) => c.status === 'warning').length;
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <title>SEO Dashboard – Admin | KhoPhim</title>
       <meta name="description" content="Admin SEO Dashboard – theo dõi và quản lý hiệu suất SEO, sitemap và Google Indexing." />
       <meta name="robots" content="noindex, nofollow" />
@@ -769,8 +769,8 @@ export default function AdminSEOPage() {
         {/* ── Footer info ── */}
         <div className="text-center py-4">
           <p className="text-white/20 text-xs">
-            Domain: <span className="text-white/40">{SITE_URL}</span> · 
-            Sitemap: <span className="text-white/40">{SITE_URL}/sitemap.xml</span> · 
+            Domain: <span className="text-white/40">{SITE_URL}</span> ·
+            Sitemap: <span className="text-white/40">{SITE_URL}/sitemap.xml</span> ·
             Robots: <span className="text-white/40">{SITE_URL}/robots.txt</span>
           </p>
         </div>

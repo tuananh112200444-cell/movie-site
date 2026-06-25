@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { useHeroLazyLoad } from '@/hooks/useHeroLazyLoad';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
@@ -355,7 +355,7 @@ const SORT_OPTIONS = [
   { value: 'year_asc', label: 'Năm cũ nhất', icon: 'ri-history-line' },
 ];
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 36;
 const POOL_CACHE_TTL = 10 * 60 * 1000;
 const VIRTUAL_GENRE_KEYWORDS: Record<string, string[]> = {
 };
@@ -572,7 +572,7 @@ export default function GenrePage() {
 
   if (!meta) {
     return (
-      <div className="min-h-screen bg-[#080a10] text-white">
+      <div className="min-h-screen kp-cinema-page text-white">
         <SEO title="Thể Loại Không Tồn Tại – KhoPhim" description="Thể loại phim không tồn tại." noIndex />
         <Navbar />
         <div className="flex flex-col items-center justify-center h-screen gap-4">
@@ -644,7 +644,7 @@ export default function GenrePage() {
   const otherGenres = Object.entries(GENRE_META).filter(([s]) => s !== slug);
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={seoTitle}
         description={meta.desc}
@@ -762,7 +762,7 @@ export default function GenrePage() {
         {/* ─── Movie Grid ─── */}
         <div className="pt-6">
           {loading && movies.length === 0 ? (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+            <div className="grid movie-grid-desktop">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : movies.length === 0 ? (
@@ -775,7 +775,7 @@ export default function GenrePage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+              <div className="grid movie-grid-desktop">
                 {movies.map((m, idx) => (
                   <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 2} />
                 ))}

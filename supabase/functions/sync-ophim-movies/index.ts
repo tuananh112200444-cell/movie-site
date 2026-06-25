@@ -626,20 +626,27 @@ serve(async (req) => {
     const maxPage = Math.max(1, Number(url.searchParams.get('max_page') || 5000) || 5000);
     const useCursor = url.searchParams.get('cursor') === '1' || url.searchParams.get('backfill') === '1';
     const cursorKey = String(url.searchParams.get('cursor_key') || `sync-ophim-movies:${provider.sourceSite}:backfill`);
+    const targetSlug = String(url.searchParams.get('slug') || '').trim();
     const startPage = useCursor ? await readCursorPage(supabase, cursorKey, requestedStartPage) : requestedStartPage;
     const candidates = new Map<string, OPhimMovie>();
     let pagesWithItems = 0;
+    let slugs: string[] = [];
 
-    for (let page = startPage; page < startPage + pages; page += 1) {
-      const payload = await fetchJsonFromMirrors(provider, provider.listPath(page));
-      const items = listItems(payload);
-      if (items.length > 0) pagesWithItems += 1;
-      for (const item of items) {
-        if (item.slug && !candidates.has(item.slug)) candidates.set(item.slug, item);
+    if (targetSlug) {
+      slugs = [targetSlug];
+      pagesWithItems = 1;
+    } else {
+      for (let page = startPage; page < startPage + pages; page += 1) {
+        const payload = await fetchJsonFromMirrors(provider, provider.listPath(page));
+        const items = listItems(payload);
+        if (items.length > 0) pagesWithItems += 1;
+        for (const item of items) {
+          if (item.slug && !candidates.has(item.slug)) candidates.set(item.slug, item);
+        }
       }
+      slugs = Array.from(candidates.keys()).slice(0, limit);
     }
 
-    const slugs = Array.from(candidates.keys()).slice(0, limit);
     for (const slug of slugs) {
       stats.scanned += 1;
       try {
@@ -666,12 +673,13 @@ serve(async (req) => {
       await clearCaches(supabase);
     }
 
-    const nextPage = pagesWithItems === 0 || startPage + pages > maxPage ? 1 : startPage + pages;
-    if (useCursor && !dryRun) await writeCursorPage(supabase, cursorKey, nextPage);
+    const nextPage = targetSlug || pagesWithItems === 0 || startPage + pages > maxPage ? 1 : startPage + pages;
+    if (useCursor && !dryRun && !targetSlug) await writeCursorPage(supabase, cursorKey, nextPage);
 
     const elapsedMs = Date.now() - started;
     const metadata = {
       provider: provider.sourceSite,
+      target_slug: targetSlug || null,
       pages,
       limit,
       start_page: startPage,
@@ -687,6 +695,7 @@ serve(async (req) => {
       provider: provider.sourceSite,
       start_page: startPage,
       next_page: nextPage,
+      target_slug: targetSlug || null,
       scanned: stats.scanned,
       created: stats.created,
       updated: stats.updated,

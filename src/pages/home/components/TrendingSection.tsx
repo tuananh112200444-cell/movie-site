@@ -117,7 +117,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
   /* ── Loading skeleton ── */
   if (loading) {
     return (
-      <div className="mb-12">
+      <div className="mb-12 home-section-surface">
         <SectionHeader />
         <div className="flex items-center gap-2 mb-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           {TABS.map((t) => (
@@ -140,7 +140,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
   if (movies.length === 0) return null;
 
   return (
-    <div className="mb-14">
+    <div className="mb-11 home-section-surface">
       <SectionHeader count={filtered.length} />
 
       {/* ── Tabs ── */}
@@ -152,10 +152,10 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`
-                whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-semibold
+                whitespace-nowrap px-3.5 py-1.5 rounded-md text-sm font-semibold
                 transition-all duration-200 cursor-pointer flex-shrink-0
                 ${active
-                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/25'
+                  ? 'bg-white text-black shadow-lg shadow-black/25'
                   : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80 border border-white/10'
                 }
               `}
@@ -167,7 +167,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
       </div>
 
       {/* ── Slider ── */}
-      <div className="relative group/slider">
+      <div className="home-rail-frame relative group/slider">
         {/* Prev */}
         <button
           onClick={() => scroll('left')}
@@ -210,7 +210,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
 
         <div
           ref={sliderRef}
-          className="flex gap-2.5 overflow-x-auto scroll-smooth pb-3 px-0.5"
+          className="home-rail-scroll flex gap-2.5 overflow-x-auto scroll-smooth pb-8 pt-2 px-0.5 lg:gap-4 xl:gap-5"
           style={{ scrollbarWidth: 'none' }}
         >
           {filtered.slice(0, 40).map((movie, idx) => (
@@ -409,7 +409,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
 /* ── Section Header ── */
 function SectionHeader({ count }: { count?: number }) {
   return (
-    <div className="flex items-center justify-between mb-4 lg:mb-5 gap-2 flex-wrap">
+    <div className="flex items-center justify-between mb-3 lg:mb-5 gap-2 flex-wrap">
       <div className="flex items-center gap-2 lg:gap-3 flex-wrap">
         <div className="relative">
           <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center shadow-lg shadow-red-500/20">
@@ -418,7 +418,7 @@ function SectionHeader({ count }: { count?: number }) {
           <div className="absolute inset-0 w-8 h-8 md:w-9 md:h-9 rounded-lg bg-red-500/30 blur-md -z-10" />
         </div>
         <div className="flex flex-col">
-          <h3 className="text-base lg:text-lg font-bold gradient-heading flex items-center gap-2">
+          <h3 className="text-lg md:text-2xl lg:text-[1.55rem] font-black text-white flex items-center gap-2">
             Top Thịnh Hành
           </h3>
           <span className="text-[10px] text-white/30 -mt-0.5">BXH theo lượt xem tuần qua</span>

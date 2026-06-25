@@ -277,7 +277,7 @@ interface ColumnProps {
 
 function RankColumn({ items, startRank, loading, skeletonCount }: ColumnProps) {
   return (
-    <div className="rounded-xl bg-white/[0.02] border border-white/[0.05] overflow-hidden">
+    <div className="rounded-2xl bg-white/[0.025] border border-white/[0.06] overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.045)]">
       {loading
         ? Array.from({ length: skeletonCount }).map((_, i) => (
             <div key={i}>
@@ -342,9 +342,9 @@ export default function Top10TodaySection({ initialMovies = [], loading: parentL
   }, [initialMovies, parentLoading]);
 
   return (
-    <section className="mb-7 md:mb-16">
+    <section className="mb-7 md:mb-12 home-section-surface">
       {/* ── Header ── */}
-      <div className="flex items-center gap-3 mb-5 md:mb-6">
+      <div className="flex items-center gap-3 mb-4 md:mb-5">
         <div className="relative flex-shrink-0">
           <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-red-500 to-rose-700 flex items-center justify-center">
             <i className="ri-bar-chart-fill text-white text-base md:text-lg" />
@@ -353,7 +353,7 @@ export default function Top10TodaySection({ initialMovies = [], loading: parentL
         </div>
 
         <div className="flex flex-col">
-          <h3 className="text-base lg:text-lg font-bold gradient-heading leading-tight">
+          <h3 className="text-lg md:text-2xl lg:text-[1.55rem] font-black text-white leading-tight">
             Top 10 Phim Hôm Nay
           </h3>
           <span className="text-[10px] text-white/30">Cập nhật mới nhất trong ngày</span>
@@ -366,7 +366,7 @@ export default function Top10TodaySection({ initialMovies = [], loading: parentL
       </div>
 
       {/* ── 2-column grid ── */}
-      <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-3 scrollbar-hide lg:hidden">
+      <div className="home-rail-scroll flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-3 scrollbar-hide lg:hidden">
         {loading
           ? Array.from({ length: 10 }).map((_, i) => <MobileSkeletonCard key={i} />)
           : movies.slice(0, 10).map((movie, idx) => (
@@ -374,7 +374,7 @@ export default function Top10TodaySection({ initialMovies = [], loading: parentL
             ))}
       </div>
 
-      <div className="hidden lg:grid lg:grid-cols-2 gap-4">
+      <div className="hidden lg:grid lg:grid-cols-2 gap-4 xl:gap-5">
         <RankColumn
           items={movies.slice(0, 5)}
           startRank={1}
