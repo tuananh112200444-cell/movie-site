@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
@@ -320,8 +320,8 @@ export const COUNTRY_CONFIGS: Record<string, CountryConfig> = {
   },
 };
 
-const PAGE_SIZE = 30;
-const API_PAGE_SIZE = 24;
+const PAGE_SIZE = 36;
+const API_PAGE_SIZE = 36;
 const POOL_CACHE_TTL = 10 * 60 * 1000;
 
 function getPoolCacheKey(country: string) {
@@ -523,7 +523,7 @@ export default function CountryPage({ countrySlug }: Props) {
 
   if (!config) {
     return (
-      <div className="min-h-screen bg-[#080a10] text-white">
+      <div className="min-h-screen kp-cinema-page text-white">
         <Navbar />
         <div className="flex flex-col items-center justify-center h-screen gap-4">
           <i className="ri-error-warning-line text-5xl text-white/20" />
@@ -579,7 +579,7 @@ export default function CountryPage({ countrySlug }: Props) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={seoTitle}
         description={config.seoDesc}
@@ -602,7 +602,7 @@ export default function CountryPage({ countrySlug }: Props) {
             {!loading && sortedMovies.length > 0 && (
               <span className="text-sm text-white/35 flex items-center gap-1.5">
                 <i className="ri-film-line text-xs" />
-                Trang {page} · <span className="text-white/55 font-medium">{sortedMovies.length} phim</span>
+                Trang {page} Â· <span className="text-white/55 font-medium">{sortedMovies.length} phim</span>
                 {poolLoading && poolReady && (
                   <i className="ri-loader-4-line animate-spin text-xs text-white/25 ml-1" />
                 )}
@@ -633,7 +633,7 @@ export default function CountryPage({ countrySlug }: Props) {
 
         {/* Movie Grid */}
         {loading ? (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+          <div className="grid movie-grid-desktop">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
               <div key={i}>
                 <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -648,7 +648,7 @@ export default function CountryPage({ countrySlug }: Props) {
             <p className="text-lg">Không có phim nào</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+          <div className="grid movie-grid-desktop">
             {sortedMovies.map((m, idx) => (
               <MovieCard key={m._id} movie={m} priority={idx < 2} />
             ))}

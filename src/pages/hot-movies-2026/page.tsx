@@ -8,9 +8,9 @@ import { hotMovies2026, getDaysUntilRelease, formatReleaseDate } from '../../moc
 
 const hypeFilters = [
   { key: 'all', label: 'Tất Cả', color: 'bg-white/10' },
-  { key: 'cực hot', label: '🔥 Cực Hot', color: 'bg-red-500' },
-  { key: 'hot', label: '⭐ Hot', color: 'bg-orange-500' },
-  { key: 'đáng chờ đợi', label: '💎 Đáng Chờ Đợi', color: 'bg-blue-500' },
+  { key: 'cực hot', label: 'Cực Hot', color: 'bg-red-500' },
+  { key: 'hot', label: 'Hot', color: 'bg-orange-500' },
+  { key: 'đáng chờ đợi', label: 'Đáng Chờ Đợi', color: 'bg-blue-500' },
 ];
 
 const genreFilters = [
@@ -38,10 +38,9 @@ export default function HotMovies2026Page() {
       movies = movies.filter((m) => m.genre.includes(activeGenre));
     }
 
-    // Sắp xếp: Cực hot trước, rồi đến ngày ra mắt
-    const hypeOrder = { 'cực hot': 0, hot: 1, 'đáng chờ đợi': 2 };
+    const hypeOrder: Record<string, number> = { 'cực hot': 0, hot: 1, 'đáng chờ đợi': 2 };
     return movies.sort((a, b) => {
-      const hypeDiff = hypeOrder[a.hype] - hypeOrder[b.hype];
+      const hypeDiff = (hypeOrder[String(a.hype)] ?? 99) - (hypeOrder[String(b.hype)] ?? 99);
       if (hypeDiff !== 0) return hypeDiff;
       return new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime();
     });
@@ -85,9 +84,9 @@ export default function HotMovies2026Page() {
   };
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
-        title="Phim Hot 2026 – Bom Tấn Điện Ảnh | KhoPhim"
+        title="Phim Hot 2026 - Bom Tấn Điện Ảnh | KhoPhim"
         description="Danh sách phim hot nhất 2026: Avengers: Doomsday, The Odyssey (Nolan), Spider-Man: Brand New Day, Dune 3, Toy Story 5. Countdown ngày ra mắt tại khophim.org!"
         keywords="phim hot 2026, phim 2026, avengers doomsday, the odyssey, spider man 4, dune 3, toy story 5, phim marvel 2026, phim chieu rap 2026, khophim"
         canonical="/phim-hot-2026"
@@ -96,11 +95,9 @@ export default function HotMovies2026Page() {
       />
       <Navbar />
 
-      {/* Hero Section - Featured Movie */}
       {featuredMovie && (
         <section className="relative pt-20 pb-8 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-b from-red-500/10 via-transparent to-transparent" />
-          {/* Background blur poster */}
           <div className="absolute inset-0 overflow-hidden">
             <img
               src={featuredMovie.poster}
@@ -111,7 +108,6 @@ export default function HotMovies2026Page() {
           </div>
           <div className="max-w-[1760px] mx-auto px-4 lg:px-6 relative">
             <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start lg:items-center">
-              {/* Poster */}
               <div className="flex-shrink-0 w-[200px] sm:w-[240px] lg:w-[260px] xl:w-[280px]">
                 <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl shadow-red-500/30 border border-white/10">
                   <img
@@ -133,7 +129,6 @@ export default function HotMovies2026Page() {
                 </div>
               </div>
 
-              {/* Info */}
               <div className="flex-1 text-center lg:text-left">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full mb-3">
                   <i className="ri-fire-line text-red-400 text-sm" />
@@ -183,11 +178,9 @@ export default function HotMovies2026Page() {
         </section>
       )}
 
-      {/* Filters */}
       <section className="sticky top-16 z-40 bg-[#080a10]/95 border-y border-white/[0.06] py-4">
         <div className="max-w-[1760px] mx-auto px-4 lg:px-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            {/* Hype Filter */}
             <div className="flex flex-wrap gap-2">
               {hypeFilters.map((filter) => (
                 <button
@@ -204,7 +197,6 @@ export default function HotMovies2026Page() {
               ))}
             </div>
 
-            {/* Genre Filter */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
               <span className="text-white/30 text-xs whitespace-nowrap">Thể loại:</span>
               {genreFilters.map((genre) => (
@@ -225,7 +217,6 @@ export default function HotMovies2026Page() {
         </div>
       </section>
 
-      {/* Movies Grid */}
       <main className="max-w-[1760px] mx-auto px-4 lg:px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-white">
@@ -244,13 +235,13 @@ export default function HotMovies2026Page() {
             {filteredMovies.map((movie) => {
               const daysLeft = getDaysUntilRelease(movie.releaseDate);
               const isReleased = daysLeft <= 0;
+              const hype = String(movie.hype);
 
               return (
                 <article
                   key={movie.id}
                   className="group bg-[#0d0f18] border border-white/[0.06] rounded-xl overflow-hidden hover:border-red-500/20 transition-all duration-300"
                 >
-                  {/* Poster */}
                   <div className="relative w-full overflow-hidden" style={{ paddingBottom: '150%' }}>
                     <img
                       src={movie.poster}
@@ -264,22 +255,20 @@ export default function HotMovies2026Page() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0d0f18] via-transparent to-transparent" />
 
-                    {/* Hype Badge */}
                     <div className="absolute top-2 left-2 z-10">
                       <span
                         className={`px-1.5 py-0.5 text-[9px] font-bold rounded uppercase ${
-                          movie.hype === 'cực hot'
+                          hype === 'cực hot'
                             ? 'bg-red-500 text-white'
-                            : movie.hype === 'hot'
+                            : hype === 'hot'
                             ? 'bg-orange-500 text-white'
                             : 'bg-emerald-600 text-white'
                         }`}
                       >
-                        {movie.hype === 'cực hot' ? '🔥 Hot' : movie.hype === 'hot' ? '⭐ Hot' : '💎 Hay'}
+                        {hype === 'cực hot' ? 'Hot' : hype === 'hot' ? 'Hot' : 'Hay'}
                       </span>
                     </div>
 
-                    {/* Days Left */}
                     <div className="absolute top-2 right-2 z-10">
                       <span
                         className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${
@@ -290,17 +279,15 @@ export default function HotMovies2026Page() {
                             : 'bg-black/60 text-white/70'
                         }`}
                       >
-                        {isReleased ? '✓ Ra mắt' : `${daysLeft}d`}
+                        {isReleased ? 'Ra mắt' : `${daysLeft}d`}
                       </span>
                     </div>
 
-                    {/* Countdown Overlay */}
                     <div className="absolute bottom-0 left-0 right-0 px-2 pb-2">
                       <Countdown targetDate={movie.releaseDate} className="justify-center" />
                     </div>
                   </div>
 
-                  {/* Content */}
                   <div className="p-3">
                     <h3 className="font-bold text-white text-[13px] group-hover:text-red-400 transition-colors line-clamp-1 mb-0.5">
                       {movie.title}
@@ -329,7 +316,6 @@ export default function HotMovies2026Page() {
         )}
       </main>
 
-      {/* CTA Section */}
       <section className="max-w-[1760px] mx-auto px-4 lg:px-6 py-12">
         <div className="bg-gradient-to-r from-red-500/10 via-orange-500/5 to-red-500/10 border border-red-500/20 rounded-2xl p-4 sm:p-6 md:p-8 text-center">
           <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-3">

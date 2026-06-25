@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import MovieForm from './components/MovieForm';
 import EpisodeStreamForm from './components/EpisodeStreamForm';
@@ -44,7 +44,7 @@ function AddMovieWizard() {
   const currentIdx = STEPS.findIndex((s) => s.key === step);
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <title>Thêm phim thủ công – Admin | KhoPhim</title>
       <meta name="robots" content="noindex, nofollow" />
 
@@ -139,7 +139,7 @@ function AddMovieWizard() {
                 Phim đã được lưu vào Supabase cùng episodes và streams.
               </p>
               <p className="text-white/20 text-xs font-mono mb-6">
-                Movie ID: {savedMovie.id} · Slug: {savedMovie.slug}
+                Movie ID: {savedMovie.id} Â· Slug: {savedMovie.slug}
               </p>
               <div className="flex items-center justify-center gap-3">
                 <button

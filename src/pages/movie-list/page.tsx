@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import Navbar from '../../components/feature/Navbar';
 import Footer from '../../components/feature/Footer';
@@ -134,7 +134,7 @@ const DEFAULT_UI = {
   stats: [{ label: 'Phim', value: '50K+' }, { label: 'Cập nhật', value: 'Hàng ngày' }, { label: 'Chất lượng', value: 'Full HD' }],
 };
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 36;
 
 function getMovieKey(movie: Movie): string {
   return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
@@ -156,7 +156,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
   const { movies: rawMovies, loading, totalPages: hookTotalPages } = useMoviesByType(
     type,
     page,
-    1,
+    2,
     sortField,
   );
 
@@ -255,7 +255,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
   const { sectionRef: seoRef, visible: seoVisible } = useLazySection('300px');
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={seoTitle}
         description={seoDesc}
@@ -267,23 +267,40 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
       />
       <Navbar />
 
-      <main className="max-w-[1760px] mx-auto px-4 pb-12 pt-8">
+      <main className="cinema-page-container pt-6 sm:pt-8 lg:pt-10">
         {/* ── Breadcrumb + Title ── */}
-        <div className="flex items-center gap-3 mb-6 flex-wrap">
-          <nav className="flex items-center gap-1.5 text-xs text-white/25">
+        <section className="cinema-hero-panel mb-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+        <div className="relative z-10 flex items-center gap-3 mb-4 flex-wrap">
+          <nav className="flex items-center gap-1.5 text-xs text-white/35">
             <a href="/" className="hover:text-white/50 transition-colors">Trang chủ</a>
             <i className="ri-arrow-right-s-line text-white/15 text-sm" />
             <span className="text-white/50">{displayTitle}</span>
           </nav>
         </div>
 
-        <h1 className="text-xl md:text-2xl font-bold text-white leading-tight tracking-tight mb-1">
-          {displayTitle} 2026 – Vietsub HD Miễn Phí{page > 1 ? ` – Trang ${page}` : ''}
-        </h1>
-        <p className="text-white/35 text-xs mb-5">{uiMeta.description}</p>
+        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <div className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.055] ${uiMeta.accentColor}`}>
+              <i className={`${uiMeta.icon} text-xl`} />
+            </div>
+            <h1 className="text-2xl font-black leading-tight tracking-tight text-white sm:text-3xl lg:text-4xl">
+              {displayTitle} 2026{page > 1 ? ` – Trang ${page}` : ''}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55 sm:text-base">{uiMeta.description}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:min-w-[360px]">
+            {uiMeta.stats.map((stat) => (
+              <div key={stat.label} className="cinema-chip rounded-2xl px-3 py-3 text-center">
+                <div className="text-sm font-black text-white sm:text-base">{stat.value}</div>
+                <div className="mt-0.5 text-[10px] font-semibold uppercase text-white/35 sm:text-[11px]">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        </section>
 
         {/* ── Filter & Sort Bar ── */}
-        <div className="flex items-center justify-between mb-6 gap-3 py-4 border-b border-white/[0.05] flex-col sm:flex-row">
+        <div className="cinema-toolbar-panel mb-7 flex flex-col items-stretch justify-between gap-3 px-3 py-3 sm:flex-row sm:items-center sm:px-4">
           <div className="flex items-center gap-3">
             {!loading && movies.length > 0 ? (
               <span className="text-sm text-white/35 flex items-center gap-2">
@@ -297,14 +314,14 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
             )}
           </div>
 
-          <div className="flex items-center gap-1 bg-white/[0.03] border border-white/[0.06] rounded-xl p-1 overflow-x-auto w-full sm:w-auto">
+          <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-white/[0.06] bg-black/20 p-1 w-full sm:w-auto">
             {(['new', 'hot', 'updated'] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setSortBy(mode)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                   sortBy === mode
-                    ? 'bg-white/[0.1] text-white'
+                    ? 'bg-white/[0.12] text-white shadow-sm'
                     : 'text-white/30 hover:text-white/60'
                 }`}
               >
@@ -345,7 +362,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+            <div className="grid movie-grid-desktop">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (
                 <div key={i} className="animate-pulse">
                   <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -356,7 +373,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
             </div>
           </div>
         ) : movies.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-32 text-white/20">
+          <div className="cinema-empty-state flex flex-col items-center justify-center py-24 text-center text-white/20 sm:py-32">
             <div className="w-16 h-16 flex items-center justify-center rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-4">
               <i className="ri-film-line text-3xl" />
             </div>
@@ -364,7 +381,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
             <p className="text-sm text-white/15 mt-1">Thử chọn danh mục khác</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+          <div className="grid movie-grid-desktop">
               {movies.map((m, idx) => (
                 <MovieCard key={m._id} movie={m} priority={idx < 2} />
               ))}

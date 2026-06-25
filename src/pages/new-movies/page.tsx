@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useHeroLazyLoad } from '@/hooks/useHeroLazyLoad';
 import Navbar from '@/components/feature/Navbar';
@@ -12,7 +12,7 @@ import { isImagePreloaded, markImagePreloaded } from '@/utils/imagePreloader';
 import { movieDetailUrl } from '@/utils/slugEncoder';
 import type { Movie } from '@/types/movie';
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 36;
 const INITIAL_BATCHES = 3;
 
 function getMovieKey(movie: Movie): string {
@@ -236,7 +236,7 @@ export default function NewMoviesPage() {
   const activeFilter = FILTERS.find((f) => f.key === filterType) ?? FILTERS[0];
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title="Phim Mới Nhất 2026 – Vietsub HD Miễn Phí | KhoPhim"
         description="Xem phim mới nhất 2026 vietsub HD miễn phí tại KhoPhim. Tổng hợp phim lẻ, phim bộ, phim chiếu rạp, anime cập nhật hàng ngày. 50.000+ bộ phim, không quảng cáo, không cần đăng ký. Xem ngay!"
@@ -316,11 +316,11 @@ export default function NewMoviesPage() {
         </div>
       </div>
 
-      <main className="max-w-[1760px] mx-auto px-4 pb-14">
+      <main className="cinema-page-container">
 
         {/* ── Filter Tabs ── */}
         <div className="mb-6 -mt-1">
-          <div className="flex gap-1.5 flex-wrap">
+          <div className="cinema-toolbar-panel flex flex-wrap gap-1.5 p-2 sm:p-3">
             {FILTERS.map(({ key, label, icon, color }) => (
               <button
                 key={key}
@@ -328,7 +328,7 @@ export default function NewMoviesPage() {
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap border ${
                   filterType === key
                     ? `bg-gradient-to-r ${color} text-white border-transparent shadow-lg shadow-red-500/10`
-                    : 'bg-[#13151f] text-white/45 hover:text-white border-white/[0.07] hover:border-white/15'
+                    : 'bg-black/20 text-white/45 hover:text-white border-white/[0.07] hover:border-white/15'
                 }`}
               >
                 <i className={`${icon} text-sm`} />
@@ -360,10 +360,9 @@ export default function NewMoviesPage() {
 
         {/* ── Featured Section (only page 1, not loading) ── */}
         {!loading && page === 1 && featuredMain && (
-          <section className="mb-10">
+          <section className="home-section-surface mb-10">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-1 h-4 bg-red-500 rounded-full" />
-              <h2 className="text-sm font-bold gradient-heading">Mới Cập Nhật Hôm Nay</h2>
+              <h2 className="cinema-section-title text-sm sm:text-base">Mới Cập Nhật Hôm Nay</h2>
               <span className="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
                 <span className="w-1 h-1 bg-green-400 rounded-full animate-pulse" />
                 LIVE
@@ -387,13 +386,12 @@ export default function NewMoviesPage() {
         )}
 
         {/* ── Section header for grid ── */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-1 h-4 bg-red-500 rounded-full" />
-            <h2 className="text-sm font-bold gradient-heading">Tất Cả Phim Mới</h2>
+            <h2 className="cinema-section-title text-sm sm:text-base">Tất Cả Phim Mới</h2>
           </div>
           {!loading && filteredPool.length > 0 && (
-            <span className="text-xs text-white/30">
+            <span className="cinema-chip rounded-full px-3 py-1 text-xs text-white/35">
               Trang {page} · {filteredPool.length.toLocaleString()} phim
             </span>
           )}
@@ -401,7 +399,7 @@ export default function NewMoviesPage() {
 
         {/* ── Movie Grid: 10 cols, smaller posters ── */}
         {showLoading ? (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+          <div className="grid movie-grid-desktop">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
               <div key={i}>
                 <div className="aspect-[2/3] skeleton rounded-lg" />
@@ -411,7 +409,7 @@ export default function NewMoviesPage() {
             ))}
           </div>
         ) : pageMovies.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-white/30">
+          <div className="cinema-empty-state flex flex-col items-center justify-center py-24 text-white/30">
             <i className="ri-film-line text-5xl mb-3" />
             <p className="text-lg">Không có phim nào</p>
             <button
@@ -422,7 +420,7 @@ export default function NewMoviesPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+          <div className="grid movie-grid-desktop">
             {pageMovies.map((m, idx) => (
               <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 4} />
             ))}

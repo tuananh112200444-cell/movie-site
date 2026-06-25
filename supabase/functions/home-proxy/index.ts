@@ -174,7 +174,7 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
 }
 
 /* ── Build trending list from new-movies ── */
-const HOME_OVERRIDE_SELECT = 'slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,status,source_site,source_name,year,type,tmdb_id,ophim_id,ophim_slug,is_published';
+const HOME_OVERRIDE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,status,source_site,source_name,year,type,tmdb_id,ophim_id,ophim_slug,is_published';
 
 function normalizeTitle(value: unknown): string {
   return String(value || '')
@@ -234,6 +234,7 @@ function overridePriority(movie: Record<string, unknown>): number {
 function applyMovieOverride(item: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
   return {
     ...item,
+    _id: override.id || item._id,
     slug: override.slug || item.slug,
     name: override.name || override.title_vi || item.name,
     origin_name: override.origin_name || item.origin_name,
@@ -254,6 +255,103 @@ function applyMovieOverride(item: Record<string, unknown>, override: Record<stri
     source_site: override.source_site || 'supabase',
     source_name: override.source_name || 'Supabase',
   };
+}
+
+function extractEpisodeNumber(value: unknown): number {
+  const text = String(value ?? '').toLowerCase();
+  if (!text || /\b(trailer|teaser)\b/.test(text)) return 0;
+  const matches = [...text.matchAll(/(\d{1,5})/g)]
+    .map((match) => Number(match[1]))
+    .filter(Number.isFinite);
+  return matches.length ? Math.max(...matches) : 0;
+}
+
+function advertisedEpisode(item: Record<string, unknown>): number {
+  return Math.max(
+    Number(item.current_episode || 0) || 0,
+    extractEpisodeNumber(item.episode_current),
+  );
+}
+
+function capEpisodeToPlayable(item: Record<string, unknown>, playableMax: number): Record<string, unknown> {
+  const advertised = advertisedEpisode(item);
+  if (!playableMax || !advertised || playableMax === advertised) return item;
+  return {
+    ...item,
+    episode_current: `Tập ${playableMax}`,
+    current_episode: playableMax,
+    episode_total: Number(item.total_episodes || 0) >= playableMax ? item.episode_total : '',
+    total_episodes: Number(item.total_episodes || 0) >= playableMax ? item.total_episodes : undefined,
+  };
+}
+
+async function enrichWithPlayableEpisodeCounts(
+  supabase: ReturnType<typeof createClient>,
+  sections: Record<string, Record<string, unknown>[]>,
+): Promise<Record<string, Record<string, unknown>[]>> {
+  const ids = Array.from(new Set(
+    Object.values(sections)
+      .flat()
+      .map((item) => String(item._id || ''))
+      .filter((id) => /^[0-9a-f-]{24,36}$/i.test(id)),
+  ));
+  if (ids.length === 0) return sections;
+
+  const maxByMovieId = new Map<string, number>();
+  const setMax = (movieId: unknown, episodeNumber: unknown) => {
+    const id = String(movieId || '');
+    const num = Number(episodeNumber || 0) || extractEpisodeNumber(episodeNumber);
+    if (!id || !Number.isFinite(num) || num <= 0) return;
+    maxByMovieId.set(id, Math.max(maxByMovieId.get(id) || 0, num));
+  };
+
+  try {
+    const chunkSize = 80;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const [movieEpisodes, episodes, streams] = await Promise.all([
+        supabase
+          .from('movie_episodes')
+          .select('movie_id, episode_number, slug, episode_name, link_m3u8, link_embed, source')
+          .in('movie_id', chunk)
+          .abortSignal(timeoutSignal(1200)),
+        supabase
+          .from('episodes')
+          .select('movie_id, episode_number, episode_slug, episode_name, link_m3u8, link_embed')
+          .in('movie_id', chunk)
+          .abortSignal(timeoutSignal(1200)),
+        supabase
+          .from('streams')
+          .select('movie_id, episode_slug, stream_url, embed_url, is_active')
+          .in('movie_id', chunk)
+          .eq('is_active', true)
+          .abortSignal(timeoutSignal(1200)),
+      ]);
+
+      for (const row of (movieEpisodes.data ?? []) as Record<string, unknown>[]) {
+        if (String(row.source || '').toLowerCase() === 'hidden') continue;
+        if (!String(row.link_m3u8 || row.link_embed || '').trim()) continue;
+        setMax(row.movie_id, row.episode_number || row.slug || row.episode_name);
+      }
+      for (const row of (episodes.data ?? []) as Record<string, unknown>[]) {
+        if (!String(row.link_m3u8 || row.link_embed || '').trim()) continue;
+        setMax(row.movie_id, row.episode_number || row.episode_slug || row.episode_name);
+      }
+      for (const row of (streams.data ?? []) as Record<string, unknown>[]) {
+        if (!String(row.stream_url || row.embed_url || '').trim()) continue;
+        setMax(row.movie_id, row.episode_slug);
+      }
+    }
+  } catch {
+    return sections;
+  }
+
+  if (maxByMovieId.size === 0) return sections;
+  const normalized: Record<string, Record<string, unknown>[]> = {};
+  for (const [section, items] of Object.entries(sections)) {
+    normalized[section] = items.map((item) => capEpisodeToPlayable(item, maxByMovieId.get(String(item._id || '')) || 0));
+  }
+  return normalized;
 }
 
 async function buildSupabaseOverrideMap(
@@ -611,8 +709,10 @@ serve(async (req) => {
     );
   }
 
+  const safeFreshSections = await enrichWithPlayableEpisodeCounts(supabase, freshSections);
+
   /* 5. Stale-while-revalidate: if OPhim returned nothing but cache exists, return stale */
-  const hasAnyFresh = Object.values(freshSections).some((arr) => arr.length > 0);
+  const hasAnyFresh = Object.values(safeFreshSections).some((arr) => arr.length > 0);
 
   if (!hasAnyFresh && cacheRow) {
     const staleSections = (cacheRow.sections as Record<string, unknown[]>);
@@ -637,10 +737,10 @@ serve(async (req) => {
      temp I/O on small Supabase instances. Updating the fixed cache row is cheaper. */
   try {
     const expiresAt = new Date(Date.now() + CACHE_TTL_MIN * 60 * 1000).toISOString();
-    let mergedSections = freshSections;
+    let mergedSections = safeFreshSections;
     if (cacheRow) {
       const existing = (cacheRow.sections as Record<string, unknown[]>) ?? {};
-      mergedSections = { ...existing, ...freshSections };
+      mergedSections = { ...existing, ...safeFreshSections };
     }
     const payload = {
       sections: mergedSections as unknown as object,
@@ -668,7 +768,7 @@ serve(async (req) => {
   /* 7. Return fresh */
   const payload: Record<string, unknown[]> = {};
   for (const key of requestedSections) {
-    payload[key] = freshSections[key] ?? [];
+    payload[key] = safeFreshSections[key] ?? [];
   }
 
   return jsonResponse({ status: true, source: 'fresh', sections: payload }, 200, {

@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/supabase';
+﻿import { supabase } from '../../lib/supabase';
 import { clearAdminAuth, isAdminAuthenticated } from '@/services/adminAuth';
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
@@ -198,7 +198,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
   // ── RENDER LOGIN / SETUP GATE ──────────────────────────────────
   if (!auth) {
     return (
-      <div className="min-h-screen bg-[#080a10] flex items-center justify-center px-4">
+      <div className="min-h-screen kp-cinema-page flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <div className="bg-[#0d0f18] border border-white/[0.06] rounded-2xl p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-6">

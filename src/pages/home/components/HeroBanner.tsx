@@ -57,7 +57,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
 
   if (loading) {
     return (
-      <div className="relative w-full bg-[#0a0c14]" style={{ aspectRatio: '16/6', minHeight: 'clamp(240px, 64vw, 320px)' }}>
+      <div className="relative w-full bg-[#0a0c14]" style={{ aspectRatio: '16/5.7', minHeight: 'clamp(240px, 58vw, 460px)' }}>
         <div className="absolute inset-0 skeleton" />
         <div className="absolute inset-0 flex items-center justify-center">
           <i className="ri-loader-4-line animate-spin text-2xl text-red-500/40" />
@@ -79,7 +79,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
   const nextIndex = (activeIndex + 1) % featured.length;
 
   return (
-    <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/6', minHeight: 'clamp(240px, 62vw, 280px)' }}>
+    <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/5.7', minHeight: 'clamp(240px, 58vw, 460px)' }}>
 
       {/* Only render active + next slides to reduce initial DOM & image count */}
       <MemoSlideBackground
@@ -119,11 +119,11 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#080a10] to-transparent pointer-events-none" />
 
       {/* Content */}
-      <div className="absolute inset-0 flex items-center px-3 pt-16 pb-10 sm:px-8 sm:pt-20 sm:pb-6 md:px-12 md:pt-24 md:pb-4 lg:px-8">
-        <div key={contentKey} className="hero-content-enter mx-auto flex w-full max-w-[1760px] items-center justify-between gap-3 md:gap-8 2xl:px-2">
+      <div className="absolute inset-0 flex items-center px-3 pt-16 pb-10 sm:px-8 sm:pt-20 sm:pb-6 md:px-12 md:pt-24 md:pb-4 lg:px-10 xl:px-12">
+        <div key={contentKey} className="hero-content-enter mx-auto flex w-full max-w-[1880px] items-center justify-between gap-3 md:gap-8 2xl:px-2">
 
           {/* Left: Text info */}
-          <div className="max-w-lg flex-1 xl:max-w-2xl 2xl:max-w-3xl">
+          <div className="max-w-lg flex-1 xl:max-w-3xl 2xl:max-w-[840px]">
             <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3 flex-wrap">
               {active.category?.slice(0, 2).map((c) => (
                 <Link key={c.slug} to={`/the-loai/${c.slug}`}
@@ -137,7 +137,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
               </span>
             </div>
 
-            <h2 className="hero-title-enter mb-1 text-xl font-black leading-snug tracking-tight text-white line-clamp-2 sm:mb-1.5 sm:text-2xl sm:leading-tight md:text-4xl lg:text-5xl 2xl:text-6xl">
+            <h2 className="hero-title-enter mb-1 text-xl font-black leading-snug tracking-tight text-white line-clamp-2 sm:mb-1.5 sm:text-2xl sm:leading-tight md:text-4xl lg:text-5xl 2xl:text-[3.6rem]">
               {active.name}
             </h2>
 
@@ -317,7 +317,7 @@ const MemoHeroPosterCard = memo(function HeroPosterCard({ src, alt, href, qualit
   const [loaded, setLoaded] = useState(isImagePreloaded(src));
   const [imgError, setImgError] = useState(false);
   return (
-    <Link to={href} className="group relative block w-[160px] xl:w-[190px] 2xl:w-[220px]" style={{ aspectRatio: '2/3' }}>
+    <Link to={href} className="group relative block w-[170px] xl:w-[205px] 2xl:w-[230px]" style={{ aspectRatio: '2/3' }}>
       <div className="relative w-full h-full rounded-2xl overflow-hidden bg-[#16192a]" style={{ boxShadow: '0 16px 40px rgba(0,0,0,0.6), 0 6px 16px rgba(0,0,0,0.4)' }}>
         {/* BLUR PLACEHOLDER — hiển thị NGAY LẬP TỨC */}
         <div className={`absolute inset-0 blur-placeholder z-[1] transition-opacity duration-700 ${loaded ? 'opacity-0' : 'opacity-100'}`} />

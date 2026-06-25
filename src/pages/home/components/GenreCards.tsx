@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useScrollReveal } from '../../../hooks/useScrollReveal';
 import { memo } from 'react';
 
-const GENRE_LIST = [
+export const GENRE_LIST = [
   { name: 'Hành Động',   slug: 'hanh-dong',   icon: 'ri-sword-fill',            color: '#ef4444', glow: 'rgba(239,68,68,0.3)',    bg: 'rgba(239,68,68,0.10)',   border: 'rgba(239,68,68,0.25)',  count: '8.2K+' },
   { name: 'Tình Cảm',   slug: 'tinh-cam',    icon: 'ri-heart-3-fill',           color: '#f472b6', glow: 'rgba(244,114,182,0.3)',  bg: 'rgba(244,114,182,0.10)', border: 'rgba(244,114,182,0.25)', count: '6.5K+' },
   { name: 'Hài Hước',   slug: 'hai-huoc',    icon: 'ri-emotion-laugh-fill',     color: '#fb923c', glow: 'rgba(251,146,60,0.3)',   bg: 'rgba(251,146,60,0.10)',  border: 'rgba(251,146,60,0.25)', count: '4.1K+' },

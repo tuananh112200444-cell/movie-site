@@ -1,4 +1,4 @@
-// ━━━ No StrictMode in production — saves one full re-render cycle ━━━
+// No StrictMode in production: saves one full re-render cycle.
 import './i18n'
 import { createRoot } from 'react-dom/client'
 import './index.css'
@@ -9,7 +9,7 @@ import { reportClientIssue } from './services/playerDiagnostics'
 const rootElement = document.getElementById('root');
 
 if (!rootElement) {
-  document.body.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><div><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang cap nhat</h1><p style="color:rgba(255,255,255,.72);margin:0 0 20px">Vui long tai lai trang de nhan phien ban moi nhat.</p><button onclick="location.reload()" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer">Tai lai</button></div></main>';
+  document.body.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><div><h1 style="font-size:24px;margin:0 0 12px">KhoPhim đang cập nhật</h1><p style="color:rgba(255,255,255,.72);margin:0 0 20px">Vui lòng tải lại trang để nhận phiên bản mới nhất.</p><button onclick="location.reload()" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer">Tải lại</button></div></main>';
 } else {
   createRoot(rootElement).render(<App />);
 }
@@ -17,8 +17,9 @@ if (!rootElement) {
 // Report Core Web Vitals sau khi render
 reportWebVitals()
 
-const STALE_TAB_RELOAD_MS = 15 * 60 * 1000;
+const STALE_TAB_RELOAD_MS = 10 * 60 * 1000;
 const STALE_TAB_RELOAD_KEY = 'kp_stale_tab_reload_v1';
+const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|dynamically imported module/i;
 
 function hasActiveMediaPlayback(): boolean {
   return Array.from(document.querySelectorAll('video, audio')).some((media) => {
@@ -32,8 +33,17 @@ function reloadOnceForFreshShell(reason: string): void {
   if (sessionStorage.getItem(key) === '1') return;
   if (hasActiveMediaPlayback()) return;
   sessionStorage.setItem(key, '1');
-  reportClientIssue(reason === 'bfcache_restore' ? 'bfcache_restore_reload' : 'stale_tab_reload', reason);
+  const eventType = reason === 'bfcache_restore'
+    ? 'bfcache_restore_reload'
+    : reason.includes('chunk')
+      ? 'chunk_load_error'
+      : 'stale_tab_reload';
+  reportClientIssue(eventType, reason);
   window.location.reload();
+}
+
+function isChunkLikeError(message: string): boolean {
+  return CHUNK_ERROR_RE.test(message);
 }
 
 async function clearLegacyKhophimCaches(): Promise<void> {
@@ -78,7 +88,7 @@ async function removeLegacyServiceWorkers(): Promise<void> {
   }
 }
 
-// ── Page Visibility: pause heavy animations when tab hidden ──
+// Page Visibility: pause heavy animations when tab hidden.
 if (typeof document !== 'undefined') {
   let hiddenAt = Date.now();
 
@@ -100,10 +110,21 @@ if (typeof document !== 'undefined') {
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'unknown rejection');
     reportClientIssue('unhandled_rejection', reason);
+    if (isChunkLikeError(reason)) {
+      void clearLegacyKhophimCaches().finally(() => reloadOnceForFreshShell('chunk_unhandled_rejection'));
+    }
+  });
+
+  window.addEventListener('error', (event) => {
+    const message = event.error instanceof Error ? event.error.message : event.message || 'unknown window error';
+    reportClientIssue(isChunkLikeError(message) ? 'chunk_load_error' : 'app_error', message);
+    if (isChunkLikeError(message)) {
+      void clearLegacyKhophimCaches().finally(() => reloadOnceForFreshShell('chunk_window_error'));
+    }
   });
 }
 
-// ── Service Worker Registration: "Never Go Down" ──
+// Service Worker Registration: disabled while recovering visitors stuck on old cached builds.
 const ENABLE_SERVICE_WORKER = false;
 
 // Service worker is disabled temporarily to recover visitors stuck on old cached builds.

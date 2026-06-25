@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import Fuse from 'fuse.js';
 import Navbar from '@/components/feature/Navbar';
@@ -561,7 +561,7 @@ export default function SearchPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={q ? `Tìm kiếm "${q}" – KhoPhim` : 'Tìm Kiếm Phim – KhoPhim'}
         description={
@@ -577,12 +577,12 @@ export default function SearchPage() {
       <Navbar />
 
       {/* ── Hero Search Section ── */}
-      <div className="relative pt-16 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-red-950/20 via-[#080a10]/80 to-[#080a10]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(220,38,38,0.08),transparent_60%)]" />
+      <div className="relative overflow-hidden pt-16">
+        <div className="absolute inset-0 bg-gradient-to-b from-red-950/10 via-transparent to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-72 bg-[radial-gradient(ellipse_at_top,rgba(236,180,102,0.10),transparent_65%)]" />
 
 
-        <div className="relative max-w-3xl mx-auto px-4 pt-8 sm:pt-12 pb-6 sm:pb-10">
+        <div className="relative mx-auto max-w-4xl px-4 pb-7 pt-8 sm:pt-12">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-1.5 mb-6 text-sm justify-center">
             <Link to="/" className="text-white/30 hover:text-white/60 transition-colors">Trang chủ</Link>
@@ -592,7 +592,7 @@ export default function SearchPage() {
 
           {/* Title */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-3 py-1.5 rounded-full mb-4">
+            <div className="cinema-chip inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm text-amber-200/85 mb-4">
               <i className="ri-search-line text-sm" />
               Tìm kiếm trong 50,000+ bộ phim
             </div>
@@ -604,14 +604,14 @@ export default function SearchPage() {
               )}
             </h1>
             {!q && (
-              <p className="text-white/40 text-base">Nhập tên phim, diễn viên hoặc thể loại bạn muốn tìm</p>
+              <p className="text-white/45 text-base">Nhập tên phim, tên gốc, diễn viên hoặc thể loại bạn muốn tìm</p>
             )}
           </div>
 
           {/* Search bar */}
           <div ref={searchRef} className="relative">
             <form onSubmit={handleSubmit} className="relative group" role="search">
-              <div className="relative flex items-center bg-[#141720] border border-white/10 group-focus-within:border-red-500/50 rounded-2xl transition-all overflow-hidden">
+              <div className="cinema-search-shell relative flex items-center overflow-hidden rounded-2xl transition-all">
                 <div className="w-10 sm:w-12 h-12 sm:h-14 flex items-center justify-center flex-shrink-0">
                   <i className="ri-search-line text-white/30 text-lg" />
                 </div>
@@ -639,7 +639,7 @@ export default function SearchPage() {
                 <button
                   type="submit"
                   aria-label="Tìm kiếm phim"
-                  className="m-1.5 sm:m-2 px-3 sm:px-5 h-9 sm:h-10 flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+                  className="m-1.5 sm:m-2 px-3 sm:px-5 h-9 sm:h-10 flex items-center gap-2 bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-500 hover:to-amber-500 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
                 >
                   {loadingSug
                     ? <i className="ri-loader-4-line animate-spin" />
@@ -653,7 +653,7 @@ export default function SearchPage() {
             {showSuggestions && (
               <div
                 ref={sugListRef}
-                className="absolute top-full left-0 right-0 mt-2 bg-[#141720] border border-white/10 rounded-2xl overflow-hidden z-50 shadow-2xl max-h-[420px] overflow-y-auto"
+                className="cinema-search-shell absolute top-full left-0 right-0 mt-2 rounded-2xl overflow-hidden z-50 max-h-[420px] overflow-y-auto"
               >
                 {/* ── Suggestions (typing >= 2 chars) ── */}
                 {query.trim().length >= 1 ? (
@@ -841,21 +841,21 @@ export default function SearchPage() {
         </div>
       </div>
 
-      <main className="max-w-[1760px] mx-auto px-4 pb-12">
+      <main className="cinema-page-container">
 
         {/* ── Quick Categories (only when no query) ── */}
         {!q && (
           <div className="mb-10">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-1 h-5 bg-red-500 rounded-full" />
-              <h2 className="text-base font-bold text-white">Khám Phá Theo Danh Mục</h2>
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <h2 className="cinema-section-title text-base sm:text-lg">Khám Phá Theo Danh Mục</h2>
+              <span className="hidden text-xs text-white/30 sm:inline">Chọn nhanh nhóm phim bạn muốn xem</span>
             </div>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+            <div className="grid movie-grid-desktop">
               {QUICK_CATEGORIES.map((cat) => (
                 <Link
                   key={cat.href}
                   to={cat.href}
-                  className={`flex flex-col items-center gap-2 bg-gradient-to-b ${cat.color} border rounded-2xl p-4 transition-all cursor-pointer group`}
+                  className={`cinema-category-tile flex flex-col items-center justify-center gap-2 p-4 transition-all cursor-pointer group ${cat.color}`}
                 >
                   <div className="text-2xl leading-none">
                     {cat.isIcon
@@ -873,10 +873,9 @@ export default function SearchPage() {
         {q ? (
           <div>
             {/* Top bar: count + sort + view toggle */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+            <div className="cinema-toolbar-panel mb-5 flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                <div className="w-1 h-5 bg-red-500 rounded-full" />
-                <h2 className="text-white font-bold text-base sm:text-lg">
+                <h2 className="cinema-section-title text-base sm:text-lg">
                   Kết quả: <span className="text-red-400">&ldquo;{q}&rdquo;</span>
                 </h2>
                 <span className="text-white/35 text-sm sm:text-base bg-white/[0.04] border border-white/[0.06] px-2.5 sm:px-3 py-1 rounded-full">
@@ -956,12 +955,12 @@ export default function SearchPage() {
             </div>
 
             {/* Divider */}
-            <div className="h-px bg-gradient-to-r from-white/[0.06] via-white/[0.03] to-transparent mb-5" />
+              <div className="h-px bg-gradient-to-r from-white/[0.06] via-amber-200/10 to-transparent mb-5" />
 
             {/* Loading skeleton */}
             {loading && results.length === 0 ? (
               viewMode === 'grid' ? (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+                <div className="grid movie-grid-desktop">
                 {Array.from({ length: 24 }).map((_, i) => (
                     <div key={i}>
                       <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -985,7 +984,7 @@ export default function SearchPage() {
                 </div>
               )
             ) : error ? (
-              <div className="flex flex-col items-center justify-center py-12 sm:py-20 text-center">
+              <div className="cinema-empty-state flex flex-col items-center justify-center py-12 text-center sm:py-20">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center bg-white/[0.03] border border-white/[0.06] rounded-2xl mb-5">
                   <i className="ri-search-eye-line text-4xl text-white/15" />
                 </div>
@@ -1009,7 +1008,7 @@ export default function SearchPage() {
             ) : filteredResults.length > 0 ? (
               <>
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+                  <div className="grid movie-grid-desktop">
                     {filteredResults.map((m, index) => (
                       <SearchResultItem key={searchResultKey(m, index)} movie={m} query={q} viewMode="grid" />
                     ))}
@@ -1069,7 +1068,7 @@ export default function SearchPage() {
               <span className="text-sm text-white/30 bg-white/[0.04] border border-white/[0.06] px-2.5 py-1 rounded-full">Cập nhật hàng ngày</span>
             </div>
             {trending.length === 0 ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+              <div className="grid movie-grid-desktop">
                 {Array.from({ length: 16 }).map((_, i) => (
                   <div key={i}>
                     <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -1079,7 +1078,7 @@ export default function SearchPage() {
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+              <div className="grid movie-grid-desktop">
                 {trending.map((m) => (
                   <MovieCard key={m._id} movie={m} />
                 ))}

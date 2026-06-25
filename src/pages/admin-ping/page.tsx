@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { adminFetch } from '@/services/adminAuth';
 
@@ -268,7 +268,7 @@ export default function AdminPingPage() {
   const lastLog = logs[0];
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <title>Google Indexing Ping – Admin | KhoPhim</title>
       <meta name="description" content="Admin panel quản lý Google Indexing API Ping – tự động ping phim mới và trang danh mục lên Google." />
       <meta name="robots" content="noindex, nofollow" />
@@ -492,7 +492,7 @@ export default function AdminPingPage() {
                 }`}>
                   <i className={keywordResult.failed === 0 ? 'ri-checkbox-circle-fill' : 'ri-error-warning-line'} />
                   <span>{keywordResult.message}</span>
-                  <span className="text-white/30">·</span>
+                  <span className="text-white/30">Â·</span>
                   <span>OK: <strong>{keywordResult.success}</strong>/{keywordResult.total}</span>
                   {keywordResult.failed > 0 && <span className="text-red-400">Lỗi: {keywordResult.failed}</span>}
                 </div>
@@ -545,7 +545,7 @@ export default function AdminPingPage() {
                 }`}>
                   <i className={seoResult.failed === 0 ? 'ri-checkbox-circle-fill' : 'ri-error-warning-line'} />
                   <span>{seoResult.message}</span>
-                  <span className="text-white/30">·</span>
+                  <span className="text-white/30">Â·</span>
                   <span>OK: <strong>{seoResult.success}</strong>/{seoResult.total}</span>
                   {seoResult.failed > 0 && <span className="text-red-400">Lỗi: {seoResult.failed}</span>}
                 </div>

@@ -760,7 +760,7 @@ function sortListItems(
 }
 
 const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
-const SUPABASE_LIST_PAGE_SIZE = 30;
+const SUPABASE_LIST_PAGE_SIZE = 36;
 
 function typeFilterValues(type?: string): string[] {
   if (!type || type === 'phim-moi-cap-nhat') return [];
@@ -1855,6 +1855,24 @@ function getMaxEpisodeNumberFromServers(servers: EpisodeServer[] = []): number {
   }, 0);
 }
 
+function getMaxEpisodeNumberFromServerData(serverData: unknown): number {
+  const rows = Array.isArray(serverData)
+    ? serverData
+    : serverData && typeof serverData === 'object'
+      ? [serverData]
+      : [];
+  return rows.reduce((max, item) => {
+    const ep = item as Partial<EpisodeData> & { episode_number?: number | string };
+    return Math.max(
+      max,
+      Number(ep.episode_number || 0) || 0,
+      getEpisodeNumberFromText(ep.slug),
+      getEpisodeNumberFromText(ep.name),
+      getEpisodeNumberFromText(ep.filename),
+    );
+  }, 0);
+}
+
 function normalizeMovieEpisodeCounts<T extends MovieDetail | MovieItem>(movie: T, episodes: EpisodeServer[] = []): T {
   const maxEpisode = Math.max(
     getEpisodeNumberFromText(movie.current_episode ? String(movie.current_episode) : movie.episode_current),
@@ -2445,40 +2463,63 @@ async function enrichMoviesWithSupabaseEpisodeCounts(items: MovieItem[], signal?
       if (!movieId || !Number.isFinite(episodeNumber) || episodeNumber <= 0) return;
       maxByMovieId.set(movieId, Math.max(maxByMovieId.get(movieId) || 0, episodeNumber));
     };
-    const chunkSize = 200;
+    const fetchPagedRows = async (
+      buildQuery: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>
+    ): Promise<Record<string, unknown>[]> => {
+      const rows: Record<string, unknown>[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await buildQuery(from, from + 999);
+        if (error) throw new Error(error.message);
+        rows.push(...((data ?? []) as Record<string, unknown>[]));
+        if (!data || data.length < 1000) break;
+      }
+      return rows;
+    };
+    const chunkSize = 30;
     for (let i = 0; i < ids.length; i += chunkSize) {
       const chunk = ids.slice(i, i + chunkSize);
-      const [movieEpisodesResult, episodesResult, streamsResult] = await Promise.all([
-        supabase
+      const [movieEpisodesRows, episodeRows, streamRows] = await Promise.all([
+        fetchPagedRows((from, to) => supabase
           .from('movie_episodes')
           .select('movie_id, episode_number, source')
           .in('movie_id', chunk)
           .order('episode_number', { ascending: false })
-          .abortSignal(signal),
-        supabase
+          .range(from, to)
+          .abortSignal(signal)),
+        fetchPagedRows((from, to) => supabase
           .from('episodes')
-          .select('movie_id, episode_number')
+          .select('movie_id, episode_number, episode_slug, episode_name, server_data')
           .in('movie_id', chunk)
           .order('episode_number', { ascending: false })
-          .abortSignal(signal),
-        supabase
+          .range(from, to)
+          .abortSignal(signal)),
+        fetchPagedRows((from, to) => supabase
           .from('streams')
           .select('movie_id, episode_slug, is_active')
           .in('movie_id', chunk)
           .eq('is_active', true)
-          .abortSignal(signal),
+          .range(from, to)
+          .abortSignal(signal)),
       ]);
 
-      for (const row of (movieEpisodesResult.data ?? []) as Record<string, unknown>[]) {
+      for (const row of movieEpisodesRows) {
         if (String(row.source || '').toLowerCase() === 'hidden') continue;
         setMaxEpisode(String(row.movie_id || ''), Number(row.episode_number || 0));
       }
 
-      for (const row of (episodesResult.data ?? []) as Record<string, unknown>[]) {
-        setMaxEpisode(String(row.movie_id || ''), Number(row.episode_number || 0));
+      for (const row of episodeRows) {
+        setMaxEpisode(
+          String(row.movie_id || ''),
+          Math.max(
+            Number(row.episode_number || 0) || 0,
+            getEpisodeNumberFromText(String(row.episode_slug || '')),
+            getEpisodeNumberFromText(String(row.episode_name || '')),
+            getMaxEpisodeNumberFromServerData(row.server_data),
+          ),
+        );
       }
 
-      for (const row of (streamsResult.data ?? []) as Record<string, unknown>[]) {
+      for (const row of streamRows) {
         setMaxEpisode(String(row.movie_id || ''), getEpisodeNumberFromText(String(row.episode_slug || '')));
       }
     }
@@ -3763,10 +3804,11 @@ export async function getMergedEpisodes(
       .abortSignal(querySignal),
     supabase
       .from('streams')
-      .select('stream_url, embed_url, episode_slug, server_name, subtitle_url, priority')
+      .select('stream_url, embed_url, episode_slug, server_name, subtitle_url, priority, health_status, response_time_ms, failure_count')
       .eq('movie_id', movieId)
       .eq('is_active', true)
       .order('priority', { ascending: false })
+      .order('response_time_ms', { ascending: true, nullsFirst: false })
       .abortSignal(querySignal),
     supabase
       .from('movies')
@@ -3943,6 +3985,9 @@ export async function getMergedEpisodes(
 
     // STRICT: skip dead streams — no playable URL
     if (!streamUrl && !embedUrl) continue;
+    const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
+    const failureCount = Number(sm.failure_count || 0);
+    if (healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 5)) continue;
 
     const slug = String(sm.episode_slug || 'full');
     const num = slug === 'full' ? 0 : extractEpNumber(slug);

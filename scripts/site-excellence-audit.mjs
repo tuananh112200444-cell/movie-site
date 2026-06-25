@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -48,7 +48,16 @@ const CHECKS = [
 ];
 
 function hasMojibake(text) {
-  return /Ã|Â»|Â¼|â€|Æ°|áº|á»/.test(text);
+  return /Ã|áº|á»|Ä‘|Ä|Æ°|Æ¡|Â(?!u|U)/.test(text);
+}
+
+function collectDuplicateValues(text, regex) {
+  const counts = new Map();
+  for (const match of text.matchAll(regex)) {
+    const value = match[1];
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts.entries()].filter(([, count]) => count > 1).map(([value]) => value);
 }
 
 async function fetchText(check) {
@@ -112,6 +121,99 @@ async function assertLocalSeoClean() {
   return failures;
 }
 
+async function assertProductionBuildClean() {
+  const failures = [];
+  const html = await readFile('out/index.html', 'utf8').catch(() => null);
+  if (!html) {
+    return ['out/index.html is missing. Run npm run build before site-excellence audit.'];
+  }
+
+  for (const needle of ['/@vite/client', 'react-refresh', '/src/main.tsx']) {
+    if (html.includes(needle)) failures.push(`out/index.html contains dev-only reference: ${needle}`);
+  }
+
+  for (const needle of [
+    '<title>KhoPhim',
+    'meta name="description"',
+    'rel="canonical"',
+    'type="module" crossorigin src="/assets/',
+    '<noscript>',
+  ]) {
+    if (!html.includes(needle)) failures.push(`out/index.html is missing required production marker: ${needle}`);
+  }
+
+  if (hasMojibake(html)) failures.push('out/index.html contains mojibake text.');
+
+  const duplicatePreloads = collectDuplicateValues(
+    html,
+    /<link[^>]+rel=["']modulepreload["'][^>]+href=["']([^"']+)["'][^>]*>/g,
+  );
+  if (duplicatePreloads.length > 0) {
+    failures.push(`out/index.html contains duplicate modulepreload links: ${duplicatePreloads.join(', ')}`);
+  }
+
+  const assets = await readdir('out/assets', { withFileTypes: true }).catch(() => []);
+  const files = assets.filter((entry) => entry.isFile()).map((entry) => entry.name);
+  const fileSet = new Set(files);
+  const budgets = [
+    { pattern: /^index-.*\.js$/, maxBytes: 390_000, label: 'main app JS' },
+    { pattern: /^vendor-hls-.*\.js$/, maxBytes: 560_000, label: 'HLS vendor JS' },
+    { pattern: /^vendor-react-.*\.js$/, maxBytes: 220_000, label: 'React vendor JS' },
+    { pattern: /^index-.*\.css$/, maxBytes: 230_000, label: 'main CSS' },
+  ];
+
+  for (const file of files) {
+    if (!/\.(js|css)$/.test(file)) continue;
+    const budget = budgets.find((item) => item.pattern.test(file));
+    if (!budget) continue;
+    const bytes = (await readFile(`out/assets/${file}`)).byteLength;
+    if (bytes > budget.maxBytes) {
+      failures.push(`${budget.label} ${file} is ${bytes} bytes, above budget ${budget.maxBytes}.`);
+    }
+    if (!fileSet.has(`${file}.gz`)) failures.push(`${file} is missing gzip precompression.`);
+    if (!fileSet.has(`${file}.br`)) failures.push(`${file} is missing brotli precompression.`);
+  }
+
+  return failures;
+}
+
+async function assertHeadersClean() {
+  const headers = await readFile('public/_headers', 'utf8').catch(() => '');
+  const failures = [];
+  for (const needle of [
+    'Strict-Transport-Security: max-age=31536000; includeSubDomains; preload',
+    'Content-Security-Policy:',
+    'X-Content-Type-Options: nosniff',
+    '/assets/*',
+    'Cache-Control: public, max-age=31536000, immutable',
+    '/service-worker.js',
+    'Cache-Control: no-store, no-cache, must-revalidate, max-age=0',
+    '/sitemap*.xml',
+    'Content-Type: application/xml',
+  ]) {
+    if (!headers.includes(needle)) failures.push(`public/_headers is missing: ${needle}`);
+  }
+  return failures;
+}
+
+async function assertSitemapsClean() {
+  const [index, seo] = await Promise.all([
+    readFile('public/sitemap.xml', 'utf8').catch(() => ''),
+    readFile('public/sitemap-seo-landing.xml', 'utf8').catch(() => ''),
+  ]);
+  const failures = [];
+  if (!index.includes('<sitemapindex')) failures.push('public/sitemap.xml is not a sitemap index.');
+  for (const loc of ['sitemap-static.xml', 'sitemap-seo-landing.xml', 'sitemap-movies-recent.xml', 'sitemap-movies-upcoming.xml']) {
+    if (!index.includes(loc)) failures.push(`public/sitemap.xml is missing ${loc}.`);
+  }
+  if (!seo.includes('<urlset')) failures.push('public/sitemap-seo-landing.xml is not a URL set.');
+  for (const loc of ['/xem-phim-online', '/phim-vietsub', '/phim-dang-chieu']) {
+    if (!seo.includes(loc)) failures.push(`public/sitemap-seo-landing.xml is missing ${loc}.`);
+  }
+  if (hasMojibake(index) || hasMojibake(seo)) failures.push('Local sitemap XML contains mojibake text.');
+  return failures;
+}
+
 const failures = [];
 const warnings = [];
 const results = [];
@@ -140,6 +242,9 @@ for (const check of CHECKS) {
 }
 
 failures.push(...await assertLocalSeoClean());
+failures.push(...await assertProductionBuildClean());
+failures.push(...await assertHeadersClean());
+failures.push(...await assertSitemapsClean());
 
 console.log(JSON.stringify({ site: SITE_URL, strictLive: STRICT_LIVE, results, warnings, failures }, null, 2));
 

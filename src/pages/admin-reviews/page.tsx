@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import type { MovieInfo, MovieReview } from '@/services/reviewService';
 import { getAllReviews, getApiKey, getGeminiKey, getProvider, deleteReview } from '@/services/reviewService';
@@ -223,7 +223,7 @@ export default function AdminReviewsPage() {
   const missingCount = movies.filter((m) => !reviews[m.slug]).length;
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <title>Review Manager – Admin | KhoPhim</title>
       <meta name="description" content="Admin panel quản lý review phìm – tạo, chỉnh sửa và xuất bản review phìm tự động bằng AI." />
       <meta name="robots" content="noindex, nofollow" />

@@ -109,7 +109,7 @@ export default function ActorMovies({ actorName, apiKeyword, knownFor = [] }: Ac
 
       {/* Grid */}
       {loading ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8">
+        <div className="grid movie-grid-desktop">
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i}>
               <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -135,7 +135,7 @@ export default function ActorMovies({ actorName, apiKeyword, knownFor = [] }: Ac
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8">
+          <div className="grid movie-grid-desktop">
             {displayMovies.map((m, idx) => (
               <MovieCard key={m._id} movie={m} priority={idx < 6} />
             ))}

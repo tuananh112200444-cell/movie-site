@@ -383,8 +383,8 @@ export default function PlayerBox({
   }, [iframeBlocked, playerMode, reportIssue, switchToFallbackServer]);
 
   return (
-    <div className="mb-2 relative">
-      <div className="relative rounded-xl overflow-hidden bg-black">
+    <div className="movie-player-box mb-2 relative">
+      <div className="movie-player-frame relative overflow-hidden rounded-2xl bg-black lg:rounded-[22px]">
         {episode?.is_scheduled && (
           <div className="aspect-video w-full bg-[#090b12] flex flex-col items-center justify-center gap-4 px-4 text-center">
             <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
@@ -413,7 +413,7 @@ export default function PlayerBox({
         {!episode?.is_scheduled && (
           <>
         {playerMode === 'embed' && embedSrc && !iframeBlocked && (
-          <div ref={embedContainerRef} className="aspect-video w-full relative group">
+          <div ref={embedContainerRef} className="aspect-video w-full relative group bg-black">
             {!iframeLoaded && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0c14]">
                 <div className="w-10 h-10 rounded-full border-2 border-red-500/20 border-t-red-500 animate-spin mb-3" />
@@ -448,7 +448,7 @@ export default function PlayerBox({
               <button
                 onClick={toggleEmbedFullscreen}
                 title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-                className="absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-lg bg-black/60 text-white/80 border border-white/10 backdrop-blur-sm transition-all hover:bg-black/80 hover:text-white cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                className="absolute top-3 right-3 z-20 flex h-10 w-10 items-center justify-center rounded-xl bg-black/65 text-white/85 border border-white/10 backdrop-blur-sm transition-all hover:bg-black/85 hover:text-white hover:border-white/20 cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
               >
                 <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-base`} />
               </button>
@@ -581,23 +581,23 @@ export default function PlayerBox({
 
       {/* Control bar */}
       {playerMode !== 'embed' && (
-      <div className="mt-1.5 sm:mt-2 flex items-center justify-between gap-2 px-1 flex-wrap">
-        <div className="flex items-center gap-1.5">
+      <div className="movie-watch-topbar mt-2 flex items-center justify-between gap-2 px-2 py-2 flex-wrap lg:mt-3 lg:px-3">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button onClick={onPrev} disabled={!hasPrev} title="Tập trước"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/8 transition-all cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed">
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-white/45 hover:text-white hover:bg-white/10 transition-all cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed">
             <i className="ri-skip-back-line text-base" />
           </button>
           <button onClick={onNext} disabled={!hasNext} title="Tập sau"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/8 transition-all cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed">
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-white/45 hover:text-white hover:bg-white/10 transition-all cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed">
             <i className="ri-skip-forward-line text-base" />
           </button>
           <button onClick={() => { setIframeLoaded(false); setIframeKey((k) => k + 1); }} title="Tải lại"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/8 transition-all cursor-pointer">
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-white/45 hover:text-white hover:bg-white/10 transition-all cursor-pointer">
             <i className="ri-refresh-line text-base" />
           </button>
 
           {streamIsHls && episode?.link_embed && (
-            <div className="flex items-center gap-0.5 bg-white/[0.04] border border-white/[0.08] rounded-lg p-0.5 ml-1">
+            <div className="flex items-center gap-0.5 bg-black/25 border border-white/[0.08] rounded-xl p-0.5 ml-1">
               <button onClick={() => setPlayerMode('hls')}
                 className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   playerMode === 'hls' ? 'bg-red-500 text-white' : 'text-white/35 hover:text-white/70'
@@ -613,7 +613,7 @@ export default function PlayerBox({
             </div>
           )}
           {playerMode === 'video' && (
-            <div className="flex items-center gap-0.5 bg-white/[0.04] border border-white/[0.08] rounded-lg p-0.5 ml-1">
+            <div className="flex items-center gap-0.5 bg-black/25 border border-white/[0.08] rounded-xl p-0.5 ml-1">
               {DIRECT_VIDEO_SPEEDS.map((speed) => (
                 <button
                   key={speed}
@@ -645,7 +645,7 @@ export default function PlayerBox({
             <button
               onClick={toggleEmbedFullscreen}
               title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/8 transition-all cursor-pointer"
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-white/45 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
             >
               <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-base`} />
             </button>

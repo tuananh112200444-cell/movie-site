@@ -133,7 +133,7 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
 
   if (loading) {
     return (
-      <div className="mb-7 md:mb-10">
+      <div className="mb-7 md:mb-10 home-section-surface">
         <SectionHeader />
         <div className="flex gap-2.5 overflow-hidden">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -151,11 +151,11 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
   if (movies.length === 0) return null;
 
   return (
-    <div className="mb-7 md:mb-10">
+    <div className="mb-7 md:mb-10 home-section-surface">
       <SectionHeader count={movies.length} />
 
       {/* ── Slider ── */}
-      <div className="relative group/slider">
+      <div className="home-rail-frame relative group/slider">
         {/* Prev */}
         <button
           onClick={() => scroll('left')}
@@ -198,7 +198,7 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
 
         <div
           ref={sliderRef}
-          className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-smooth pb-3 px-0.5 md:gap-3"
+          className="home-rail-scroll flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-smooth pb-8 pt-2 px-0.5 md:gap-3 lg:gap-4 xl:gap-5"
           style={{ scrollbarWidth: 'none' }}
         >
           {movies.slice(0, 20).map((movie, idx) => (
@@ -393,7 +393,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
 /* ── Section Header ── */
 function SectionHeader({ count = 0 }: { count?: number }) {
   return (
-    <div className="flex items-center justify-between mb-4 lg:mb-5 gap-2 flex-wrap">
+    <div className="flex items-center justify-between mb-3 lg:mb-5 gap-2 flex-wrap">
       <div className="flex items-center gap-2 lg:gap-3 flex-wrap">
         <div className="relative">
           <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
@@ -402,7 +402,7 @@ function SectionHeader({ count = 0 }: { count?: number }) {
           <div className="absolute inset-0 w-8 h-8 md:w-9 md:h-9 rounded-lg bg-purple-500/30 blur-md -z-10" />
         </div>
         <div className="flex flex-col">
-          <h3 className="text-base lg:text-lg font-bold gradient-heading flex items-center gap-2">
+          <h3 className="text-lg md:text-2xl lg:text-[1.55rem] font-black text-white flex items-center gap-2">
             Top Phim Chiếu Rạp
           </h3>
           <span className="text-[10px] text-white/30 -mt-0.5">BXH phim chiếu rạp được xem nhiều nhất</span>

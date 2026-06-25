@@ -11,7 +11,7 @@ export default function ContinueWatching() {
   if (history.length === 0) return null;
 
   return (
-    <section className="mb-8 md:mb-10">
+    <section className="mb-8 md:mb-12 home-section-surface">
       <div className="mb-3 flex items-center justify-between md:mb-5">
         <div className="flex items-center gap-3">
           <div className="w-1 h-5 bg-orange-500 rounded-full" />
@@ -22,7 +22,7 @@ export default function ContinueWatching() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6 md:gap-3">
+      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6 md:gap-3 lg:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] lg:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]">
         {history.slice(0, 6).map((entry) => (
           <HistoryCard key={entry._id} entry={entry} onRemove={removeEntry} />
         ))}

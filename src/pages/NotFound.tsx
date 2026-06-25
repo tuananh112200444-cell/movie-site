@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import SEO from '../components/base/SEO';
 import Navbar from '../components/feature/Navbar';
@@ -52,7 +52,7 @@ export default function NotFound() {
   };
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white flex flex-col">
+    <div className="min-h-screen kp-cinema-page text-white flex flex-col">
       <SEO
         title="404 – Trang Không Tìm Thấy | KhoPhim"
         description="Trang bạn tìm kiếm không tồn tại. Xem phim online miễn phí vietsub HD tại KhoPhim - kho phim lớn nhất Việt Nam với hàng nghìn bộ phim mới cập nhật hàng ngày."

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../../components/feature/Navbar';
 import Footer from '../../components/feature/Footer';
@@ -79,7 +79,7 @@ export default function BlogPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title="KhoPhim Blog - Review Phim & Tin Tức Điện Ảnh 2026"
         description="Blog review phim, top phim hay nhất 2026, hướng dẫn xem phim HD không giật lag. Tất cả đều có trên khophim.org - kho phim vietsub miễn phí!"

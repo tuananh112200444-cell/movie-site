@@ -12,7 +12,11 @@ async function clearBrowserCaches() {
   try {
     if ('caches' in window) {
       const names = await caches.keys();
-      await Promise.all(names.filter((name) => name.startsWith('khophim-')).map((name) => caches.delete(name)));
+      await Promise.all(
+        names
+          .filter((name) => /^khophim|workbox/i.test(name))
+          .map((name) => caches.delete(name))
+      );
     }
   } catch {
     // Cache cleanup is best-effort only.
@@ -63,19 +67,30 @@ export default class AppErrorBoundary extends Component<Props, State> {
     if (!this.state.error) return this.props.children;
 
     return (
-      <main className="min-h-screen bg-[#080a10] text-white flex items-center justify-center px-6">
-        <section className="max-w-md text-center">
-          <h1 className="text-2xl font-semibold mb-3">KhoPhim dang cap nhat</h1>
+      <main className="min-h-screen kp-cinema-page text-white flex items-center justify-center px-6">
+        <section className="cinema-empty-state max-w-lg text-center px-6 py-8">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/15 text-red-300 ring-1 ring-red-300/20">
+            <i className="ri-refresh-line text-2xl" aria-hidden="true" />
+          </div>
+          <h1 className="text-2xl font-semibold mb-3">KhoPhim đang cập nhật</h1>
           <p className="text-white/70 text-sm leading-6 mb-6">
-            Trinh duyet cua ban co the dang giu phien ban cu. Bam thu lai de tai phien ban moi nhat.
+            Trình duyệt của bạn có thể đang giữ phiên bản cũ. Bấm tải lại để nhận phiên bản mới nhất.
           </p>
-          <button
-            type="button"
-            onClick={this.handleRetry}
-            className="inline-flex items-center justify-center rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-300"
-          >
-            Thu lai
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={this.handleRetry}
+              className="inline-flex w-full sm:w-auto items-center justify-center rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-300"
+            >
+              Tải lại phiên bản mới
+            </button>
+            <a
+              href="/"
+              className="inline-flex w-full sm:w-auto items-center justify-center rounded-lg border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
+            >
+              Về trang chủ
+            </a>
+          </div>
         </section>
       </main>
     );

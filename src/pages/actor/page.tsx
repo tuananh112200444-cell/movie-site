@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+﻿import { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
@@ -86,7 +86,7 @@ export default function ActorPage() {
   // 404 nếu không tìm thấy diễn viên
   if (!actor) {
     return (
-      <div className="min-h-screen bg-[#080a10] text-white">
+      <div className="min-h-screen kp-cinema-page text-white">
         <SEO
           title="Diễn Viên Không Tìm Thấy – KhoPhim"
           description="Trang diễn viên không tồn tại. Khám phá danh sách diễn viên nổi tiếng tại KhoPhim."
@@ -114,7 +114,7 @@ export default function ActorPage() {
   const seoKeywords = actor.searchKeywords.join(', ');
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={seoTitle}
         description={seoDesc}

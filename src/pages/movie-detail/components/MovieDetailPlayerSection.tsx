@@ -308,7 +308,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     return (
       <div
         ref={forwardedRef}
-        className={`max-w-[1760px] mx-auto px-3 sm:px-4 pb-10 sm:pb-12 ${cinemaMode ? 'relative z-[101]' : ''}`}
+        className={`movie-watch-section cinema-page-container pt-2 sm:pt-4 ${cinemaMode ? 'relative z-[101]' : ''}`}
       >
         {cinemaMode && (
           <div className="fixed inset-0 z-[100] bg-black pointer-events-none" aria-hidden="true" />
@@ -316,9 +316,20 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
 
         <div className={`mb-6 sm:mb-8 ${cinemaMode ? 'relative z-[101]' : ''}`}>
           {/* Tabs */}
-          <div className="flex items-center gap-2 mb-3 sm:mb-4 flex-wrap">
+          <div className="movie-watch-topbar mb-3 flex items-center gap-2 px-3 py-3 sm:mb-4 sm:px-4 lg:px-5 flex-wrap">
+            <div className="mr-auto flex min-w-[210px] items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/12 text-red-300">
+                <i className="ri-play-circle-line text-lg" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-white sm:text-base">Trình phát phim</p>
+                <p className="truncate text-[11px] text-white/38">
+                  {activeEp ? `${activeEp.name} · ${mergedEpisodes.length} tập` : `${mergedEpisodes.length || episodes.length} tập khả dụng`}
+                </p>
+              </div>
+            </div>
             {!isTrailerOnly && hasTrailer && (
-              <div className="flex gap-1 bg-[#1a1d27] rounded-xl p-1 w-fit border border-white/5">
+              <div className="flex gap-1 bg-black/25 rounded-xl p-1 w-fit border border-white/5">
                 {(['episodes', 'trailer'] as const).map((t) => (
                   <button
                     key={t}
@@ -382,7 +393,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
               {/* Player area: poster if no ep selected, else video player */}
               {!activeEp ? (
                 mergedEpisodes.length === 0 && !isTrailerOnly ? (
-                  <div className="aspect-video w-full bg-[#0d0f1a] rounded-xl flex flex-col items-center justify-center gap-3 border border-white/5">
+                  <div className="movie-player-frame aspect-video w-full bg-[#0d0f1a] rounded-2xl flex flex-col items-center justify-center gap-3">
                     <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
                       <i className="ri-time-line text-2xl text-amber-400" />
                     </div>
@@ -399,7 +410,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   </div>
                 ) : (
                   <div
-                    className="relative aspect-video w-full rounded-xl overflow-hidden cursor-pointer group"
+                    className="movie-player-frame relative aspect-video w-full rounded-2xl overflow-hidden cursor-pointer group"
                     onClick={handleWatchNow}
                   >
                     <img
@@ -478,10 +489,10 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
 
               {/* Watch controls */}
               {episodes.length > 0 && (
-                <div className="mt-3 sm:mt-4 rounded-xl bg-[#11131b] border border-white/[0.07] overflow-hidden">
-                  <div className="flex items-center gap-2 border-b border-white/[0.07] px-3 py-2.5 sm:px-4">
-                    <span className="w-1 h-4 bg-red-500 rounded-full" />
-                    <p className="text-white/60 text-xs font-semibold uppercase tracking-wider">Nguồn Phim</p>
+                <div className="movie-watch-panel mt-4 sm:mt-5 rounded-2xl border border-white/[0.08] overflow-hidden">
+                  <div className="flex items-center gap-2 border-b border-white/[0.07] px-3 py-3 sm:px-4 lg:px-5 lg:py-4">
+                    <span className="w-1.5 h-5 bg-red-500 rounded-full shadow-[0_0_18px_rgba(239,68,68,.45)]" />
+                    <p className="text-white/68 text-xs font-semibold uppercase tracking-wider">Nguồn Phim</p>
                     <span className="text-white/30 text-[11px] ml-1">
                       ({episodes.length} nguồn)
                     </span>
@@ -500,8 +511,8 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   )}
 
                   {/* Type filter tabs */}
-                  <div className="overflow-x-auto px-3 pt-3 sm:px-4">
-                  <div className="flex w-max gap-1.5 sm:w-auto sm:flex-wrap">
+                  <div className="overflow-x-auto px-3 pt-3 sm:px-4 lg:px-5 lg:pt-4">
+                  <div className="flex w-max gap-1.5 sm:w-auto sm:flex-wrap lg:gap-2">
                     {[
                       { key: 'all' as const, label: 'Tất cả', icon: 'ri-apps-line', color: 'bg-white/10 text-white/70 border-white/10 hover:bg-white/15' },
                       { key: 'vietsub' as const, label: 'Vietsub', icon: 'ri-file-text-line', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' },
@@ -528,7 +539,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                           key={t.key}
                           onClick={() => setServerTypeTab(t.key)}
                           disabled={count === 0}
-                          className={`flex h-9 items-center gap-1.5 px-3 rounded-full text-[11px] sm:text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
+                          className={`flex h-9 lg:h-10 items-center gap-1.5 px-3 lg:px-4 rounded-full text-[11px] sm:text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
                             isActive ? activeColor : t.color
                           } ${count === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
                         >
@@ -541,7 +552,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5 px-3 py-3 sm:px-4">
+                  <div className="grid grid-cols-1 gap-2 px-3 py-3 sm:grid-cols-2 sm:px-4 lg:grid-cols-3 lg:gap-2.5 lg:px-5 lg:pb-5 2xl:grid-cols-4">
                     {visibleServerOptions
                       .filter(({ typeKey }) => serverTypeTab === 'all' || typeKey === serverTypeTab)
                       .map(({ srv, idx, typeKey }) => {
@@ -552,16 +563,16 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                         <button
                           key={idx}
                           onClick={() => onSwitchServer(idx)}
-                          className={`flex h-9 items-center gap-1.5 rounded-md border px-3 text-left transition-all cursor-pointer active:scale-[0.99] ${
+                          className={`flex h-12 lg:h-14 items-center gap-2 rounded-xl border px-3 text-left transition-all cursor-pointer active:scale-[0.99] ${
                             isActive
-                              ? 'bg-white text-[#11131b] border-white'
-                              : 'bg-white/[0.06] text-white/65 border-white/[0.08] hover:bg-white/[0.1] hover:text-white'
+                              ? 'bg-white text-[#11131b] border-white shadow-lg shadow-white/10'
+                              : 'bg-white/[0.05] text-white/68 border-white/[0.08] hover:bg-white/[0.10] hover:text-white hover:border-white/18'
                           }`}
                         >
                           <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${isActive ? 'bg-white' : type.dotClass}`} />
                           <i className={`${type.icon} shrink-0 text-base`} />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs sm:text-sm font-bold">{type.label}</span>
+                            <span className="block truncate text-xs sm:text-sm lg:text-[15px] font-bold">{type.label}</span>
                             <span className={`block truncate text-[10px] sm:text-[11px] ${isActive ? 'text-white/80' : 'text-white/35'}`}>
                               {sourceName} · {srv.server_data?.length ?? 0}
                             </span>
@@ -578,7 +589,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
 
               {/* Episode group pagination */}
               {groups.length > 1 && (
-                <div className="mt-3 rounded-xl border border-white/[0.08] bg-[#11131b] p-3 sm:p-4">
+                <div className="movie-watch-panel mt-4 rounded-2xl border border-white/[0.08] p-3 sm:p-4 lg:p-5">
                   <span className="text-white/40 text-xs">Nhóm:</span>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -590,7 +601,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     <select
                       value={epGroup}
                       onChange={(e) => setEpGroup(Number(e.target.value))}
-                      className="h-9 rounded-lg border border-white/[0.1] bg-black/30 px-3 text-xs font-semibold text-white/75 outline-none focus:border-red-500/60"
+                      className="h-10 rounded-xl border border-white/[0.1] bg-black/30 px-3 text-xs font-semibold text-white/75 outline-none focus:border-red-500/60"
                     >
                       {groupOptions.map((group) => (
                         <option key={group.index} value={group.index}>
@@ -604,7 +615,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     <button
                       key={i}
                       onClick={() => setEpGroup(i)}
-                      className={`h-8 rounded-md px-2.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                      className={`h-9 rounded-lg px-3 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                         epGroup === i
                           ? 'bg-white text-[#10131d]'
                           : 'bg-black/24 text-white/45 border border-white/[0.08] hover:text-white'
@@ -619,8 +630,8 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
 
               {/* Episode list — ALWAYS visible */}
               {currentTypeGroup.length > 0 && (
-                <div className="mt-3 rounded-xl border border-white/[0.08] bg-[#11131b] p-3 sm:p-4">
-                  <p className="text-white/35 text-[10px] uppercase tracking-wider mb-2">
+                <div className="movie-watch-panel mt-4 rounded-2xl border border-white/[0.08] p-3 sm:p-4 lg:p-5">
+                  <p className="text-white/42 text-[10px] uppercase tracking-wider mb-3">
                     Danh Sách Tập
                     {activeEp && (
                       <span className="ml-2 text-white/20 normal-case">
@@ -639,20 +650,20 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       </button>
                     </div>
                   )}
-                  <div className={`${episodesCollapsed ? '' : 'sm:max-h-[360px] sm:overflow-y-auto sm:pr-1'}`}>
-                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12 xl:grid-cols-[repeat(16,minmax(0,1fr))] 2xl:grid-cols-[repeat(20,minmax(0,1fr))]">
+                  <div className={`${episodesCollapsed ? '' : 'sm:max-h-[360px] lg:max-h-[500px] sm:overflow-y-auto sm:pr-1'}`}>
+                  <div className="episode-button-grid grid gap-1.5 lg:gap-2">
                     {shownEpisodes.map((item) => (
                       <button
                         key={item.key}
                         onClick={() => handleSelectMergedEp(item)}
-                        className={`flex h-9 items-center justify-center gap-1 rounded-md px-1.5 text-center text-[11px] sm:text-xs font-semibold transition-all cursor-pointer active:scale-95 ${
+                        className={`flex h-9 lg:h-11 items-center justify-center gap-1 rounded-lg px-1.5 text-center text-[11px] sm:text-xs lg:text-[13px] font-semibold transition-all cursor-pointer active:scale-95 ${
                           activeEpisodeKey === item.key
                             ? item.ep.is_scheduled
                               ? 'bg-amber-500 text-black shadow-lg shadow-amber-950/25'
                               : 'bg-red-500 text-white shadow-lg shadow-red-950/25'
                             : item.ep.is_scheduled
                               ? 'bg-amber-500/10 text-amber-300 border border-amber-500/25 hover:bg-amber-500/20'
-                            : 'bg-black/24 text-white/55 hover:text-white border border-white/[0.07] hover:bg-white/[0.07]'
+                            : 'bg-black/24 text-white/62 hover:text-white border border-white/[0.07] hover:bg-white/[0.08]'
                         }`}
                       >
                         {item.ep.is_scheduled && <i className="ri-timer-flash-line shrink-0" />}

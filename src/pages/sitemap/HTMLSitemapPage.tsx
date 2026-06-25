@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../../components/feature/Navbar';
 import Footer from '../../components/feature/Footer';
@@ -115,7 +115,7 @@ export default function HTMLSitemapPage() {
   schema.numberOfItems = schema.itemListElement.length;
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title="Sitemap - Tất Cả Trang | KhoPhim"
         description="Sitemap đầy đủ của KhoPhim (khophim.org). Tất cả danh mục phim, thể loại, quốc gia, và phim mới nhất."

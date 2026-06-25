@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
@@ -141,7 +141,7 @@ export default function PolicyPage() {
   const content = CONTENT[activeTab];
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title="Chính Sách Bảo Mật & Điều Khoản Sử Dụng – KhoPhim"
         description="Chính sách bảo mật, điều khoản sử dụng và chính sách DMCA của KhoPhim (khophim.org). Cam kết bảo vệ quyền riêng tư và tôn trọng bản quyền."
