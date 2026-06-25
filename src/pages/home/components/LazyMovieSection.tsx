@@ -40,10 +40,12 @@ export default function LazyMovieSection({
   ...sectionProps
 }: LazyMovieSectionProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [triggered, setTriggered] = useState(false);
 
   // Nếu đã có data từ props (home-proxy), vẫn dùng IntersectionObserver để lazy render
   const hasData = propMovies && propMovies.length > 0;
+  const [triggered, setTriggered] = useState(() => (
+    typeof window !== 'undefined' && window.innerWidth < 768 && !!hasData
+  ));
 
   useEffect(() => {
     const el = ref.current;
@@ -112,7 +114,17 @@ function SectionPlaceholder({ title, cols = 6, rows = 1, theme }: { title: strin
           <div className="h-8 w-20 skeleton rounded-md flex-shrink-0" />
         </div>
 
-        <div className="flex snap-x snap-mandatory gap-3 overflow-hidden pb-2 md:gap-4">
+        <div className="grid grid-cols-3 gap-x-2 gap-y-4 pb-3 md:hidden">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i}>
+              <div className="aspect-[2/3] skeleton rounded-lg" />
+              <div className="mt-2 h-3 skeleton rounded w-3/4" />
+              <div className="mt-1 h-2.5 skeleton rounded w-1/2" />
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden snap-x snap-mandatory gap-3 overflow-hidden pb-2 md:flex md:gap-4">
           {Array.from({ length: Math.max(cols * rows, 8) }).map((_, i) => (
             <div key={i} className={carouselItemClass}>
               <div className="aspect-[2/3] skeleton rounded-lg" />

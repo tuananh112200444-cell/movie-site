@@ -39,24 +39,24 @@ export default function HomeDiscoverySection({ onSelect }: HomeDiscoverySectionP
   return (
     <section
       ref={ref}
-      className="reveal kp-cinema-surface mb-8 hidden overflow-hidden rounded-2xl border p-3 sm:block"
+      className="reveal kp-cinema-surface mb-5 overflow-hidden rounded-2xl border p-2.5 sm:mb-8 sm:p-3"
       aria-label="Chon kho phim va the loai"
     >
-      <div className="grid gap-3 lg:grid-cols-[minmax(210px,0.72fr)_minmax(0,3.28fr)] xl:grid-cols-[minmax(220px,0.74fr)_minmax(0,3.26fr)]">
-        <div className="grid gap-2.5">
+      <div className="grid gap-2.5 lg:grid-cols-[minmax(210px,0.72fr)_minmax(0,3.28fr)] xl:grid-cols-[minmax(220px,0.74fr)_minmax(0,3.26fr)]">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-1 sm:gap-2.5">
           {PORTALS.map((portal) => (
             <button
               key={portal.key}
               type="button"
               onClick={() => handleSelect(portal.key)}
-              className="group relative min-h-[92px] overflow-hidden rounded-xl border border-amber-100/12 p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_16px_40px_-30px_rgba(0,0,0,0.9)] transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-200/24 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_20px_54px_-34px_rgba(245,158,11,0.55)] active:scale-[0.99] lg:min-h-[102px] xl:min-h-[106px]"
+              className="group relative min-h-[74px] overflow-hidden rounded-xl border border-amber-100/12 p-2.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_16px_40px_-30px_rgba(0,0,0,0.9)] transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-200/24 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_20px_54px_-34px_rgba(245,158,11,0.55)] active:scale-[0.99] sm:min-h-[92px] sm:p-3 lg:min-h-[102px] xl:min-h-[106px]"
               style={{ background: portal.bg }}
             >
               <div className="absolute inset-0 opacity-80" style={{ background: portal.grain }} />
               <div className="absolute inset-x-4 top-3 h-px bg-gradient-to-r from-transparent via-amber-100/28 to-transparent" />
               <div className="absolute inset-x-4 bottom-3 h-px bg-gradient-to-r from-transparent via-black/45 to-transparent" />
 
-              <div className="relative z-[1] flex h-full items-center gap-2.5">
+              <div className="relative z-[1] flex h-full items-center gap-2 sm:gap-2.5">
                 <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-black/24 text-lg ${
                   portal.tone === 'cyan'
                     ? 'border-cyan-300/20 text-cyan-200'
@@ -65,9 +65,9 @@ export default function HomeDiscoverySection({ onSelect }: HomeDiscoverySectionP
                   <i className={portal.icon} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-black tracking-tight text-white xl:text-base">{portal.title}</p>
+                  <p className="text-xs font-black tracking-tight text-white sm:text-sm xl:text-base">{portal.title}</p>
                   <p className="mt-0.5 line-clamp-1 text-[11px] leading-4 text-white/50 xl:text-xs">{portal.subtitle}</p>
-                  <span className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold ${
+                  <span className={`mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-bold sm:mt-2 sm:text-[11px] ${
                     portal.tone === 'cyan' ? 'text-cyan-200' : 'text-amber-200'
                   }`}>
                     Mo khong gian
@@ -79,10 +79,10 @@ export default function HomeDiscoverySection({ onSelect }: HomeDiscoverySectionP
           ))}
         </div>
 
-        <div className="rounded-xl border border-white/[0.08] bg-white/[0.045] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.055)]">
-          <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.045] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.055)] sm:p-3">
+          <div className="mb-2.5 flex items-center justify-between gap-3 sm:mb-3">
             <div className="min-w-0">
-              <h3 className="truncate text-base font-black text-white lg:text-lg">The Loai Pho Bien</h3>
+              <h3 className="truncate text-sm font-black text-white sm:text-base lg:text-lg">The Loai Pho Bien</h3>
               <p className="mt-0.5 hidden text-xs text-white/35 md:block">Chon nhanh dung gu phim muon xem</p>
             </div>
             <Link
@@ -93,12 +93,12 @@ export default function HomeDiscoverySection({ onSelect }: HomeDiscoverySectionP
             </Link>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {GENRE_LIST.slice(0, 12).map((g, index) => (
               <Link
                 key={g.slug}
                 to={g.to ?? `/the-loai/${g.slug}`}
-                className="group relative min-h-[76px] overflow-hidden rounded-lg border p-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06] xl:min-h-[82px]"
+                className={`group relative min-h-[58px] overflow-hidden rounded-lg border p-2 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06] sm:min-h-[76px] sm:p-2.5 xl:min-h-[82px] ${index >= 9 ? 'hidden sm:block' : ''}`}
                 style={{
                   '--g-color': g.color,
                   background: g.bg,
@@ -111,10 +111,10 @@ export default function HomeDiscoverySection({ onSelect }: HomeDiscoverySectionP
                   style={{ background: g.color }}
                 />
                 <div className="relative z-[1] flex h-full flex-col justify-between">
-                  <i className={`${g.icon} text-lg`} style={{ color: g.color }} />
+                  <i className={`${g.icon} text-base sm:text-lg`} style={{ color: g.color }} />
                   <div>
-                    <p className="truncate text-xs font-black text-white/88">{g.name}</p>
-                    <p className="mt-0.5 text-[10px] font-semibold text-white/30">{g.count}</p>
+                    <p className="truncate text-[11px] font-black text-white/88 sm:text-xs">{g.name}</p>
+                    <p className="mt-0.5 hidden text-[10px] font-semibold text-white/30 sm:block">{g.count}</p>
                   </div>
                 </div>
               </Link>
