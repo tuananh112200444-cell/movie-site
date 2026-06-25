@@ -127,6 +127,7 @@ interface PlayerBoxProps {
   allServers: EpisodeServer[];
   activeServer: number;
   onSwitchServer: (idx: number) => void;
+  onSelectEp: (ep: EpisodeData) => void;
   initialTime?: number;
   onTimeUpdate?: (time: number, duration: number) => void;
   onVideoEnded?: () => void;
@@ -135,10 +136,23 @@ interface PlayerBoxProps {
 }
 
 const DIRECT_VIDEO_SPEEDS = [1, 1.25, 1.5, 2];
-const EMBED_FALLBACK_TIMEOUT_MS = 6500;
-const EMBED_LAST_SOURCE_TIMEOUT_MS = 10000;
+const BAD_SOURCE_HOSTS_KEY = 'khophim.bad-source-hosts.v1';
+const EMBED_FALLBACK_TIMEOUT_MS = 3800;
+const EMBED_LAST_SOURCE_TIMEOUT_MS = 8000;
 const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
 const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
+
+function rememberBadSourceHost(host: string): void {
+  if (!host || typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(BAD_SOURCE_HOSTS_KEY);
+    const map = raw ? JSON.parse(raw) as Record<string, number> : {};
+    map[host] = Date.now();
+    window.localStorage.setItem(BAD_SOURCE_HOSTS_KEY, JSON.stringify(map));
+  } catch {
+    // Best-effort hint only; playback fallback must still work if storage is blocked.
+  }
+}
 
 function getUrlOrigin(url: string): string | null {
   if (!url) return null;
@@ -186,6 +200,7 @@ export default function PlayerBox({
   allServers,
   activeServer,
   onSwitchServer,
+  onSelectEp,
   initialTime = 0,
   onTimeUpdate,
   onVideoEnded,
@@ -332,6 +347,7 @@ export default function PlayerBox({
   }, []);
 
   const switchToFallbackServer = useCallback(() => {
+    rememberBadSourceHost(activeSourceHost);
     const remainingServerIndices = allServers
       .map((_, index) => index)
       .filter((index) => index !== activeServer);
@@ -339,10 +355,11 @@ export default function PlayerBox({
     const fallback = pickBestEpisodeByPriority(remainingServers, episode?.slug);
     if (fallback) {
       onSwitchServer(remainingServerIndices[fallback.serverIndex]);
+      onSelectEp(fallback.episode);
       return true;
     }
     return false;
-  }, [allServers, activeServer, episode?.slug, onSwitchServer]);
+  }, [activeServer, activeSourceHost, allServers, episode?.slug, onSelectEp, onSwitchServer]);
 
   const handleHlsFatal = useCallback(() => {
     reportIssue({

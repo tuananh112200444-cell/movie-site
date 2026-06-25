@@ -111,6 +111,11 @@ function addParsedEpisode(episodes, episodeNumber, serverNumber, rawLink, type =
   } catch {
     return;
   }
+  const normalizedLink = link.replace(/\/+$/, '');
+  for (const existing of episodes.values()) {
+    const existingLink = (existing.link_embed || existing.link_m3u8 || '').replace(/\/+$/, '');
+    if (existing.episode_number === episodeNumber && existingLink === normalizedLink) return;
+  }
   const serverName = `SV ${serverNumber || 1}`;
   const key = `${serverName}|${episodeNumber}`;
   if (episodes.has(key)) return;

@@ -3356,6 +3356,53 @@ function getEpisodeQualityScore(ep: EpisodeData): number {
   if (ep.link_embed) score += 2;
   return score;
 }
+
+function getUrlHost(value = ''): string {
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function getRecentBadHostPenalty(ep: EpisodeData): number {
+  if (typeof window === 'undefined') return 0;
+  const host = getUrlHost(ep.link_m3u8 || ep.link_embed || '');
+  if (!host) return 0;
+  try {
+    const raw = window.localStorage.getItem('khophim.bad-source-hosts.v1');
+    const map = raw ? JSON.parse(raw) as Record<string, number> : {};
+    const lastBadAt = Number(map[host] || 0);
+    if (!lastBadAt) return 0;
+    const ageMs = Date.now() - lastBadAt;
+    return ageMs >= 30 * 60 * 1000 ? 0 : 900;
+  } catch {
+    return 0;
+  }
+}
+
+function getEpisodeReliabilityScore(ep: EpisodeData): number {
+  const m3u8 = String(ep.link_m3u8 || '').trim();
+  const embed = String(ep.link_embed || '').trim();
+  const url = m3u8 || embed;
+  const host = getUrlHost(url);
+  const lower = url.toLowerCase();
+  let score = 0;
+
+  if (!url) return -10000;
+  if (m3u8) score += /\.m3u8(?:[?#].*)?$/i.test(m3u8) ? 130 : 115;
+  if (/\.(mp4|webm|mov)(?:[?#].*)?$/i.test(embed)) score += 110;
+  if (host.includes('video.khophim.org') || host.includes('supabase.co')) score += 120;
+  if (host.includes('dailymotion.com') || host === 'dai.ly') score += 85;
+  if (host.includes('phimapi.com') || host.includes('kkphim') || lower.includes('.m3u8')) score += 70;
+  if (host.includes('ssplay')) score += 45;
+  if (host.includes('abyssplayer') || host.includes('short.icu')) score += 20;
+  if (host.includes('blvietsub.com') && lower.includes('/xem-phim/')) score -= 250;
+  if (embed && !m3u8 && score < 20) score += 10;
+
+  return score - getRecentBadHostPenalty(ep);
+}
+
 export function getServerQualityScore(server: EpisodeServer): number {
   const name = (server.server_name ?? '').toLowerCase();
   let score = 0;
@@ -3497,7 +3544,7 @@ export function pickBestEpisodeAcrossServers(
 ): { serverIndex: number; episode: EpisodeData } | null {
   if (!episodes.length) return null;
 
-  const allOptions: { serverIndex: number; episode: EpisodeData; score: number }[] = [];
+  const allOptions: { serverIndex: number; episode: EpisodeData; score: number; priorityRank: number }[] = [];
 
   for (let si = 0; si < episodes.length; si++) {
     const srv = episodes[si];
@@ -3511,19 +3558,23 @@ export function pickBestEpisodeAcrossServers(
 
       let epScore = srvScore;
       epScore += getEpisodeQualityScore(ep);
+      epScore += getEpisodeReliabilityScore(ep);
       const priorityRank = getServerPriorityRank(srv, ep);
       if (priorityRank < STREAM_SERVER_PRIORITY.length) {
         epScore += (STREAM_SERVER_PRIORITY.length - priorityRank) * 1000;
       }
 
-      allOptions.push({ serverIndex: si, episode: ep, score: epScore });
+      allOptions.push({ serverIndex: si, episode: ep, score: epScore, priorityRank });
     }
   }
 
   if (!allOptions.length) return null;
 
   // Sort by score descending, pick best
-  allOptions.sort((a, b) => b.score - a.score);
+  allOptions.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.priorityRank - b.priorityRank;
+  });
   const best = allOptions[0];
   return { serverIndex: best.serverIndex, episode: best.episode };
 }
@@ -3552,6 +3603,7 @@ export function pickBestEpisodeByPriority(
         priorityRank: getServerPriorityRank(server, episode),
         qualityScore:
           getServerQualityScore(server) +
+          getEpisodeReliabilityScore(episode) +
           getEpisodeQualityScore(episode) -
           (serverIndex === 0 ? FALLBACK_SERVER_AUTO_PICK_PENALTY : 0),
       });
@@ -3561,6 +3613,9 @@ export function pickBestEpisodeByPriority(
   if (!candidates.length) return null;
 
   candidates.sort((a, b) => {
+    const aDirect = a.episode.link_m3u8 || /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(a.episode.link_embed || '');
+    const bDirect = b.episode.link_m3u8 || /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(b.episode.link_embed || '');
+    if (Boolean(aDirect) !== Boolean(bDirect)) return bDirect ? 1 : -1;
     if (a.priorityRank !== b.priorityRank) return a.priorityRank - b.priorityRank;
     return b.qualityScore - a.qualityScore;
   });

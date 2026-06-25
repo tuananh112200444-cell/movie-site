@@ -113,6 +113,7 @@ serve(async (req) => {
   const blLatestLimit = clampNumber(url.searchParams.get('blvietsub_latest_limit'), 150, 10, 500);
   const blBackfillLimit = clampNumber(url.searchParams.get('blvietsub_backfill_limit'), 100, 10, 1000);
   const blPageSize = clampNumber(url.searchParams.get('blvietsub_page_size'), 150, 10, 500);
+  const blRepairExistingLimit = clampNumber(url.searchParams.get('blvietsub_repair_existing_limit'), 24, 1, 80);
   const refreshCaches = url.searchParams.get('refresh_caches') !== '0';
   const dryRun = url.searchParams.get('dry_run') === '1';
 
@@ -161,6 +162,12 @@ serve(async (req) => {
       limit: blLatestLimit,
       page_size: blPageSize,
       refresh_search: '0',
+    }));
+
+    calls.push(await callFunction(supabaseUrl, serviceKey, internalSecret, 'sync-blvietsub-feed', {
+      repair_existing: '1',
+      limit: blRepairExistingLimit,
+      refresh_search: refreshCaches ? '1' : null,
     }));
 
     calls.push(await callFunction(supabaseUrl, serviceKey, internalSecret, 'sync-blvietsub-feed', {
