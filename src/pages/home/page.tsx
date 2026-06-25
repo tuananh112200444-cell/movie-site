@@ -656,24 +656,12 @@ export default function Home() {
       </div>
 
       <main className="mx-auto max-w-[1880px] px-3 pt-3 sm:px-4 md:px-6 md:pt-7 lg:px-8 xl:px-12 2xl:px-14">
+        <HomeDiscoverySection onSelect={setActivePortal} />
+        <MobileQuickCategories />
         <VietnamPoetryBanner />
         <MobileQuickMovies movies={mobileQuickMovies} loading={homeLoading} />
-        <MobileQuickCategories />
-        <HomeDiscoverySection onSelect={setActivePortal} />
         <ContinueWatching />
         <TrendingSection movies={trendingMovies} loading={bannerLoading} />
-        <DeferredHomeSection minHeight={260}>
-          <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? EMPTY_MOVIES} loading={homeLoading} />
-        </DeferredHomeSection>
-        <DeferredHomeSection minHeight={240}>
-          <Top10TodaySection initialMovies={trendingMovies} loading={homeLoading} />
-        </DeferredHomeSection>
-        <DeferredHomeSection minHeight={220}>
-          <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} />
-        </DeferredHomeSection>
-        <Year2026Banner />
-
-        {/* Lazy sections — data already loaded from home-proxy, render on scroll */}
         <LazyMovieSection
           fetchType="type" fetchKey="phim-le" limit={18}
           title="Phim Lẻ Hay" viewAllLink="/phim-le"
@@ -688,6 +676,18 @@ export default function Home() {
           movies={homeData['phim-bo'] ?? []}
           loading={homeLoading}
         />
+        <DeferredHomeSection minHeight={260}>
+          <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? EMPTY_MOVIES} loading={homeLoading} />
+        </DeferredHomeSection>
+        <DeferredHomeSection minHeight={240}>
+          <Top10TodaySection initialMovies={trendingMovies} loading={homeLoading} />
+        </DeferredHomeSection>
+        <DeferredHomeSection minHeight={220}>
+          <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} />
+        </DeferredHomeSection>
+        <Year2026Banner />
+
+        {/* Lazy sections — data already loaded from home-proxy, render on scroll */}
         <LazyMovieSection
           fetchType="type" fetchKey="hoat-hinh" limit={18}
           title="Hoạt Hình Mới Nhất" viewAllLink="/hoat-hinh"

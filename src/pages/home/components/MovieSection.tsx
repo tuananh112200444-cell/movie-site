@@ -295,7 +295,16 @@ export default function MovieSection({
           </div>
           <div className="h-8 w-20 skeleton rounded-md flex-shrink-0" />
         </div>
-      <div className="home-rail-frame">
+      <div className="grid grid-cols-3 gap-x-2 gap-y-4 pb-3 md:hidden">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i}>
+            <div className="aspect-[2/3] skeleton rounded-lg" />
+            <div className="mt-2 h-3 skeleton rounded w-3/4" />
+            <div className="mt-1 h-2.5 skeleton rounded w-1/2" />
+          </div>
+        ))}
+      </div>
+      <div className="home-rail-frame hidden md:block">
         <div className="home-rail-scroll flex snap-x snap-mandatory gap-2.5 overflow-hidden pb-2 md:gap-4">
           {Array.from({ length: Math.max(cols, 8) }).map((_, i) => (
             <div key={i} className={carouselItemClass}>
@@ -343,7 +352,22 @@ export default function MovieSection({
       </div>
 
       {/* Grid — stagger delays từ CSS nth-child, không cần inline style */}
-      <div className="home-rail-frame">
+      <div className="grid grid-cols-3 gap-x-2 gap-y-4 pb-3 md:hidden">
+        {displayMovies.slice(0, 6).map((movie, index) => (
+          <div
+            key={`${movie._id}-mobile-${index}`}
+            className="min-w-0"
+          >
+            <MovieCard
+              movie={movie}
+              rank={variant === 'rank' ? index + 1 : undefined}
+              priority={prioritizeFirstRow && index < 3}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="home-rail-frame hidden md:block">
         <div className="home-rail-scroll reveal flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-8 pt-2 scrollbar-hide md:gap-4 md:pb-10 lg:gap-4 xl:gap-5">
           {displayMovies.map((movie, index) => (
             <div
