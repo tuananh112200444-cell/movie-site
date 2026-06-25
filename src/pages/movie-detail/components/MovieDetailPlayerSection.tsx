@@ -478,6 +478,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     allServers={episodes}
                     activeServer={activeServer}
                     onSwitchServer={onSwitchServer}
+                    onSelectEp={onSelectEp}
                     initialTime={initialSeekTime}
                     onTimeUpdate={onTimeUpdate}
                     onRefetchMovie={onRefetchMovie}
