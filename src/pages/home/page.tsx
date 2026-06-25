@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState, useRef, lazy, Suspense, type ReactNode } from 'react';
+﻿import { useEffect, useMemo, useState, useRef, lazy, Suspense, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../../components/feature/Navbar';
 import Footer from '../../components/feature/Footer';
 import HeroBanner from './components/HeroBanner';
-import GenreCards from './components/GenreCards';
 import LazyMovieSection from './components/LazyMovieSection';
 import ContinueWatching from './components/ContinueWatching';
 import TrendingSection from './components/TrendingSection';
@@ -12,7 +11,7 @@ import Top10TodaySection from './components/Top10TodaySection';
 import GenreSEOSection from './components/GenreSEOSection';
 import TopRatedSection from './components/TopRatedSection';
 import Year2026Banner from './components/Year2026Banner';
-import PortalGateway from './components/PortalGateway';
+import HomeDiscoverySection from './components/HomeDiscoverySection';
 import QueerUniverseHome from './components/QueerUniverseHome';
 import TrailerMoviesSection from './components/TrailerMoviesSection';
 import SEO, { SITE_URL } from '../../components/base/SEO';
@@ -29,9 +28,9 @@ const SiteGuideSection = lazy(() => import('./components/SiteGuideSection'));
 
 function VietnamPoetryBanner() {
   return (
-    <section className="mb-4 overflow-visible sm:mb-6">
-      <div className="grid grid-cols-[138px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[260px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="relative flex h-[88px] items-center justify-start overflow-visible sm:h-32 md:h-40">
+    <section className="mx-auto mb-5 max-w-[1180px] overflow-visible sm:mb-7 lg:mb-8">
+      <div className="grid grid-cols-[138px_minmax(0,1fr)] items-center gap-2 rounded-2xl border border-white/[0.06] bg-white/[0.025] px-1.5 py-2 sm:grid-cols-[260px_minmax(0,1fr)] sm:gap-4 sm:px-3 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[380px_minmax(0,1fr)] lg:px-5 lg:py-3">
+        <div className="relative flex h-[88px] items-center justify-start overflow-visible sm:h-32 md:h-36 lg:h-32">
           <img
             src="/images/vietnam-flag-watercolor.png"
             alt="Co Viet Nam"
@@ -40,7 +39,7 @@ function VietnamPoetryBanner() {
           />
         </div>
         <blockquote
-          className="min-w-0 space-y-2 overflow-hidden border-l border-amber-300/25 pl-2.5 italic leading-snug text-amber-100 sm:space-y-3 sm:pl-4"
+          className="min-w-0 space-y-2 overflow-hidden border-l border-amber-300/25 pl-2.5 italic leading-snug text-amber-100 sm:space-y-3 sm:pl-4 lg:pl-6"
           style={{ wordBreak: 'keep-all', overflowWrap: 'normal', fontKerning: 'normal' }}
         >
           <p className="whitespace-nowrap text-[clamp(0.68rem,2.75vw,1.55rem)] font-semibold tracking-normal">HOÀNG SA,TRƯỜNG SA là của Trung quốc</p>
@@ -624,7 +623,7 @@ export default function Home() {
   const bannerLoading = homeLoading && trendingMovies.length === 0;
   if (activePortal === 'queer') {
     return (
-      <div className="min-h-screen bg-[#080a10] text-white">
+      <div className="min-h-screen kp-cinema-page text-white">
         <SEO
           title="Vu Tru Dam My / GL - KhoPhim"
           description="Khong gian phim Dam My, BL, GL va Bach Hop tren KhoPhim, lay du lieu tu Supabase."
@@ -640,7 +639,7 @@ export default function Home() {
     );
   }
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <h1 className="sr-only">KhoPhim – Xem Phim Online Vietsub HD Miễn Phí 2026</h1>
       <SEO
         title="KhoPhim – Xem Phim Online Vietsub HD Miễn Phí 2026"
@@ -656,16 +655,11 @@ export default function Home() {
         <HeroBanner movies={trendingMovies} loading={bannerLoading} />
       </div>
 
-      <main className="mx-auto max-w-[1760px] px-3 pt-3 md:px-5 md:pt-8 2xl:px-8">
+      <main className="mx-auto max-w-[1880px] px-3 pt-3 sm:px-4 md:px-6 md:pt-7 lg:px-8 xl:px-12 2xl:px-14">
         <VietnamPoetryBanner />
         <MobileQuickMovies movies={mobileQuickMovies} loading={homeLoading} />
         <MobileQuickCategories />
-        <div className="mb-5 sm:mb-0">
-          <PortalGateway onSelect={setActivePortal} compact />
-        </div>
-        <div className="hidden sm:block">
-          <GenreCards />
-        </div>
+        <HomeDiscoverySection onSelect={setActivePortal} />
         <ContinueWatching />
         <TrendingSection movies={trendingMovies} loading={bannerLoading} />
         <DeferredHomeSection minHeight={260}>

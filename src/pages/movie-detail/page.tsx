@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+﻿import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
@@ -403,7 +403,7 @@ export default function MovieDetailPage() {
 
   /* ── Loading ── */
   if (loading) return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
       <Navbar />
       <div className="max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">
@@ -427,7 +427,7 @@ export default function MovieDetailPage() {
   );
 
   if (error || !detail || !displayMovie) return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO title="Không tìm thấy phim – KhoPhim" description="Phim không tồn tại hoặc đã bị xóa." noIndex={true} />
       <Navbar />
       <div className="flex flex-col items-center justify-center min-h-[70vh] gap-4 px-4">
@@ -451,7 +451,7 @@ export default function MovieDetailPage() {
   const favored = isFav(movie._id);
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <Navbar />
 
       {/* Hero section */}
@@ -520,7 +520,7 @@ export default function MovieDetailPage() {
                     </Link>
                   )}
                 </div>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6 lg:grid-cols-8">
+                <div className="grid movie-grid-desktop">
                   {related.map((m) => <MovieCard key={m._id} movie={m} />)}
                 </div>
               </div>

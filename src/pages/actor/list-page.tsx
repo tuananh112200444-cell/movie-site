@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
@@ -44,7 +44,7 @@ export default function ActorListPage() {
   ], []);
 
   return (
-    <div className="min-h-screen bg-[#080a10] text-white">
+    <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title="Diễn Viên Nổi Tiếng – Xem Phim Vietsub | KhoPhim"
         description="Danh sách diễn viên nổi tiếng Hàn Quốc, Trung Quốc, Âu Mỹ tại KhoPhim. Xem phim Lee Min Ho, Song Hye Kyo, Hyun Bin, IU vietsub HD miễn phí. Cập nhật 2026."

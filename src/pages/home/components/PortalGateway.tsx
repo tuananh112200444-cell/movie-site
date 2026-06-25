@@ -13,15 +13,15 @@ export default function PortalGateway({ onSelect, compact }: PortalGatewayProps)
 
   if (compact) {
     return (
-      <section className="mb-6 md:mb-8">
-        <div className="grid grid-cols-2 gap-3 md:gap-4">
+      <section className="mx-auto mb-7 max-w-[980px] md:mb-9">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:gap-3">
           <button
             type="button"
             onClick={() => handleSelect('movies')}
-            className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] p-4 md:p-5 text-left transition-all hover:border-amber-400/30 hover:bg-white/[0.07] active:scale-[0.98]"
+            className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.035] p-3.5 text-left transition-all hover:border-amber-400/30 hover:bg-white/[0.06] active:scale-[0.98] md:p-4"
           >
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-amber-400/10 text-amber-300">
+              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-amber-400/10 text-amber-300 md:h-10 md:w-10">
                 <i className="ri-movie-2-line text-lg" />
               </span>
               <div>
@@ -34,11 +34,11 @@ export default function PortalGateway({ onSelect, compact }: PortalGatewayProps)
           <button
             type="button"
             onClick={() => handleSelect('queer')}
-            className="group relative overflow-hidden rounded-xl border border-cyan-400/15 bg-[#081112] p-4 md:p-5 text-left transition-all hover:border-cyan-300/40 hover:bg-[#0a1416] active:scale-[0.98]"
+            className="group relative overflow-hidden rounded-xl border border-cyan-400/15 bg-[#081112] p-3.5 text-left transition-all hover:border-cyan-300/40 hover:bg-[#0a1416] active:scale-[0.98] md:p-4"
           >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_0%,rgba(34,211,238,0.10),transparent_40%)]" />
             <div className="relative z-[1] flex items-center gap-3">
-              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-cyan-400/10 text-cyan-300">
+              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-cyan-400/10 text-cyan-300 md:h-10 md:w-10">
                 <i className="ri-heart-3-line text-lg" />
               </span>
               <div>

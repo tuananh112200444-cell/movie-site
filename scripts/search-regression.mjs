@@ -260,12 +260,40 @@ async function inspectProxy() {
   };
 }
 
+async function warmProxy() {
+  const endpoint = new URL(`${SUPABASE_URL}/functions/v1/search-index-proxy`);
+  endpoint.searchParams.set('limit', '5000');
+  endpoint.searchParams.set('refresh', '1');
+  const start = performance.now();
+  const response = await fetch(endpoint, {
+    cache: 'no-store',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    signal: AbortSignal.timeout(25_000),
+  });
+  const json = await response.json();
+  return {
+    status: response.status,
+    source: json.source,
+    items: Array.isArray(json.items) ? json.items.length : 0,
+    ms: Math.round(performance.now() - start),
+    xCache: response.headers.get('x-cache'),
+  };
+}
+
 const failures = [];
 const results = [];
+const warmups = [];
 
 let proxy;
 try {
   proxy = await inspectProxy();
+  if (!['HIT', 'STALE'].includes(String(proxy.xCache || '').toUpperCase()) && proxy.source !== 'cache') {
+    warmups.push(await warmProxy());
+    proxy = await inspectProxy();
+  }
   if (proxy.items < 2500) {
     failures.push(`search-index-proxy returned ${proxy.items} items for limit=3000; deploy the latest function or raise its limit.`);
   }
@@ -307,7 +335,7 @@ for (const testCase of CASES) {
   });
 }
 
-console.log(JSON.stringify({ proxy, results, failures }, null, 2));
+console.log(JSON.stringify({ proxy, warmups, results, failures }, null, 2));
 
 if (failures.length > 0) {
   process.exitCode = 1;

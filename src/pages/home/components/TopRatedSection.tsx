@@ -93,12 +93,12 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false }:
   if (movies.length === 0) return null;
 
   return (
-    <section className="mb-7 md:mb-10">
+    <section className="mb-7 md:mb-10 home-section-surface">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3 md:mb-4 gap-2">
+      <div className="flex items-center justify-between mb-3 md:mb-5 gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-1 h-5 bg-amber-400 rounded-full" />
-          <h3 className="text-base font-bold gradient-heading-warm flex items-center gap-2 truncate">
+          <h3 className="text-lg md:text-2xl lg:text-[1.55rem] font-black gradient-heading-warm flex items-center gap-2 truncate">
             <i className="ri-trophy-fill text-amber-400" />
             Phim Được Đánh Giá Cao
           </h3>
@@ -115,13 +115,13 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false }:
       </div>
 
       {/* Unified list — 2 cột ngang, mỗi cột 5 phim */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-3">
-        <div className="flex flex-col divide-y divide-white/[0.04]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-x-4">
+        <div className="flex flex-col divide-y divide-white/[0.04] rounded-2xl border border-white/[0.055] bg-white/[0.025] p-1">
           {movies.slice(0, 5).map((movie, idx) => (
             <RankedRow key={movie._id} movie={movie} idx={idx} />
           ))}
         </div>
-        <div className="flex flex-col divide-y divide-white/[0.04]">
+        <div className="flex flex-col divide-y divide-white/[0.04] rounded-2xl border border-white/[0.055] bg-white/[0.025] p-1">
           {movies.slice(5, 10).map((movie, idx) => (
             <RankedRow key={movie._id} movie={movie} idx={idx + 5} />
           ))}

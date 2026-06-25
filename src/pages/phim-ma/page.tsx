@@ -68,7 +68,7 @@ const FAQ = [
   },
 ];
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 36;
 const POOL_CACHE_TTL = 10 * 60 * 1000;
 
 const BG_COLOR = '#080808';
@@ -654,7 +654,7 @@ export default function PhimMaPage() {
         {/* ─── Movie Grid ─── */}
         <div className="pt-4">
           {loading && movies.length === 0 ? (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+            <div className="grid movie-grid-desktop">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : filteredMovies.length === 0 ? (
@@ -680,7 +680,7 @@ export default function PhimMaPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 lg:grid-cols-10">
+              <div className="grid movie-grid-desktop">
                 {filteredMovies.map((m, idx) => (
                   <div key={getMovieKey(m)} className="relative group">
                     <MovieCard movie={m} priority={idx < 2} />
