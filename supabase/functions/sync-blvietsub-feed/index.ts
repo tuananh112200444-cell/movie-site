@@ -504,6 +504,11 @@ function addParsedEpisode(
   } catch {
     return;
   }
+  const normalizedLink = link.replace(/\/+$/, '');
+  for (const existing of episodes.values()) {
+    const existingLink = (existing.link_embed || existing.link_m3u8 || '').replace(/\/+$/, '');
+    if (existing.episode_number === episodeNumber && existingLink === normalizedLink) return;
+  }
   const serverName = `SV ${serverNumber || 1}`;
   const key = `${serverName}|${episodeNumber}`;
   if (episodes.has(key)) return;
@@ -864,6 +869,127 @@ async function updateMovieMetadata(
   return true;
 }
 
+async function deleteDetailCache(supabase: SupabaseClient, slugs: string[]): Promise<void> {
+  const targets = Array.from(new Set(slugs.map((slug) => slug.trim()).filter(Boolean)));
+  if (targets.length === 0) return;
+  try {
+    await supabase.from('movie_api_cache').delete().in('slug', targets);
+  } catch {
+    /* detail cache is best-effort */
+  }
+}
+
+function normalizeSourceUrl(value = ''): string {
+  return value.replace(/^http:\/\//i, 'https://').replace(/\/+$/, '').trim();
+}
+
+function getBlvietsubMovieUrl(movie: MovieRow): string {
+  for (const raw of [movie.source_url, movie.showtimes]) {
+    const value = normalizeSourceUrl(String(raw || ''));
+    if (/^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(value)) return value;
+  }
+  return '';
+}
+
+async function fetchWordPressEntryByUrl(movieUrl: string): Promise<ParsedEntry | null> {
+  const page = await fetch(proxiedBlvietsubUrl(movieUrl), {
+    headers: BLVIETSUB_HEADERS,
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!page.ok) throw new Error(`BLVietsub movie ${page.status}`);
+  const html = await page.text();
+  const movieSlug = getWordPressMovieSlug(movieUrl);
+  const playerHtml = movieSlug ? await fetchWordPressPlayerPages(html, movieSlug) : '';
+  return parseWordPressMoviePage(movieUrl, new Date().toISOString(), html, playerHtml);
+}
+
+async function syncEntryToMovie(
+  supabase: SupabaseClient,
+  movie: MovieRow,
+  entry: ParsedEntry,
+): Promise<{ inserted: number; updated: boolean; source_max_episode: number; db_before_episode: number }> {
+  const dbBeforeEpisode = getMovieCurrentEpisode(movie);
+  const sourceMaxEpisode = Math.max(1, maxPlayableEpisodeNumber(entry.episodes) || playableEpisodeCount(entry.episodes));
+  const inserted = await insertMissingEpisodes(supabase, movie, entry);
+  const updated = await updateMovieMetadata(supabase, movie, entry);
+  if (inserted > 0 || updated || sourceMaxEpisode !== dbBeforeEpisode) {
+    await deleteDetailCache(supabase, [movie.slug]);
+  }
+  return {
+    inserted,
+    updated,
+    source_max_episode: sourceMaxEpisode,
+    db_before_episode: dbBeforeEpisode,
+  };
+}
+
+async function repairExistingBlvietsubMovies(
+  supabase: SupabaseClient,
+  limit: number,
+): Promise<{
+  scanned: number;
+  checked: number;
+  repaired: number;
+  inserted: number;
+  updated: number;
+  drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }>;
+  errors: string[];
+}> {
+  const cappedLimit = Math.max(1, Math.min(limit, 80));
+  const { data, error } = await supabase
+    .from('movies')
+    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year, last_synced_at')
+    .eq('is_published', true)
+    .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub.com/phim/%,source_url.ilike.%blvietsub.com/phim/%')
+    .order('updated_at', { ascending: false })
+    .limit(cappedLimit);
+
+  if (error) throw new Error(`existing BLVietsub select: ${error.message}`);
+
+  let checked = 0;
+  let repaired = 0;
+  let inserted = 0;
+  let updated = 0;
+  const drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }> = [];
+  const errors: string[] = [];
+  const rows = (data || []) as MovieRow[];
+
+  for (const movie of rows) {
+    const movieUrl = getBlvietsubMovieUrl(movie);
+    if (!movieUrl) continue;
+    checked += 1;
+    try {
+      const entry = await fetchWordPressEntryByUrl(movieUrl);
+      if (!entry) continue;
+      const result = await syncEntryToMovie(supabase, movie, entry);
+      inserted += result.inserted;
+      if (result.updated) updated += 1;
+      if (result.inserted > 0 || result.updated || result.source_max_episode > result.db_before_episode) {
+        repaired += 1;
+        drift.push({
+          slug: movie.slug,
+          title: entry.title || movie.name || movie.slug,
+          before: result.db_before_episode,
+          after: result.source_max_episode,
+          inserted: result.inserted,
+        });
+      }
+    } catch (error) {
+      errors.push(`${movie.slug}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  return {
+    scanned: rows.length,
+    checked,
+    repaired,
+    inserted,
+    updated,
+    drift: drift.slice(0, 20),
+    errors: errors.slice(0, 20),
+  };
+}
+
 async function writeSyncLog(
   supabase: SupabaseClient,
   payload: Record<string, unknown>,
@@ -1061,17 +1187,32 @@ serve(async (req) => {
       }, result.errors.length ? 207 : 200);
     }
 
+    if (url.searchParams.get('repair_existing') === '1') {
+      const repairLimit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 24), 80));
+      const result = await repairExistingBlvietsubMovies(supabase, repairLimit);
+      const shouldRefreshSearch = url.searchParams.get('refresh_search') === '1';
+      const searchIndexRefreshed = shouldRefreshSearch && (result.repaired > 0 || result.inserted > 0 || result.updated > 0)
+        ? await refreshSearchIndex(supabaseUrl)
+        : false;
+      await writeSyncLog(supabase, {
+        function_name: 'sync-blvietsub-feed-repair-existing',
+        scanned: result.scanned,
+        inserted: result.inserted,
+        matched: result.checked,
+        errors: result.errors,
+        elapsed_ms: Date.now() - started,
+      });
+      return json({
+        success: result.errors.length === 0,
+        ...result,
+        search_index_refreshed: searchIndexRefreshed,
+        elapsed_ms: Date.now() - started,
+      }, result.errors.length ? 207 : 200);
+    }
+
     const directUrl = url.searchParams.get('movie_url')?.trim();
     if (directUrl && /^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(directUrl)) {
-      const page = await fetch(proxiedBlvietsubUrl(directUrl), {
-        headers: BLVIETSUB_HEADERS,
-        signal: AbortSignal.timeout(20000),
-      });
-      if (!page.ok) throw new Error(`BLVietsub movie ${page.status}`);
-      const html = await page.text();
-      const movieSlug = getWordPressMovieSlug(directUrl);
-      const playerHtml = movieSlug ? await fetchWordPressPlayerPages(html, movieSlug) : '';
-      const entry = parseWordPressMoviePage(directUrl, new Date().toISOString(), html, playerHtml);
+      const entry = await fetchWordPressEntryByUrl(normalizeSourceUrl(directUrl));
       if (!entry) {
         return json({
           success: false,
@@ -1092,8 +1233,7 @@ serve(async (req) => {
         movie = await createMovieFromEntry(supabase, entry);
         created = true;
       }
-      const inserted = await insertMissingEpisodes(supabase, movie, entry);
-      const updated = await updateMovieMetadata(supabase, movie, entry);
+      const syncResult = await syncEntryToMovie(supabase, movie, entry);
       const shouldRefreshSearch = url.searchParams.get('refresh_search') === '1';
       const searchIndexRefreshed = shouldRefreshSearch
         ? await refreshSearchIndex(supabaseUrl)
@@ -1107,8 +1247,10 @@ serve(async (req) => {
         episodes: entry.episodes.length,
         max_episode: Math.max(...entry.episodes.map((episode) => episode.episode_number)),
         servers: Array.from(new Set(entry.episodes.map((episode) => episode.server_name))),
-        inserted,
-        updated,
+        inserted: syncResult.inserted,
+        updated: syncResult.updated,
+        db_before_episode: syncResult.db_before_episode,
+        source_max_episode: syncResult.source_max_episode,
         search_index_refreshed: searchIndexRefreshed,
         elapsed_ms: Date.now() - started,
       };
@@ -1116,7 +1258,7 @@ serve(async (req) => {
         ...result,
         scanned: 1,
         matched: created ? 0 : 1,
-        inserted,
+        inserted: syncResult.inserted,
         errors: [],
       });
       return json({
@@ -1155,8 +1297,9 @@ serve(async (req) => {
           matched += 1;
         }
 
-        inserted += await insertMissingEpisodes(supabase, movie, entry);
-        if (await updateMovieMetadata(supabase, movie, entry)) updated += 1;
+        const syncResult = await syncEntryToMovie(supabase, movie, entry);
+        inserted += syncResult.inserted;
+        if (syncResult.updated) updated += 1;
       } catch (error) {
         errors.push(error instanceof Error ? error.message : String(error));
       }
