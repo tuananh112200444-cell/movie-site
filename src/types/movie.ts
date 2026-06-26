@@ -81,6 +81,10 @@ export interface EpisodeData {
   link_m3u8: string;
   episode_number?: number;
   subtitle_url?: string;
+  source_health_status?: string;
+  source_response_time_ms?: number;
+  source_failure_count?: number;
+  source_priority?: number;
   is_scheduled?: boolean;
   scheduled_target_at?: string;
   scheduled_note?: string;

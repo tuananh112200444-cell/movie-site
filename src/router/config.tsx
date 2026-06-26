@@ -47,6 +47,11 @@ const AdminReviewsPage  = lazy(() => import('../pages/admin-reviews/page'));
 const AdminPingPage     = lazy(() => import('../pages/admin-ping/page'));
 const AdminSEOPage      = lazy(() => import('../pages/admin-seo/page'));
 const AdminAddMoviePage = lazy(() => import('../pages/admin-add-movie/page'));
+const AdminDiagnosticsPage = lazy(() => import('../pages/admin-diagnostics/page'));
+const AdminSyncHealthPage = lazy(() => import('../pages/admin-sync-health/page'));
+const AdminSiteHealthPage = lazy(() => import('../pages/admin-site-health/page'));
+const AdminContentHealthPage = lazy(() => import('../pages/admin-content-health/page'));
+const AdminOverviewPage = lazy(() => import('../pages/admin-overview/page'));
 
 /* ─── Admin Banner Stats ─── */
 const AdminBannerPage   = lazy(() => import('../pages/admin-banner/page'));
@@ -87,6 +92,11 @@ function LazyAdminReviews()  { return <Suspense fallback={<PageLoader />}><Admin
 function LazyAdminPing()     { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminPingPage /></AdminGuard></Suspense>; }
 function LazyAdminSEO()      { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminSEOPage /></AdminGuard></Suspense>; }
 function LazyAdminAddMovie() { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminAddMoviePage /></AdminGuard></Suspense>; }
+function LazyAdminDiagnostics() { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminDiagnosticsPage /></AdminGuard></Suspense>; }
+function LazyAdminSyncHealth() { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminSyncHealthPage /></AdminGuard></Suspense>; }
+function LazyAdminSiteHealth() { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminSiteHealthPage /></AdminGuard></Suspense>; }
+function LazyAdminContentHealth() { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminContentHealthPage /></AdminGuard></Suspense>; }
+function LazyAdminOverview() { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminOverviewPage /></AdminGuard></Suspense>; }
 
 /* Quốc gia */
 function LazyHanQuocCountry()   { return <Suspense fallback={<PageLoader />}><CountryPage countrySlug="han-quoc" /></Suspense>; }
@@ -201,11 +211,16 @@ const routes: RouteObject[] = [
   // ═══════════════════════════════════════════
   // ADMIN
   // ═══════════════════════════════════════════
-  { path: '/admin', element: <Navigate to="/admin/add-movie" replace /> },
+  { path: '/admin', element: <Navigate to="/admin/overview" replace /> },
+  { path: '/admin/overview', element: <LazyAdminOverview /> },
   { path: '/admin/reviews', element: <LazyAdminReviews /> },
   { path: '/admin/ping',    element: <LazyAdminPing /> },
   { path: '/admin/seo',     element: <LazyAdminSEO /> },
   { path: '/admin/banner',  element: <LazyAdminBanner /> },
+  { path: '/admin/diagnostics', element: <LazyAdminDiagnostics /> },
+  { path: '/admin/sync-health', element: <LazyAdminSyncHealth /> },
+  { path: '/admin/site-health', element: <LazyAdminSiteHealth /> },
+  { path: '/admin/content-health', element: <LazyAdminContentHealth /> },
   { path: '/admin/add-movie', element: <LazyAdminAddMovie /> },
 
   // ═══════════════════════════════════════════

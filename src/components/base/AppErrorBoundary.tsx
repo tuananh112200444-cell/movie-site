@@ -72,9 +72,9 @@ export default class AppErrorBoundary extends Component<Props, State> {
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/15 text-red-300 ring-1 ring-red-300/20">
             <i className="ri-refresh-line text-2xl" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-semibold mb-3">KhoPhim đang cập nhật</h1>
+          <h1 className="text-2xl font-semibold mb-3">KhoPhim dang cap nhat</h1>
           <p className="text-white/70 text-sm leading-6 mb-6">
-            Trình duyệt của bạn có thể đang giữ phiên bản cũ. Bấm tải lại để nhận phiên bản mới nhất.
+            Trinh duyet co the dang giu phien ban cu. Bam tai lai de nhan phien ban moi nhat.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
@@ -82,13 +82,13 @@ export default class AppErrorBoundary extends Component<Props, State> {
               onClick={this.handleRetry}
               className="inline-flex w-full sm:w-auto items-center justify-center rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-300"
             >
-              Tải lại phiên bản mới
+              Tai lai phien ban moi
             </button>
             <a
               href="/"
               className="inline-flex w-full sm:w-auto items-center justify-center rounded-lg border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
             >
-              Về trang chủ
+              Ve trang chu
             </a>
           </div>
         </section>

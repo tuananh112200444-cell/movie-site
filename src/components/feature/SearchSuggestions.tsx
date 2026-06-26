@@ -166,6 +166,14 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
 
     try {
       let items = instantItems;
+      const indexPromise = ensureSearchIndexLoaded()
+        .then((indexedItems) => {
+          if (ctrl.signal.aborted || indexedItems.length === 0) return;
+          const indexedHits = getInstantLocalHits(indexedItems, q, 8);
+          if (indexedHits.length === 0) return;
+          setSuggestions((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...indexedHits]), q.trim(), 'relevance').slice(0, 8));
+        })
+        .catch(() => {});
       const apiItems = await searchMoviesInSupabase(q.trim(), { limit: 16, timeoutMs: 1400, minLength: 2, signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       items = mergeMoviesUnique([...items, ...apiItems]);
@@ -184,14 +192,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
         } catch { /* quota */ }
       }
 
-      ensureSearchIndexLoaded()
-        .then((indexedItems) => {
-          if (ctrl.signal.aborted || indexedItems.length === 0) return;
-          const indexedHits = getInstantLocalHits(indexedItems, q, 8);
-          if (indexedHits.length === 0) return;
-          setSuggestions((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...indexedHits]), q.trim(), 'relevance').slice(0, 8));
-        })
-        .catch(() => {});
+      void indexPromise;
     } catch {
       if (!ctrl.signal.aborted) {
         setSuggestions([]);

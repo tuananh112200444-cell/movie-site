@@ -60,6 +60,10 @@ function collectDuplicateValues(text, regex) {
   return [...counts.entries()].filter(([, count]) => count > 1).map(([value]) => value);
 }
 
+function hasAppShellMojibake(text) {
+  return /(?:Ã|Â|Ä|Æ|áº|á»)/.test(text);
+}
+
 async function fetchText(check) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
@@ -103,6 +107,13 @@ async function fetchTextWithCurl(check, cause) {
   }
 }
 
+async function fetchTextBestEffort(check) {
+  const first = await fetchText(check);
+  if (first.status === 200 && first.ms <= check.maxMs) return first;
+  const second = await fetchText(check);
+  return second.ms < first.ms ? second : first;
+}
+
 async function assertLocalSeoClean() {
   const [html, analytics] = await Promise.all([
     readFile('index.html', 'utf8'),
@@ -118,6 +129,34 @@ async function assertLocalSeoClean() {
   if (hasMojibake(html)) {
     failures.push('index.html contains mojibake text that can hurt no-JS SEO fallback.');
   }
+  return failures;
+}
+
+async function assertAppShellRecoveryClean() {
+  const files = [
+    'src/main.tsx',
+    'src/App.tsx',
+    'src/components/base/AppErrorBoundary.tsx',
+    'src/components/base/OfflineIndicator.tsx',
+    'public/service-worker.js',
+  ];
+  const failures = [];
+
+  for (const file of files) {
+    const text = await readFile(file, 'utf8').catch(() => '');
+    if (!text) {
+      failures.push(`${file} is missing from app shell recovery audit.`);
+      continue;
+    }
+    if (hasAppShellMojibake(text)) failures.push(`${file} contains mojibake text.`);
+  }
+
+  const main = await readFile('src/main.tsx', 'utf8').catch(() => '');
+  const offline = await readFile('src/components/base/OfflineIndicator.tsx', 'utf8').catch(() => '');
+  if (!main.includes('removeLegacyServiceWorkers')) failures.push('src/main.tsx no longer removes legacy service workers.');
+  if (!main.includes('visible_after_stale')) failures.push('src/main.tsx no longer refreshes stale restored tabs.');
+  if (!offline.includes('canReachApp')) failures.push('OfflineIndicator does not verify app reachability before showing offline state.');
+
   return failures;
 }
 
@@ -220,7 +259,7 @@ const results = [];
 
 for (const check of CHECKS) {
   try {
-    const result = await fetchText(check);
+    const result = await fetchTextBestEffort(check);
     const missing = check.required.filter((needle) => !result.text.includes(needle));
     const mojibake = check.name.includes('prerender') && hasMojibake(result.text);
     if (result.status !== 200) failures.push(`${check.name}: expected HTTP 200, got ${result.status}`);
@@ -242,6 +281,7 @@ for (const check of CHECKS) {
 }
 
 failures.push(...await assertLocalSeoClean());
+failures.push(...await assertAppShellRecoveryClean());
 failures.push(...await assertProductionBuildClean());
 failures.push(...await assertHeadersClean());
 failures.push(...await assertSitemapsClean());

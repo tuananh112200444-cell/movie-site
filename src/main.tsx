@@ -9,12 +9,12 @@ import { reportClientIssue } from './services/playerDiagnostics'
 const rootElement = document.getElementById('root');
 
 if (!rootElement) {
-  document.body.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><div><h1 style="font-size:24px;margin:0 0 12px">KhoPhim đang cập nhật</h1><p style="color:rgba(255,255,255,.72);margin:0 0 20px">Vui lòng tải lại trang để nhận phiên bản mới nhất.</p><button onclick="location.reload()" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer">Tải lại</button></div></main>';
+  document.body.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><div><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang cap nhat</h1><p style="color:rgba(255,255,255,.72);margin:0 0 20px">Vui long tai lai trang de nhan phien ban moi nhat.</p><button onclick="location.reload()" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer">Tai lai</button></div></main>';
 } else {
   createRoot(rootElement).render(<App />);
 }
 
-// Report Core Web Vitals sau khi render
+// Report Core Web Vitals after render.
 reportWebVitals()
 
 const STALE_TAB_RELOAD_MS = 10 * 60 * 1000;
@@ -152,20 +152,20 @@ if (ENABLE_SERVICE_WORKER && 'serviceWorker' in navigator && import.meta.env.PRO
           window.location.reload();
         });
 
-        // Listen for updates
+        // Listen for updates.
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (!newWorker) return;
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New version available, activate immediately
+              // New version available, activate immediately.
               newWorker.postMessage({ type: 'SKIP_WAITING' });
             }
           });
         });
       })
       .catch(() => {
-        // Silent fail
+        // Silent fail.
       });
   });
 }

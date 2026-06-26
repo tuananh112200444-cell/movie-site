@@ -353,7 +353,7 @@ async function refreshCaches() {
   searchEndpoint.searchParams.set('refresh', '1');
 
   const homeEndpoint = new URL(`${SUPABASE_URL}/functions/v1/home-proxy`);
-  homeEndpoint.searchParams.set('sections', 'trending,phim-le,phim-bo,hoat-hinh,han-quoc,au-my,thai-lan,trung-quoc');
+  homeEndpoint.searchParams.set('sections', 'trending,phim-le,phim-bo,phim-chieu-rap,hoat-hinh,han-quoc,au-my,thai-lan,trung-quoc');
   homeEndpoint.searchParams.set('refresh', '1');
 
   const headers = {

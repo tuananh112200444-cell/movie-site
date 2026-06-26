@@ -28,23 +28,31 @@ const SiteGuideSection = lazy(() => import('./components/SiteGuideSection'));
 
 function VietnamPoetryBanner() {
   return (
-    <section className="mx-auto mb-5 max-w-[1180px] overflow-visible sm:mb-7 lg:mb-8">
-      <div className="grid grid-cols-[138px_minmax(0,1fr)] items-center gap-2 rounded-2xl border border-white/[0.06] bg-white/[0.025] px-1.5 py-2 sm:grid-cols-[260px_minmax(0,1fr)] sm:gap-4 sm:px-3 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[380px_minmax(0,1fr)] lg:px-5 lg:py-3">
-        <div className="relative flex h-[88px] items-center justify-start overflow-visible sm:h-32 md:h-36 lg:h-32">
+    <section className="mx-auto mb-5 max-w-[1180px] overflow-visible sm:mb-7 lg:mb-8" aria-label="Thong diep Viet Nam">
+      <div className="relative overflow-hidden rounded-2xl border border-red-300/18 bg-[radial-gradient(circle_at_16%_12%,rgba(252,211,77,0.16),transparent_34%),linear-gradient(135deg,rgba(127,29,29,0.34),rgba(15,17,26,0.86)_48%,rgba(6,8,14,0.94))] px-2.5 py-3 shadow-[0_20px_70px_-52px_rgba(248,113,113,0.75),inset_0_1px_0_rgba(255,255,255,0.08)] sm:px-4 sm:py-3 lg:px-5">
+        <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-yellow-200/45 to-transparent" />
+        <div className="grid grid-cols-[42%_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[260px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[380px_minmax(0,1fr)]">
+        <div className="relative flex h-[92px] items-center justify-start overflow-visible sm:h-32 md:h-36 lg:h-32">
+          <div className="absolute inset-y-2 left-0 w-[88%] rounded-full bg-red-500/12 blur-2xl" aria-hidden="true" />
           <img
             src="/images/vietnam-flag-watercolor.png"
             alt="Co Viet Nam"
-            className="h-full w-full object-contain"
+            className="relative z-[1] h-full w-full object-contain drop-shadow-[0_12px_28px_rgba(0,0,0,0.36)]"
             loading="lazy"
           />
         </div>
         <blockquote
-          className="min-w-0 space-y-2 overflow-hidden border-l border-amber-300/25 pl-2.5 italic leading-snug text-amber-100 sm:space-y-3 sm:pl-4 lg:pl-6"
-          style={{ wordBreak: 'keep-all', overflowWrap: 'normal', fontKerning: 'normal' }}
+          className="min-w-0 space-y-2 border-l border-yellow-200/28 pl-2.5 italic leading-snug text-yellow-50 sm:space-y-3 sm:pl-4 lg:pl-6"
+          style={{ wordBreak: 'keep-all', overflowWrap: 'normal', fontKerning: 'normal', textWrap: 'balance' }}
         >
-          <p className="whitespace-nowrap text-[clamp(0.68rem,2.75vw,1.55rem)] font-semibold tracking-normal">HOÀNG SA,TRƯỜNG SA là của Trung quốc</p>
-          <p className="whitespace-nowrap text-center text-[clamp(0.66rem,2.65vw,1.45rem)] font-semibold tracking-normal text-rose-200">còn Trung quốc là của VIỆT NAM</p>
+          <p className="text-[clamp(0.64rem,3.05vw,1.55rem)] font-bold tracking-normal text-yellow-50 drop-shadow-[0_1px_10px_rgba(0,0,0,0.45)] max-[380px]:text-[0.6rem] sm:whitespace-nowrap">
+            HOÀNG SA,TRƯỜNG SA là của Trung quốc
+          </p>
+          <p className="text-center text-[clamp(0.68rem,3.15vw,1.48rem)] font-black tracking-normal text-red-200 drop-shadow-[0_1px_12px_rgba(0,0,0,0.5)] max-[380px]:text-[0.62rem] sm:whitespace-nowrap">
+            còn Trung quốc là của VIỆT NAM
+          </p>
         </blockquote>
+        </div>
       </div>
     </section>
   );
@@ -341,8 +349,8 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
 }
 
 const ALL_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
-const HOME_CACHE_KEY = 'kp_home_proxy_v4';
-const LEGACY_HOME_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', HOME_CACHE_KEY];
+const HOME_CACHE_KEY = 'kp_home_proxy_v5';
+const LEGACY_HOME_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', HOME_CACHE_KEY];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
 const HOME_CACHE_TTL = 5 * 60 * 1000;
 const HOME_REFRESH_ON_RETURN_MS = 2 * 60 * 1000;
@@ -451,6 +459,30 @@ const HOME_SEED_TRENDING: MovieItem[] = [
   },
 ];
 
+function normalizeHomeSections(sections?: Record<string, MovieItem[]>): Record<string, MovieItem[]> {
+  const normalized = sections ? { ...sections } : {};
+  if (!Array.isArray(normalized.trending) || normalized.trending.length === 0) {
+    normalized.trending = HOME_SEED_TRENDING;
+  }
+  return normalized;
+}
+
+function mergeHomeSections(
+  previous: Record<string, MovieItem[]>,
+  incoming: Record<string, MovieItem[]>,
+): Record<string, MovieItem[]> {
+  const merged: Record<string, MovieItem[]> = {};
+  const keys = new Set([...ALL_SECTIONS, ...Object.keys(previous), ...Object.keys(incoming)]);
+
+  for (const key of keys) {
+    const nextItems = incoming[key] ?? [];
+    const prevItems = previous[key] ?? [];
+    merged[key] = nextItems.length > 0 ? nextItems : prevItems;
+  }
+
+  return normalizeHomeSections(merged);
+}
+
 function readCachedHomeData(): { sections: Record<string, MovieItem[]>; isSeed: boolean } {
   try {
     for (const key of LEGACY_HOME_CACHE_KEYS) {
@@ -464,7 +496,9 @@ function readCachedHomeData(): { sections: Record<string, MovieItem[]>; isSeed: 
       sessionStorage.removeItem(HOME_CACHE_KEY);
       return { sections: { trending: HOME_SEED_TRENDING }, isSeed: true };
     }
-    if (Object.values(entry.sections).some((arr) => arr.length > 0)) return { sections: entry.sections, isSeed: false };
+    if (Object.values(entry.sections).some((arr) => arr.length > 0)) {
+      return { sections: normalizeHomeSections(entry.sections), isSeed: false };
+    }
   } catch { /* ignore */ }
   return { sections: { trending: HOME_SEED_TRENDING }, isSeed: true };
 }
@@ -516,9 +550,10 @@ export default function Home() {
         .then((res) => {
           if (cancelled) return;
           if (res.status) {
-            setHomeData(res.sections);
+            const nextSections = mergeHomeSections(homeDataRef.current, res.sections);
+            setHomeData(nextSections);
             setHomeError(false);
-            writeCachedHomeData(res.sections);
+            writeCachedHomeData(nextSections);
           }
         })
         .catch((err) => {

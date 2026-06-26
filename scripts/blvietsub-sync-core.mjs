@@ -366,8 +366,10 @@ async function createMovie(supabase, entry) {
 }
 
 async function updateMovie(supabase, movie, entry) {
-  const episodeCount = Math.max(1, playableEpisodeCount(entry.episodes));
   const current = getMovieCurrentEpisode(movie);
+  const existingTotal = Number(movie.total_episodes || 0) || 0;
+  const syncedEpisodeCount = Math.max(1, playableEpisodeCount(entry.episodes));
+  const episodeCount = Math.max(current, existingTotal, syncedEpisodeCount);
   const payload = {
     showtimes: entry.sourceUrl,
     source_url: entry.sourceUrl,
@@ -390,7 +392,7 @@ async function insertMissingEpisodes(supabase, movie, entry) {
     .from('movie_episodes')
     .select('id, episode_number, server_name, link_embed, link_m3u8')
     .eq('movie_id', movie.id)
-    .eq('source', SOURCE_SITE);
+    .abortSignal(AbortSignal.timeout(20_000));
   if (error) throw new Error(`movie_episodes select ${movie.slug}: ${error.message}`);
 
   const existing = new Map((data || []).map((row) => [`${String(row.server_name || '').trim()}|${Number(row.episode_number || 0)}`, row]));

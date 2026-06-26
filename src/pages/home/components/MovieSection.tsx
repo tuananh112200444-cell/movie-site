@@ -319,7 +319,38 @@ export default function MovieSection({
     );
   }
 
-  if (movies.length === 0) return null;
+  if (movies.length === 0) {
+    return (
+      <section ref={sectionRef} className="mb-7 md:mb-11 home-section-surface group/section">
+        <div className="reveal flex items-center gap-2.5 mb-3 md:mb-5 px-1">
+          <div className={`relative hidden items-center justify-center w-7 h-7 rounded-md bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} border ${t.iconBorder} flex-shrink-0 md:flex`}>
+            <i className={`${t.icon} ${t.iconText} text-sm`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="truncate text-lg md:text-2xl lg:text-[1.55rem] font-black tracking-tight text-white">
+              {title}
+            </h3>
+            <p className="home-section-eyebrow mt-0.5 hidden md:block">Dang cap nhat danh sach phim moi</p>
+          </div>
+          <Link
+            to={viewAllLink}
+            className={`group/btn flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-xs font-bold text-white/58 ${t.btnHoverText} transition-all duration-300 cursor-pointer whitespace-nowrap flex-shrink-0 hover:bg-white/[0.08] active:scale-95 active:text-white`}
+          >
+            Xem tat ca
+            <i className="ri-arrow-right-line text-xs transition-transform duration-300 group-hover/btn:translate-x-1" />
+          </Link>
+        </div>
+
+        <Link
+          to={viewAllLink}
+          className="block rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-5 text-center transition-colors active:bg-white/[0.06] md:px-6"
+        >
+          <p className="text-sm font-semibold text-white/70">Danh sach dang duoc cap nhat</p>
+          <p className="mt-1 text-xs text-white/38">Bam de xem tat ca phim trong muc nay</p>
+        </Link>
+      </section>
+    );
+  }
 
   return (
     <section ref={sectionRef} className="mb-7 md:mb-11 home-section-surface group/section">

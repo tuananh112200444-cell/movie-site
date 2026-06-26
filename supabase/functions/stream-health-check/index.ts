@@ -19,7 +19,10 @@ interface StreamRow {
   embed_url: string;
   quality: string;
   priority: number | null;
+  health_status: string | null;
   failure_count: number | null;
+  last_checked_at: string | null;
+  response_time_ms: number | null;
 }
 
 interface MovieQueueRow {
@@ -51,8 +54,17 @@ function isHls(url: string) {
   return /\.m3u8($|[?#])/i.test(url);
 }
 
+function getHost(url: string) {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
 function scoreStream(row: StreamRow, responseMs: number) {
   const url = streamUrl(row).toLowerCase();
+  const host = getHost(url);
   const server = `${row.server_name} ${row.source} ${row.quality}`.toLowerCase();
   let score = 100;
   if (row.source === 'manual' || server.includes('khophim')) score += 90;
@@ -61,6 +73,7 @@ function scoreStream(row: StreamRow, responseMs: number) {
   if (server.includes('1080') || server.includes('fhd')) score += 25;
   if (server.includes('720') || server.includes('hd')) score += 15;
   if (url.includes('abyss') || url.includes('short.icu')) score -= 25;
+  if (host.includes('vk.com') || host.includes('ok.ru')) score -= 20;
   if (responseMs > 6000) score -= 25;
   else if (responseMs > 3000) score -= 10;
   return Math.max(1, Math.min(score, 250));
@@ -175,18 +188,31 @@ async function updateStream(
     update.is_active = true;
   } else {
     update.last_failure_at = now;
+    const currentPriority = Number(row.priority || 100);
+    const hardFail = result.status === 404 || result.status === 410 || /playlist invalid|name not resolved|connection refused/i.test(result.error);
+    update.priority = result.status === 401 || result.status === 403
+      ? Math.min(currentPriority, 35)
+      : Math.max(1, currentPriority - (hardFail ? 80 : 35));
     if (shouldDeactivate(result, nextFailureCount, deactivateAfter)) update.is_active = false;
   }
   await supabase.from('streams').update(update).eq('id', row.id);
+}
+
+function authorized(req: Request, url: URL): boolean {
+  const provided = url.searchParams.get('secret') || req.headers.get('x-cron-secret') || '';
+  const allowed = [
+    Deno.env.get('CRON_SECRET') || '',
+    Deno.env.get('STREAM_HEALTH_SECRET') || '',
+    Deno.env.get('PLAYER_REPAIR_SECRET') || '',
+  ].filter(Boolean);
+  return allowed.length === 0 || allowed.includes(provided);
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   const url = new URL(req.url);
-  const cronSecret = Deno.env.get('CRON_SECRET') || '';
-  const provided = url.searchParams.get('secret') || req.headers.get('x-cron-secret') || '';
-  if (cronSecret && provided !== cronSecret) return json({ success: false, error: 'Unauthorized' }, 401);
+  if (!authorized(req, url)) return json({ success: false, error: 'Unauthorized' }, 401);
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -201,7 +227,7 @@ serve(async (req) => {
   const dryRun = url.searchParams.get('dry_run') === '1';
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-  const streamSelect = 'id,movie_id,episode_slug,source,server_name,stream_url,embed_url,quality,priority,failure_count,movies!inner(slug)';
+  const streamSelect = 'id,movie_id,episode_slug,source,server_name,stream_url,embed_url,quality,priority,health_status,failure_count,last_checked_at,response_time_ms,movies!inner(slug)';
   let query = supabase
     .from('streams')
     .select(streamSelect)
@@ -212,7 +238,38 @@ serve(async (req) => {
     .limit(limit);
 
   if (slug) query = query.eq('movies.slug', slug);
-  else if (queue === 'hot') {
+  else if (queue === 'unchecked') {
+    query = supabase
+      .from('streams')
+      .select(streamSelect)
+      .eq('is_active', true)
+      .eq('health_status', 'unchecked')
+      .or('stream_url.neq.,embed_url.neq.')
+      .order('last_checked_at', { ascending: true, nullsFirst: true })
+      .order('priority', { ascending: false })
+      .limit(limit);
+  } else if (queue === 'problem') {
+    query = supabase
+      .from('streams')
+      .select(streamSelect)
+      .eq('is_active', true)
+      .in('health_status', ['failed', 'dead', 'blocked'])
+      .or('stream_url.neq.,embed_url.neq.')
+      .order('last_checked_at', { ascending: true, nullsFirst: true })
+      .order('priority', { ascending: false })
+      .limit(limit);
+  } else if (queue === 'stale') {
+    const staleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    query = supabase
+      .from('streams')
+      .select(streamSelect)
+      .eq('is_active', true)
+      .or('last_checked_at.is.null,last_checked_at.lt.' + staleBefore)
+      .or('stream_url.neq.,embed_url.neq.')
+      .order('last_checked_at', { ascending: true, nullsFirst: true })
+      .order('priority', { ascending: false })
+      .limit(limit);
+  } else if (queue === 'hot') {
     const { data: hotMovies, error: hotMovieError } = await supabase
       .from('movies')
       .select('id')

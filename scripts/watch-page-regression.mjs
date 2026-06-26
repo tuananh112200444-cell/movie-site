@@ -170,6 +170,36 @@ assert(
   'Dailymotion embed should be preferred over slower third-party embed sources for the same episode'
 );
 
+const directUnknownVsDaily = [
+  {
+    server_name: 'Server HLS',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_m3u8: 'https://unknown-slow.test/video.m3u8' }],
+  },
+  {
+    server_name: 'Server Dailymotion',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_embed: 'https://www.dailymotion.com/video/x123456' }],
+  },
+];
+assert(
+  pickBestEpisodeByPriority(directUnknownVsDaily, 'tap-24')?.serverIndex === 1,
+  'Dailymotion should beat unknown direct HLS when both have the same episode'
+);
+
+const ownHlsVsDaily = [
+  {
+    server_name: 'KhoPhim',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_m3u8: 'https://video.khophim.org/movie/tap-24.m3u8' }],
+  },
+  {
+    server_name: 'Server Dailymotion',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_embed: 'https://www.dailymotion.com/video/x123456' }],
+  },
+];
+assert(
+  pickBestEpisodeByPriority(ownHlsVsDaily, 'tap-24')?.serverIndex === 0,
+  'KhoPhim HLS should still be preferred over Dailymotion'
+);
+
 const metadataEpisode = 148;
 const playableEpisode = getHighestEpisodeFromServers([
   { server_name: 'Vietsub #1', server_data: [{ name: '50', slug: '50', link_m3u8: 'https://cdn.test/50.m3u8' }] },

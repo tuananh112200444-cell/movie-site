@@ -392,6 +392,9 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
         {showLogout && (
           <div className="absolute right-0 top-full mt-1 bg-[#0d0f18] border border-white/[0.08] rounded-xl p-1 min-w-[180px] z-[201] shadow-xl">
+            <Link to="/admin/overview" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
+              <i className="ri-dashboard-3-line" /> Overview
+            </Link>
             <Link to="/admin/add-movie" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
               <i className="ri-movie-2-line" /> Add Movie
             </Link>
@@ -406,6 +409,18 @@ export default function AdminGuard({ children }: AdminGuardProps) {
             </Link>
             <Link to="/admin/ping" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-sky-400 hover:bg-sky-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
               <i className="ri-radar-line" /> Ping Status
+            </Link>
+            <Link to="/admin/diagnostics" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
+              <i className="ri-pulse-line" /> Player Diagnostics
+            </Link>
+            <Link to="/admin/sync-health" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
+              <i className="ri-loop-left-line" /> Sync Health
+            </Link>
+            <Link to="/admin/site-health" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-sky-400 hover:bg-sky-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
+              <i className="ri-radar-line" /> Site Health
+            </Link>
+            <Link to="/admin/content-health" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-violet-400 hover:bg-violet-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
+              <i className="ri-database-2-line" /> Content Health
             </Link>
             <div className="my-1 border-t border-white/[0.06]" />
             <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">

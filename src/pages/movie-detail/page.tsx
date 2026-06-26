@@ -291,9 +291,10 @@ export default function MovieDetailPage() {
     if (!detail?.movie) return false;
     const epCurrent = (detail.movie.episode_current ?? '').toLowerCase().trim();
     if (epCurrent === 'trailer') return true;
+    if (epCurrent === 'sap chieu' || epCurrent === 'dang cap nhat') return true;
     const allEps = detail.episodes?.flatMap((s) => s.server_data ?? []) ?? [];
     if (allEps.length === 0) {
-      return epCurrent === 'trailer';
+      return epCurrent === 'trailer' || epCurrent === 'sap chieu' || epCurrent === 'dang cap nhat';
     }
     if (allEps.every((ep) => ep.name?.toLowerCase().includes('trailer'))) return true;
     return false;
