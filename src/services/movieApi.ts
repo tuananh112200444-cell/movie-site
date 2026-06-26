@@ -3214,6 +3214,7 @@ interface ServerQualityInfo {
 }
 export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'DM', 'SUPABASE', 'OPHIM', 'SS', 'OK', 'ABYSS', 'VK'] as const;
 const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
+const SERVER_RECENT_BAD_HOST_PENALTY = 900;
 
 function normalizeServerPriorityText(value: string): string {
   return value
@@ -3375,10 +3376,26 @@ function getRecentBadHostPenalty(ep: EpisodeData): number {
     const lastBadAt = Number(map[host] || 0);
     if (!lastBadAt) return 0;
     const ageMs = Date.now() - lastBadAt;
-    return ageMs >= 30 * 60 * 1000 ? 0 : 900;
+    return ageMs >= 30 * 60 * 1000 ? 0 : SERVER_RECENT_BAD_HOST_PENALTY;
   } catch {
     return 0;
   }
+}
+
+function getPriorityRankScore(rank: number): number {
+  return rank < STREAM_SERVER_PRIORITY.length
+    ? (STREAM_SERVER_PRIORITY.length - rank) * 95
+    : 0;
+}
+
+function getBestPlayableEpisodeScore(server: EpisodeServer): number {
+  const playable = (server.server_data ?? []).filter((ep) => hasPlayableUrl(ep) && !ep.is_scheduled);
+  if (!playable.length) return -10000;
+
+  return playable.reduce((best, ep) => {
+    const score = getEpisodeReliabilityScore(ep) + getEpisodeQualityScore(ep);
+    return Math.max(best, score);
+  }, -10000);
 }
 
 function getEpisodeReliabilityScore(ep: EpisodeData): number {
@@ -3390,6 +3407,28 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   let score = 0;
 
   if (!url) return -10000;
+  const healthStatus = String(ep.source_health_status || '').trim().toLowerCase();
+  const failureCount = Number(ep.source_failure_count || 0);
+  const responseMs = Number(ep.source_response_time_ms || 0);
+  const sourcePriority = Number(ep.source_priority || 0);
+
+  if (healthStatus === 'ok') score += 120;
+  else if (healthStatus === 'unchecked') score += 8;
+  else if (healthStatus === 'blocked') score -= failureCount >= 3 ? 180 : 55;
+  else if (healthStatus === 'failed') score -= 220 + failureCount * 35;
+  else if (healthStatus === 'dead') score -= 1000;
+
+  if (Number.isFinite(responseMs) && responseMs > 0) {
+    if (responseMs <= 1200) score += 55;
+    else if (responseMs <= 2500) score += 25;
+    else if (responseMs >= 7000) score -= 90;
+    else if (responseMs >= 4500) score -= 45;
+  }
+
+  if (Number.isFinite(sourcePriority) && sourcePriority > 0) {
+    score += Math.min(sourcePriority, 250) * 0.25;
+  }
+
   if (m3u8) score += /\.m3u8(?:[?#].*)?$/i.test(m3u8) ? 130 : 115;
   if (/\.(mp4|webm|mov)(?:[?#].*)?$/i.test(embed)) score += 110;
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) score += 120;
@@ -3417,6 +3456,7 @@ export function getServerQualityScore(server: EpisodeServer): number {
   const firstEp = server.server_data?.[0];
   if (firstEp?.link_m3u8) score += 10;
   if (firstEp?.link_embed) score += 3;
+  score += getBestPlayableEpisodeScore(server);
 
   // Vietnamese audio preferred (vietsub, thuyetminh, longtieng)
   const tokens = name.split(/[\s\-_#]+/).filter(Boolean);
@@ -3430,9 +3470,7 @@ export function getServerQualityScore(server: EpisodeServer): number {
   const epCount = server.server_data?.length ?? 0;
   if (epCount > 0) score += Math.min(epCount, 10);
   const priorityRank = getServerPriorityRank(server, firstEp);
-  if (priorityRank < STREAM_SERVER_PRIORITY.length) {
-    score += (STREAM_SERVER_PRIORITY.length - priorityRank) * 100;
-  }
+  score += getPriorityRankScore(priorityRank);
   return score;
 }
 
@@ -3560,9 +3598,7 @@ export function pickBestEpisodeAcrossServers(
       epScore += getEpisodeQualityScore(ep);
       epScore += getEpisodeReliabilityScore(ep);
       const priorityRank = getServerPriorityRank(srv, ep);
-      if (priorityRank < STREAM_SERVER_PRIORITY.length) {
-        epScore += (STREAM_SERVER_PRIORITY.length - priorityRank) * 1000;
-      }
+      epScore += getPriorityRankScore(priorityRank);
 
       allOptions.push({ serverIndex: si, episode: ep, score: epScore, priorityRank });
     }
@@ -3615,9 +3651,9 @@ export function pickBestEpisodeByPriority(
   candidates.sort((a, b) => {
     const aDirect = a.episode.link_m3u8 || /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(a.episode.link_embed || '');
     const bDirect = b.episode.link_m3u8 || /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(b.episode.link_embed || '');
+    if (b.qualityScore !== a.qualityScore) return b.qualityScore - a.qualityScore;
     if (Boolean(aDirect) !== Boolean(bDirect)) return bDirect ? 1 : -1;
-    if (a.priorityRank !== b.priorityRank) return a.priorityRank - b.priorityRank;
-    return b.qualityScore - a.qualityScore;
+    return a.priorityRank - b.priorityRank;
   });
 
   const best = candidates[0];
@@ -3759,6 +3795,10 @@ export function deduplicateAndLimitServers(episodes: EpisodeServer[]): EpisodeSe
   // 1. Sắp xếp: vietsub → thuyetminh → longtieng → other, trong mỗi nhóm sort by quality
   const order: Record<string, number> = { khophim: 0, vietsub: 1, thuyetminh: 2, longtieng: 3, other: 4 };
   const sorted = [...playableOnly].sort((a, b) => {
+    const scoreA = getServerQualityScore(a);
+    const scoreB = getServerQualityScore(b);
+    if (scoreA !== scoreB) return scoreB - scoreA;
+
     const rankA = getServerPriorityRank(a, a.server_data?.[0]);
     const rankB = getServerPriorityRank(b, b.server_data?.[0]);
     if (rankA !== rankB) return rankA - rankB;
@@ -3766,7 +3806,7 @@ export function deduplicateAndLimitServers(episodes: EpisodeServer[]): EpisodeSe
     const typeA = order[detectServerType(a.server_name ?? '')] ?? 99;
     const typeB = order[detectServerType(b.server_name ?? '')] ?? 99;
     if (typeA !== typeB) return typeA - typeB;
-    return getServerQualityScore(b) - getServerQualityScore(a);
+    return 0;
   });
 
   return sorted;
@@ -4058,6 +4098,10 @@ export async function getMergedEpisodes(
       link_m3u8: streamUrl,
       episode_number: num || undefined,
       subtitle_url: String(sm.subtitle_url || ''),
+      source_health_status: healthStatus || 'unchecked',
+      source_response_time_ms: Number(sm.response_time_ms || 0) || undefined,
+      source_failure_count: failureCount || undefined,
+      source_priority: Number(sm.priority || 0) || undefined,
     };
     if (hasSeenEpisode(seen, serverName, slug, num, epData.name)) continue;
     markSeenEpisode(seen, serverName, slug, num, epData.name);
@@ -4256,8 +4300,14 @@ export async function fetchHomePageData(
   const supabaseUrl = typeof import.meta.env !== 'undefined'
     ? (import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined)
     : undefined;
+  const supabaseAnonKey = typeof import.meta.env !== 'undefined'
+    ? (import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY as string | undefined)
+    : undefined;
   if (!supabaseUrl) {
     throw new Error('Supabase config missing');
+  }
+  if (!supabaseAnonKey) {
+    throw new Error('Supabase anon key missing');
   }
 
   const url = new URL(`${supabaseUrl}/functions/v1/home-proxy`);
@@ -4266,13 +4316,16 @@ export async function fetchHomePageData(
   const abortFromCaller = () => controller.abort(options.signal?.reason);
   if (options.signal?.aborted) controller.abort(options.signal.reason);
   else options.signal?.addEventListener('abort', abortFromCaller, { once: true });
-  const timer = setTimeout(() => controller.abort(), 6000);
+  const timer = setTimeout(() => controller.abort(), 12000);
 
   try {
     const res = await fetch(url.toString(), {
       signal: controller.signal,
       cache: 'no-store',
-      
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+      },
     });
     clearTimeout(timer);
     if (!res.ok) {

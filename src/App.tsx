@@ -1,5 +1,5 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { AppRoutes } from "./router";
 import { I18nextProvider } from "react-i18next";
 import i18n from "./i18n";
@@ -11,8 +11,9 @@ import CatPawCursor from "./components/feature/CatPawCursor";
 import { ThemeProvider } from "./context/ThemeContext";
 import CWVMonitor from "./components/base/CWVMonitor";
 import AppErrorBoundary from "./components/base/AppErrorBoundary";
+import { warmPlayerSourceHealth } from "./services/playerSourceHealth";
 
-// ScrollProgressBar dùng DOM trực tiếp thay vì setState để tránh re-render mỗi scroll.
+// ScrollProgressBar updates the DOM directly to avoid a React re-render on every scroll.
 function ScrollProgressBar() {
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -71,7 +72,6 @@ function saveScrollPosition(key: string, y: number) {
   }
 }
 
-/** Scroll restoration + fade animation */
 function AnimatedContent() {
   const location = useLocation();
   const prevPathRef = useRef(location.pathname);
@@ -151,12 +151,26 @@ function SkipToContent() {
       onClick={handleClick}
       className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[200] focus:bg-red-500 focus:text-white focus:px-5 focus:py-3 focus:rounded-xl focus:font-semibold focus:text-sm focus:shadow-lg focus:outline-none"
     >
-      Bỏ qua điều hướng, đi đến nội dung chính
+      Bo qua dieu huong, di den noi dung chinh
     </a>
   );
 }
 
 function App() {
+  useEffect(() => {
+    const run = () => void warmPlayerSourceHealth();
+    const win = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (win.requestIdleCallback) {
+      const id = win.requestIdleCallback(run, { timeout: 5000 });
+      return () => win.cancelIdleCallback?.(id);
+    }
+    const timer = window.setTimeout(run, 2500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <AppErrorBoundary>
       <ThemeProvider>

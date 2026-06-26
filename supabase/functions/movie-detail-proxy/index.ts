@@ -835,6 +835,10 @@ serve(async (req) => {
           link_embed: normalizeDailymotionUrl(embedUrl),
           link_m3u8: streamUrl,
           subtitle_url: String(sm.subtitle_url || ''),
+          source_health_status: healthStatus || 'unchecked',
+          source_response_time_ms: Number(sm.response_time_ms || 0) || undefined,
+          source_failure_count: failureCount || undefined,
+          source_priority: Number(sm.priority || 0) || undefined,
         };
 
         pushEpisode(serverMap, serverName, epData);

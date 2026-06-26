@@ -139,6 +139,10 @@ const DIRECT_VIDEO_SPEEDS = [1, 1.25, 1.5, 2];
 const BAD_SOURCE_HOSTS_KEY = 'khophim.bad-source-hosts.v1';
 const EMBED_FALLBACK_TIMEOUT_MS = 3800;
 const EMBED_LAST_SOURCE_TIMEOUT_MS = 8000;
+const DIRECT_VIDEO_STALL_TIMEOUT_MS = 7000;
+const DIRECT_VIDEO_STALL_CHECK_MS = 2500;
+const DIRECT_VIDEO_MIN_PROGRESS_SECONDS = 0.25;
+const DIRECT_VIDEO_MAX_RECOVERY_ATTEMPTS = 1;
 const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
 const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
 
@@ -172,6 +176,20 @@ function addTemporaryPreconnect(origin: string): () => void {
   link.crossOrigin = 'anonymous';
   document.head.appendChild(link);
   return () => link.remove();
+}
+
+function getVideoBufferedAhead(video: HTMLVideoElement | null): number {
+  if (!video) return 0;
+  try {
+    for (let i = 0; i < video.buffered.length; i++) {
+      if (video.buffered.start(i) <= video.currentTime && video.currentTime <= video.buffered.end(i)) {
+        return video.buffered.end(i) - video.currentTime;
+      }
+    }
+  } catch {
+    return 0;
+  }
+  return 0;
 }
 
 function PlayerWatermark() {
@@ -216,6 +234,10 @@ export default function PlayerBox({
   const [autoNextCountdown, setAutoNextCountdown] = useState(5);
   const prevEpSlug = useRef<string | null>(null);
   const iframeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const directVideoStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const directVideoStallMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const directVideoLastTimeRef = useRef(0);
+  const directVideoRecoveryAttemptsRef = useRef(0);
   const embedContainerRef = useRef<HTMLDivElement>(null);
   const directVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -288,6 +310,10 @@ export default function PlayerBox({
   useEffect(() => {
     if (directVideoRef.current) directVideoRef.current.playbackRate = directVideoSpeed;
   }, [directVideoSpeed, directVideoSrc]);
+
+  useEffect(() => {
+    directVideoRecoveryAttemptsRef.current = 0;
+  }, [directVideoSrc]);
 
   /* Reset when episode changes */
   useEffect(() => {
@@ -389,6 +415,114 @@ export default function PlayerBox({
     }
     switchToFallbackServer();
   }, [episode?.link_embed, playerMode, reportIssue, switchToFallbackServer]);
+
+  const handleDirectVideoStallFatal = useCallback((reason: string) => {
+    const video = directVideoRef.current;
+    reportIssue({
+      event_type: 'stall_fatal',
+      playback_time: video?.currentTime ?? 0,
+      duration: video?.duration ?? 0,
+      buffered_ahead: getVideoBufferedAhead(video),
+      error_message: reason,
+    });
+    switchToFallbackServer();
+  }, [reportIssue, switchToFallbackServer]);
+
+  useEffect(() => {
+    if (playerMode !== 'video' || !directVideoSrc) return;
+    const video = directVideoRef.current;
+    if (!video) return;
+
+    const clearStallTimer = () => {
+      if (directVideoStallTimerRef.current) {
+        clearTimeout(directVideoStallTimerRef.current);
+        directVideoStallTimerRef.current = null;
+      }
+    };
+    const stopMonitor = () => {
+      if (directVideoStallMonitorRef.current) {
+        clearInterval(directVideoStallMonitorRef.current);
+        directVideoStallMonitorRef.current = null;
+      }
+    };
+    const recoverOrFallback = (reason: string) => {
+      if (video.paused || video.ended) return;
+      if (getVideoBufferedAhead(video) > 1.5) return;
+
+      directVideoRecoveryAttemptsRef.current += 1;
+      if (directVideoRecoveryAttemptsRef.current <= DIRECT_VIDEO_MAX_RECOVERY_ATTEMPTS) {
+        reportIssue({
+          event_type: 'stall_recovery',
+          playback_time: video.currentTime,
+          duration: video.duration || 0,
+          buffered_ahead: getVideoBufferedAhead(video),
+          error_message: reason,
+        });
+        const resumeAt = video.currentTime;
+        video.load();
+        video.currentTime = resumeAt;
+        video.play().catch(() => {});
+        return;
+      }
+
+      handleDirectVideoStallFatal(reason);
+    };
+    const startMonitor = () => {
+      if (directVideoStallMonitorRef.current) return;
+      directVideoLastTimeRef.current = video.currentTime;
+      directVideoStallMonitorRef.current = setInterval(() => {
+        if (video.paused || video.ended) {
+          directVideoLastTimeRef.current = video.currentTime;
+          return;
+        }
+        const progressed = Math.abs(video.currentTime - directVideoLastTimeRef.current);
+        const lowBuffer = getVideoBufferedAhead(video) < 1.2;
+        if (progressed < DIRECT_VIDEO_MIN_PROGRESS_SECONDS && lowBuffer) {
+          recoverOrFallback('direct video progress stalled');
+        }
+        directVideoLastTimeRef.current = video.currentTime;
+      }, DIRECT_VIDEO_STALL_CHECK_MS);
+    };
+    const onWaiting = () => {
+      clearStallTimer();
+      directVideoStallTimerRef.current = setTimeout(() => {
+        recoverOrFallback('direct video waiting timeout');
+      }, DIRECT_VIDEO_STALL_TIMEOUT_MS);
+    };
+    const onPlaying = () => {
+      clearStallTimer();
+      directVideoRecoveryAttemptsRef.current = 0;
+      startMonitor();
+    };
+    const onPause = () => {
+      clearStallTimer();
+      stopMonitor();
+    };
+    const onEnded = () => {
+      clearStallTimer();
+      stopMonitor();
+    };
+
+    video.addEventListener('waiting', onWaiting);
+    video.addEventListener('stalled', onWaiting);
+    video.addEventListener('playing', onPlaying);
+    video.addEventListener('canplay', onPlaying);
+    video.addEventListener('pause', onPause);
+    video.addEventListener('ended', onEnded);
+
+    if (!video.paused && !video.ended) startMonitor();
+
+    return () => {
+      video.removeEventListener('waiting', onWaiting);
+      video.removeEventListener('stalled', onWaiting);
+      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('canplay', onPlaying);
+      video.removeEventListener('pause', onPause);
+      video.removeEventListener('ended', onEnded);
+      clearStallTimer();
+      stopMonitor();
+    };
+  }, [directVideoSrc, handleDirectVideoStallFatal, playerMode, reportIssue]);
 
   useEffect(() => {
     if (!iframeBlocked || playerMode !== 'embed') return;

@@ -3,35 +3,67 @@ import { reportClientIssue } from '@/services/playerDiagnostics';
 
 type OfflineStatus = 'online' | 'offline';
 
+async function canReachApp(): Promise<boolean> {
+  try {
+    const response = await fetch('/favicon.ico', {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3500),
+    });
+    return response.ok || response.status === 404;
+  } catch {
+    return false;
+  }
+}
+
 export default function OfflineIndicator() {
   const [status, setStatus] = useState<OfflineStatus>('online');
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    const updateStatus = () => {
-      if (!navigator.onLine) {
-        reportClientIssue('offline', 'browser reported offline');
-        setStatus('offline');
-        setVisible(true);
-        setDismissed(false);
-        return;
-      }
+    let disposed = false;
+    let offlineTimer: number | null = null;
+    let hideTimer: number | null = null;
 
+    const showRecovered = () => {
       setStatus((previous) => {
         if (previous === 'offline') {
           reportClientIssue('online_recovered', 'browser recovered online');
           setVisible(true);
-          window.setTimeout(() => setVisible(false), 3000);
+          if (hideTimer) clearTimeout(hideTimer);
+          hideTimer = window.setTimeout(() => setVisible(false), 3000);
         }
         return 'online';
       });
+    };
+
+    const updateStatus = () => {
+      if (!navigator.onLine) {
+        if (offlineTimer) clearTimeout(offlineTimer);
+        offlineTimer = window.setTimeout(async () => {
+          if (disposed || navigator.onLine) return;
+          const reachable = await canReachApp();
+          if (disposed || reachable) return;
+          reportClientIssue('offline', 'browser reported offline and app probe failed');
+          setStatus('offline');
+          setVisible(true);
+          setDismissed(false);
+        }, 1800);
+        return;
+      }
+
+      if (offlineTimer) clearTimeout(offlineTimer);
+      showRecovered();
     };
 
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
 
     return () => {
+      disposed = true;
+      if (offlineTimer) clearTimeout(offlineTimer);
+      if (hideTimer) clearTimeout(hideTimer);
       window.removeEventListener('online', updateStatus);
       window.removeEventListener('offline', updateStatus);
     };
@@ -42,7 +74,7 @@ export default function OfflineIndicator() {
   const config = {
     online: {
       icon: 'ri-wifi-line',
-      text: 'Đã kết nối lại internet',
+      text: 'Da ket noi lai internet',
       bg: 'bg-emerald-500/15',
       border: 'border-emerald-500/30',
       textColor: 'text-emerald-400',
@@ -50,7 +82,7 @@ export default function OfflineIndicator() {
     },
     offline: {
       icon: 'ri-wifi-off-line',
-      text: 'Bạn đang ngoại tuyến. Vui lòng kiểm tra kết nối internet rồi tải lại trang.',
+      text: 'Ket noi dang khong on dinh. Hay kiem tra internet roi tai lai trang neu can.',
       bg: 'bg-amber-500/15',
       border: 'border-amber-500/30',
       textColor: 'text-amber-400',
@@ -73,7 +105,7 @@ export default function OfflineIndicator() {
       <button
         onClick={() => setDismissed(true)}
         className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-white/30 hover:text-white/60 transition-colors cursor-pointer"
-        aria-label="Đóng thông báo"
+        aria-label="Dong thong bao"
       >
         <i className="ri-close-line text-sm" />
       </button>
