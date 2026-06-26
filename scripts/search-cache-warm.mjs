@@ -77,11 +77,19 @@ for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
 }
 
 let verifyResult = null;
-try {
-  verifyResult = await callProxy({ limit: VERIFY_LIMIT, refresh: false });
-  attempts.push({ attempt: attempts.length + 1, phase: 'verify-cache', ...verifyResult });
-} catch (error) {
-  attempts.push({ attempt: attempts.length + 1, phase: 'verify-cache', ok: false, error: error.message });
+for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+  try {
+    verifyResult = await callProxy({ limit: VERIFY_LIMIT, refresh: false });
+    attempts.push({ attempt: attempts.length + 1, phase: 'verify-cache', ...verifyResult });
+    const cacheReady =
+      verifyResult.ok &&
+      verifyResult.items >= MIN_ITEMS &&
+      (['HIT', 'STALE'].includes(String(verifyResult.xCache || '').toUpperCase()) || verifyResult.source === 'cache');
+    if (cacheReady) break;
+  } catch (error) {
+    attempts.push({ attempt: attempts.length + 1, phase: 'verify-cache', ok: false, error: error.message });
+  }
+  await sleep(1000 * attempt);
 }
 
 const failures = [];

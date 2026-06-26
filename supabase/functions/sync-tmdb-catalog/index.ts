@@ -288,7 +288,8 @@ async function upsertCatalogMovie(
 
   if (existing.data?.id) {
     const episode = String(existing.data.episode_current || '').toLowerCase().trim();
-    const hasPlayableMarker = episode && !['trailer', 'sap chieu', 'dang cap nhat'].includes(episode);
+    const existingSource = String(existing.data.source_site || '').toLowerCase().trim();
+    const hasPlayableMarker = existingSource !== 'tmdb-catalog' && episode && !['trailer', 'sap chieu', 'dang cap nhat'].includes(episode);
     const { slug: _slug, episode_current: _episodeCurrent, source_site: _sourceSite, ...updatePayload } = payload;
     if (hasPlayableMarker) {
       delete updatePayload.status;

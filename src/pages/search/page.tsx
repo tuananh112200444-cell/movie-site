@@ -245,6 +245,17 @@ export default function SearchPage() {
     const instantItems = pg === 1 && localPool.length > 0
       ? getInstantLocalHits(localPool, normalizedKeyword, 16)
       : [];
+    const indexPromise = pg === 1
+      ? ensureSearchIndexLoaded()
+          .then((indexedItems) => {
+            if (runId !== searchRunRef.current || searchCtrl.signal.aborted) return;
+            const localItems = getInstantLocalHits(indexedItems, normalizedKeyword, 16);
+            if (localItems.length === 0) return;
+            setError('');
+            setResults((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...localItems]), normalizedKeyword, 'relevance'));
+          })
+          .catch(() => {})
+      : Promise.resolve();
 
     if (instantItems.length > 0) {
       setResults(instantItems);
@@ -291,17 +302,7 @@ export default function SearchPage() {
       });
       setTotalPages(apiData.pagination?.totalPages ?? 1);
       setAllLoaded(pg >= (apiData.pagination?.totalPages ?? 1));
-      if (pg === 1) {
-        ensureSearchIndexLoaded()
-          .then((indexedItems) => {
-            if (runId !== searchRunRef.current || searchCtrl.signal.aborted) return;
-            const localItems = getInstantLocalHits(indexedItems, normalizedKeyword, 16);
-            if (localItems.length === 0) return;
-            setError('');
-            setResults((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...localItems]), normalizedKeyword, 'relevance'));
-          })
-          .catch(() => {});
-      }
+      void indexPromise;
       if (pg === 1 && items.length === 0) setError('Không tìm thấy phim nào cho từ khoá này.');
     } catch {
       if (runId === searchRunRef.current && !searchCtrl.signal.aborted) {

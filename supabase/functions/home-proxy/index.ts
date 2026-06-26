@@ -23,6 +23,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 const INTERNAL_REFRESH_HEADER = 'x-home-proxy-refresh';
+const HOME_MIN_SECTION_ITEMS = 6;
 function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
@@ -46,6 +47,45 @@ function sleep(ms: number): Promise<void> {
 function isTrailerOnly(episodeCurrent?: string): boolean {
   if (!episodeCurrent) return false;
   return episodeCurrent.toLowerCase().trim() === 'trailer';
+}
+
+function filteredSectionItems(sections: Record<string, unknown[]> | null | undefined, key: string): unknown[] {
+  return ((sections?.[key] ?? []) as unknown[])
+    .filter((m) => !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
+}
+
+function cacheHasRequestedSections(sections: Record<string, unknown[]> | null | undefined, requestedSections: string[]): boolean {
+  if (!sections) return false;
+  return requestedSections.every((key) => filteredSectionItems(sections, key).length >= HOME_MIN_SECTION_ITEMS);
+}
+
+function buildPayloadFromSections(sections: Record<string, unknown[]> | null | undefined, requestedSections: string[]): Record<string, unknown[]> {
+  const payload: Record<string, unknown[]> = {};
+  for (const key of requestedSections) {
+    payload[key] = filteredSectionItems(sections, key);
+  }
+  return payload;
+}
+
+function mergeFreshWithStableCache(
+  freshSections: Record<string, Record<string, unknown>[]>,
+  cacheSections: Record<string, unknown[]> | null | undefined,
+): Record<string, Record<string, unknown>[]> {
+  const merged: Record<string, Record<string, unknown>[]> = {};
+  const keys = Array.from(new Set([
+    ...Object.keys(cacheSections ?? {}),
+    ...Object.keys(freshSections),
+  ]));
+
+  for (const key of keys) {
+    const fresh = freshSections[key] ?? [];
+    const cached = filteredSectionItems(cacheSections, key) as Record<string, unknown>[];
+    merged[key] = fresh.length >= HOME_MIN_SECTION_ITEMS || cached.length < HOME_MIN_SECTION_ITEMS
+      ? fresh
+      : cached;
+  }
+
+  return merged;
 }
 
 function hotScore(
@@ -175,6 +215,7 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
 
 /* ── Build trending list from new-movies ── */
 const HOME_OVERRIDE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,status,source_site,source_name,year,type,tmdb_id,ophim_id,ophim_slug,is_published';
+const HOME_SUPABASE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,source_site,source_name,year,type,category,country,updated_at,is_published';
 
 function normalizeTitle(value: unknown): string {
   return String(value || '')
@@ -452,7 +493,56 @@ async function buildTrending(
 }
 
 /* ── Fetch a category / type list ── */
+function supabaseTypeValues(section: string): string[] {
+  if (section === 'phim-le') return ['single', 'phim-le'];
+  if (section === 'phim-bo') return ['series', 'phim-bo'];
+  if (section === 'hoat-hinh') return ['hoathinh'];
+  if (section === 'phim-chieu-rap') return ['single'];
+  return [section];
+}
+
+async function fetchSupabaseSection(
+  supabase: ReturnType<typeof createClient>,
+  typeOrCategory: string,
+  isCountry = false,
+  limit = 18,
+): Promise<Record<string, unknown>[]> {
+  try {
+    let query = supabase
+      .from('movies')
+      .select(HOME_SUPABASE_SELECT)
+      .eq('is_published', true);
+
+    if (isCountry) {
+      query = query.filter('country', 'cs', JSON.stringify([{ slug: typeOrCategory }]));
+    } else {
+      const types = supabaseTypeValues(typeOrCategory);
+      query = types.length === 1 ? query.eq('type', types[0]) : query.in('type', types);
+    }
+
+    const { data, error } = await query
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(limit * 2)
+      .abortSignal(timeoutSignal(1500));
+
+    if (error || !data) return [];
+
+    return (data as Record<string, unknown>[])
+      .map((row) => cleanMovieItem({
+        ...row,
+        _id: row.id,
+        modified: { time: row.updated_at || new Date().toISOString() },
+      }, 'supabase'))
+      .filter(Boolean)
+      .filter((m) => !isTrailerOnly((m as Record<string, unknown>).episode_current as string))
+      .slice(0, limit) as Record<string, unknown>[];
+  } catch {
+    return [];
+  }
+}
+
 async function fetchSection(
+  supabase: ReturnType<typeof createClient>,
   typeOrCategory: string,
   isCountry = false,
   limit = 18
@@ -482,7 +572,7 @@ async function fetchSection(
       .slice(0, limit) as Record<string, unknown>[];
   }
 
-  return [];
+  return fetchSupabaseSection(supabase, typeOrCategory, isCountry, limit);
 }
 
 /* ── Supabase custom overrides ── */
@@ -575,16 +665,12 @@ serve(async (req) => {
 
   const now = new Date().toISOString();
   const cacheValid = cacheRow && cacheRow.expires_at > now;
+  const cachedSections = (cacheRow?.sections as Record<string, unknown[]> | undefined) ?? undefined;
+  const cacheCompleteForRequest = cacheHasRequestedSections(cachedSections, requestedSections);
 
   /* 2. If cache valid → return immediately (fast path <300ms) */
-  if (cacheValid && !forceRefresh) {
-    const sections = cacheRow!.sections as Record<string, unknown[]>;
-    // Filter only requested sections + trailer-only
-    const payload: Record<string, unknown[]> = {};
-    for (const key of requestedSections) {
-      payload[key] = ((sections[key] ?? []) as unknown[])
-        .filter((m) => !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
-    }
+  if (cacheValid && cacheCompleteForRequest && !forceRefresh) {
+    const payload = buildPayloadFromSections(cachedSections, requestedSections);
     return jsonResponse({ status: true, source: 'cache', sections: payload }, 200, {
       'Cache-Control': 'public, max-age=60',
       'X-Cache': 'HIT',
@@ -592,7 +678,7 @@ serve(async (req) => {
   }
 /* 2b. Expired cache is still better than blocking first paint.
      Trigger a background refresh; the foreground request returns stale data fast. */
-  if (cacheRow && !forceRefresh) {
+  if (cacheRow && cacheCompleteForRequest && !forceRefresh) {
     try {
       const refreshUrl = new URL(req.url);
       refreshUrl.searchParams.set('refresh', '1');
@@ -625,12 +711,7 @@ serve(async (req) => {
       /* background refresh best-effort */
     }
 
-    const sections = cacheRow.sections as Record<string, unknown[]>;
-    const payload: Record<string, unknown[]> = {};
-    for (const key of requestedSections) {
-      payload[key] = ((sections[key] ?? []) as unknown[])
-        .filter((m) => !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
-    }
+    const payload = buildPayloadFromSections(cachedSections, requestedSections);
     return jsonResponse({ status: true, source: 'stale', sections: payload }, 200, {
       'Cache-Control': 'public, max-age=60',
       'X-Cache': 'STALE',
@@ -645,28 +726,28 @@ serve(async (req) => {
     sectionPromises.trending = buildTrending(limit);
   }
   if (requestedSections.includes('phim-chieu-rap')) {
-    sectionPromises['phim-chieu-rap'] = fetchSection('phim-chieu-rap', false, limit);
+    sectionPromises['phim-chieu-rap'] = fetchSection(supabase, 'phim-chieu-rap', false, limit);
   }
   if (requestedSections.includes('phim-le')) {
-    sectionPromises['phim-le'] = fetchSection('phim-le', false, limit);
+    sectionPromises['phim-le'] = fetchSection(supabase, 'phim-le', false, limit);
   }
   if (requestedSections.includes('phim-bo')) {
-    sectionPromises['phim-bo'] = fetchSection('phim-bo', false, limit);
+    sectionPromises['phim-bo'] = fetchSection(supabase, 'phim-bo', false, limit);
   }
   if (requestedSections.includes('hoat-hinh')) {
-    sectionPromises['hoat-hinh'] = fetchSection('hoat-hinh', false, limit);
+    sectionPromises['hoat-hinh'] = fetchSection(supabase, 'hoat-hinh', false, limit);
   }
   if (requestedSections.includes('han-quoc')) {
-    sectionPromises['han-quoc'] = fetchSection('han-quoc', true, limit);
+    sectionPromises['han-quoc'] = fetchSection(supabase, 'han-quoc', true, limit);
   }
   if (requestedSections.includes('au-my')) {
-    sectionPromises['au-my'] = fetchSection('au-my', true, limit);
+    sectionPromises['au-my'] = fetchSection(supabase, 'au-my', true, limit);
   }
   if (requestedSections.includes('thai-lan')) {
-    sectionPromises['thai-lan'] = fetchSection('thai-lan', true, limit);
+    sectionPromises['thai-lan'] = fetchSection(supabase, 'thai-lan', true, limit);
   }
   if (requestedSections.includes('trung-quoc')) {
-    sectionPromises['trung-quoc'] = fetchSection('trung-quoc', true, limit);
+    sectionPromises['trung-quoc'] = fetchSection(supabase, 'trung-quoc', true, limit);
   }
 
   // Race: all sections must finish within 5s total
@@ -714,18 +795,8 @@ serve(async (req) => {
   /* 5. Stale-while-revalidate: if OPhim returned nothing but cache exists, return stale */
   const hasAnyFresh = Object.values(safeFreshSections).some((arr) => arr.length > 0);
 
-  if (!hasAnyFresh && cacheRow) {
-    const staleSections = (cacheRow.sections as Record<string, unknown[]>);
-    // Also filter stale cache for trailers
-    const filteredStale: Record<string, unknown[]> = {};
-    for (const key of requestedSections) {
-      filteredStale[key] = ((staleSections[key] ?? []) as unknown[])
-        .filter((m) => !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
-    }
-    const payload: Record<string, unknown[]> = {};
-    for (const key of requestedSections) {
-      payload[key] = filteredStale[key] ?? [];
-    }
+  if (!hasAnyFresh && cacheRow && cacheCompleteForRequest) {
+    const payload = buildPayloadFromSections(cachedSections, requestedSections);
     return jsonResponse({ status: true, source: 'stale', sections: payload }, 200, {
       'Cache-Control': 'public, max-age=30',
       'X-Cache': 'STALE',
@@ -735,15 +806,11 @@ serve(async (req) => {
   /* 6. Persist to cache.
      Avoid PostgREST upsert here: the large JSONB sections payload has shown high
      temp I/O on small Supabase instances. Updating the fixed cache row is cheaper. */
+  const responseSections = mergeFreshWithStableCache(safeFreshSections, cachedSections);
   try {
     const expiresAt = new Date(Date.now() + CACHE_TTL_MIN * 60 * 1000).toISOString();
-    let mergedSections = safeFreshSections;
-    if (cacheRow) {
-      const existing = (cacheRow.sections as Record<string, unknown[]>) ?? {};
-      mergedSections = { ...existing, ...safeFreshSections };
-    }
     const payload = {
-      sections: mergedSections as unknown as object,
+      sections: responseSections as unknown as object,
       updated_at: now,
       expires_at: expiresAt,
       source: 'ophim',
@@ -768,7 +835,7 @@ serve(async (req) => {
   /* 7. Return fresh */
   const payload: Record<string, unknown[]> = {};
   for (const key of requestedSections) {
-    payload[key] = safeFreshSections[key] ?? [];
+    payload[key] = responseSections[key] ?? [];
   }
 
   return jsonResponse({ status: true, source: 'fresh', sections: payload }, 200, {
