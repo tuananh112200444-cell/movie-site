@@ -67,6 +67,16 @@ const CASES = [
     expectAtLeast: 8,
     description: 'Broad season search returns a useful set',
   },
+  {
+    query: 'lately winter season',
+    expectTopSlug: 'fourever-you-phan-2',
+    description: 'Alternative English title with a missing middle word',
+  },
+  {
+    query: 'summer night',
+    expectTopSlug: 'bi-mat-dem-he',
+    description: 'English title after episode repair',
+  },
 ];
 
 async function inspectProxy() {
