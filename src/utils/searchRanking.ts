@@ -16,6 +16,8 @@ function movieTitleKeys(movie: MovieItem): string[] {
     movie.title_vi,
     movie.title_en,
     movie.title_zh,
+    movie.title_original,
+    movie.normalized_name?.replace(/-/g, ' '),
     movie.origin_name,
     movie.slug?.replace(/-/g, ' '),
   ]
@@ -41,6 +43,8 @@ function getMovieSeasonSignature(movie: MovieItem): string {
     movie.title_vi,
     movie.title_en,
     movie.title_zh,
+    movie.title_original,
+    movie.normalized_name?.replace(/-/g, ' '),
     movie.origin_name,
     movie.slug?.replace(/-/g, ' '),
   ].filter(Boolean).join(' '));
@@ -80,6 +84,8 @@ function movieLooseTitleKeys(movie: MovieItem): string[] {
     movie.title_vi,
     movie.title_en,
     movie.title_zh,
+    movie.title_original,
+    movie.normalized_name?.replace(/-/g, ' '),
     movie.origin_name,
   ]
     .map(canonicalDuplicateTitle)
@@ -246,6 +252,8 @@ export function getSearchScore(movie: MovieItem, keyword: string): number {
   const origin = normalizeSearchText(movie.origin_name);
   const titleVi = normalizeSearchText(movie.title_vi);
   const titleEn = normalizeSearchText(movie.title_en);
+  const titleOriginal = normalizeSearchText(movie.title_original);
+  const normalizedName = normalizeSearchText(movie.normalized_name?.replace(/-/g, ' '));
   const slug = normalizeSearchText(movie.slug);
   const episodeCurrent = normalizeSearchText(movie.episode_current);
   const episodeTotal = normalizeSearchText(movie.episode_total);
@@ -256,11 +264,15 @@ export function getSearchScore(movie: MovieItem, keyword: string): number {
   score += textScore(titleVi, query, tokens) * 4;
   score += textScore(origin, query, tokens) * 3;
   score += textScore(titleEn, query, tokens) * 3;
+  score += textScore(titleOriginal, query, tokens) * 3;
+  score += textScore(normalizedName, query, tokens) * 3;
   score += textScore(slug, query, tokens);
   score += fuzzyTokenScore(name, tokens) * 5;
   score += fuzzyTokenScore(titleVi, tokens) * 4;
   score += fuzzyTokenScore(origin, tokens) * 3;
   score += fuzzyTokenScore(titleEn, tokens) * 3;
+  score += fuzzyTokenScore(titleOriginal, tokens) * 3;
+  score += fuzzyTokenScore(normalizedName, tokens) * 3;
   score += fuzzyTokenScore(slug, tokens);
   score += textScore(episodeCurrent, query, tokens);
   score += textScore(episodeTotal, query, tokens);
