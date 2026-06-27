@@ -170,7 +170,15 @@ function isHiddenEpisodeSource(source: unknown): boolean {
   return String(source || '').trim().toLowerCase() === 'hidden';
 }
 
+function hasPlayableEpisodeLink(epData: Record<string, unknown>): boolean {
+  return Boolean(
+    String(epData.link_m3u8 || '').trim() ||
+    String(epData.link_embed || '').trim()
+  );
+}
+
 function pushEpisode(serverMap: Map<string, unknown[]>, serverName: string, epData: Record<string, unknown>): void {
+  if (!hasPlayableEpisodeLink(epData)) return;
   if (!serverMap.has(serverName)) serverMap.set(serverName, []);
   serverMap.get(serverName)!.push(epData);
 }
@@ -234,6 +242,138 @@ async function writeCachedDetail(
 }
 
 /* ── Search OPhim for correct slug when detail 404 ── */
+function getInternalSyncSecret(): string {
+  return Deno.env.get('CRON_SECRET') ||
+    Deno.env.get('BLVIETSUB_SYNC_SECRET') ||
+    Deno.env.get('PLAYER_REPAIR_SECRET') ||
+    '';
+}
+
+function edgeWaitUntil(promise: Promise<unknown>): void {
+  try {
+    const runtime = globalThis as unknown as {
+      EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+    };
+    if (runtime.EdgeRuntime?.waitUntil) {
+      runtime.EdgeRuntime.waitUntil(promise);
+    } else {
+      void promise;
+    }
+  } catch {
+    void promise;
+  }
+}
+
+function isBlvietsubMovieRecord(movie: Record<string, unknown> | null | undefined): boolean {
+  const text = `${movie?.source_site || ''} ${movie?.source_name || ''} ${movie?.showtimes || ''} ${movie?.source_url || ''}`.toLowerCase();
+  return text.includes('blvietsub') || text.includes('admin-queer');
+}
+
+function getBlvietsubMovieUrl(movie: Record<string, unknown> | null | undefined): string {
+  for (const value of [movie?.source_url, movie?.showtimes]) {
+    const url = String(value || '').trim();
+    if (/^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(url)) return url.replace(/\/+$/, '/');
+  }
+  return '';
+}
+
+function isOphimLikeMovieRecord(movie: Record<string, unknown> | null | undefined): boolean {
+  const text = `${movie?.source_site || ''} ${movie?.source_name || ''}`.toLowerCase();
+  return text.includes('ophim') || text.includes('kkphim') || !!movie?.ophim_slug;
+}
+
+function getOphimProvider(movie: Record<string, unknown> | null | undefined): string {
+  const text = `${movie?.source_site || ''} ${movie?.source_name || ''}`.toLowerCase();
+  return text.includes('kkphim') || text.includes('phimapi') ? 'kkphim' : 'ophim';
+}
+
+function getOphimRepairSlug(movie: Record<string, unknown> | null | undefined, fallbackSlug: string): string {
+  return String(movie?.ophim_slug || movie?.slug || fallbackSlug).trim();
+}
+
+async function callInternalFunction(
+  functionName: string,
+  params: Record<string, string | number | boolean>,
+): Promise<{ ok: boolean; status: number; body: Record<string, unknown> | null }> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return { ok: false, status: 0, body: null };
+  const secret = getInternalSyncSecret();
+  const endpoint = new URL(`${SUPABASE_URL}/functions/v1/${functionName}`);
+  for (const [key, value] of Object.entries(params)) endpoint.searchParams.set(key, String(value));
+  if (secret) endpoint.searchParams.set('secret', secret);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    const response = await fetch(endpoint.toString(), {
+      headers: { Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => null) as Record<string, unknown> | null;
+    return { ok: response.ok && body?.success !== false, status: response.status, body };
+  } catch (error) {
+    console.log(`[movie-detail-proxy] on-demand repair ${functionName} failed:`, error);
+    return { ok: false, status: 0, body: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function clearDetailCaches(
+  supabase: ReturnType<typeof createClient>,
+  slugs: string[],
+): Promise<void> {
+  const cleanSlugs = Array.from(new Set(slugs.map((value) => String(value || '').trim()).filter(Boolean)));
+  if (cleanSlugs.length === 0) return;
+  await Promise.allSettled(cleanSlugs.map((cacheSlug) =>
+    supabase.from('movie_api_cache').delete().eq('slug', cacheSlug)
+  ));
+}
+
+function triggerOnDemandEpisodeRepair(
+  supabase: ReturnType<typeof createClient>,
+  movie: Record<string, unknown> | null | undefined,
+  requestedSlug: string,
+  reason: string,
+): boolean {
+  if (!movie) return false;
+  const movieSlug = String(movie.slug || requestedSlug).trim();
+  let repairPromise: Promise<unknown> | null = null;
+
+  if (isBlvietsubMovieRecord(movie)) {
+    const movieUrl = getBlvietsubMovieUrl(movie);
+    if (movieUrl) {
+      repairPromise = callInternalFunction('sync-blvietsub-feed', {
+        movie_url: movieUrl,
+        refresh_search: '1',
+        reason,
+      });
+    } else {
+      repairPromise = callInternalFunction('sync-blvietsub-feed', {
+        repair_existing: '1',
+        limit: 8,
+        refresh_search: '1',
+        reason,
+      });
+    }
+  } else if (isOphimLikeMovieRecord(movie)) {
+    repairPromise = callInternalFunction('sync-ophim-movies', {
+      provider: getOphimProvider(movie),
+      slug: getOphimRepairSlug(movie, requestedSlug),
+      episodes: '1',
+      limit: 1,
+      reason,
+    });
+  }
+
+  if (!repairPromise) return false;
+  edgeWaitUntil(
+    repairPromise
+      .then(() => clearDetailCaches(supabase, [requestedSlug, movieSlug, String(movie.ophim_slug || '')]))
+      .catch(() => undefined),
+  );
+  return true;
+}
+
 async function searchOphimForSlug(keyword: string): Promise<string | null> {
   const urls = [
     `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=1`,
@@ -853,10 +993,20 @@ serve(async (req) => {
       getExpectedEpisodeNumber(movieData),
       getExpectedEpisodeNumber(movie),
     );
+    const shouldRepairOnDemand = expectedEpisode > 1 && (dbMaxEpisode === 0 || dbMaxEpisode < expectedEpisode);
+    let repairTriggered = false;
+    if (shouldRepairOnDemand) {
+      repairTriggered = triggerOnDemandEpisodeRepair(
+        supabase,
+        (movieData || movie) as Record<string, unknown>,
+        slug,
+        'movie_detail_episode_mismatch',
+      );
+    }
     const shouldFetchExternal =
       serverMap.size === 0 ||
       !useSupabase ||
-      (expectedEpisode > 1 && dbMaxEpisode > 0 && dbMaxEpisode < expectedEpisode);
+      shouldRepairOnDemand;
 
     if (shouldFetchExternal) {
       let detailSlug = slug;
@@ -1027,6 +1177,7 @@ serve(async (req) => {
     return jsonResponse(response, 200, {
       'Cache-Control': cacheControl,
       'X-Cache': forceRefresh ? 'REFRESH' : 'MISS',
+      'X-Repair-Triggered': repairTriggered || isIncomplete ? '1' : '0',
     });
   } catch (err) {
     console.error('[movie-detail-proxy] Fatal Error:', err);
