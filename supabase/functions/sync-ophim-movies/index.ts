@@ -485,7 +485,12 @@ async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, d
     return { id: String(existing.id), created: false, updated: true };
   }
 
-  const { data, error } = await supabase.from('movies').insert(payload).select('id').single();
+  const conflictColumn = String(payload.ophim_slug || '').trim() ? 'ophim_slug' : 'slug';
+  const { data, error } = await supabase
+    .from('movies')
+    .upsert(payload, { onConflict: conflictColumn })
+    .select('id')
+    .single();
   if (error) {
     if (isDuplicateError(error)) {
       const duplicate = await findExistingMovie(supabase, payload);
@@ -760,7 +765,7 @@ serve(async (req) => {
         const detail = await fetchDetail(provider, slug);
         if (!detail) {
           stats.skipped += 1;
-          if (!targetSlug) stats.errors.push(`[${slug}] detail not found`);
+          if (targetSlug) stats.errors.push(`[${slug}] detail not found`);
           continue;
         }
         if (dryRun) continue;

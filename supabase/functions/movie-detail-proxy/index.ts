@@ -101,6 +101,12 @@ function extractEpNumber(text: string): number {
   return 0;
 }
 
+function extractMaxEpNumber(text: string): number {
+  const matches = String(text || '').match(/\d+/g);
+  if (!matches) return extractEpNumber(text);
+  return Math.max(...matches.map((value) => Number(value || 0)).filter(Number.isFinite));
+}
+
 function getExpectedEpisodeNumber(movie: Record<string, unknown> | null | undefined): number {
   if (!movie) return 0;
   return Math.max(
@@ -200,6 +206,40 @@ function timeoutSignal(ms: number): AbortSignal {
   return controller.signal;
 }
 
+async function fetchTextWithTimeout(url: string, ms = 5000, init: RequestInit = {}): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => { try { controller.abort(); } catch { /* noop */ } }, ms);
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; KhoPhimBot/1.0)',
+        'Accept': init.body ? 'application/json,text/plain,*/*' : 'text/html,application/xhtml+xml',
+        ...(init.headers || {}),
+      },
+    });
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&#038;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#8211;/g, '-')
+    .replace(/&#8217;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+}
+
 async function readCachedDetail(
   supabase: ReturnType<typeof createClient>,
   slug: string,
@@ -289,6 +329,146 @@ function getOphimProvider(movie: Record<string, unknown> | null | undefined): st
 
 function getOphimRepairSlug(movie: Record<string, unknown> | null | undefined, fallbackSlug: string): string {
   return String(movie?.ophim_slug || movie?.slug || fallbackSlug).trim();
+}
+
+function parseMotchillEpisodeLinks(html: string, slug: string): Array<{ episodeNumber: number; url: string }> {
+  const escapedSlug = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`href=['"]([^'"]*\\/tap-phim\\/${escapedSlug}-tap-(\\d+)[^'"]*)['"]`, 'gi');
+  const links = new Map<number, string>();
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null) {
+    const episodeNumber = Number(match[2] || 0);
+    if (!episodeNumber) continue;
+    const rawUrl = match[1].replace(/&amp;/g, '&');
+    const url = rawUrl.startsWith('http') ? rawUrl : `https://www.motchillzn.org${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
+    links.set(episodeNumber, url);
+  }
+  return [...links.entries()]
+    .map(([episodeNumber, url]) => ({ episodeNumber, url }))
+    .sort((a, b) => a.episodeNumber - b.episodeNumber);
+}
+
+function parseMotchillPlayerOptions(html: string): Array<{ serverName: string; post: string; nume: string; type: string }> {
+  const options: Array<{ serverName: string; post: string; nume: string; type: string }> = [];
+  const pattern = /<li[^>]*data-type=['"]([^'"]+)['"][^>]*data-post=['"]([^'"]+)['"][^>]*data-nume=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/li>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null) {
+    const titleMatch = match[4].match(/<span[^>]*class=['"][^'"]*title[^'"]*['"][^>]*>([\s\S]*?)<\/span>/i);
+    const serverName = decodeHtmlEntities(titleMatch?.[1] || `Motchill #${match[3]}`);
+    if (/trailer/i.test(serverName)) continue;
+    options.push({
+      serverName: serverName || `Motchill #${match[3]}`,
+      type: match[1],
+      post: match[2],
+      nume: match[3],
+    });
+  }
+  return options;
+}
+
+async function fetchMotchillPlayer(option: { post: string; nume: string; type: string }): Promise<string> {
+  const body = new URLSearchParams({
+    action: 'doo_player_ajax',
+    post: option.post,
+    nume: option.nume,
+    type: option.type,
+  });
+  const text = await fetchTextWithTimeout('https://www.motchillzn.org/wp-admin/admin-ajax.php', 4500, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'Referer': 'https://www.motchillzn.org/',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body,
+  });
+  if (!text) return '';
+  try {
+    const payload = JSON.parse(text) as Record<string, unknown>;
+    return String(payload.embed_url || '').replace(/\\\//g, '/').trim();
+  } catch {
+    return '';
+  }
+}
+
+async function fetchMotchillMovieDetail(
+  slug: string,
+): Promise<{
+  movie: Record<string, unknown>;
+  episodes: Array<{ server_name: string; server_data: unknown[] }>;
+} | null> {
+  const seriesUrl = `https://www.motchillzn.org/phim-bo/${encodeURIComponent(slug)}`;
+  const html = await fetchTextWithTimeout(seriesUrl, 5500);
+  if (!html || !html.includes('/tap-phim/')) return null;
+
+  const episodeLinks = parseMotchillEpisodeLinks(html, slug);
+  if (episodeLinks.length === 0) return null;
+
+  const maxListedEpisode = episodeLinks.reduce((max, episode) => Math.max(max, episode.episodeNumber), 0);
+  const labelText = decodeHtmlEntities(html.match(/<span[^>]*class=['"][^'"]*item-label[^'"]*['"][^>]*>([\s\S]*?)<\/span>/i)?.[1] || '');
+  const currentFromLabel = extractMaxEpNumber(labelText) || Math.min(maxListedEpisode, 1);
+  const linksToFetch = episodeLinks.slice(0, 24);
+  const serverMap = new Map<string, Record<string, unknown>[]>();
+
+  await Promise.all(linksToFetch.map(async ({ episodeNumber, url }) => {
+    const episodeHtml = await fetchTextWithTimeout(url, 5500, { headers: { Referer: seriesUrl } });
+    if (!episodeHtml) return;
+    const options = parseMotchillPlayerOptions(episodeHtml);
+    await Promise.all(options.slice(0, 4).map(async (option) => {
+      const embed = await fetchMotchillPlayer(option);
+      if (!embed || /youtube\.com|youtu\.be/i.test(embed)) return;
+      const serverName = option.serverName.toLowerCase().includes('motchill')
+        ? option.serverName
+        : `${option.serverName} Motchill`;
+      if (!serverMap.has(serverName)) serverMap.set(serverName, []);
+      serverMap.get(serverName)!.push({
+        name: `Tap ${episodeNumber}`,
+        slug: `tap-${episodeNumber}`,
+        filename: '',
+        link_embed: embed,
+        link_m3u8: '',
+        source: 'motchill',
+      });
+    }));
+  }));
+
+  const episodes = [...serverMap.entries()]
+    .map(([server_name, server_data]) => ({
+      server_name,
+      server_data: server_data.sort((a, b) => epSortKey(a) - epSortKey(b)),
+    }))
+    .filter((server) => server.server_data.length > 0);
+
+  if (episodes.length === 0) return null;
+
+  const title = decodeHtmlEntities(
+    html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ||
+    html.match(/<meta[^>]+property=['"]og:title['"][^>]+content=['"]([^'"]+)['"]/i)?.[1] ||
+    slug.replace(/-/g, ' '),
+  );
+  const originName = decodeHtmlEntities(html.match(/<h2[^>]*class=['"][^'"]*tieudephim[^'"]*['"][^>]*>([\s\S]*?)<\/h2>/i)?.[1] || '');
+  const poster = (html.match(/<meta[^>]+property=['"]og:image['"][^>]+content=['"]([^'"]+)['"]/i)?.[1] || '').replace(/&amp;/g, '&');
+  const year = Number(html.match(/<span[^>]*class=['"]year['"][^>]*>(\d{4})<\/span>/i)?.[1] || 0);
+
+  return {
+    movie: {
+      id: `motchill:${slug}`,
+      _id: `motchill:${slug}`,
+      slug,
+      name: title,
+      origin_name: originName,
+      type: 'series',
+      status: 'ongoing',
+      thumb_url: poster,
+      poster_url: poster,
+      episode_current: currentFromLabel > 0 ? `Tap ${currentFromLabel}` : '',
+      current_episode: currentFromLabel || undefined,
+      year: year || undefined,
+      source_site: 'motchill',
+      source_name: 'Motchill',
+    },
+    episodes,
+  };
 }
 
 async function callInternalFunction(
@@ -413,7 +593,10 @@ async function fetchExternalMovieDetail(
 
   const controllers: AbortController[] = [];
 
-  const promises = urls.map((url) => {
+  const promises: Array<Promise<{
+    movie: Record<string, unknown>;
+    episodes: Array<{ server_name: string; server_data: unknown[] }>;
+  } | null>> = urls.map((url) => {
     const ctrl = new AbortController();
     controllers.push(ctrl);
     const t = setTimeout(() => { try { ctrl.abort(); } catch { /* noop */ } }, 5000);
@@ -466,6 +649,10 @@ async function fetchExternalMovieDetail(
         return null;
       });
   });
+  promises.push(fetchMotchillMovieDetail(slug).catch((err) => {
+    console.log(`[fetchExternalMovieDetail] motchill ${slug} failed: ${err.message}`);
+    return null;
+  }));
 
   const results = await Promise.all(promises);
   const validResults = results.filter((r): r is {
@@ -584,8 +771,8 @@ function buildPersistMoviePayload(
     director: Array.isArray(movie.director) ? movie.director : [],
     category: Array.isArray(movie.category) ? movie.category : [],
     country: Array.isArray(movie.country) ? movie.country : [],
-    source_site: 'ophim',
-    source_name: 'OPhim',
+    source_site: String(movie.source_site || 'ophim'),
+    source_name: String(movie.source_name || 'OPhim'),
     is_published: true,
     last_synced_at: now,
     updated_at: now,
@@ -669,22 +856,44 @@ async function persistExternalMovie(
     const payload = buildPersistMoviePayload(external.movie, requestedSlug, detailSlug);
     let movieId = existingMovieId || await findMovieIdForPersist(supabase, payload);
     const now = new Date().toISOString();
+    const externalSource = String(external.movie.source_site || 'ophim').trim().toLowerCase();
+    const isAuxiliarySource = externalSource && externalSource !== 'ophim' && externalSource !== 'kkphim' && externalSource !== 'phimapi';
+    const externalMaxEpisode = getMaxEpisodeNumberFromServers(external.episodes);
 
     if (movieId) {
+      const movieUpdate: Record<string, unknown> = {
+        last_synced_at: now,
+        updated_at: now,
+      };
+      if (externalMaxEpisode > 0) {
+        const { data: currentMovie } = await supabase
+          .from('movies')
+          .select('current_episode,episode_current')
+          .eq('id', movieId)
+          .limit(1)
+          .maybeSingle();
+        const storedCurrent = Math.max(
+          Number(currentMovie?.current_episode || 0) || 0,
+          extractEpNumber(String(currentMovie?.episode_current || '')),
+        );
+        if (externalMaxEpisode > storedCurrent) {
+          movieUpdate.current_episode = externalMaxEpisode;
+          movieUpdate.episode_current = `Tập ${externalMaxEpisode}`;
+        }
+      }
+      if (!isAuxiliarySource) {
+        movieUpdate.ophim_id = payload.ophim_id;
+        movieUpdate.ophim_slug = payload.ophim_slug;
+      }
       await supabase
         .from('movies')
-        .update({
-          ophim_id: payload.ophim_id,
-          ophim_slug: payload.ophim_slug,
-    
-          last_synced_at: now,
-          updated_at: now,
-        })
+        .update(movieUpdate)
         .eq('id', movieId);
     } else {
+      const conflictColumn = String(payload.ophim_slug || '').trim() ? 'ophim_slug' : 'slug';
       const { data, error } = await supabase
         .from('movies')
-        .insert(payload)
+        .upsert(payload, { onConflict: conflictColumn })
         .select('id')
         .single();
       if (error) {
@@ -750,7 +959,7 @@ async function persistExternalMovie(
             stream_url: linkM3u8,
             embed_url: linkEmbed,
             subtitle_url: subtitleUrl,
-            source: 'ophim',
+            source: externalSource || 'ophim',
             is_active: true,
           });
         }
@@ -993,6 +1202,14 @@ serve(async (req) => {
       getExpectedEpisodeNumber(movieData),
       getExpectedEpisodeNumber(movie),
     );
+    const advertisedTotalEpisode = Math.max(
+      Number((movieData || movie)?.total_episodes || 0) || 0,
+      extractEpNumber(String((movieData || movie)?.episode_total || '')),
+    );
+    const shouldCheckFreshOngoingExternal =
+      isOphimLikeMovieRecord((movieData || movie) as Record<string, unknown>) &&
+      expectedEpisode > 0 &&
+      advertisedTotalEpisode > expectedEpisode;
     const shouldRepairOnDemand = expectedEpisode > 1 && (dbMaxEpisode === 0 || dbMaxEpisode < expectedEpisode);
     let repairTriggered = false;
     if (shouldRepairOnDemand) {
@@ -1006,7 +1223,8 @@ serve(async (req) => {
     const shouldFetchExternal =
       serverMap.size === 0 ||
       !useSupabase ||
-      shouldRepairOnDemand;
+      shouldRepairOnDemand ||
+      shouldCheckFreshOngoingExternal;
 
     if (shouldFetchExternal) {
       let detailSlug = slug;
@@ -1027,7 +1245,7 @@ serve(async (req) => {
         if (!movieData) {
           movieData = external.movie;
         }
-        if (ENABLE_PUBLIC_LAZY_PERSIST) {
+        if (ENABLE_PUBLIC_LAZY_PERSIST || movieId) {
           try {
             const runtime = globalThis as unknown as {
               EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
@@ -1145,8 +1363,6 @@ serve(async (req) => {
     const currentAdvertisedEpisode = Math.max(
       Number(response.movie.current_episode || 0) || 0,
       extractEpNumber(String(response.movie.episode_current || '')),
-      Number(externalMovieData?.current_episode || 0) || 0,
-      extractEpNumber(String(externalMovieData?.episode_current || externalMovieData?.episodeCurrent || '')),
     );
     if (liveMaxEpisode > currentAdvertisedEpisode) {
       response.movie.episode_current = liveMaxEpisode > 0 ? `Tập ${liveMaxEpisode}` : response.movie.episode_current;
