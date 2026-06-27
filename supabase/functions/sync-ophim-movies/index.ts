@@ -199,8 +199,38 @@ function episodeNumber(ep: OPhimEpisode): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+function firstEpisodeNumber(value = ''): number {
+  const text = String(value || '').toLowerCase();
+  if (text.includes('full')) return 1;
+  const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+  if (slash) return Number(slash[1] || 0) || 0;
+  const valueNumber = Number(text.match(/\d{1,4}/)?.[0] || 0);
+  return Number.isFinite(valueNumber) ? valueNumber : 0;
+}
+
+function totalEpisodeNumber(value = ''): number {
+  const text = String(value || '');
+  const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+  if (slash) return Number(slash[2] || 0) || 0;
+  const valueNumber = Number(text.match(/\d{1,4}/)?.[0] || 0);
+  return Number.isFinite(valueNumber) ? valueNumber : 0;
+}
+
+function repairConcatenatedEpisodeNumber(current: number, total: number): number {
+  if (!current || !total || current <= total) return current;
+  const currentText = String(current);
+  const totalText = String(total);
+  if (!currentText.endsWith(totalText) || currentText.length <= totalText.length) return current;
+  const repaired = Number(currentText.slice(0, -totalText.length));
+  return Number.isFinite(repaired) && repaired > 0 && repaired <= total ? repaired : current;
+}
+
 function getCurrentEpisode(movie: OPhimMovie, episodes: OPhimServer[]): number {
-  const fromText = Number(String(movie.episode_current || '').match(/\d+/)?.[0] || 0);
+  const sourceTotal = Math.max(
+    totalEpisodeNumber(movie.episode_current || ''),
+    totalEpisodeNumber(movie.episode_total || ''),
+  );
+  const fromText = repairConcatenatedEpisodeNumber(firstEpisodeNumber(movie.episode_current || ''), sourceTotal);
   let fromEpisodes = 0;
   for (const server of episodes) {
     for (const ep of server.server_data || []) {
@@ -218,6 +248,21 @@ function chunks<T>(items: T[], size: number): T[][] {
   }
   return result;
 }
+
+type MovieEpisodeUpsertRow = {
+  movie_id: string;
+  ophim_id: string;
+  episode_number: number;
+  episode_name: string;
+  slug: string;
+  server_name: string;
+  link_m3u8: string;
+  link_embed: string;
+  thumbnail_url: string;
+  duration: string;
+  source: string;
+  is_backup: boolean;
+};
 
 async function readCursorPage(supabase: SupabaseClient, key: string, fallbackPage: number): Promise<number> {
   try {
@@ -289,6 +334,13 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
   const originName = String(movie.origin_name || '');
   const slug = String(movie.slug || slugify(name));
   const currentEpisode = getCurrentEpisode(movie, detail.episodes);
+  const totalEpisode = Math.max(
+    currentEpisode,
+    totalEpisodeNumber(movie.episode_current || ''),
+    totalEpisodeNumber(movie.episode_total || ''),
+  );
+  const rawCurrent = firstEpisodeNumber(movie.episode_current || '');
+  const sourceCurrentLooksClean = rawCurrent > 0 && rawCurrent === currentEpisode;
 
   return {
     slug,
@@ -307,10 +359,10 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
     poster_url: String(movie.poster_url || ''),
     trailer_url: String(movie.trailer_url || ''),
     time: String(movie.time || ''),
-    episode_current: String(movie.episode_current || (currentEpisode ? `Tap ${currentEpisode}` : '')),
+    episode_current: sourceCurrentLooksClean ? String(movie.episode_current || '') : (currentEpisode ? `Tập ${currentEpisode}` : ''),
     episode_total: String(movie.episode_total || ''),
     current_episode: currentEpisode || null,
-    total_episodes: currentEpisode || null,
+    total_episodes: totalEpisode || currentEpisode || null,
     quality: String(movie.quality || 'HD'),
     lang: String(movie.lang || 'Vietsub'),
     notify: String(movie.notify || ''),
@@ -338,7 +390,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
   for (const [column, value] of checks) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,tmdb_id,ophim_id,ophim_slug')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,tmdb_id,ophim_id,ophim_slug')
       .eq(column as string, value as string)
       .limit(1)
       .maybeSingle();
@@ -351,7 +403,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
     const safe = escapePostgrestIlike(title);
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,tmdb_id,ophim_id,ophim_slug')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,tmdb_id,ophim_id,ophim_slug')
       .eq('year', year)
       .or(`name.ilike.%${safe}%,origin_name.ilike.%${safe}%,title_vi.ilike.%${safe}%,title_en.ilike.%${safe}%,title_zh.ilike.%${safe}%,title_original.ilike.%${safe}%`)
       .limit(20);
@@ -365,7 +417,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
   if (normalized.length >= 6 && year > 0) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,tmdb_id,ophim_id,ophim_slug')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,tmdb_id,ophim_id,ophim_slug')
       .eq('year', year)
       .ilike('normalized_name', normalized)
       .limit(10);
@@ -380,7 +432,15 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
 function updatePayloadForExisting(existing: Record<string, unknown>, incoming: Record<string, unknown>): Record<string, unknown> {
   const source = `${existing.source_site || ''} ${existing.source_name || ''}`.toLowerCase();
   const managed = source.includes('admin') || source.includes('blvietsub') || source.includes('supabase');
-  const current = Math.max(Number(existing.current_episode || 0), Number(String(existing.episode_current || '').match(/\d+/)?.[0] || 0));
+  const existingTotal = Math.max(
+    Number(existing.total_episodes || 0),
+    totalEpisodeNumber(String(existing.episode_total || '')),
+    totalEpisodeNumber(String(existing.episode_current || '')),
+  );
+  const current = Math.max(
+    repairConcatenatedEpisodeNumber(Number(existing.current_episode || 0), existingTotal),
+    repairConcatenatedEpisodeNumber(firstEpisodeNumber(String(existing.episode_current || '')), existingTotal),
+  );
   const incomingCurrent = Number(incoming.current_episode || 0);
 
   if (!managed) return incoming;
@@ -441,6 +501,58 @@ async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, d
   return { id: String(data.id), created: true, updated: false };
 }
 
+async function upsertMovieEpisodeRowsSafely(
+  supabase: SupabaseClient,
+  rows: MovieEpisodeUpsertRow[],
+  movieSlug: string,
+): Promise<void> {
+  for (const batch of chunks(rows, 500)) {
+    const { error } = await supabase
+      .from('movie_episodes')
+      .upsert(batch, { onConflict: 'movie_id,server_name,episode_number' });
+    if (!error) continue;
+    if (!isDuplicateError(error)) throw new Error(`movie_episodes upsert ${movieSlug}: ${error.message}`);
+
+    for (const row of batch) {
+      const serverName = String(row.server_name || '').trim();
+      const { data: existing, error: existingError } = await supabase
+        .from('movie_episodes')
+        .select('id')
+        .eq('movie_id', row.movie_id)
+        .eq('episode_number', row.episode_number)
+        .ilike('server_name', serverName)
+        .limit(1)
+        .maybeSingle();
+      if (existingError) throw new Error(`movie_episodes duplicate lookup ${movieSlug}: ${existingError.message}`);
+
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from('movie_episodes')
+          .update({
+            ophim_id: row.ophim_id,
+            episode_name: row.episode_name,
+            slug: row.slug,
+            server_name: serverName,
+            link_m3u8: row.link_m3u8,
+            link_embed: row.link_embed,
+            thumbnail_url: row.thumbnail_url,
+            duration: row.duration,
+            source: row.source,
+            is_backup: row.is_backup,
+          })
+          .eq('id', existing.id);
+        if (updateError) throw new Error(`movie_episodes duplicate update ${movieSlug}: ${updateError.message}`);
+        continue;
+      }
+
+      const { error: insertError } = await supabase.from('movie_episodes').insert(row);
+      if (insertError && !isDuplicateError(insertError)) {
+        throw new Error(`movie_episodes insert ${movieSlug}: ${insertError.message}`);
+      }
+    }
+  }
+}
+
 async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig, movieId: string, detail: ParsedDetail): Promise<number> {
   const sourceId = provider.trackOphimIdentity ? String(detail.movie._id || detail.movie.id || '') : '';
   const parsedEpisodes: Array<{
@@ -496,7 +608,7 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
   const plannedEpisodes = new Set<string>();
   const plannedStreams = new Set<string>();
 
-  const movieEpisodeRows = [];
+  const movieEpisodeRows: MovieEpisodeUpsertRow[] = [];
   const episodeRows = [];
   const streamRows = [];
 
@@ -552,12 +664,7 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
     }
   }
 
-  for (const batch of chunks(movieEpisodeRows, 500)) {
-    const { error } = await supabase
-      .from('movie_episodes')
-      .upsert(batch, { onConflict: 'movie_id,server_name,episode_number' });
-    if (error) throw new Error(`movie_episodes upsert ${detail.movie.slug}: ${error.message}`);
-  }
+  await upsertMovieEpisodeRowsSafely(supabase, movieEpisodeRows, String(detail.movie.slug || 'movie'));
   for (const batch of chunks(episodeRows, 500)) {
     const { error } = await supabase
       .from('episodes')
@@ -653,7 +760,7 @@ serve(async (req) => {
         const detail = await fetchDetail(provider, slug);
         if (!detail) {
           stats.skipped += 1;
-          stats.errors.push(`[${slug}] detail not found`);
+          if (!targetSlug) stats.errors.push(`[${slug}] detail not found`);
           continue;
         }
         if (dryRun) continue;

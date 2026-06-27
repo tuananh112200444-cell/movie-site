@@ -65,6 +65,11 @@ function playableEpisodeCount(episodes) {
   return new Set(episodes.map((episode) => Number(episode.episode_number || 0)).filter(Boolean)).size;
 }
 
+function isTransientExternalFetchError(error) {
+  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error || '');
+  return /abort|timeout|timed out|signal|fetch failed|network|502|503|504|522|523|524/i.test(text);
+}
+
 function parseSitemap(xml = '') {
   const urls = [];
   for (const match of xml.matchAll(/<url>\s*<loc>([\s\S]*?)<\/loc>(?:[\s\S]*?<lastmod>([\s\S]*?)<\/lastmod>)?[\s\S]*?<\/url>/gi)) {
@@ -356,12 +361,65 @@ async function createMovie(supabase, entry) {
     last_synced_at: new Date().toISOString(),
     schedule_timezone: 'Asia/Ho_Chi_Minh',
   };
+
+  const selectFields = 'id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year';
+  async function selectExistingMovieAfterDuplicate() {
+    const directChecks = [
+      ['slug', slug],
+      ['showtimes', entry.sourceUrl],
+      ['source_url', entry.sourceUrl],
+    ].filter(([, value]) => String(value || '').trim());
+
+    for (const [column, value] of directChecks) {
+      const { data } = await supabase
+        .from('movies')
+        .select(selectFields)
+        .eq(column, value)
+        .limit(1)
+        .maybeSingle();
+      if (data?.id) return data;
+    }
+
+    if (entry.postId) {
+      for (const column of ['showtimes', 'source_url']) {
+        const { data } = await supabase
+          .from('movies')
+          .select(selectFields)
+          .ilike(column, `%${entry.postId}%`)
+          .limit(1)
+          .maybeSingle();
+        if (data?.id) return data;
+      }
+    }
+
+    for (const title of [entry.title, entry.originName].filter(Boolean)) {
+      for (const column of ['name', 'origin_name', 'title_vi', 'title_en']) {
+        let query = supabase
+          .from('movies')
+          .select(selectFields)
+          .eq(column, title)
+          .limit(1);
+        if (entry.year) query = query.eq('year', entry.year);
+        const { data } = await query.maybeSingle();
+        if (data?.id) return data;
+      }
+    }
+
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('movies')
     .insert(payload)
-    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year')
+    .select(selectFields)
     .single();
-  if (error) throw new Error(`movies insert ${slug}: ${error.message}`);
+  if (error) {
+    if (error.code === '23505' || String(error.message || '').toLowerCase().includes('duplicate')) {
+      const existing = await selectExistingMovieAfterDuplicate();
+      if (existing) return existing;
+    }
+    throw new Error(`movies insert ${slug}: ${error.message}`);
+  }
   return data;
 }
 
@@ -430,8 +488,10 @@ async function insertMissingEpisodes(supabase, movie, entry) {
     repaired += 1;
   }
   if (rows.length > 0) {
-    const { error: insertError } = await supabase.from('movie_episodes').insert(rows);
-    if (insertError) throw new Error(`movie_episodes insert ${movie.slug}: ${insertError.message}`);
+    const { error: insertError } = await supabase
+      .from('movie_episodes')
+      .upsert(rows, { onConflict: 'movie_id,server_name,episode_number' });
+    if (insertError) throw new Error(`movie_episodes upsert ${movie.slug}: ${insertError.message}`);
   }
   return rows.length + repaired;
 }
@@ -496,10 +556,20 @@ export async function runBlvietsubSync({
 } = {}) {
   const started = Date.now();
   const errors = [];
+  const transientErrors = [];
   let singleEntry = null;
 
   if (movieUrl) {
-    const entry = await fetchMovieEntry(movieUrl);
+    let entry = null;
+    try {
+      entry = await fetchMovieEntry(movieUrl);
+    } catch (error) {
+      if (isTransientExternalFetchError(error)) {
+        transientErrors.push(`${movieUrl}: ${error.message}`);
+      } else {
+        throw error;
+      }
+    }
     if (dryRun || !supabase) {
       return {
         success: Boolean(entry),
@@ -509,6 +579,7 @@ export async function runBlvietsubSync({
         episodes: entry?.episodes.length || 0,
         distinct_episodes: entry ? playableEpisodeCount(entry.episodes) : 0,
         servers: entry ? [...new Set(entry.episodes.map((episode) => episode.server_name))] : [],
+        transient_errors: transientErrors,
         elapsed_ms: Date.now() - started,
       };
     }
@@ -529,7 +600,10 @@ export async function runBlvietsubSync({
         concurrency,
       });
   const { entries, urls, errors: fetchErrors, total } = fetched;
-  errors.push(...fetchErrors);
+  for (const error of fetchErrors) {
+    if (isTransientExternalFetchError(error)) transientErrors.push(error);
+    else errors.push(error);
+  }
 
   if (dryRun || !supabase) {
     return {
@@ -546,6 +620,8 @@ export async function runBlvietsubSync({
         distinct_episodes: playableEpisodeCount(entry.episodes),
       })),
       errors,
+      transient_errors: transientErrors.slice(0, 20),
+      transient_skipped: transientErrors.length,
       elapsed_ms: Date.now() - started,
     };
   }
@@ -598,6 +674,8 @@ export async function runBlvietsubSync({
     inserted_episodes: insertedEpisodes,
     search_refreshed: searchRefreshed,
     errors,
+    transient_errors: transientErrors.slice(0, 20),
+    transient_skipped: transientErrors.length,
     elapsed_ms: Date.now() - started,
   };
   if (useCursor) {
