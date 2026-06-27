@@ -349,6 +349,11 @@ function maxPlayableEpisodeNumber(episodes: ParsedEpisode[]): number {
   return episodes.reduce((max, episode) => Math.max(max, Number(episode.episode_number || 0)), 0);
 }
 
+function isTransientExternalFetchError(error: unknown): boolean {
+  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error || '');
+  return /abort|timeout|timed out|signal|fetch failed|network|502|503|504|522|523|524/i.test(text);
+}
+
 function buildEntryIndexes(entries: ParsedEntry[]) {
   const byPostId = new Map<string, ParsedEntry>();
   const byTitle = new Map<string, ParsedEntry>();
@@ -759,6 +764,51 @@ async function createMovieFromEntry(
     schedule_timezone: 'Asia/Ho_Chi_Minh',
   };
 
+  const selectExistingMovieAfterDuplicate = async (): Promise<MovieRow | null> => {
+    const selectFields = 'id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year';
+    const directChecks: Array<[string, string]> = [
+      ['slug', slug],
+      ['showtimes', entry.sourceUrl],
+      ['source_url', entry.sourceUrl],
+    ].filter(([, value]) => String(value || '').trim());
+
+    for (const [column, value] of directChecks) {
+      const { data } = await supabase
+        .from('movies')
+        .select(selectFields)
+        .eq(column, value)
+        .limit(1)
+        .maybeSingle();
+      if (data?.id) return data as MovieRow;
+    }
+
+    if (entry.postId) {
+      for (const column of ['showtimes', 'source_url']) {
+        const { data } = await supabase
+          .from('movies')
+          .select(selectFields)
+          .ilike(column, `%${entry.postId}%`)
+          .limit(1)
+          .maybeSingle();
+        if (data?.id) return data as MovieRow;
+      }
+    }
+
+    for (const title of [entry.title, entry.originName].filter(Boolean)) {
+      for (const column of ['name', 'origin_name', 'title_vi', 'title_en']) {
+        const query = supabase
+          .from('movies')
+          .select(selectFields)
+          .eq(column, title)
+          .limit(1);
+        const { data } = entry.year ? await query.eq('year', entry.year).maybeSingle() : await query.maybeSingle();
+        if (data?.id) return data as MovieRow;
+      }
+    }
+
+    return null;
+  };
+
   const { data, error } = await supabase
     .from('movies')
     .insert(payload)
@@ -767,12 +817,8 @@ async function createMovieFromEntry(
 
   if (error) {
     if (error.code === '23505' || error.message.toLowerCase().includes('duplicate')) {
-      const { data: existing, error: existingError } = await supabase
-        .from('movies')
-        .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year')
-        .eq('slug', slug)
-        .single();
-      if (!existingError && existing) return existing as MovieRow;
+      const existing = await selectExistingMovieAfterDuplicate();
+      if (existing) return existing;
     }
     throw new Error(`movies insert ${slug}: ${error.message}`);
   }
@@ -829,8 +875,10 @@ async function insertMissingEpisodes(
   }
 
   if (rows.length > 0) {
-    const { error: insertError } = await supabase.from('movie_episodes').insert(rows);
-    if (insertError) throw new Error(`movie_episodes insert ${movie.slug}: ${insertError.message}`);
+    const { error: insertError } = await supabase
+      .from('movie_episodes')
+      .upsert(rows, { onConflict: 'movie_id,server_name,episode_number' });
+    if (insertError) throw new Error(`movie_episodes upsert ${movie.slug}: ${insertError.message}`);
   }
   return rows.length + repaired;
 }
@@ -932,6 +980,8 @@ async function repairExistingBlvietsubMovies(
   repaired: number;
   inserted: number;
   updated: number;
+  transient_skipped: number;
+  transient_details: string[];
   drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }>;
   errors: string[];
 }> {
@@ -950,6 +1000,8 @@ async function repairExistingBlvietsubMovies(
   let repaired = 0;
   let inserted = 0;
   let updated = 0;
+  let transientSkipped = 0;
+  const transientDetails: string[] = [];
   const drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }> = [];
   const errors: string[] = [];
   const rows = (data || []) as MovieRow[];
@@ -975,7 +1027,13 @@ async function repairExistingBlvietsubMovies(
         });
       }
     } catch (error) {
-      errors.push(`${movie.slug}: ${error instanceof Error ? error.message : String(error)}`);
+      const message = `${movie.slug}: ${error instanceof Error ? error.message : String(error)}`;
+      if (isTransientExternalFetchError(error)) {
+        transientSkipped += 1;
+        transientDetails.push(message);
+      } else {
+        errors.push(message);
+      }
     }
   }
 
@@ -985,6 +1043,8 @@ async function repairExistingBlvietsubMovies(
     repaired,
     inserted,
     updated,
+    transient_skipped: transientSkipped,
+    transient_details: transientDetails.slice(0, 20),
     drift: drift.slice(0, 20),
     errors: errors.slice(0, 20),
   };
