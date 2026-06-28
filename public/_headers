@@ -14,49 +14,49 @@
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
 /
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim/*
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /search*
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /vu-tru-dam-my
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-moi-nhat
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-moi-cap-nhat
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-le
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-bo
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-chieu-rap
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-han-quoc
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-trung-quoc
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-au-my
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-nhat-ban
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-thai-lan
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /phim-viet-nam
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
@@ -76,4 +76,4 @@
   Content-Type: text/plain; charset=utf-8
 
 /index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate, max-age=0
