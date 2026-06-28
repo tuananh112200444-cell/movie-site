@@ -18,7 +18,8 @@ if (!rootElement) {
 reportWebVitals()
 
 const STALE_TAB_RELOAD_MS = 10 * 60 * 1000;
-const STALE_TAB_RELOAD_KEY = 'kp_stale_tab_reload_v1';
+const STALE_TAB_RELOAD_KEY = 'kp_stale_tab_reload_v2';
+const STALE_TAB_RELOAD_COOLDOWN_MS = 2 * 60 * 1000;
 const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|dynamically imported module/i;
 
 function hasActiveMediaPlayback(): boolean {
@@ -30,9 +31,10 @@ function hasActiveMediaPlayback(): boolean {
 
 function reloadOnceForFreshShell(reason: string): void {
   const key = `${STALE_TAB_RELOAD_KEY}_${reason}`;
-  if (sessionStorage.getItem(key) === '1') return;
+  const previous = Number(sessionStorage.getItem(key) || 0);
+  if (Number.isFinite(previous) && Date.now() - previous < STALE_TAB_RELOAD_COOLDOWN_MS) return;
   if (hasActiveMediaPlayback()) return;
-  sessionStorage.setItem(key, '1');
+  sessionStorage.setItem(key, String(Date.now()));
   const eventType = reason === 'bfcache_restore'
     ? 'bfcache_restore_reload'
     : reason.includes('chunk')
@@ -90,7 +92,7 @@ async function removeLegacyServiceWorkers(): Promise<void> {
 
 // Page Visibility: pause heavy animations when tab hidden.
 if (typeof document !== 'undefined') {
-  let hiddenAt = Date.now();
+  let hiddenAt = document.hidden ? Date.now() : 0;
 
   document.addEventListener('visibilitychange', () => {
     document.body.classList.toggle('tab-hidden', document.hidden);
@@ -98,9 +100,10 @@ if (typeof document !== 'undefined') {
       hiddenAt = Date.now();
       return;
     }
-    if (Date.now() - hiddenAt > STALE_TAB_RELOAD_MS) {
+    if (hiddenAt > 0 && Date.now() - hiddenAt > STALE_TAB_RELOAD_MS) {
       reloadOnceForFreshShell('visible_after_stale');
     }
+    hiddenAt = 0;
   });
 
   window.addEventListener('pageshow', (event) => {

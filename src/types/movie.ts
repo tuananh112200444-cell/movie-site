@@ -38,6 +38,8 @@ export interface MovieItem {
   title_vi?: string;
   title_en?: string;
   title_zh?: string;
+  title_original?: string;
+  normalized_name?: string;
   ophim_id?: string;
   tmdb_id?: string;
   source_site?: string;
@@ -135,6 +137,8 @@ export interface MovieDetail {
   title_vi?: string;
   title_en?: string;
   title_zh?: string;
+  title_original?: string;
+  normalized_name?: string;
   ophim_id?: string;
   source_site?: string;
   source_name?: string;

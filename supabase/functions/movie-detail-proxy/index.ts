@@ -240,6 +240,28 @@ function decodeHtmlEntities(value: string): string {
     .trim();
 }
 
+function getUrlHost(value = ''): string {
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function isKnownBlockedEmbedHost(value = ''): boolean {
+  const raw = String(value || '').toLowerCase();
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  })();
+  if (raw.includes('versondd.top') || decoded.includes('versondd.top')) return true;
+  const host = getUrlHost(value);
+  return host === 'versondd.top' || host.endsWith('.versondd.top');
+}
+
 async function readCachedDetail(
   supabase: ReturnType<typeof createClient>,
   slug: string,
@@ -416,7 +438,7 @@ async function fetchMotchillMovieDetail(
     const options = parseMotchillPlayerOptions(episodeHtml);
     await Promise.all(options.slice(0, 4).map(async (option) => {
       const embed = await fetchMotchillPlayer(option);
-      if (!embed || /youtube\.com|youtu\.be/i.test(embed)) return;
+      if (!embed || /youtube\.com|youtu\.be/i.test(embed) || isKnownBlockedEmbedHost(embed)) return;
       const serverName = option.serverName.toLowerCase().includes('motchill')
         ? option.serverName
         : `${option.serverName} Motchill`;
@@ -939,6 +961,16 @@ async function persistExternalMovie(
             subtitle_url: subtitleUrl,
             server_data: ep,
           });
+        } else {
+          await supabase
+            .from('episodes')
+            .update({
+              link_m3u8: linkM3u8,
+              link_embed: linkEmbed,
+              subtitle_url: subtitleUrl,
+              server_data: ep,
+            })
+            .eq('id', existingEpisode.id);
         }
 
         const { data: existingStream } = await supabase
@@ -962,6 +994,17 @@ async function persistExternalMovie(
             source: externalSource || 'ophim',
             is_active: true,
           });
+        } else {
+          await supabase
+            .from('streams')
+            .update({
+              stream_url: linkM3u8,
+              embed_url: linkEmbed,
+              subtitle_url: subtitleUrl,
+              source: externalSource || 'ophim',
+              is_active: true,
+            })
+            .eq('id', existingStream.id);
         }
       }
     }
@@ -1101,6 +1144,7 @@ serve(async (req) => {
           link_m3u8: String(em.link_m3u8 || ''),
           subtitle_url: String(em.subtitle_url || ''),
         };
+        if (isKnownBlockedEmbedHost(String(epData.link_embed || epData.link_m3u8 || ''))) continue;
         const alreadySeen = hasSeenEpisode(seen, serverName, slugVal, num, String(epData.name));
         markSeenEpisode(seen, serverName, slugVal, num, String(epData.name));
         if (isHiddenEpisodeSource(source) || alreadySeen) continue;
@@ -1142,20 +1186,23 @@ serve(async (req) => {
             const epNum = extractEpNumber(epSlug || epName);
             if (hasSeenEpisode(seen, serverName, epSlug, epNum, epName)) continue;
             markSeenEpisode(seen, serverName, epSlug, epNum, epName);
-            pushEpisode(serverMap, serverName, {
+            const nestedEpData = {
               name: String(ep.name || ''),
               slug: epSlug,
               filename: String(ep.filename || ''),
               link_embed: normalizeDailymotionUrl(String(ep.link_embed || '')),
               link_m3u8: String(ep.link_m3u8 || ''),
               subtitle_url: String(ep.subtitle_url || ep.subtitle || ''),
-            });
+            };
+            if (isKnownBlockedEmbedHost(String(nestedEpData.link_embed || nestedEpData.link_m3u8 || ''))) continue;
+            pushEpisode(serverMap, serverName, nestedEpData);
           }
           continue;
         } else {
           continue;
         }
 
+        if (isKnownBlockedEmbedHost(String(epData.link_embed || epData.link_m3u8 || ''))) continue;
         if (hasSeenEpisode(seen, serverName, slugVal, num, String(epData.name || ''))) continue;
         markSeenEpisode(seen, serverName, slugVal, num, String(epData.name || ''));
         pushEpisode(serverMap, serverName, epData);
@@ -1167,6 +1214,7 @@ serve(async (req) => {
         const streamUrl = String(sm.stream_url || '').trim();
         const embedUrl = String(sm.embed_url || '').trim();
         if (!streamUrl && !embedUrl) continue;
+        if (isKnownBlockedEmbedHost(embedUrl || streamUrl)) continue;
         const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
         const failureCount = Number(sm.failure_count || 0);
         if (healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 5)) continue;
@@ -1371,6 +1419,9 @@ serve(async (req) => {
         response.movie.total_episodes = undefined;
         response.movie.episode_total = '';
       }
+    } else if (liveMaxEpisode > 0 && currentAdvertisedEpisode > liveMaxEpisode) {
+      response.movie.episode_current = `Tập ${liveMaxEpisode}`;
+      response.movie.current_episode = liveMaxEpisode;
     }
 
     // Cache successful responses for repeat opens; episode metadata rarely changes minute by minute.

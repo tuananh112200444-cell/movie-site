@@ -1583,7 +1583,7 @@ export async function searchMoviesInSupabase(
     }
   } catch (e) {
     if ((e as Error)?.name === 'AbortError') {
-      supabaseSearchRpcUnavailable = true;
+      return [];
     }
   }
 
@@ -1680,22 +1680,51 @@ export async function searchMoviesInSupabase(
   }
 }
 
-const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v3';
+const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v4';
 const SUPABASE_SEARCH_INDEX_TTL = 30 * 60 * 1000;
 let supabaseSearchIndexInflight: Promise<MovieItem[]> | null = null;
+const supabaseSearchIndexMemory = new Map<string, { items: MovieItem[]; ts: number }>();
 
-export async function fetchSupabaseSearchIndex(options: { limit?: number; signal?: AbortSignal } = {}): Promise<MovieItem[]> {
+function writeSearchIndexCacheLater(cacheKey: string, items: MovieItem[]): void {
+  const write = () => {
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify({ items, ts: Date.now() }));
+    } catch { /* quota */ }
+  };
+
+  const idle = (globalThis as typeof globalThis & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  }).requestIdleCallback;
+
+  if (typeof idle === 'function') {
+    idle(write, { timeout: 2000 });
+  } else {
+    setTimeout(write, 250);
+  }
+}
+
+export async function fetchSupabaseSearchIndex(options: { limit?: number; signal?: AbortSignal; persistentCache?: boolean } = {}): Promise<MovieItem[]> {
   if (!ENABLE_SUPABASE_TEXT_SEARCH) return [];
   const limit = options.limit ?? 3000;
+  const usePersistentCache = options.persistentCache ?? true;
   const cacheKey = `${SUPABASE_SEARCH_INDEX_KEY}_${limit}`;
+  const memoryCached = supabaseSearchIndexMemory.get(cacheKey);
+  if (memoryCached && Date.now() - memoryCached.ts < SUPABASE_SEARCH_INDEX_TTL) {
+    return memoryCached.items;
+  }
 
-  try {
-    const raw = localStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
-    if (raw) {
-      const cached = JSON.parse(raw) as { items: MovieItem[]; ts: number };
-      if (Date.now() - cached.ts < SUPABASE_SEARCH_INDEX_TTL) return cached.items;
-    }
-  } catch { /* ignore cache */ }
+  if (usePersistentCache) {
+    try {
+      const raw = sessionStorage.getItem(cacheKey);
+      if (raw) {
+        const cached = JSON.parse(raw) as { items: MovieItem[]; ts: number };
+        if (Date.now() - cached.ts < SUPABASE_SEARCH_INDEX_TTL) {
+          supabaseSearchIndexMemory.set(cacheKey, { items: cached.items, ts: cached.ts });
+          return cached.items;
+        }
+      }
+    } catch { /* ignore cache */ }
+  }
 
   if (supabaseSearchIndexInflight) return supabaseSearchIndexInflight;
 
@@ -1710,11 +1739,8 @@ export async function fetchSupabaseSearchIndex(options: { limit?: number; signal
     if (!res.ok) return [];
     const data = await res.json() as { items?: Record<string, unknown>[] };
     const items = ((data.items ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem);
-    try {
-      const payload = JSON.stringify({ items, ts: Date.now() });
-      localStorage.setItem(cacheKey, payload);
-      sessionStorage.setItem(cacheKey, payload);
-    } catch { /* quota */ }
+    supabaseSearchIndexMemory.set(cacheKey, { items, ts: Date.now() });
+    if (usePersistentCache) writeSearchIndexCacheLater(cacheKey, items);
     return items;
   })().catch((e) => {
     if ((e as Error)?.name !== 'AbortError') {
@@ -3436,6 +3462,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (host.includes('phimapi.com') || host.includes('kkphim') || lower.includes('.m3u8')) score += 70;
   if (host.includes('ssplay')) score += 45;
   if (host.includes('abyssplayer') || host.includes('short.icu')) score += 20;
+  if (host.includes('versondd.top')) score -= 1200;
   if (host.includes('blvietsub.com') && lower.includes('/xem-phim/')) score -= 250;
   if (embed && !m3u8 && score < 20) score += 10;
 

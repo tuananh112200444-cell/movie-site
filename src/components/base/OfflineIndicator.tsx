@@ -4,16 +4,20 @@ import { reportClientIssue } from '@/services/playerDiagnostics';
 type OfflineStatus = 'online' | 'offline';
 
 async function canReachApp(): Promise<boolean> {
-  try {
-    const response = await fetch('/favicon.ico', {
-      method: 'HEAD',
-      cache: 'no-store',
-      signal: AbortSignal.timeout(3500),
-    });
-    return response.ok || response.status === 404;
-  } catch {
-    return false;
+  const probes = ['/', '/robots.txt'];
+  for (const path of probes) {
+    try {
+      const response = await fetch(`${path}${path.includes('?') ? '&' : '?'}kp_probe=${Date.now()}`, {
+        method: 'HEAD',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4500),
+      });
+      if (response.ok || response.status === 404 || response.status === 405) return true;
+    } catch {
+      // Try the next lightweight same-origin endpoint before declaring offline.
+    }
   }
+  return false;
 }
 
 export default function OfflineIndicator() {
@@ -38,6 +42,14 @@ export default function OfflineIndicator() {
       });
     };
 
+    const verifyAndRecover = async () => {
+      if (disposed) return;
+      if (navigator.onLine) {
+        const reachable = await canReachApp();
+        if (!disposed && reachable) showRecovered();
+      }
+    };
+
     const updateStatus = () => {
       if (!navigator.onLine) {
         if (offlineTimer) clearTimeout(offlineTimer);
@@ -57,8 +69,16 @@ export default function OfflineIndicator() {
       showRecovered();
     };
 
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void verifyAndRecover();
+      }
+    };
+
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
+    window.addEventListener('focus', verifyAndRecover);
+    document.addEventListener('visibilitychange', handleVisible);
 
     return () => {
       disposed = true;
@@ -66,6 +86,8 @@ export default function OfflineIndicator() {
       if (hideTimer) clearTimeout(hideTimer);
       window.removeEventListener('online', updateStatus);
       window.removeEventListener('offline', updateStatus);
+      window.removeEventListener('focus', verifyAndRecover);
+      document.removeEventListener('visibilitychange', handleVisible);
     };
   }, []);
 
