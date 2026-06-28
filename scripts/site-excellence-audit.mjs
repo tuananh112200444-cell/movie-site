@@ -45,6 +45,12 @@ const CHECKS = [
     maxMs: 1200,
     required: ['<urlset', '/xem-phim-online', '/phim-vietsub', '/phim-dang-chieu'],
   },
+  {
+    name: 'llms-txt',
+    url: `${SITE_URL}/llms.txt`,
+    maxMs: 1200,
+    required: ['# KhoPhim.org', '## Important Links', `${SITE_URL}/sitemap.xml`, `${SITE_URL}/search`],
+  },
 ];
 
 function hasMojibake(text) {
@@ -229,6 +235,8 @@ async function assertHeadersClean() {
     'Cache-Control: no-store, no-cache, must-revalidate, max-age=0',
     '/sitemap*.xml',
     'Content-Type: application/xml',
+    '/llms.txt',
+    'Content-Type: text/plain; charset=utf-8',
   ]) {
     if (!headers.includes(needle)) failures.push(`public/_headers is missing: ${needle}`);
   }
@@ -236,9 +244,10 @@ async function assertHeadersClean() {
 }
 
 async function assertSitemapsClean() {
-  const [index, seo] = await Promise.all([
+  const [index, seo, llms] = await Promise.all([
     readFile('public/sitemap.xml', 'utf8').catch(() => ''),
     readFile('public/sitemap-seo-landing.xml', 'utf8').catch(() => ''),
+    readFile('public/llms.txt', 'utf8').catch(() => ''),
   ]);
   const failures = [];
   if (!index.includes('<sitemapindex')) failures.push('public/sitemap.xml is not a sitemap index.');
@@ -250,6 +259,13 @@ async function assertSitemapsClean() {
     if (!seo.includes(loc)) failures.push(`public/sitemap-seo-landing.xml is missing ${loc}.`);
   }
   if (hasMojibake(index) || hasMojibake(seo)) failures.push('Local sitemap XML contains mojibake text.');
+  if (!llms.startsWith('# KhoPhim.org')) failures.push('public/llms.txt must start with "# KhoPhim.org".');
+  for (const loc of [`${SITE_URL}/`, `${SITE_URL}/search`, `${SITE_URL}/sitemap.xml`, `${SITE_URL}/robots.txt`]) {
+    if (!llms.includes(loc)) failures.push(`public/llms.txt is missing ${loc}.`);
+  }
+  const llmsLinkCount = [...llms.matchAll(/\[[^\]]+\]\((https:\/\/khophim\.org(?:\/[^)]*)?)\)/g)].length;
+  if (llmsLinkCount < 8) failures.push('public/llms.txt should contain at least 8 khophim.org markdown links.');
+  if (hasMojibake(llms)) failures.push('public/llms.txt contains mojibake text.');
   return failures;
 }
 
