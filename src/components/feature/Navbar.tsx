@@ -501,7 +501,6 @@ export default function Navbar() {
                     <button
                       type="button"
                       onClick={() => setSearchOpen(true)}
-                      aria-label="Mở tìm kiếm"
                       className="flex items-center gap-2.5 bg-white/[0.10] hover:bg-white/[0.15] border border-white/25 hover:border-red-500/60 text-white/75 hover:text-white text-sm rounded-full pl-3.5 pr-4 py-2 w-56 transition-all cursor-pointer group"
                     >
                       <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 bg-red-500/20 rounded-full group-hover:bg-red-500/35 transition-colors">
@@ -526,10 +525,10 @@ export default function Navbar() {
               className={`lg:hidden relative z-[70] h-11 min-w-11 px-3 flex items-center justify-center gap-1.5 rounded-full border transition-all cursor-pointer active:scale-95 touch-manipulation ${
                 searchOpen
                   ? 'bg-white/[0.08] border-white/15 text-white shadow-none'
-                  : 'bg-red-500 text-white border-red-400/60 shadow-[0_0_18px_rgba(239,68,68,0.45)]'
+                  : 'bg-red-700 text-white border-red-500/70 shadow-[0_0_18px_rgba(185,28,28,0.45)]'
               }`}>
               {!searchOpen && (
-                <span className="absolute inset-0 rounded-full bg-red-400/25 animate-ping opacity-60" aria-hidden="true" />
+                <span className="absolute inset-0 rounded-full bg-red-800/20 animate-ping opacity-50" aria-hidden="true" />
               )}
               <span className="relative flex items-center justify-center gap-1.5">
                 <i className={`${searchOpen ? 'ri-close-line' : 'ri-search-line'} text-lg`} aria-hidden="true" />

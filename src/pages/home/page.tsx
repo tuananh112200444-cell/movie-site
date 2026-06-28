@@ -35,7 +35,7 @@ function VietnamPoetryBanner() {
         <div className="relative flex h-[92px] items-center justify-start overflow-visible sm:h-32 md:h-36 lg:h-32">
           <div className="absolute inset-y-2 left-0 w-[88%] rounded-full bg-red-500/12 blur-2xl" aria-hidden="true" />
           <img
-            src="/images/vietnam-flag-watercolor.png"
+            src="/images/vietnam-flag-watercolor-760.jpg"
             alt="Co Viet Nam"
             className="relative z-[1] h-full w-full object-contain drop-shadow-[0_12px_28px_rgba(0,0,0,0.36)]"
             loading="lazy"
