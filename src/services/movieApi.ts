@@ -591,12 +591,12 @@ export function getOptimizedImageUrl(path: string, width = 360, quality = 82): s
   if (original.includes('wsrv.nl/?url=')) return original;
   // wsrv.nl free image proxy — resize + compress + WebP auto
   const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth || 1440;
-  const dpr = typeof window === 'undefined' ? 2 : Math.min(window.devicePixelRatio || 1, 3);
+  const dpr = typeof window === 'undefined' ? 1.5 : Math.min(window.devicePixelRatio || 1, 2);
   const isDesktop = viewportWidth >= 1024;
-  const density = isDesktop ? Math.max(2.35, dpr) : Math.max(2, Math.min(dpr, 2.25));
-  const maxWidth = isDesktop ? 2600 : 1700;
-  const minQuality = isDesktop ? 88 : 84;
-  const maxQuality = isDesktop ? 95 : 90;
+  const density = isDesktop ? Math.max(1.35, Math.min(dpr, 1.65)) : Math.max(1.55, Math.min(dpr, 1.85));
+  const maxWidth = isDesktop ? 1680 : 1120;
+  const minQuality = isDesktop ? 82 : 78;
+  const maxQuality = isDesktop ? 88 : 84;
   const safeWidth = Math.max(320, Math.min(Math.round(width * density), maxWidth));
   const safeQuality = Math.max(minQuality, Math.min(quality, maxQuality));
   const encoded = encodeURIComponent(original);

@@ -240,6 +240,10 @@ async function assertHeadersClean() {
   ]) {
     if (!headers.includes(needle)) failures.push(`public/_headers is missing: ${needle}`);
   }
+  for (const route of ['/', '/phim/*', '/search*']) {
+    const block = `${route}\n  Cache-Control: no-cache, must-revalidate, max-age=0`;
+    if (!headers.includes(block)) failures.push(`public/_headers should keep ${route} fresh without no-store.`);
+  }
   return failures;
 }
 
