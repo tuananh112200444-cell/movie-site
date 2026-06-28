@@ -331,12 +331,20 @@ update public.movies
 set
   ophim_id = coalesce(nullif(ophim_id, ''), ${sqlString(detail.id || '')}),
   ophim_slug = coalesce(nullif(ophim_slug, ''), ${sqlString(detail.slug || target.slug)}),
-  current_episode = greatest(coalesce(current_episode, 0), ${maxEpisode}),
+  current_episode = ${maxEpisode},
   total_episodes = greatest(coalesce(total_episodes, 0), ${maxEpisode}),
   episode_current = case
     when greatest(coalesce(current_episode, 0), ${maxEpisode}) >= ${maxEpisode} then episode_current
     else ${sqlString(`Tập ${maxEpisode}`)}
   end,
+  last_synced_at = now(),
+  updated_at = now()
+where id = ${sqlString(target.id)};`);
+      statements.push(`
+update public.movies
+set
+  current_episode = ${maxEpisode},
+  episode_current = ${sqlString(`Tap ${maxEpisode}`)},
   last_synced_at = now(),
   updated_at = now()
 where id = ${sqlString(target.id)};`);
