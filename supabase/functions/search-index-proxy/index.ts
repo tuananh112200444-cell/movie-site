@@ -169,6 +169,17 @@ serve(async (req) => {
 
   const fetchLimit = Math.max(limit, 3000);
   const items = await fetchFreshIndex(supabase, fetchLimit);
+  if (items.length === 0 && cachedItems.length > 0) {
+    return jsonResponse(
+      { status: true, source: 'stale-refresh-empty', items: cachedItems.slice(0, limit), updated_at: cacheRow?.updated_at },
+      200,
+      {
+        'Cache-Control': 'public, max-age=30, stale-while-revalidate=900',
+        'X-Cache': 'STALE',
+      },
+    );
+  }
+
   if (items.length > 0) {
     try {
       await supabase
