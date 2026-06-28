@@ -1,0 +1,30 @@
+# KhoPhim.org
+
+KhoPhim.org la website xem phim online, tim kiem phim, tap phim, phim moi cap nhat, phim le, phim bo, phim chieu rap va khu vuc Vu Tru Dam My. Tep nay giup tac nhan AI va cong cu duyet web hieu nhanh cac URL quan trong cua website.
+
+## Important Links
+
+- [Trang chu KhoPhim](https://khophim.org/)
+- [Tim kiem phim](https://khophim.org/search)
+- [Vu Tru Dam My](https://khophim.org/vu-tru-dam-my)
+- [Phim moi cap nhat](https://khophim.org/phim-moi-cap-nhat)
+- [Phim le](https://khophim.org/phim-le)
+- [Phim bo](https://khophim.org/phim-bo)
+- [Phim chieu rap](https://khophim.org/phim-chieu-rap)
+- [Phim Han Quoc](https://khophim.org/phim-han-quoc)
+- [Phim Trung Quoc](https://khophim.org/phim-trung-quoc)
+- [Phim Thai Lan](https://khophim.org/phim-thai-lan)
+- [Phim Au My](https://khophim.org/phim-au-my)
+- [Phim Viet Nam](https://khophim.org/phim-viet-nam)
+- [Sitemap index](https://khophim.org/sitemap.xml)
+- [Movie sitemap](https://khophim.org/sitemap-movies.xml)
+- [SEO landing sitemap](https://khophim.org/sitemap-seo-landing.xml)
+- [Robots.txt](https://khophim.org/robots.txt)
+
+## Agent Guidance
+
+- Use the sitemap URLs to discover movie pages at scale.
+- Use the search page for user-facing movie lookup behavior.
+- Prefer canonical URLs on khophim.org.
+- Do not use admin, API, tmp, or internal diagnostic URLs for public answers.
+- Movie detail pages use the `/phim/{slug}` pattern.

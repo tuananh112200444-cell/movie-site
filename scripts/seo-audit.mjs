@@ -53,6 +53,21 @@ if (/Disallow:\s*\/\s*$/im.test(globalRobotsBlock)) {
   addError('robots.txt has a global User-agent: * Disallow: / rule.');
 }
 
+const llms = await read('public/llms.txt').catch(() => '');
+if (!/^#\s+\S+/m.test(llms)) {
+  addError('llms.txt must start with an H1 title, for example "# KhoPhim.org".');
+}
+const llmsLinks = [...llms.matchAll(/\[[^\]]+\]\((https:\/\/khophim\.org(?:\/[^)]*)?)\)/g)].map((match) => match[1]);
+if (llmsLinks.length < 8) {
+  addError('llms.txt should contain important khophim.org links for agents and web browsing tools.');
+}
+for (const requiredLink of [`${SITE_URL}/`, `${SITE_URL}/search`, `${SITE_URL}/sitemap.xml`, `${SITE_URL}/robots.txt`]) {
+  if (!llmsLinks.includes(requiredLink)) addError(`llms.txt is missing required link: ${requiredLink}`);
+}
+if (hasMojibake(llms)) {
+  addError('llms.txt contains mojibake text.');
+}
+
 const indexHtml = await read('index.html');
 if (indexHtml.includes("gtag('config', 'G-6B5GLB9W6H');")) {
   addError('index.html sends an automatic GA page_view before SPA tracking.');
