@@ -6,6 +6,22 @@ import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 
 const SearchSuggestions = lazy(() => import('./SearchSuggestions'));
 
+function prewarmSearchSuggestions() {
+  void import('./SearchSuggestions').catch(() => {});
+}
+
+function runSearchPrewarmWhenIdle() {
+  const idle = (globalThis as typeof globalThis & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  }).requestIdleCallback;
+
+  if (typeof idle === 'function') {
+    idle(prewarmSearchSuggestions, { timeout: 3000 });
+  } else {
+    window.setTimeout(prewarmSearchSuggestions, 1200);
+  }
+}
+
 const GENRES = [
   { name: 'Hành Động', slug: 'hanh-dong', icon: 'ri-sword-line' },
   { name: 'Tình Cảm', slug: 'tinh-cam', icon: 'ri-heart-3-line' },
@@ -79,6 +95,21 @@ export default function Navbar() {
   const rafRef = useRef<number | null>(null);
   const lastScrolledRef = useRef(false);
   const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    runSearchPrewarmWhenIdle();
+
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') runSearchPrewarmWhenIdle();
+    };
+
+    document.addEventListener('visibilitychange', handleVisible);
+    window.addEventListener('focus', runSearchPrewarmWhenIdle);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisible);
+      window.removeEventListener('focus', runSearchPrewarmWhenIdle);
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const header = headerRef.current;
