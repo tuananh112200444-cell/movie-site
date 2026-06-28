@@ -485,10 +485,9 @@ async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, d
     return { id: String(existing.id), created: false, updated: true };
   }
 
-  const conflictColumn = String(payload.ophim_slug || '').trim() ? 'ophim_slug' : 'slug';
   const { data, error } = await supabase
     .from('movies')
-    .upsert(payload, { onConflict: conflictColumn })
+    .insert(payload)
     .select('id')
     .single();
   if (error) {
