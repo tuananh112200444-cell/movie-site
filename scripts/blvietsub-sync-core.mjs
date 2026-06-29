@@ -1,6 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
 const DEFAULT_FEED_URL = 'https://blvietsub.com/ophim-sitemap.xml';
+const DEFAULT_DISCOVERY_URLS = [
+  'https://blvietsub.com/',
+  'https://blvietsub.com/phim/',
+];
+const DEFAULT_DISCOVERY_QUERIES = [
+  'deep in',
+  'nhap hi',
+  'nhập hí',
+];
+const PRIORITY_SITEMAP_LIMIT = 40;
 const SOURCE_SITE = 'blvietsub';
 const SOURCE_NAME = 'BLVietsub';
 const TAP_LABEL = 'Tập';
@@ -78,6 +88,81 @@ function parseSitemap(xml = '') {
     urls.push({ url, updatedAt: decodeHtml(match[2] || '') });
   }
   return urls;
+}
+
+function uniqMovieUrls(items = []) {
+  const seen = new Set();
+  const urls = [];
+  for (const item of items) {
+    const url = String(item?.url || item || '').replace(/^http:\/\//i, 'https://').replace(/\/+$/, '/');
+    if (!/^https:\/\/blvietsub\.com\/phim\/[^/]+\/$/i.test(url) || seen.has(url)) continue;
+    if (/\/phim\/(?:feed|page)\/$/i.test(url)) continue;
+    seen.add(url);
+    urls.push({ url, updatedAt: item?.updatedAt || '', title: item?.title || '', originName: item?.originName || '' });
+  }
+  return urls;
+}
+
+function parseMovieUrlsFromHtml(html = '') {
+  const urls = [];
+  for (const match of String(html).matchAll(/href=["']([^"']*\/phim\/[^"']+)["']/gi)) {
+    const raw = decodeHtml(match[1]).trim();
+    let url = raw;
+    if (url.startsWith('//')) url = `https:${url}`;
+    if (url.startsWith('/')) url = `https://blvietsub.com${url}`;
+    if (!/^https?:\/\/blvietsub\.com\/phim\/[^/?#]+\/?(?:[?#].*)?$/i.test(url)) continue;
+    url = url.split(/[?#]/)[0].replace(/^http:\/\//i, 'https://').replace(/\/?$/, '/');
+    urls.push({ url });
+  }
+  return uniqMovieUrls(urls);
+}
+
+async function fetchDiscoveryPageMovieUrls(discoveryUrls = DEFAULT_DISCOVERY_URLS) {
+  const urls = [];
+  for (const url of discoveryUrls) {
+    try {
+      const html = await fetchText(url, 18000);
+      urls.push(...parseMovieUrlsFromHtml(html));
+    } catch {
+      // Discovery is a fallback; sitemap sync must continue if a page is temporarily blocked.
+    }
+  }
+  return uniqMovieUrls(urls);
+}
+
+async function searchBlvietsubMovieUrls(queries = DEFAULT_DISCOVERY_QUERIES) {
+  const urls = [];
+  for (const query of queries.map((value) => String(value || '').trim()).filter(Boolean)) {
+    try {
+      const body = new URLSearchParams({ action: 'search_film', keyword: query, limit: '20' });
+      const response = await fetch('https://blvietsub.com/wp-admin/admin-ajax.php', {
+        method: 'POST',
+        headers: {
+          ...BLVIETSUB_HEADERS,
+          Accept: 'application/json,text/plain,*/*',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body,
+        signal: AbortSignal.timeout(18000),
+      });
+      if (!response.ok) continue;
+      const data = await response.json().catch(() => []);
+      for (const item of Array.isArray(data) ? data : []) {
+        const url = String(item?.slug || '').replace(/^http:\/\//i, 'https://');
+        if (/^https:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(url)) {
+          urls.push({
+            url: url.replace(/\/?$/, '/'),
+            title: stripTags(item?.title || ''),
+            originName: stripTags(item?.original_title || ''),
+          });
+        }
+      }
+    } catch {
+      // Keep sync resilient when BLVietsub search rate-limits or times out.
+    }
+  }
+  return uniqMovieUrls(urls);
 }
 
 function getMovieSlug(movieUrl = '') {
@@ -224,7 +309,7 @@ export function parseMoviePage(movieUrl, updatedAt, html, playerHtml = '') {
   };
 }
 
-export async function fetchMovieEntry(movieUrl, updatedAt = '') {
+export async function fetchMovieEntry(movieUrl, updatedAt = '', fallback = {}) {
   const html = await fetchText(movieUrl, 22000);
   const movieSlug = getMovieSlug(movieUrl);
   const watchUrls = getWatchUrls(html, movieSlug);
@@ -250,20 +335,35 @@ export async function fetchMovieEntry(movieUrl, updatedAt = '') {
     playerPages.push(...pages.filter(Boolean));
   }
   const playerHtml = playerPages.join('\n');
-  return parseMoviePage(movieUrl, updatedAt, html, playerHtml);
+  const entry = parseMoviePage(movieUrl, updatedAt, html, playerHtml);
+  if (entry && !entry.originName && fallback.originName) entry.originName = fallback.originName;
+  if (entry && !entry.title && fallback.title) entry.title = fallback.title;
+  return entry;
 }
 
 export async function fetchEntries({ feedUrl = DEFAULT_FEED_URL, limit = 10, offset = 0, concurrency = 3 } = {}) {
-  const sitemap = await fetchText(feedUrl, 30000);
-  const allUrls = parseSitemap(sitemap);
-  const urls = allUrls.slice(offset, offset + limit);
-  const entries = [];
   const errors = [];
+  let sitemapUrls = [];
+  try {
+    const sitemap = await fetchText(feedUrl, 30000);
+    sitemapUrls = parseSitemap(sitemap);
+  } catch (error) {
+    errors.push(`sitemap: ${error.message}`);
+  }
+  const discoveryUrls = uniqMovieUrls([
+    ...(await searchBlvietsubMovieUrls()),
+    ...(await fetchDiscoveryPageMovieUrls()),
+    ...sitemapUrls.slice(0, PRIORITY_SITEMAP_LIMIT),
+  ]);
+  const cursorUrls = sitemapUrls.slice(offset, offset + limit);
+  const urls = uniqMovieUrls([...discoveryUrls, ...cursorUrls]).slice(0, limit);
+  const allUrls = uniqMovieUrls([...discoveryUrls, ...sitemapUrls]);
+  const entries = [];
   for (let index = 0; index < urls.length; index += concurrency) {
     const batch = urls.slice(index, index + concurrency);
     const parsed = await Promise.all(batch.map(async (item) => {
       try {
-        return await fetchMovieEntry(item.url, item.updatedAt);
+        return await fetchMovieEntry(item.url, item.updatedAt, item);
       } catch (error) {
         errors.push(`${item.url}: ${error.message}`);
         return null;

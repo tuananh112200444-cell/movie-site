@@ -179,14 +179,21 @@ async function auditCountryCoverage() {
   return { ok: failures.length === 0, results, failures };
 }
 
-async function queryByMovieIds(table, select, movieIds) {
+async function queryByMovieIds(table, select, movieIds, orderColumns = []) {
   const rows = [];
   for (const ids of chunk(movieIds, 10)) {
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await supabase
+      let query = supabase
         .from(table)
         .select(select)
         .in('movie_id', ids)
+        .order('movie_id', { ascending: true });
+
+      for (const column of orderColumns) {
+        query = query.order(column, { ascending: true, nullsFirst: true });
+      }
+
+      const { data, error } = await query
         .range(from, from + 999)
         .abortSignal(AbortSignal.timeout(20_000));
       if (error) {
@@ -233,9 +240,9 @@ if (movieError) {
 const movieIds = (movies || []).map((movie) => movie.id).filter(Boolean);
 
 const [movieEpisodes, episodes, streams] = await Promise.all([
-  queryByMovieIds('movie_episodes', 'movie_id, episode_number, slug, episode_name, server_name, link_m3u8, link_embed, source', movieIds),
-  queryByMovieIds('episodes', 'movie_id, episode_number, episode_slug, episode_name, server_name, link_m3u8, link_embed, server_data', movieIds),
-  queryByMovieIds('streams', 'movie_id, episode_slug, server_name, stream_url, embed_url, is_active', movieIds),
+  queryByMovieIds('movie_episodes', 'movie_id, episode_number, slug, episode_name, server_name, link_m3u8, link_embed, source', movieIds, ['episode_number', 'server_name']),
+  queryByMovieIds('episodes', 'movie_id, episode_number, episode_slug, episode_name, server_name, link_m3u8, link_embed, server_data', movieIds, ['episode_number', 'server_name']),
+  queryByMovieIds('streams', 'movie_id, episode_slug, server_name, stream_url, embed_url, is_active', movieIds, ['episode_slug', 'server_name']),
 ]);
 
 for (const result of [movieEpisodes, episodes, streams]) {
