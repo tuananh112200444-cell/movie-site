@@ -58,7 +58,7 @@ async function fetchFreshIndex(
       .eq('is_published', true)
       .order('updated_at', { ascending: false })
       .range(offset, end)
-      .abortSignal(timeoutSignal(2500));
+      .abortSignal(timeoutSignal(10000));
 
     if (error || !data || data.length === 0) break;
     rows.push(...(data as unknown as Record<string, unknown>[]));
@@ -111,7 +111,7 @@ serve(async (req) => {
       .from('home_page_cache')
       .select('sections, updated_at, expires_at')
       .eq('id', CACHE_ID)
-      .abortSignal(timeoutSignal(5000))
+      .abortSignal(timeoutSignal(12000))
       .maybeSingle();
     if (data) cacheRow = data as unknown as typeof cacheRow;
   } catch {
@@ -191,7 +191,7 @@ serve(async (req) => {
           updated_at: nowIso,
           expires_at: new Date(now.getTime() + CACHE_TTL_MIN * 60 * 1000).toISOString(),
         })
-        .abortSignal(timeoutSignal(5000));
+        .abortSignal(timeoutSignal(20000));
     } catch {
       /* cache write is best-effort */
     }

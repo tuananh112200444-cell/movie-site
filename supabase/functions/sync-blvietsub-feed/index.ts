@@ -3,6 +3,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://blvietsub.com/ophim-sitemap.xml';
 const BLVIETSUB_PROXY_URL = Deno.env.get('BLVIETSUB_PROXY_URL') || 'https://khophim.org/internal/blvietsub-proxy';
+const DISCOVERY_URLS = [
+  'https://blvietsub.com/',
+  'https://blvietsub.com/phim/',
+];
+const DISCOVERY_QUERIES = [
+  'deep in',
+  'nhap hi',
+  'nhập hí',
+];
+const PRIORITY_SITEMAP_LIMIT = 40;
 const SOURCE_SITE = 'blvietsub';
 const SOURCE_NAME = 'BLVietsub';
 const TAP_LABEL = 'T\u1eadp';
@@ -83,6 +93,8 @@ interface ParsedEntry {
 interface WordPressMovieUrl {
   url: string;
   updatedAt: string;
+  title?: string;
+  originName?: string;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -104,6 +116,28 @@ function proxiedBlvietsubUrl(rawUrl: string): string {
   } catch {
     return rawUrl;
   }
+}
+
+async function fetchBlvietsubText(rawUrl: string, timeoutMs: number): Promise<string> {
+  const candidates = Array.from(new Set([rawUrl, proxiedBlvietsubUrl(rawUrl)]));
+  let lastError: unknown = null;
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate, {
+        headers: BLVIETSUB_HEADERS,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) {
+        lastError = new Error(`${candidate} ${response.status}`);
+        continue;
+      }
+      const text = await response.text();
+      if (text.trim()) return text;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`BLVietsub fetch failed: ${rawUrl}`);
 }
 
 function normalizeText(value = ''): string {
@@ -466,6 +500,87 @@ function parseWordPressSitemap(xml = ''): WordPressMovieUrl[] {
   return urls;
 }
 
+function uniqWordPressMovieUrls(items: Array<WordPressMovieUrl | string>): WordPressMovieUrl[] {
+  const seen = new Set<string>();
+  const urls: WordPressMovieUrl[] = [];
+  for (const item of items) {
+    const rawUrl = typeof item === 'string' ? item : item.url;
+    const url = String(rawUrl || '').replace(/^http:\/\//i, 'https://').replace(/\/+$/, '/');
+    if (!/^https:\/\/blvietsub\.com\/phim\/[^/]+\/$/i.test(url) || seen.has(url)) continue;
+    if (/\/phim\/(?:feed|page)\/$/i.test(url)) continue;
+    seen.add(url);
+    urls.push({
+      url,
+      updatedAt: typeof item === 'string' ? '' : item.updatedAt || '',
+      title: typeof item === 'string' ? '' : item.title || '',
+      originName: typeof item === 'string' ? '' : item.originName || '',
+    });
+  }
+  return urls;
+}
+
+function parseWordPressMovieUrlsFromHtml(html = ''): WordPressMovieUrl[] {
+  const urls: WordPressMovieUrl[] = [];
+  for (const match of html.matchAll(/href=["']([^"']*\/phim\/[^"']+)["']/gi)) {
+    const raw = decodeHtml(match[1]).trim();
+    let url = raw;
+    if (url.startsWith('//')) url = `https:${url}`;
+    if (url.startsWith('/')) url = `https://blvietsub.com${url}`;
+    if (!/^https?:\/\/blvietsub\.com\/phim\/[^/?#]+\/?(?:[?#].*)?$/i.test(url)) continue;
+    url = url.split(/[?#]/)[0].replace(/^http:\/\//i, 'https://').replace(/\/?$/, '/');
+    urls.push({ url, updatedAt: '' });
+  }
+  return uniqWordPressMovieUrls(urls);
+}
+
+async function fetchDiscoveryPageMovieUrls(): Promise<WordPressMovieUrl[]> {
+  const urls: WordPressMovieUrl[] = [];
+  for (const discoveryUrl of DISCOVERY_URLS) {
+    try {
+      urls.push(...parseWordPressMovieUrlsFromHtml(await fetchBlvietsubText(discoveryUrl, 18000)));
+    } catch {
+      // Discovery is best-effort; a temporary BLVietsub block must not break sitemap sync.
+    }
+  }
+  return uniqWordPressMovieUrls(urls);
+}
+
+async function searchBlvietsubMovieUrls(): Promise<WordPressMovieUrl[]> {
+  const urls: WordPressMovieUrl[] = [];
+  for (const keyword of DISCOVERY_QUERIES.map((value) => value.trim()).filter(Boolean)) {
+    try {
+      const body = new URLSearchParams({ action: 'search_film', keyword, limit: '20' });
+      const response = await fetch('https://blvietsub.com/wp-admin/admin-ajax.php', {
+        method: 'POST',
+        headers: {
+          ...BLVIETSUB_HEADERS,
+          'Accept': 'application/json,text/plain,*/*',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body,
+        signal: AbortSignal.timeout(18000),
+      });
+      if (!response.ok) continue;
+      const data = await response.json().catch(() => []);
+      for (const item of Array.isArray(data) ? data : []) {
+        const url = String(item?.slug || '').replace(/^http:\/\//i, 'https://');
+        if (/^https:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(url)) {
+          urls.push({
+            url: url.replace(/\/?$/, '/'),
+            updatedAt: '',
+            title: stripTags(String(item?.title || '')),
+            originName: stripTags(String(item?.original_title || '')),
+          });
+        }
+      }
+    } catch {
+      // Keep sync resilient when BLVietsub search rate-limits or times out.
+    }
+  }
+  return uniqWordPressMovieUrls(urls);
+}
+
 function getWordPressMovieSlug(movieUrl: string): string {
   return movieUrl.match(/\/phim\/([^/]+)\/?$/i)?.[1] || '';
 }
@@ -623,12 +738,7 @@ async function fetchWordPressPlayerPages(html: string, movieSlug: string): Promi
     });
     const pages = await Promise.all(batch.map(async (watch) => {
       try {
-        const playerPage = await fetch(proxiedBlvietsubUrl(watch.url), {
-          headers: BLVIETSUB_HEADERS,
-          signal: AbortSignal.timeout(20000),
-        });
-        if (!playerPage.ok) return '';
-        const pageHtml = await playerPage.text();
+        const pageHtml = await fetchBlvietsubText(watch.url, 20000);
         for (const discovered of getWordPressWatchUrls(pageHtml, movieSlug)) {
           if (!seenWatchUrls.has(discovered.url) && watchUrls.length < 120) watchUrls.push(discovered);
         }
@@ -650,28 +760,33 @@ async function fetchWordPressEntries(limit: number, offset: number): Promise<Par
 }
 
 async function fetchWordPressEntriesWithMeta(limit: number, offset: number): Promise<{ entries: ParsedEntry[]; scanned: number; total: number }> {
-  const response = await fetch(proxiedBlvietsubUrl(FEED_URL), {
-    headers: BLVIETSUB_HEADERS,
-    signal: AbortSignal.timeout(25000),
-  });
-  if (!response.ok) throw new Error(`BLVietsub sitemap ${response.status}`);
-  const allUrls = parseWordPressSitemap(await response.text());
-  const urls = allUrls.slice(offset, offset + limit);
+  let sitemapUrls: WordPressMovieUrl[] = [];
+  try {
+    sitemapUrls = parseWordPressSitemap(await fetchBlvietsubText(FEED_URL, 25000));
+  } catch {
+    // Continue with discovery URLs when the upstream sitemap is temporarily unreachable.
+  }
+  const discoveryUrls = uniqWordPressMovieUrls([
+    ...(await searchBlvietsubMovieUrls()),
+    ...(await fetchDiscoveryPageMovieUrls()),
+    ...sitemapUrls.slice(0, PRIORITY_SITEMAP_LIMIT),
+  ]);
+  const cursorUrls = sitemapUrls.slice(offset, offset + limit);
+  const urls = uniqWordPressMovieUrls([...discoveryUrls, ...cursorUrls]).slice(0, limit);
+  const allUrls = uniqWordPressMovieUrls([...discoveryUrls, ...sitemapUrls]);
   const entries: ParsedEntry[] = [];
   const concurrency = 6;
   for (let index = 0; index < urls.length && entries.length < limit; index += concurrency) {
     const batch = urls.slice(index, index + concurrency);
     const parsed = await Promise.all(batch.map(async (item) => {
       try {
-      const page = await fetch(proxiedBlvietsubUrl(item.url), {
-          headers: BLVIETSUB_HEADERS,
-          signal: AbortSignal.timeout(20000),
-        });
-        if (!page.ok) return null;
-        const html = await page.text();
+        const html = await fetchBlvietsubText(item.url, 20000);
         const movieSlug = getWordPressMovieSlug(item.url);
         const playerHtml = movieSlug ? await fetchWordPressPlayerPages(html, movieSlug) : '';
-        return parseWordPressMoviePage(item.url, item.updatedAt, html, playerHtml);
+        const entry = parseWordPressMoviePage(item.url, item.updatedAt, html, playerHtml);
+        if (entry && !entry.originName && item.originName) entry.originName = item.originName;
+        if (entry && !entry.title && item.title) entry.title = item.title;
+        return entry;
       } catch {
         return null;
       }

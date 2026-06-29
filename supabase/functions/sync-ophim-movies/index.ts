@@ -199,6 +199,10 @@ function episodeNumber(ep: OPhimEpisode): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+function hasPlayableEpisodeLink(ep: OPhimEpisode): boolean {
+  return Boolean(String(ep.link_m3u8 || '').trim() || String(ep.link_embed || '').trim());
+}
+
 function firstEpisodeNumber(value = ''): number {
   const text = String(value || '').toLowerCase();
   if (text.includes('full')) return 1;
@@ -226,6 +230,7 @@ function repairConcatenatedEpisodeNumber(current: number, total: number): number
 }
 
 function getCurrentEpisode(movie: OPhimMovie, episodes: OPhimServer[]): number {
+  let hasSourceEpisodeRows = false;
   const sourceTotal = Math.max(
     totalEpisodeNumber(movie.episode_current || ''),
     totalEpisodeNumber(movie.episode_total || ''),
@@ -234,9 +239,12 @@ function getCurrentEpisode(movie: OPhimMovie, episodes: OPhimServer[]): number {
   let fromEpisodes = 0;
   for (const server of episodes) {
     for (const ep of server.server_data || []) {
+      hasSourceEpisodeRows = true;
+      if (!hasPlayableEpisodeLink(ep)) continue;
       fromEpisodes = Math.max(fromEpisodes, episodeNumber(ep));
     }
   }
+  if (hasSourceEpisodeRows) return fromEpisodes;
   if (!fromText && String(movie.episode_current || '').toLowerCase().includes('full')) return 1;
   return Math.max(fromText, fromEpisodes);
 }
@@ -293,7 +301,13 @@ async function fetchJsonFromMirrors(provider: ProviderConfig, path: string, time
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(`${base}${path}`, { signal: controller.signal });
+      const res = await fetch(`${base}${path}`, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json,text/plain,*/*',
+          'User-Agent': 'Mozilla/5.0 KhophimBot/1.0 (+https://khophim.org)',
+        },
+      });
       clearTimeout(timer);
       if (!res.ok) continue;
       return await res.json() as Record<string, unknown>;
@@ -302,6 +316,26 @@ async function fetchJsonFromMirrors(provider: ProviderConfig, path: string, time
     } finally {
       clearTimeout(timer);
     }
+  }
+  return null;
+}
+
+function providerListPaths(provider: ProviderConfig, page: number): string[] {
+  const primary = provider.listPath(page);
+  if (provider.sourceSite !== 'phimapi') return [primary];
+  return Array.from(new Set([
+    primary,
+    `/v1/api/danh-sach/phim-moi-cap-nhat?page=${page}`,
+    `/v1/api/danh-sach/phim-moi-cap-nhat?page=${page}&sort_field=modified.time&sort_type=desc`,
+    `/danh-sach/phim-moi-cap-nhat-v3?page=${page}`,
+    `/v1/api/danh-sach/phim-moi-cap-nhat-v3?page=${page}`,
+  ]));
+}
+
+async function fetchListPage(provider: ProviderConfig, page: number): Promise<Record<string, unknown> | null> {
+  for (const path of providerListPaths(provider, page)) {
+    const payload = await fetchJsonFromMirrors(provider, path, provider.sourceSite === 'phimapi' ? 18000 : 12000);
+    if (listItems(payload).length > 0) return payload;
   }
   return null;
 }
@@ -334,11 +368,14 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
   const originName = String(movie.origin_name || '');
   const slug = String(movie.slug || slugify(name));
   const currentEpisode = getCurrentEpisode(movie, detail.episodes);
-  const totalEpisode = Math.max(
-    currentEpisode,
-    totalEpisodeNumber(movie.episode_current || ''),
-    totalEpisodeNumber(movie.episode_total || ''),
-  );
+  const hasSourceEpisodeRows = detail.episodes.some((server) => (server.server_data || []).length > 0);
+  const totalEpisode = hasSourceEpisodeRows
+    ? currentEpisode
+    : Math.max(
+        currentEpisode,
+        totalEpisodeNumber(movie.episode_current || ''),
+        totalEpisodeNumber(movie.episode_total || ''),
+      );
   const rawCurrent = firstEpisodeNumber(movie.episode_current || '');
   const sourceCurrentLooksClean = rawCurrent > 0 && rawCurrent === currentEpisode;
 
@@ -359,7 +396,7 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
     poster_url: String(movie.poster_url || ''),
     trailer_url: String(movie.trailer_url || ''),
     time: String(movie.time || ''),
-    episode_current: sourceCurrentLooksClean ? String(movie.episode_current || '') : (currentEpisode ? `Tập ${currentEpisode}` : ''),
+    episode_current: sourceCurrentLooksClean ? String(movie.episode_current || '') : (currentEpisode ? `Tập ${currentEpisode}` : 'Đang cập nhật'),
     episode_total: String(movie.episode_total || ''),
     current_episode: currentEpisode || null,
     total_episodes: totalEpisode || currentEpisode || null,
@@ -748,7 +785,7 @@ serve(async (req) => {
       pagesWithItems = 1;
     } else {
       for (let page = startPage; page < startPage + pages; page += 1) {
-        const payload = await fetchJsonFromMirrors(provider, provider.listPath(page));
+        const payload = await fetchListPage(provider, page);
         const items = listItems(payload);
         if (items.length > 0) pagesWithItems += 1;
         for (const item of items) {
@@ -756,6 +793,9 @@ serve(async (req) => {
         }
       }
       slugs = Array.from(candidates.keys()).slice(0, limit);
+      if (pagesWithItems === 0 && startPage === 1) {
+        stats.errors.push(`[${provider.sourceSite}] latest list returned 0 items from all mirrors`);
+      }
     }
 
     for (const slug of slugs) {
