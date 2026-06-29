@@ -2262,7 +2262,9 @@ function inferBlvietsubServerName(rawServerName: string, embedUrl: string): stri
   try {
     const host = new URL(embedUrl.replace(/&amp;/g, '&')).hostname.toLowerCase();
     if (rawCode === 'VK' && host.includes('ssplay')) return 'SS';
-    if (['SS', 'HX', 'OK', 'DL'].includes(rawCode)) return rawCode;
+    if (host.includes('dailymotion.com') || host === 'dai.ly') return 'Daily';
+    if (['SS', 'HX', 'OK'].includes(rawCode)) return rawCode;
+    if (rawCode === 'DL') return 'Daily';
     if (host.includes('ssplay')) return 'SS';
     if (host.includes('ok.ru') || host.includes('odnoklassniki')) return 'OK';
     if (host.includes('vk.com') || host.includes('vkvideo')) return 'VK';
@@ -3241,6 +3243,7 @@ interface ServerQualityInfo {
 export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'DM', 'SUPABASE', 'OPHIM', 'SS', 'OK', 'ABYSS', 'VK'] as const;
 const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
 const SERVER_RECENT_BAD_HOST_PENALTY = 900;
+const DAILYMOTION_PREFERRED_SOURCE_BONUS = 360;
 
 function normalizeServerPriorityText(value: string): string {
   return value
@@ -3264,6 +3267,7 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('DAILYMOTION') ||
     compact.includes('DAILY') ||
     compact.includes('DAILYLY') ||
+    tokens.has('DL') ||
     /(^|[./])dai\.ly/i.test(String(episode?.link_embed || ''));
   const isOwnHlsSource = Boolean(episode?.link_m3u8) && (
     compact.includes('KHOPHIM') ||
@@ -3294,6 +3298,7 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
   }
   if (
     tokens.has('DM') ||
+    tokens.has('DL') ||
     tokens.has('DAILYMOTION') ||
     compact.includes('DAILYMOTION') ||
     compact.includes('DAILY') ||
@@ -3392,6 +3397,23 @@ function getUrlHost(value = ''): string {
   }
 }
 
+function isDailymotionEpisode(ep?: EpisodeData): boolean {
+  if (!ep) return false;
+  const host = getUrlHost(ep.link_embed || ep.link_m3u8 || '');
+  const text = normalizeServerPriorityText([
+    ep.link_embed,
+    ep.link_m3u8,
+    ep.filename,
+    ep.name,
+  ].filter(Boolean).join(' '));
+  return (
+    host.includes('dailymotion.com') ||
+    host === 'dai.ly' ||
+    text.includes('DAILYMOTION') ||
+    text.includes('DAILY')
+  );
+}
+
 function getRecentBadHostPenalty(ep: EpisodeData): number {
   if (typeof window === 'undefined') return 0;
   const host = getUrlHost(ep.link_m3u8 || ep.link_embed || '');
@@ -3458,7 +3480,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (m3u8) score += /\.m3u8(?:[?#].*)?$/i.test(m3u8) ? 130 : 115;
   if (/\.(mp4|webm|mov)(?:[?#].*)?$/i.test(embed)) score += 110;
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) score += 120;
-  if (host.includes('dailymotion.com') || host === 'dai.ly') score += 85;
+  if (host.includes('dailymotion.com') || host === 'dai.ly') score += DAILYMOTION_PREFERRED_SOURCE_BONUS;
   if (host.includes('phimapi.com') || host.includes('kkphim') || lower.includes('.m3u8')) score += 70;
   if (host.includes('ssplay')) score += 45;
   if (host.includes('abyssplayer') || host.includes('short.icu')) score += 20;
@@ -3484,6 +3506,9 @@ export function getServerQualityScore(server: EpisodeServer): number {
   if (firstEp?.link_m3u8) score += 10;
   if (firstEp?.link_embed) score += 3;
   score += getBestPlayableEpisodeScore(server);
+  if ((server.server_data ?? []).some((ep) => isDailymotionEpisode(ep))) {
+    score += DAILYMOTION_PREFERRED_SOURCE_BONUS;
+  }
 
   // Vietnamese audio preferred (vietsub, thuyetminh, longtieng)
   const tokens = name.split(/[\s\-_#]+/).filter(Boolean);
