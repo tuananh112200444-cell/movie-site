@@ -222,18 +222,18 @@ function getSitemapOptions(req: Request): { offset: number; limit: number; inclu
   const upcoming = url.searchParams.get('upcoming') === '1';
 
   if (upcoming) {
-    return { offset: 0, limit: Math.min(5000, pageSize), includeOphim: true, mode: 'upcoming' };
+    return { offset: 0, limit: Math.min(5000, pageSize), includeOphim: false, mode: 'upcoming' };
   }
 
   if (recent) {
-    return { offset: 0, limit: Math.min(2000, pageSize), includeOphim: true, mode: 'recent' };
+    return { offset: 0, limit: Math.min(2000, pageSize), includeOphim: false, mode: 'recent' };
   }
 
   if (Number.isFinite(page) && page > 0) {
     return { offset: (Math.floor(page) - 1) * pageSize, limit: pageSize, includeOphim: false, mode: 'all' };
   }
 
-  return { offset: 0, limit: 50000, includeOphim: true, mode: 'all' };
+  return { offset: 0, limit: 50000, includeOphim: false, mode: 'all' };
 }
 
 async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: number }> {
