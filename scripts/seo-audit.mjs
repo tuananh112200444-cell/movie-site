@@ -4,6 +4,7 @@ import { SITE_URL, seoLandingUrls } from './seo-data.mjs';
 
 const errors = [];
 const warnings = [];
+const SECONDARY_DOMAIN_PATTERN = /https?:\/\/(?:www\.)?mhophim\.com/i;
 
 async function exists(path) {
   try {
@@ -45,12 +46,26 @@ const robots = await read('public/robots.txt');
 if (!robots.includes(`Sitemap: ${SITE_URL}/sitemap.xml`)) {
   addError('robots.txt must point to the canonical sitemap index.');
 }
+if (SECONDARY_DOMAIN_PATTERN.test(robots)) {
+  addError('robots.txt must not reference the secondary domain mhophim.com.');
+}
 if (/crawl-delay\s*:/i.test(robots)) {
   addError('robots.txt contains Crawl-delay, which slows Screaming Frog and some crawlers.');
 }
 const globalRobotsBlock = robots.split(/\n\s*User-agent:/i)[0];
 if (/Disallow:\s*\/\s*$/im.test(globalRobotsBlock)) {
   addError('robots.txt has a global User-agent: * Disallow: / rule.');
+}
+
+const redirects = await read('public/_redirects');
+for (const host of ['mhophim.com', 'www.mhophim.com', 'www.khophim.org']) {
+  const expected = `https://${host}/* https://khophim.org/:splat 301!`;
+  if (!redirects.includes(expected)) {
+    addError(`public/_redirects is missing canonical redirect: ${expected}`);
+  }
+}
+if (!redirects.includes('/* /index.html 200')) {
+  addError('public/_redirects must keep the SPA fallback after canonical redirects.');
 }
 
 const llms = await read('public/llms.txt').catch(() => '');
@@ -69,6 +84,12 @@ if (hasMojibake(llms)) {
 }
 
 const indexHtml = await read('index.html');
+if (SECONDARY_DOMAIN_PATTERN.test(indexHtml)) {
+  addError('index.html must not contain mhophim.com; all SEO signals must point to khophim.org.');
+}
+if (!indexHtml.includes(`<link rel="canonical" href="${SITE_URL}`)) {
+  addError('index.html must declare khophim.org as the canonical homepage.');
+}
 if (indexHtml.includes("gtag('config', 'G-6B5GLB9W6H');")) {
   addError('index.html sends an automatic GA page_view before SPA tracking.');
 }
@@ -86,9 +107,21 @@ if (analyticsTs.includes('G-XXXXXXXXXX')) {
 }
 
 const sitemapIndex = await read('public/sitemap.xml');
+if (SECONDARY_DOMAIN_PATTERN.test(sitemapIndex)) {
+  addError('sitemap.xml must not contain mhophim.com URLs.');
+}
 const childSitemaps = extractLocs(sitemapIndex);
 if (childSitemaps.length < 3) {
   addError('sitemap.xml should include static, seo landing, and movie sitemaps.');
+}
+if (childSitemaps.includes(`${SITE_URL}/sitemap-movies.xml`)) {
+  addError('sitemap.xml should not list the full sitemap-movies.xml; use chunked movie sitemaps to improve crawl stability.');
+}
+for (let page = 1; page <= 8; page += 1) {
+  const chunkLoc = `${SITE_URL}/sitemap-movies-${page}.xml`;
+  if (!childSitemaps.includes(chunkLoc)) {
+    addError(`sitemap.xml is missing chunked movie sitemap: ${chunkLoc}`);
+  }
 }
 
 for (const loc of childSitemaps) {
@@ -107,6 +140,9 @@ for (const loc of childSitemaps) {
 }
 
 const seoSitemap = await read('public/sitemap-seo-landing.xml');
+if (SECONDARY_DOMAIN_PATTERN.test(seoSitemap)) {
+  addError('sitemap-seo-landing.xml must not contain mhophim.com URLs.');
+}
 const seoLocs = extractLocs(seoSitemap);
 const expectedSeoLocs = seoLandingUrls.map((item) => `${SITE_URL}${item.path}`);
 const missingSeoLocs = expectedSeoLocs.filter((loc) => !seoLocs.includes(loc));
@@ -127,6 +163,9 @@ if (fakeSeoLocs.length > 0) {
 }
 
 const staticSitemap = await read('public/sitemap-static.xml');
+if (SECONDARY_DOMAIN_PATTERN.test(staticSitemap)) {
+  addError('sitemap-static.xml must not contain mhophim.com URLs.');
+}
 const staticLocs = extractLocs(staticSitemap);
 const duplicateStaticLocs = staticLocs.filter((loc, index) => staticLocs.indexOf(loc) !== index);
 if (duplicateStaticLocs.length > 0) {
