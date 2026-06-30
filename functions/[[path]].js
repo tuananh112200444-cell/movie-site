@@ -13,6 +13,19 @@ const SECURITY_HEADERS = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), autoplay=(), payment=(), usb=()',
 };
 
+function canonicalRedirect(url, pathname) {
+  return new Response(null, {
+    status: 301,
+    headers: {
+      Location: `${SITE_URL}${pathname}${url.search}`,
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+      'X-Robots-Tag': 'noindex, follow',
+      'X-Canonical-Host': 'khophim.org',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
 const BOT_PATTERNS = [
   'googlebot',
   'google-inspectiontool',
@@ -1287,7 +1300,7 @@ export async function onRequest(context) {
   const pathname = url.pathname;
 
   if (url.hostname === 'www.khophim.org' || url.hostname === 'mhophim.com' || url.hostname === 'www.mhophim.com' || url.protocol === 'http:') {
-    return Response.redirect(`${SITE_URL}${pathname}${url.search}`, 301);
+    return canonicalRedirect(url, pathname);
   }
 
   if (
