@@ -304,6 +304,10 @@ serve(async (req) => {
       .map((result, index) => ({ result, url: urls[index] }))
       .filter(({ result }) => result.status === 'rejected');
     const failed = failedResults.length;
+    const failedSamples = failedResults.slice(0, 5).map(({ result, url }) => ({
+      url,
+      error: result.status === 'rejected' ? String(result.reason?.message || result.reason || 'unknown') : 'unknown',
+    }));
 
     await logPingResults(supabase, urls, successful, failed, triggeredBy || 'manual', failedResults.map((item) => item.url));
 
@@ -314,6 +318,7 @@ serve(async (req) => {
         successful,
         failed,
         sample_urls: urls.slice(0, 10),
+        failed_samples: failedSamples,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
