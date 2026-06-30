@@ -1,4 +1,5 @@
-# Canonical host redirects.
+# Canonical host redirects. Keep these above the SPA fallback so secondary
+# domains never serve duplicate indexable content.
 https://www.khophim.org/* https://khophim.org/:splat 301!
 https://mhophim.com/* https://khophim.org/:splat 301!
 https://www.mhophim.com/* https://khophim.org/:splat 301!
