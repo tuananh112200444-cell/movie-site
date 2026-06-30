@@ -493,12 +493,23 @@ function updatePayloadForExisting(existing: Record<string, unknown>, incoming: R
   };
 }
 
+function protectExistingSlug(existing: Record<string, unknown>, update: Record<string, unknown>): Record<string, unknown> {
+  const existingSlug = String(existing.slug || '').trim();
+  const incomingSlug = String(update.slug || '').trim();
+  if (existingSlug && incomingSlug && existingSlug !== incomingSlug) {
+    const safeUpdate = { ...update };
+    delete safeUpdate.slug;
+    return safeUpdate;
+  }
+  return update;
+}
+
 async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, detail: ParsedDetail): Promise<{ id: string; created: boolean; updated: boolean }> {
   const payload = moviePayload(provider, detail);
   const existing = await findExistingMovie(supabase, payload);
 
   if (existing?.id) {
-    const update = updatePayloadForExisting(existing, payload);
+    const update = protectExistingSlug(existing, updatePayloadForExisting(existing, payload));
     if (!provider.trackOphimIdentity) {
       if (existing.ophim_id) delete update.ophim_id;
       if (existing.ophim_slug) delete update.ophim_slug;
@@ -513,6 +524,7 @@ async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, d
         const retryUpdate = { ...update };
         delete retryUpdate.ophim_id;
         delete retryUpdate.ophim_slug;
+        delete retryUpdate.slug;
         const { error: retryError } = await supabase.from('movies').update(retryUpdate).eq('id', existing.id as string);
         if (!retryError) return { id: String(existing.id), created: false, updated: true };
         throw new Error(`movies update ${payload.slug}: ${dbErrorMessage(retryError)}`);
@@ -531,7 +543,7 @@ async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, d
     if (isDuplicateError(error)) {
       const duplicate = await findExistingMovie(supabase, payload);
       if (duplicate?.id) {
-        const update = updatePayloadForExisting(duplicate, payload);
+        const update = protectExistingSlug(duplicate, updatePayloadForExisting(duplicate, payload));
         const { error: updateError } = await supabase.from('movies').update(update).eq('id', duplicate.id as string);
         if (!updateError) return { id: String(duplicate.id), created: false, updated: true };
         throw new Error(`movies insert duplicate update ${payload.slug}: ${dbErrorMessage(updateError)}`);
@@ -589,6 +601,59 @@ async function upsertMovieEpisodeRowsSafely(
       const { error: insertError } = await supabase.from('movie_episodes').insert(row);
       if (insertError && !isDuplicateError(insertError)) {
         throw new Error(`movie_episodes insert ${movieSlug}: ${insertError.message}`);
+      }
+    }
+  }
+}
+
+async function upsertStreamRowsSafely(
+  supabase: SupabaseClient,
+  rows: Record<string, unknown>[],
+  movieSlug: string,
+): Promise<void> {
+  for (const batch of chunks(rows, 500)) {
+    const { error } = await supabase
+      .from('streams')
+      .upsert(batch, { onConflict: 'movie_id,episode_slug,source,server_name' });
+    if (!error) continue;
+    if (!isDuplicateError(error)) throw new Error(`streams upsert ${movieSlug}: ${error.message}`);
+
+    for (const row of batch) {
+      const serverName = String(row.server_name || '').trim();
+      const episodeSlug = String(row.episode_slug || '').trim();
+      const source = String(row.source || '').trim();
+      const { data: existing, error: existingError } = await supabase
+        .from('streams')
+        .select('id')
+        .eq('movie_id', row.movie_id as string)
+        .eq('source', source)
+        .eq('is_active', true)
+        .ilike('server_name', serverName)
+        .ilike('episode_slug', episodeSlug)
+        .limit(1)
+        .maybeSingle();
+      if (existingError) throw new Error(`streams duplicate lookup ${movieSlug}: ${existingError.message}`);
+
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from('streams')
+          .update({
+            ophim_id: row.ophim_id,
+            server_name: serverName,
+            episode_slug: episodeSlug,
+            stream_url: row.stream_url,
+            embed_url: row.embed_url,
+            source,
+            is_active: row.is_active,
+          })
+          .eq('id', existing.id);
+        if (updateError) throw new Error(`streams duplicate update ${movieSlug}: ${updateError.message}`);
+        continue;
+      }
+
+      const { error: insertError } = await supabase.from('streams').insert(row);
+      if (insertError && !isDuplicateError(insertError)) {
+        throw new Error(`streams insert ${movieSlug}: ${insertError.message}`);
       }
     }
   }
@@ -712,12 +777,7 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
       .upsert(batch, { onConflict: 'movie_id,server_name,episode_slug' });
     if (error) throw new Error(`episodes upsert ${detail.movie.slug}: ${error.message}`);
   }
-  for (const batch of chunks(streamRows, 500)) {
-    const { error } = await supabase
-      .from('streams')
-      .upsert(batch, { onConflict: 'movie_id,episode_slug,source,server_name' });
-    if (error) throw new Error(`streams upsert ${detail.movie.slug}: ${error.message}`);
-  }
+  await upsertStreamRowsSafely(supabase, streamRows, String(detail.movie.slug || 'movie'));
 
   return movieEpisodeRows.length;
 }
@@ -861,6 +921,7 @@ serve(async (req) => {
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 48), 200));
   const dryRun = url.searchParams.get('dry_run') === '1';
   const includeEpisodes = url.searchParams.get('episodes') === '1';
+  const strictMissingDetail = url.searchParams.get('strict_missing_detail') === '1';
   const provider = providerFromParam(url.searchParams.get('provider'));
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const stats: SyncStats = { scanned: 0, created: 0, updated: 0, episodesInserted: 0, skipped: 0, errors: [] };
@@ -901,7 +962,7 @@ serve(async (req) => {
         const detail = await fetchDetail(provider, slug);
         if (!detail) {
           stats.skipped += 1;
-          if (targetSlug) stats.errors.push(`[${slug}] detail not found`);
+          if (targetSlug && strictMissingDetail) stats.errors.push(`[${slug}] detail not found`);
           continue;
         }
         if (dryRun) continue;
