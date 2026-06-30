@@ -1067,6 +1067,13 @@ function renderMovieNotFound(pathname, slug) {
 async function proxySitemap(pathname, request, context) {
   if (pathname === '/sitemap.xml' || isLegacySitemapAlias(pathname)) {
     const today = new Date().toISOString().slice(0, 10);
+    const movieChunks = Array.from({ length: 8 }, (_, index) => {
+      const page = index + 1;
+      return `  <sitemap>
+    <loc>${SITE_URL}/sitemap-movies-${page}.xml</loc>
+    <lastmod>${today}</lastmod>
+  </sitemap>`;
+    }).join('\n');
     const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
 <!-- khophim.org Sitemap Index - Last updated: ${today} -->
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -1079,10 +1086,6 @@ async function proxySitemap(pathname, request, context) {
     <lastmod>${today}</lastmod>
   </sitemap>
   <sitemap>
-    <loc>${SITE_URL}/sitemap-movies.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
     <loc>${SITE_URL}/sitemap-movies-recent.xml</loc>
     <lastmod>${today}</lastmod>
   </sitemap>
@@ -1090,6 +1093,7 @@ async function proxySitemap(pathname, request, context) {
     <loc>${SITE_URL}/sitemap-movies-upcoming.xml</loc>
     <lastmod>${today}</lastmod>
   </sitemap>
+${movieChunks}
 </sitemapindex>`;
     return new Response(request.method === 'HEAD' ? null : sitemapIndex, {
       headers: {
@@ -1111,7 +1115,7 @@ async function proxySitemap(pathname, request, context) {
   } else if (pathname === '/sitemap-movies-upcoming.xml') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?upcoming=1&page_size=5000&v=${sitemapVersion}`;
   } else if (movieChunkMatch) {
-    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=10000&v=${sitemapVersion}`;
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=5000&v=${sitemapVersion}`;
   }
   const cacheKey = new Request(target, { method: 'GET' });
 
