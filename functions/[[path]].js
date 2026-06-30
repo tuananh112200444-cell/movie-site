@@ -221,6 +221,11 @@ const CLEAN_STATIC_META = {
     description: 'Xem phim mới nhất Vietsub HD tại KhoPhim. Cập nhật phim lẻ, phim bộ, phim chiếu rạp và anime mới mỗi ngày.',
     h1: 'Phim mới nhất',
   },
+  '/phim-moi-cap-nhat': {
+    title: 'Phim Mới Cập Nhật Vietsub HD | KhoPhim',
+    description: 'Danh sách phim mới cập nhật, tập mới, phim bộ đang chiếu và phim lẻ Vietsub HD được làm mới liên tục trên KhoPhim.',
+    h1: 'Phim mới cập nhật',
+  },
   '/phim-hot-2026': {
     title: 'Phim Hot 2026 - Bom Tấn Điện Ảnh Mới | KhoPhim',
     description: 'Danh sách phim hot 2026, bom tấn điện ảnh, phim chiếu rạp, phim hành động và anime được quan tâm nhất trên KhoPhim.',
@@ -371,6 +376,21 @@ const CLEAN_STATIC_META = {
     description: 'Xem trailer phim, lịch chiếu, thông tin phim sắp ra mắt, phim hot 2026 và nội dung phim mới trên KhoPhim.',
     h1: 'Trailer phim và phim sắp chiếu',
   },
+  '/about': {
+    title: 'Giới Thiệu KhoPhim - Trang Xem Phim Online Vietsub HD',
+    description: 'Giới thiệu KhoPhim, trang xem phim online Vietsub HD cập nhật phim mới, tập mới và trải nghiệm xem phim nhanh trên mọi thiết bị.',
+    h1: 'Giới thiệu KhoPhim',
+  },
+  '/policy': {
+    title: 'Chính Sách Và Điều Khoản Sử Dụng | KhoPhim',
+    description: 'Chính sách sử dụng, quyền riêng tư, điều khoản nội dung và thông tin liên hệ dành cho người dùng KhoPhim.',
+    h1: 'Chính sách và điều khoản KhoPhim',
+  },
+  '/sitemap': {
+    title: 'Sơ Đồ Trang Web KhoPhim - Danh Mục Phim Và Trang SEO',
+    description: 'Sơ đồ trang web KhoPhim giúp người dùng và công cụ tìm kiếm khám phá nhanh phim mới, danh mục, thể loại và trang nội dung quan trọng.',
+    h1: 'Sơ đồ trang web KhoPhim',
+  },
 };
 
 const PRERENDER_PATHS = [
@@ -413,6 +433,7 @@ const PRERENDER_PATHS = [
   /^\/dien-vien/,
   /^\/about(\/|$)/,
   /^\/policy(\/|$)/,
+  /^\/sitemap(\/|$)/,
   /^\/blog(\/|$)/,
 ];
 
@@ -595,7 +616,78 @@ function titleFromSlug(slug) {
     .join(' ') || 'Phim dang cap nhat';
 }
 
-function renderHtml({ title, description, canonical, h1, body, schema, ogType = 'website', ogImage, keywords = '' }) {
+function titleCaseFromSlug(slug) {
+  const text = String(slug || '')
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+    .trim();
+  return text || 'KhoPhim';
+}
+
+function dynamicStaticMeta(cleanPath) {
+  if (cleanPath.startsWith('/the-loai/')) {
+    const name = titleCaseFromSlug(cleanPath.split('/').pop());
+    return {
+      title: `Phim ${name} Vietsub HD | KhoPhim`,
+      description: `Xem phim thể loại ${name} Vietsub HD, cập nhật phim mới, phim lẻ, phim bộ và phim chiếu rạp liên quan tại KhoPhim.`,
+      h1: `Phim ${name} Vietsub HD`,
+      pageType: 'CollectionPage',
+    };
+  }
+
+  if (cleanPath === '/dien-vien') {
+    return {
+      title: 'Diễn Viên Phim - Hồ Sơ Và Phim Tham Gia | KhoPhim',
+      description: 'Khám phá danh sách diễn viên, tiểu sử, hình ảnh và các phim Vietsub HD có diễn viên yêu thích trên KhoPhim.',
+      h1: 'Diễn viên phim trên KhoPhim',
+      pageType: 'CollectionPage',
+    };
+  }
+
+  if (cleanPath.startsWith('/dien-vien/')) {
+    const name = titleCaseFromSlug(cleanPath.split('/').pop());
+    return {
+      title: `${name} - Phim Và Thông Tin Diễn Viên | KhoPhim`,
+      description: `Xem danh sách phim có ${name}, thông tin diễn viên, phim Vietsub HD mới và các tác phẩm nổi bật trên KhoPhim.`,
+      h1: `${name} - phim và thông tin diễn viên`,
+      pageType: 'ProfilePage',
+    };
+  }
+
+  if (cleanPath === '/blog') {
+    return {
+      title: 'Blog Phim - Tin Tức, Lịch Chiếu Và Gợi Ý Phim | KhoPhim',
+      description: 'Đọc tin tức phim, lịch chiếu, gợi ý phim hay, phim mới và các bài viết điện ảnh được cập nhật trên KhoPhim.',
+      h1: 'Blog phim KhoPhim',
+      pageType: 'Blog',
+    };
+  }
+
+  if (cleanPath.startsWith('/blog/')) {
+    const name = titleCaseFromSlug(cleanPath.split('/').pop());
+    return {
+      title: `${name} | Blog Phim KhoPhim`,
+      description: `Bài viết ${name} trên KhoPhim: tin tức phim, lịch chiếu, gợi ý phim hay và thông tin điện ảnh mới.`,
+      h1: name,
+      pageType: 'BlogPosting',
+    };
+  }
+
+  if (cleanPath === '/filter' || cleanPath.startsWith('/filter/')) {
+    return {
+      title: 'Lọc Phim Theo Thể Loại, Quốc Gia, Năm Và Chất Lượng | KhoPhim',
+      description: 'Lọc phim nhanh theo thể loại, quốc gia, năm phát hành, chất lượng, phụ đề và trạng thái cập nhật trên KhoPhim.',
+      h1: 'Lọc phim nhanh trên KhoPhim',
+      pageType: 'CollectionPage',
+    };
+  }
+
+  return null;
+}
+
+function renderHtml({ title, description, canonical, h1, body, schema, ogType = 'website', ogImage, keywords = '', robots = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' }) {
   const finalImage = ogImage || `${SITE_URL}/og-image.jpg`;
   const baseSchema = [
     {
@@ -631,8 +723,8 @@ function renderHtml({ title, description, canonical, h1, body, schema, ogType = 
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="${escapeHtml(description)}">
   ${keywords ? `<meta name="keywords" content="${escapeHtml(keywords)}">` : ''}
-  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
-  <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <meta name="robots" content="${escapeHtml(robots)}">
+  <meta name="googlebot" content="${escapeHtml(robots)}">
   <meta name="language" content="vi">
   <meta name="content-language" content="vi-VN">
   <link rel="canonical" href="${escapeHtml(canonical)}">
@@ -663,15 +755,7 @@ function renderHtml({ title, description, canonical, h1, body, schema, ogType = 
 
 function renderStaticPrerender(pathname) {
   const cleanPath = getCanonicalPath(pathname);
-  const meta = CLEAN_STATIC_META[cleanPath] || STATIC_META[cleanPath] || (
-    cleanPath.startsWith('/the-loai/')
-      ? {
-          title: `The Loai ${cleanPath.split('/').pop().replace(/-/g, ' ')} Vietsub HD | KhoPhim`,
-          description: `Xem phim the loai ${cleanPath.split('/').pop().replace(/-/g, ' ')} vietsub HD tai KhoPhim.`,
-          h1: `Phim ${cleanPath.split('/').pop().replace(/-/g, ' ')} vietsub HD`,
-        }
-      : null
-  );
+  const meta = CLEAN_STATIC_META[cleanPath] || STATIC_META[cleanPath] || dynamicStaticMeta(cleanPath);
   if (!meta) return null;
 
   const canonical = `${SITE_URL}${cleanPath === '/' ? '/' : cleanPath}`;
@@ -688,7 +772,7 @@ function renderStaticPrerender(pathname) {
   const schema = [
     {
       '@context': 'https://schema.org',
-      '@type': cleanPath === '/' ? 'WebPage' : 'CollectionPage',
+      '@type': cleanPath === '/' ? 'WebPage' : meta.pageType || 'CollectionPage',
       '@id': `${canonical}#webpage`,
       name: meta.title,
       headline: meta.h1,
@@ -760,23 +844,34 @@ async function fetchOphimMovie(slug) {
 }
 
 async function fetchSupabaseMovie(slug) {
-  try {
-    const url = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
-    url.searchParams.set('slug', slug);
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'KhoPhimBot/1.0 SEO-Prerender',
-      },
-      signal: AbortSignal.timeout(5500),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    if (!data || !data.status || !data.movie || !data.movie.slug) return null;
-    return data.movie;
-  } catch {
-    return null;
+  const seoUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-seo-prerender-data`);
+  seoUrl.searchParams.set('slug', slug);
+  const detailUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
+  detailUrl.searchParams.set('slug', slug);
+
+  const attempts = [
+    { url: seoUrl, timeoutMs: 4500 },
+    { url: detailUrl, timeoutMs: 9000 },
+    { url: detailUrl, timeoutMs: 14000 },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const response = await fetch(attempt.url.toString(), {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'KhoPhimBot/1.0 SEO-Prerender',
+        },
+        signal: AbortSignal.timeout(attempt.timeoutMs),
+      });
+      if (!response.ok) continue;
+      const data = await response.json();
+      if (data && data.status && data.movie && data.movie.slug) return data.movie;
+    } catch {
+      // Fall through to the next source. Detail repair can be slow on first hit.
+    }
   }
+  return null;
 }
 
 function renderMoviePrerender(pathname, movie, slug) {
@@ -916,6 +1011,46 @@ function renderMoviePrerender(pathname, movie, slug) {
   });
 }
 
+function renderMovieNotFound(pathname, slug) {
+  const cleanPath = pathname.replace(/\/+$/, '') || `/phim/${slug}`;
+  const canonical = `${SITE_URL}${cleanPath}`;
+  const title = 'Không tìm thấy phim | KhoPhim';
+  const description = 'URL phim này không còn tồn tại hoặc chưa có dữ liệu hợp lệ trên KhoPhim.';
+  const body = `<p>Không tìm thấy phim phù hợp với URL này.</p>
+    <nav>
+      <a href="${SITE_URL}/phim-moi-nhat">Xem phim mới nhất</a>
+      <a href="${SITE_URL}/search">Tìm kiếm phim</a>
+      <a href="${SITE_URL}">Về trang chủ KhoPhim</a>
+    </nav>`;
+
+  return new Response(renderHtml({
+    title,
+    description,
+    canonical,
+    h1: 'Không tìm thấy phim',
+    body,
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      '@id': `${canonical}#webpage`,
+      url: canonical,
+      name: title,
+      description,
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+    },
+    robots: 'noindex, follow',
+  }), {
+    status: 404,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Prerendered': 'cloudflare-movie-not-found',
+      'X-Robots-Tag': 'noindex, follow',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
 async function proxySitemap(pathname, request, context) {
   if (pathname === '/sitemap.xml' || isLegacySitemapAlias(pathname)) {
     const today = new Date().toISOString().slice(0, 10);
@@ -931,27 +1066,15 @@ async function proxySitemap(pathname, request, context) {
     <lastmod>${today}</lastmod>
   </sitemap>
   <sitemap>
+    <loc>${SITE_URL}/sitemap-movies.xml</loc>
+    <lastmod>${today}</lastmod>
+  </sitemap>
+  <sitemap>
     <loc>${SITE_URL}/sitemap-movies-recent.xml</loc>
     <lastmod>${today}</lastmod>
   </sitemap>
   <sitemap>
     <loc>${SITE_URL}/sitemap-movies-upcoming.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-movies-1.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-movies-2.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-movies-3.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-movies-4.xml</loc>
     <lastmod>${today}</lastmod>
   </sitemap>
 </sitemapindex>`;
@@ -966,15 +1089,16 @@ async function proxySitemap(pathname, request, context) {
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=20260620-seo-upcoming-v2`;
+  const sitemapVersion = '20260630-supabase-only-v1';
+  let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic') {
-    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml`;
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?v=${sitemapVersion}`;
   } else if (pathname === '/sitemap-movies-recent.xml') {
-    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=2000`;
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=2000&v=${sitemapVersion}`;
   } else if (pathname === '/sitemap-movies-upcoming.xml') {
-    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?upcoming=1&page_size=5000`;
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?upcoming=1&page_size=5000&v=${sitemapVersion}`;
   } else if (movieChunkMatch) {
-    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=10000`;
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=10000&v=${sitemapVersion}`;
   }
   const cacheKey = new Request(target, { method: 'GET' });
 
@@ -1198,13 +1322,7 @@ export async function onRequest(context) {
       const movie = await fetchSupabaseMovie(slug) || await fetchOphimMovie(slug);
       const movieResponse = movie
         ? renderMoviePrerender(pathname, movie, slug)
-        : renderMoviePrerender(pathname, {
-        name: titleFromSlug(slug),
-        slug,
-        content: 'Thong tin phim dang duoc cap nhat tai KhoPhim. Trang nay duoc tao de theo doi lich chieu, noi dung va nguon phim khi co san.',
-        quality: 'HD',
-        lang: 'Vietsub',
-      }, slug);
+        : renderMovieNotFound(pathname, slug);
       putCachedPrerender(context, cacheKey, movieResponse, request);
       return movieResponse;
     }
