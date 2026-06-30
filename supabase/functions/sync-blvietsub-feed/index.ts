@@ -78,6 +78,7 @@ interface ParsedEntry {
   postId: string;
   title: string;
   originName: string;
+  aliasNames?: string[];
   content: string;
   image: string;
   year: number;
@@ -161,6 +162,19 @@ function canonicalDuplicateTitle(value = ''): string {
     .replace(/\b\d+\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function uniqueTextValues(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of values) {
+    const value = String(raw || '').trim();
+    const key = canonicalDuplicateTitle(value);
+    if (!value || !key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+  }
+  return result;
 }
 
 function stripTags(html = ''): string {
@@ -393,7 +407,7 @@ function buildEntryIndexes(entries: ParsedEntry[]) {
   const byTitle = new Map<string, ParsedEntry>();
   for (const entry of entries) {
     byPostId.set(entry.postId, entry);
-    for (const key of [entry.title, entry.originName].map(canonicalDuplicateTitle).filter(Boolean)) {
+    for (const key of uniqueTextValues([entry.title, entry.originName, ...(entry.aliasNames || [])]).map(canonicalDuplicateTitle).filter(Boolean)) {
       if (!byTitle.has(key)) byTitle.set(key, entry);
     }
   }
@@ -545,9 +559,9 @@ async function fetchDiscoveryPageMovieUrls(): Promise<WordPressMovieUrl[]> {
   return uniqWordPressMovieUrls(urls);
 }
 
-async function searchBlvietsubMovieUrls(): Promise<WordPressMovieUrl[]> {
+async function searchBlvietsubMovieUrls(keywords = DISCOVERY_QUERIES): Promise<WordPressMovieUrl[]> {
   const urls: WordPressMovieUrl[] = [];
-  for (const keyword of DISCOVERY_QUERIES.map((value) => value.trim()).filter(Boolean)) {
+  for (const keyword of keywords.map((value) => value.trim()).filter(Boolean)) {
     try {
       const body = new URLSearchParams({ action: 'search_film', keyword, limit: '20' });
       const response = await fetch('https://blvietsub.com/wp-admin/admin-ajax.php', {
@@ -579,6 +593,22 @@ async function searchBlvietsubMovieUrls(): Promise<WordPressMovieUrl[]> {
     }
   }
   return uniqWordPressMovieUrls(urls);
+}
+
+async function fetchWordPressSearchAlias(movieUrl: string, title = ''): Promise<WordPressMovieUrl | null> {
+  const movieSlug = getWordPressMovieSlug(movieUrl);
+  const slugKeyword = movieSlug.replace(/-/g, ' ');
+  const compactSlugKeyword = movieSlug
+    .split(/[-\s]+/)
+    .filter((part) => part.length > 2)
+    .slice(0, 5)
+    .join(' ');
+  const keywords = uniqueTextValues([title, slugKeyword, compactSlugKeyword]);
+  if (keywords.length === 0) return null;
+
+  const normalizedTarget = normalizeSourceUrl(movieUrl).replace(/\/+$/, '');
+  const matches = await searchBlvietsubMovieUrls(keywords);
+  return matches.find((item) => normalizeSourceUrl(item.url).replace(/\/+$/, '') === normalizedTarget) || null;
 }
 
 function getWordPressMovieSlug(movieUrl: string): string {
@@ -786,6 +816,7 @@ async function fetchWordPressEntriesWithMeta(limit: number, offset: number): Pro
         const entry = parseWordPressMoviePage(item.url, item.updatedAt, html, playerHtml);
         if (entry && !entry.originName && item.originName) entry.originName = item.originName;
         if (entry && !entry.title && item.title) entry.title = item.title;
+        if (entry) entry.aliasNames = uniqueTextValues([...(entry.aliasNames || []), item.title, item.originName]);
         return entry;
       } catch {
         return null;
@@ -827,7 +858,7 @@ function findMovieForEntry(
   if (entrySourceUrl && indexes.bySourceUrl.has(entrySourceUrl)) return indexes.bySourceUrl.get(entrySourceUrl) || null;
   if (indexes.bySlug.has(generatedSlug)) return indexes.bySlug.get(generatedSlug) || null;
 
-  for (const key of [entry.title, entry.originName].map(canonicalDuplicateTitle).filter(Boolean)) {
+  for (const key of uniqueTextValues([entry.title, entry.originName, ...(entry.aliasNames || [])]).map(canonicalDuplicateTitle).filter(Boolean)) {
     const movie = indexes.byTitle.get(key);
     if (movie && (!entry.year || !movie.year || entry.year === movie.year)) return movie;
   }
@@ -1063,7 +1094,18 @@ async function fetchWordPressEntryByUrl(movieUrl: string): Promise<ParsedEntry |
   const html = await page.text();
   const movieSlug = getWordPressMovieSlug(movieUrl);
   const playerHtml = movieSlug ? await fetchWordPressPlayerPages(html, movieSlug) : '';
-  return parseWordPressMoviePage(movieUrl, new Date().toISOString(), html, playerHtml);
+  const entry = parseWordPressMoviePage(movieUrl, new Date().toISOString(), html, playerHtml);
+  if (!entry) return null;
+
+  try {
+    const alias = await fetchWordPressSearchAlias(movieUrl, entry.title);
+    if (alias?.originName && !entry.originName) entry.originName = alias.originName;
+    entry.aliasNames = uniqueTextValues([...(entry.aliasNames || []), alias?.title, alias?.originName]);
+  } catch {
+    // Alias lookup is best-effort; the parsed page still has enough data to sync.
+  }
+
+  return entry;
 }
 
 async function syncEntryToMovie(
