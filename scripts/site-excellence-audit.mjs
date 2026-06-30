@@ -37,7 +37,7 @@ const CHECKS = [
     name: 'sitemap-index',
     url: `${SITE_URL}/sitemap.xml`,
     maxMs: 1200,
-    required: ['<sitemapindex', '/sitemap-static.xml', '/sitemap-seo-landing.xml', '/sitemap-movies-recent.xml', '/sitemap-movies-upcoming.xml'],
+    required: ['<sitemapindex', '/sitemap-static.xml', '/sitemap-seo-landing.xml', '/sitemap-movies-recent.xml', '/sitemap-movies-upcoming.xml', '/sitemap-movies-1.xml', '/sitemap-movies-8.xml'],
   },
   {
     name: 'seo-sitemap',
@@ -256,6 +256,13 @@ async function assertSitemapsClean() {
   const failures = [];
   if (!index.includes('<sitemapindex')) failures.push('public/sitemap.xml is not a sitemap index.');
   for (const loc of ['sitemap-static.xml', 'sitemap-seo-landing.xml', 'sitemap-movies-recent.xml', 'sitemap-movies-upcoming.xml']) {
+    if (!index.includes(loc)) failures.push(`public/sitemap.xml is missing ${loc}.`);
+  }
+  if (index.includes('sitemap-movies.xml')) {
+    failures.push('public/sitemap.xml should use chunked movie sitemaps instead of the full sitemap-movies.xml.');
+  }
+  for (let page = 1; page <= 8; page += 1) {
+    const loc = `sitemap-movies-${page}.xml`;
     if (!index.includes(loc)) failures.push(`public/sitemap.xml is missing ${loc}.`);
   }
   if (!seo.includes('<urlset')) failures.push('public/sitemap-seo-landing.xml is not a URL set.');
