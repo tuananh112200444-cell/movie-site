@@ -748,6 +748,102 @@ async function clearCaches(supabase: SupabaseClient): Promise<void> {
   ]);
 }
 
+function uniqueSlugs(slugs: string[]): string[] {
+  return Array.from(new Set(slugs.map((slug) => String(slug || '').trim()).filter(Boolean))).slice(0, 100);
+}
+
+function movieUrlsFromSlugs(slugs: string[]): string[] {
+  return uniqueSlugs(slugs).map((slug) => `https://khophim.org/phim/${encodeURIComponent(slug)}`);
+}
+
+async function refreshSearchIndex(supabaseUrl: string, serviceKey: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/search-index-proxy?limit=5000&refresh=1`, {
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+      signal: AbortSignal.timeout(90000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function pingChangedMovieUrls(
+  supabaseUrl: string,
+  serviceKey: string,
+  cronSecret: string,
+  slugs: string[],
+): Promise<{ attempted: boolean; ok: boolean; status: number; urls: number; message: string }> {
+  const urls = movieUrlsFromSlugs(slugs);
+  if (urls.length === 0) return { attempted: false, ok: true, status: 0, urls: 0, message: 'no changed urls' };
+
+  try {
+    const endpoint = new URL(`${supabaseUrl}/functions/v1/auto-ping-new-movies`);
+    if (cronSecret) endpoint.searchParams.set('secret', cronSecret);
+    const response = await fetch(endpoint.toString(), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        'Content-Type': 'application/json',
+        'x-triggered-by': 'cron-seo-sync-ophim',
+      },
+      body: JSON.stringify({ urls, type: 'URL_UPDATED' }),
+      signal: AbortSignal.timeout(90000),
+    });
+    const body = await response.json().catch(() => ({})) as { message?: string; status?: string; error?: string };
+    return {
+      attempted: true,
+      ok: response.ok && body.status !== 'credentials_missing',
+      status: response.status,
+      urls: urls.length,
+      message: body.message || body.status || body.error || '',
+    };
+  } catch (error) {
+    return {
+      attempted: true,
+      ok: false,
+      status: 0,
+      urls: urls.length,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function runSeoAutomation(
+  supabase: SupabaseClient,
+  supabaseUrl: string,
+  serviceKey: string,
+  cronSecret: string,
+  changedSlugs: string[],
+): Promise<{ changed_urls: number; caches_cleared: boolean; search_index_refreshed: boolean; google_ping: Awaited<ReturnType<typeof pingChangedMovieUrls>> }> {
+  const slugs = uniqueSlugs(changedSlugs);
+  if (slugs.length === 0) {
+    return {
+      changed_urls: 0,
+      caches_cleared: false,
+      search_index_refreshed: false,
+      google_ping: { attempted: false, ok: true, status: 0, urls: 0, message: 'no changed urls' },
+    };
+  }
+
+  await clearCaches(supabase);
+  const [searchIndexRefreshed, googlePing] = await Promise.all([
+    refreshSearchIndex(supabaseUrl, serviceKey),
+    pingChangedMovieUrls(supabaseUrl, serviceKey, cronSecret, slugs),
+  ]);
+
+  return {
+    changed_urls: slugs.length,
+    caches_cleared: true,
+    search_index_refreshed: searchIndexRefreshed,
+    google_ping: googlePing,
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
@@ -768,6 +864,7 @@ serve(async (req) => {
   const provider = providerFromParam(url.searchParams.get('provider'));
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const stats: SyncStats = { scanned: 0, created: 0, updated: 0, episodesInserted: 0, skipped: 0, errors: [] };
+  const changedSlugs: string[] = [];
 
   try {
     const requestedStartPage = Math.max(1, Number(url.searchParams.get('start_page') || url.searchParams.get('page') || 1) || 1);
@@ -811,8 +908,12 @@ serve(async (req) => {
         const result = await upsertMovie(supabase, provider, detail);
         if (result.created) stats.created += 1;
         if (result.updated) stats.updated += 1;
+        const beforeEpisodesInserted = stats.episodesInserted;
         if (includeEpisodes) {
           stats.episodesInserted += await insertEpisodes(supabase, provider, result.id, detail);
+        }
+        if (result.created || result.updated || stats.episodesInserted > beforeEpisodesInserted) {
+          changedSlugs.push(String(detail.movie.slug || slug));
         }
       } catch (error) {
         stats.errors.push(`[${slug}] ${error instanceof Error ? error.message : String(error)}`);
@@ -820,9 +921,14 @@ serve(async (req) => {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
-    if (!dryRun && (stats.created > 0 || stats.updated > 0 || stats.episodesInserted > 0)) {
-      await clearCaches(supabase);
-    }
+    const seoAutomation = !dryRun
+      ? await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret, changedSlugs)
+      : {
+          changed_urls: 0,
+          caches_cleared: false,
+          search_index_refreshed: false,
+          google_ping: { attempted: false, ok: true, status: 0, urls: 0, message: 'dry run' },
+        };
 
     const nextPage = targetSlug || pagesWithItems === 0 || startPage + pages > maxPage ? 1 : startPage + pages;
     if (useCursor && !dryRun && !targetSlug) await writeCursorPage(supabase, cursorKey, nextPage);
@@ -839,6 +945,7 @@ serve(async (req) => {
       dry_run: dryRun,
       include_episodes: includeEpisodes,
       cursor: useCursor ? cursorKey : null,
+      seo_automation: seoAutomation,
     };
     await writeLog(supabase, stats, elapsedMs, metadata);
     return json({
@@ -854,6 +961,7 @@ serve(async (req) => {
       skipped: stats.skipped,
       errors: stats.errors,
       include_episodes: includeEpisodes,
+      seo_automation: seoAutomation,
       elapsed_ms: elapsedMs,
     }, stats.errors.length ? 207 : 200);
   } catch (error) {

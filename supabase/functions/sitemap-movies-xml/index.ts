@@ -112,6 +112,38 @@ function getFreshnessScore(movie: MovieItem): number {
   return freshness + popularity + upcomingBoost + trailerBoost;
 }
 
+function timestampValue(value?: string): number {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function getSeoYear(movie: MovieItem): number {
+  const explicitYear = Number(movie.year || 0);
+  if (explicitYear > 0) return explicitYear;
+  const releaseYear = timestampValue(movie.release_at)
+    ? new Date(movie.release_at || '').getUTCFullYear()
+    : 0;
+  if (releaseYear > 0) return releaseYear;
+  const updatedYear = timestampValue(movie.updated_at || movie.modified?.time)
+    ? new Date(movie.updated_at || movie.modified?.time || '').getUTCFullYear()
+    : 0;
+  return updatedYear > 0 ? updatedYear : 0;
+}
+
+function compareMovieSeoOrder(a: MovieItem, b: MovieItem): number {
+  const yearDiff = getSeoYear(b) - getSeoYear(a);
+  if (yearDiff !== 0) return yearDiff;
+
+  const releaseDiff = timestampValue(b.release_at) - timestampValue(a.release_at);
+  if (releaseDiff !== 0) return releaseDiff;
+
+  const updatedDiff = timestampValue(b.updated_at || b.modified?.time) - timestampValue(a.updated_at || a.modified?.time);
+  if (updatedDiff !== 0) return updatedDiff;
+
+  return String(a.slug || '').localeCompare(String(b.slug || ''));
+}
+
 function getPriority(movie: MovieItem): string {
   const ep = (movie.episode_current ?? '').toLowerCase();
   const catalogStatus = String(movie.seo_catalog_status || '').toLowerCase();
@@ -166,7 +198,9 @@ async function fetchSupabaseMovies(offset = 0, limit = 50000): Promise<MovieItem
           .select('slug,name,thumb_url,poster_url,updated_at,episode_current,is_published,seo_catalog_status,catalog_source,release_at,tmdb_popularity,trailer_url,status,year')
           .eq('is_published', true)
           .not('slug', 'is', null)
-          .order('updated_at', { ascending: false })
+          .order('year', { ascending: false, nullsFirst: false })
+          .order('release_at', { ascending: false, nullsFirst: false })
+          .order('updated_at', { ascending: false, nullsFirst: false })
           .range(from, Math.min(to, endExclusive - 1));
         if (error || !data?.length) return [] as MovieItem[];
         return data as MovieItem[];
@@ -226,6 +260,8 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       .sort((a, b) => getFreshnessScore(b) - getFreshnessScore(a));
   } else if (options.mode === 'recent') {
     movies = movies.sort((a, b) => getFreshnessScore(b) - getFreshnessScore(a));
+  } else {
+    movies = movies.sort(compareMovieSeoOrder);
   }
 
   movies = movies.slice(0, options.mode === 'all' ? 50000 : options.limit + 650);

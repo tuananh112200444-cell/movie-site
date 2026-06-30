@@ -1180,21 +1180,122 @@ async function writeSyncLog(
       details: payload.errors,
       elapsed_ms: payload.elapsed_ms,
       success: Array.isArray(payload.errors) ? payload.errors.length === 0 : true,
+      metadata: payload.metadata || (payload.seo_automation ? { seo_automation: payload.seo_automation } : null),
     });
   } catch {
     /* sync_logs is optional */
   }
 }
 
-async function refreshSearchIndex(supabaseUrl: string): Promise<boolean> {
+async function refreshSearchIndex(supabaseUrl: string, serviceKey = ''): Promise<boolean> {
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/search-index-proxy?limit=5000&refresh=1`, {
+      headers: serviceKey ? {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      } : undefined,
       signal: AbortSignal.timeout(60000),
     });
     return response.ok;
   } catch {
     return false;
   }
+}
+
+function uniqueSlugs(slugs: string[]): string[] {
+  return Array.from(new Set(slugs.map((slug) => String(slug || '').trim()).filter(Boolean))).slice(0, 100);
+}
+
+function movieUrlsFromSlugs(slugs: string[]): string[] {
+  return uniqueSlugs(slugs).map((slug) => `https://khophim.org/phim/${encodeURIComponent(slug)}`);
+}
+
+async function clearSeoCaches(supabase: SupabaseClient, slugs: string[]): Promise<boolean> {
+  try {
+    const targets = uniqueSlugs(slugs);
+    await Promise.allSettled([
+      supabase.from('home_page_cache').delete().neq('id', '__never__'),
+      targets.length > 0
+        ? supabase.from('movie_api_cache').delete().in('slug', targets)
+        : supabase.from('movie_api_cache').delete().neq('slug', '__never__'),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function pingChangedMovieUrls(
+  supabaseUrl: string,
+  serviceKey: string,
+  cronSecret: string,
+  slugs: string[],
+): Promise<{ attempted: boolean; ok: boolean; status: number; urls: number; message: string }> {
+  const urls = movieUrlsFromSlugs(slugs);
+  if (urls.length === 0) return { attempted: false, ok: true, status: 0, urls: 0, message: 'no changed urls' };
+
+  try {
+    const endpoint = new URL(`${supabaseUrl}/functions/v1/auto-ping-new-movies`);
+    if (cronSecret) endpoint.searchParams.set('secret', cronSecret);
+    const response = await fetch(endpoint.toString(), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        'Content-Type': 'application/json',
+        'x-triggered-by': 'cron-seo-sync-blvietsub',
+      },
+      body: JSON.stringify({ urls, type: 'URL_UPDATED' }),
+      signal: AbortSignal.timeout(90000),
+    });
+    const body = await response.json().catch(() => ({})) as { message?: string; status?: string; error?: string };
+    return {
+      attempted: true,
+      ok: response.ok && body.status !== 'credentials_missing',
+      status: response.status,
+      urls: urls.length,
+      message: body.message || body.status || body.error || '',
+    };
+  } catch (error) {
+    return {
+      attempted: true,
+      ok: false,
+      status: 0,
+      urls: urls.length,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function runSeoAutomation(
+  supabase: SupabaseClient,
+  supabaseUrl: string,
+  serviceKey: string,
+  cronSecret: string,
+  changedSlugs: string[],
+): Promise<{ changed_urls: number; caches_cleared: boolean; search_index_refreshed: boolean; google_ping: Awaited<ReturnType<typeof pingChangedMovieUrls>> }> {
+  const slugs = uniqueSlugs(changedSlugs);
+  if (slugs.length === 0) {
+    return {
+      changed_urls: 0,
+      caches_cleared: false,
+      search_index_refreshed: false,
+      google_ping: { attempted: false, ok: true, status: 0, urls: 0, message: 'no changed urls' },
+    };
+  }
+
+  const cachesCleared = await clearSeoCaches(supabase, slugs);
+  const [searchIndexRefreshed, googlePing] = await Promise.all([
+    refreshSearchIndex(supabaseUrl, serviceKey),
+    pingChangedMovieUrls(supabaseUrl, serviceKey, cronSecret, slugs),
+  ]);
+
+  return {
+    changed_urls: slugs.length,
+    caches_cleared: cachesCleared,
+    search_index_refreshed: searchIndexRefreshed,
+    google_ping: googlePing,
+  };
 }
 
 function pickPlayableFromWatchPage(html: string, episodeNumber: number): { link_embed: string; link_m3u8: string } | null {
@@ -1365,22 +1466,21 @@ serve(async (req) => {
     if (url.searchParams.get('repair_existing') === '1') {
       const repairLimit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 24), 80));
       const result = await repairExistingBlvietsubMovies(supabase, repairLimit);
-      const shouldRefreshSearch = url.searchParams.get('refresh_search') === '1';
-      const searchIndexRefreshed = shouldRefreshSearch && (result.repaired > 0 || result.inserted > 0 || result.updated > 0)
-        ? await refreshSearchIndex(supabaseUrl)
-        : false;
+      const changedSlugs = result.drift.map((item) => item.slug);
+      const seoAutomation = await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs);
       await writeSyncLog(supabase, {
         function_name: 'sync-blvietsub-feed-repair-existing',
         scanned: result.scanned,
         inserted: result.inserted,
         matched: result.checked,
         errors: result.errors,
+        seo_automation: seoAutomation,
         elapsed_ms: Date.now() - started,
       });
       return json({
         success: result.errors.length === 0,
         ...result,
-        search_index_refreshed: searchIndexRefreshed,
+        seo_automation: seoAutomation,
         elapsed_ms: Date.now() - started,
       }, result.errors.length ? 207 : 200);
     }
@@ -1409,10 +1509,8 @@ serve(async (req) => {
         created = true;
       }
       const syncResult = await syncEntryToMovie(supabase, movie, entry);
-      const shouldRefreshSearch = url.searchParams.get('refresh_search') === '1';
-      const searchIndexRefreshed = shouldRefreshSearch
-        ? await refreshSearchIndex(supabaseUrl)
-        : false;
+      const changedSlugs = created || syncResult.inserted > 0 || syncResult.updated ? [movie.slug] : [];
+      const seoAutomation = await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs);
       const result = {
         success: true,
         movie_url: directUrl,
@@ -1426,7 +1524,7 @@ serve(async (req) => {
         updated: syncResult.updated,
         db_before_episode: syncResult.db_before_episode,
         source_max_episode: syncResult.source_max_episode,
-        search_index_refreshed: searchIndexRefreshed,
+        seo_automation: seoAutomation,
         elapsed_ms: Date.now() - started,
       };
       await writeSyncLog(supabase, {
@@ -1435,6 +1533,7 @@ serve(async (req) => {
         matched: created ? 0 : 1,
         inserted: syncResult.inserted,
         errors: [],
+        seo_automation: seoAutomation,
       });
       return json({
         ...result,
@@ -1452,13 +1551,16 @@ serve(async (req) => {
     let created = 0;
     let inserted = 0;
     let updated = 0;
+    const changedSlugs: string[] = [];
     const missing: string[] = [];
 
     for (const entry of entries) {
       let movie = findMovieForEntry(entry, movieIndexes);
       try {
+        let createdThisMovie = false;
         if (!movie) {
           movie = await createMovieFromEntry(supabase, entry);
+          createdThisMovie = true;
           created += 1;
           movieRows.push(movie);
           const refreshedIndexes = buildMovieIndexes(movieRows);
@@ -1475,6 +1577,9 @@ serve(async (req) => {
         const syncResult = await syncEntryToMovie(supabase, movie, entry);
         inserted += syncResult.inserted;
         if (syncResult.updated) updated += 1;
+        if (createdThisMovie || syncResult.inserted > 0 || syncResult.updated) {
+          changedSlugs.push(movie.slug);
+        }
       } catch (error) {
         errors.push(error instanceof Error ? error.message : String(error));
       }
@@ -1484,10 +1589,7 @@ serve(async (req) => {
       if (!findEntryForMovie(movie, entryIndexes)) missing.push(movie.slug);
     }
 
-    const shouldRefreshSearch = url.searchParams.get('refresh_search') === '1';
-    const searchIndexRefreshed = shouldRefreshSearch
-      ? await refreshSearchIndex(supabaseUrl)
-      : false;
+    const seoAutomation = await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs);
 
     const result = {
       success: errors.length === 0,
@@ -1504,7 +1606,7 @@ serve(async (req) => {
       missing_sample: missing.slice(0, 20),
       inserted,
       updated,
-      search_index_refreshed: searchIndexRefreshed,
+      seo_automation: seoAutomation,
       errors,
       elapsed_ms: Date.now() - started,
     };
