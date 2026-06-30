@@ -106,14 +106,6 @@ function movieLooseTitleKeys(movie: MovieItem): string[] {
   return keys;
 }
 
-function sourcePriority(movie: MovieItem): number {
-  const source = `${movie.source_site ?? ''} ${movie.source_name ?? ''}`.toLowerCase();
-  if (source.includes('admin') || source.includes('supabase')) return 4;
-  if (movie.tmdb_id) return 3;
-  if (!source.includes('ophim') && !source.includes('phimapi') && !source.includes('kkphim')) return 2;
-  return 1;
-}
-
 function getEpisodeNumber(value?: string | number): number {
   if (value === undefined || value === null) return 0;
   const text = String(value);
@@ -126,6 +118,25 @@ function getMovieEpisodeNumber(movie: MovieItem): number {
     getEpisodeNumber(movie.current_episode),
     getEpisodeNumber(movie.episode_current)
   );
+}
+
+function isPendingEpisodeLabel(value?: string | null): boolean {
+  const text = normalizeSearchText(value);
+  return !text || ['trailer', 'sap chieu', 'dang cap nhat', 'coming soon', 'updating'].includes(text);
+}
+
+function hasPlayableMarker(movie: MovieItem): boolean {
+  if (getMovieEpisodeNumber(movie) > 0) return true;
+  return Boolean(movie.episode_current && !isPendingEpisodeLabel(movie.episode_current));
+}
+
+function sourcePriority(movie: MovieItem): number {
+  const source = `${movie.source_site ?? ''} ${movie.source_name ?? ''}`.toLowerCase();
+  if (source.includes('tmdb-catalog')) return hasPlayableMarker(movie) ? 1 : -2;
+  if (source.includes('admin') || source.includes('supabase')) return 4;
+  if (movie.tmdb_id && hasPlayableMarker(movie)) return 3;
+  if (!source.includes('ophim') && !source.includes('phimapi') && !source.includes('kkphim')) return 2;
+  return 1;
 }
 
 function getMergedEpisodeText(preferred: MovieItem, fallback: MovieItem): string {
@@ -159,6 +170,8 @@ function movieCompleteness(movie: MovieItem): number {
 }
 
 function choosePreferredMovie<T extends MovieItem>(a: T, b: T): T {
+  const playableDiff = Number(hasPlayableMarker(a)) - Number(hasPlayableMarker(b));
+  if (playableDiff !== 0) return playableDiff > 0 ? a : b;
   const priorityDiff = sourcePriority(a) - sourcePriority(b);
   if (priorityDiff !== 0) return priorityDiff > 0 ? a : b;
   const completenessDiff = movieCompleteness(a) - movieCompleteness(b);

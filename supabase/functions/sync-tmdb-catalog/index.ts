@@ -80,6 +80,45 @@ function normalizeTitle(value: unknown): string {
     .replace(/\s+/g, ' ');
 }
 
+function compactTitle(value: unknown): string {
+  return normalizeTitle(value).replace(/\s+/g, '');
+}
+
+function titleKeysFromMovie(movie: Record<string, unknown>): Set<string> {
+  return new Set(
+    [
+      movie.name,
+      movie.origin_name,
+      movie.title_vi,
+      movie.title_en,
+      movie.title_original,
+      String(movie.slug || '').replace(/-/g, ' '),
+    ]
+      .map(compactTitle)
+      .filter((value) => value.length >= 8),
+  );
+}
+
+function safeIlikeTerm(value: unknown): string {
+  const term = String(value || '').trim();
+  if (term.length < 3 || /[,()]/.test(term)) return '';
+  return term.replace(/[%*_]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function episodeNumber(value: unknown): number {
+  const matches = Array.from(String(value || '').matchAll(/\d+/g))
+    .map((match) => Number(match[0]))
+    .filter(Number.isFinite);
+  return matches.length ? Math.max(...matches) : 0;
+}
+
+function hasPlayableMarker(movie: Record<string, unknown>): boolean {
+  const current = Math.max(episodeNumber(movie.current_episode), episodeNumber(movie.episode_current));
+  if (current > 0) return true;
+  const episode = normalizeTitle(movie.episode_current);
+  return Boolean(episode && !['trailer', 'sap chieu', 'dang cap nhat', 'coming soon', 'updating'].includes(episode));
+}
+
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -276,6 +315,53 @@ async function upsertCatalogMovie(
 ): Promise<'inserted' | 'updated' | 'skipped'> {
   const tmdbId = Number(payload.tmdb_id || 0);
   const mediaType = String(payload.tmdb_media_type || '');
+  const payloadYear = Number(payload.year || 0);
+  const payloadKeys = titleKeysFromMovie(payload);
+  let playableDuplicate: Record<string, unknown> | null = null;
+
+  if (payloadKeys.size > 0 && payloadYear > 0) {
+    const terms = [
+      payload.name,
+      payload.origin_name,
+      payload.title_vi,
+      payload.title_en,
+      payload.title_original,
+    ]
+      .map(safeIlikeTerm)
+      .filter(Boolean)
+      .slice(0, 4);
+
+    let query = supabase
+      .from('movies')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_original,episode_current,current_episode,source_site,is_published,year')
+      .eq('is_published', true)
+      .eq('year', payloadYear)
+      .neq('source_site', 'tmdb-catalog')
+      .limit(80);
+
+    if (terms.length > 0) {
+      const filters = terms.flatMap((term) => [
+        `name.ilike.%${term}%`,
+        `origin_name.ilike.%${term}%`,
+        `title_vi.ilike.%${term}%`,
+        `title_en.ilike.%${term}%`,
+        `title_original.ilike.%${term}%`,
+      ]);
+      query = query.or(filters.join(','));
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    playableDuplicate = ((data ?? []) as unknown as Record<string, unknown>[]).find((movie) => {
+      if (!hasPlayableMarker(movie)) return false;
+      const movieKeys = titleKeysFromMovie(movie);
+      for (const key of payloadKeys) {
+        if (movieKeys.has(key)) return true;
+      }
+      return false;
+    }) ?? null;
+  }
+
   const existing = await supabase
     .from('movies')
     .select('id,slug,episode_current,source_site,is_published')
@@ -289,6 +375,16 @@ async function upsertCatalogMovie(
   if (existing.data?.id) {
     const episode = String(existing.data.episode_current || '').toLowerCase().trim();
     const existingSource = String(existing.data.source_site || '').toLowerCase().trim();
+    if (existingSource === 'tmdb-catalog' && playableDuplicate?.id) {
+      const { error } = await supabase.from('movies').update({
+        is_published: false,
+        seo_catalog_status: 'superseded',
+        schedule_note: `Da co ban phim co nguon xem: ${String(playableDuplicate.slug || '')}`,
+        updated_at: new Date().toISOString(),
+      }).eq('id', existing.data.id);
+      if (error) throw error;
+      return 'skipped';
+    }
     const hasPlayableMarker = existingSource !== 'tmdb-catalog' && episode && !['trailer', 'sap chieu', 'dang cap nhat'].includes(episode);
     const { slug: _slug, episode_current: _episodeCurrent, source_site: _sourceSite, ...updatePayload } = payload;
     if (hasPlayableMarker) {
@@ -304,6 +400,8 @@ async function upsertCatalogMovie(
     if (error) throw error;
     return 'updated';
   }
+
+  if (playableDuplicate?.id) return 'skipped';
 
   const { error } = await supabase.from('movies').insert(payload);
   if (error) {
