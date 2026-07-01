@@ -192,6 +192,35 @@ function getVideoBufferedAhead(video: HTMLVideoElement | null): number {
   return 0;
 }
 
+function getEpisodeHost(ep?: EpisodeData | null): string {
+  return getSourceHost(ep?.link_m3u8 || ep?.link_embed || '');
+}
+
+function buildFallbackServersAvoidingHost(
+  servers: EpisodeServer[],
+  activeServer: number,
+  activeHost: string,
+): { indices: number[]; servers: EpisodeServer[] } {
+  const indices = servers.map((_, index) => index).filter((index) => index !== activeServer);
+  if (!activeHost) return { indices, servers: indices.map((index) => servers[index]) };
+
+  const filtered = indices
+    .map((index) => ({
+      index,
+      server: {
+        ...servers[index],
+        server_data: (servers[index].server_data ?? []).filter((ep) => getEpisodeHost(ep) !== activeHost),
+      },
+    }))
+    .filter(({ server }) => (server.server_data ?? []).length > 0);
+
+  if (!filtered.length) return { indices, servers: indices.map((index) => servers[index]) };
+  return {
+    indices: filtered.map(({ index }) => index),
+    servers: filtered.map(({ server }) => server),
+  };
+}
+
 function PlayerWatermark() {
   return (
     <div className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-white/85 shadow-lg shadow-black/30 backdrop-blur-md sm:left-4 sm:top-4 sm:gap-2 sm:px-2.5">
@@ -374,10 +403,11 @@ export default function PlayerBox({
 
   const switchToFallbackServer = useCallback(() => {
     rememberBadSourceHost(activeSourceHost);
-    const remainingServerIndices = allServers
-      .map((_, index) => index)
-      .filter((index) => index !== activeServer);
-    const remainingServers = remainingServerIndices.map((index) => allServers[index]);
+    const { indices: remainingServerIndices, servers: remainingServers } = buildFallbackServersAvoidingHost(
+      allServers,
+      activeServer,
+      activeSourceHost,
+    );
     const fallback = pickBestEpisodeByPriority(remainingServers, episode?.slug);
     if (fallback) {
       onSwitchServer(remainingServerIndices[fallback.serverIndex]);

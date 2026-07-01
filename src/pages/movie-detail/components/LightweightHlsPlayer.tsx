@@ -29,6 +29,7 @@ interface HlsQualityLevel {
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 const MAX_STREAM_RECOVERY_ATTEMPTS = 5;
+const MAX_NON_FATAL_NETWORK_RETRIES = 4;
 const STALL_RECOVERY_DELAY_MS = 5000;
 const STALL_PROGRESS_CHECK_MS = 2500;
 const STALL_MIN_PROGRESS_SECONDS = 0.05;
@@ -128,6 +129,7 @@ export default function LightweightHlsPlayer({
   const lastTimeRef = useRef(0);
   const lastPlaybackSecondRef = useRef(0);
   const fatalRetryRef = useRef(0);
+  const nonFatalNetworkRetryRef = useRef(0);
   const streamRecoveryRef = useRef(0);
   const pseudoFsRef = useRef(false);
 
@@ -246,6 +248,7 @@ export default function LightweightHlsPlayer({
     setErrorMsg('');
     setIsBuffering(false);
     fatalRetryRef.current = 0;
+    nonFatalNetworkRetryRef.current = 0;
     streamRecoveryRef.current = 0;
     if (stallTimerRef.current) {
       clearTimeout(stallTimerRef.current);
@@ -314,6 +317,7 @@ export default function LightweightHlsPlayer({
         if (!data.fatal) {
           const details = String(data.details || '');
           if (data.type === 'networkError' && /frag|level|manifest/i.test(details)) {
+            nonFatalNetworkRetryRef.current += 1;
             setIsBuffering(true);
             setErrorMsg('Đang tải lại đoạn phim...');
             onPlayerIssue?.({
@@ -323,6 +327,23 @@ export default function LightweightHlsPlayer({
               buffered_ahead: getBufferedAhead(video),
               error_message: details,
             });
+            if (
+              nonFatalNetworkRetryRef.current >= MAX_NON_FATAL_NETWORK_RETRIES &&
+              getBufferedAhead(video) < 0.75
+            ) {
+              setHasError(true);
+              setErrorMsg('Nguồn phim phản hồi chậm');
+              onPlayerIssue?.({
+                event_type: 'hls_fatal',
+                playback_time: video.currentTime,
+                duration: video.duration || 0,
+                buffered_ahead: getBufferedAhead(video),
+                error_message: `${details || 'network retry limit reached'} after ${nonFatalNetworkRetryRef.current} retries`,
+              });
+              onFatalError?.();
+              return;
+            }
+            capToLowerAutoLevel(hls);
             hls.startLoad(video.currentTime);
           }
           return;
@@ -507,6 +528,7 @@ export default function LightweightHlsPlayer({
       setIsBuffering(false);
       setErrorMsg('');
       streamRecoveryRef.current = 0;
+      nonFatalNetworkRetryRef.current = 0;
       clearStallTimer();
       ensureStallMonitor();
     };
@@ -520,6 +542,7 @@ export default function LightweightHlsPlayer({
       if (getBufferedAhead(video) > 2) {
         setErrorMsg('');
         streamRecoveryRef.current = 0;
+        nonFatalNetworkRetryRef.current = 0;
       }
     };
     const onVol = () => {
