@@ -19,6 +19,7 @@ import {
   hasPlayableUrl,
   pickBestEpisodeByPriority,
   epSortKey,
+  getPosterUrl,
 } from '@/services/movieApi';
 
 const UserComments = lazy(() => import('./components/UserComments'));
@@ -538,7 +539,7 @@ export default function MovieDetailPage() {
                 originName={movie.origin_name}
                 year={movie.year}
                 genres={movie.category?.map((c) => c.name)}
-                posterUrl={`https://img.ophim.live/uploads/movies/${movie.poster_url || movie.thumb_url}`}
+                posterUrl={getPosterUrl(movie.poster_url || movie.thumb_url)}
               />
             </Suspense>
 

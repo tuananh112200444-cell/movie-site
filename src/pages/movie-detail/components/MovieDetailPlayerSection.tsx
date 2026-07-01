@@ -6,6 +6,7 @@ import {
   detectServerType,
   getServerTypeStyle,
   epSortKey,
+  getThumbUrl,
 } from '@/services/movieApi';
 import { useServerNow } from '@/hooks/useServerNow';
 import { getMovieCountdownInfo } from '@/utils/movieSchedule';
@@ -414,11 +415,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     onClick={handleWatchNow}
                   >
                     <img
-                      src={
-                        movie.thumb_url
-                          ? `https://img.ophim.live/uploads/movies/${movie.thumb_url}`
-                          : ''
-                      }
+                      src={getThumbUrl(movie.thumb_url || movie.poster_url)}
                       alt={movie.name}
                       className="w-full h-full object-cover object-top scale-105 group-hover:scale-100 transition-transform duration-500"
                     />
