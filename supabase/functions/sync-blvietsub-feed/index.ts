@@ -1073,11 +1073,12 @@ async function updateMovieMetadata(
   }
 
   Object.keys(update).forEach((key) => update[key] === undefined && delete update[key]);
-  if (Object.keys(update).length === 0) return false;
+  const changed = Object.keys(update).length > 0;
+  update.last_synced_at = new Date().toISOString();
 
   const { error } = await supabase.from('movies').update(update).eq('id', movie.id);
   if (error) throw new Error(`movies update ${movie.slug}: ${error.message}`);
-  return true;
+  return changed;
 }
 
 async function deleteDetailCache(supabase: SupabaseClient, slugs: string[]): Promise<void> {
