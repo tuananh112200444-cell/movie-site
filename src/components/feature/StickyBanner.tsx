@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
-const BANNER_URL = '';
+const BANNER_URL = 'https://winaz.it.com/?utm_source=Khophim&utm_medium=facebook&utm_campaign=booking';
 const DISMISSED_KEY = 'kp_sticky_banner_dismissed';
 function trackBannerClick(pagePath: string) {
   const payload = {
@@ -54,7 +54,7 @@ function trackBannerClick(pagePath: string) {
 
 export default function StickyBanner() {
   const location = useLocation();
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [dismissed, setDismissed] = useState(() => {
     try {
       return sessionStorage.getItem(DISMISSED_KEY) === '1';
@@ -65,13 +65,7 @@ export default function StickyBanner() {
 
   useEffect(() => {
     if (dismissed) return;
-    setVisible(false);
-
-    const timer = setTimeout(() => {
-      setVisible(true);
-    }, 1500);
-
-    return () => clearTimeout(timer);
+    setVisible(true);
   }, [location.pathname, dismissed]);
 
   const handleClose = (e: React.MouseEvent) => {
@@ -92,25 +86,26 @@ export default function StickyBanner() {
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-[90] transition-transform duration-500 ease-out ${
-        visible ? 'translate-y-0' : 'translate-y-full'
+      className={`relative z-0 w-full overflow-hidden border-t border-white/[0.04] bg-[#0d0f1a]/90 transition-all duration-500 ease-out ${
+        visible ? 'max-h-[62px] opacity-100 sm:max-h-[82px]' : 'max-h-0 opacity-0'
       }`}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      <div className="relative mx-auto w-full max-w-[720px] px-2 sm:px-3 pb-2 pt-1">
-        <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60">
+      <div className="relative mx-auto w-full max-w-[728px] px-2 py-1.5 sm:px-3">
+        <div className="relative overflow-hidden rounded-lg border border-white/10 shadow-lg shadow-black/35">
           <a
             href={BANNER_URL}
             target="_blank"
-            rel="noopener noreferrer nofollow"
+            rel="noopener noreferrer nofollow sponsored"
             onClick={handleBannerClick}
             className="block active:scale-[0.99] transition-transform cursor-pointer"
           >
             <img
-              src="https://static.readdy.ai/image/85988c9764f3464943f9546f02dafd4c/77c2b25cfe14f09e260a7cdb41aa610f.jpeg"
-              alt="Banner"
-              className="w-full h-[50px] sm:h-[90px] object-cover object-center"
-              loading="lazy"
+              src="/banners/winaz-728x90.gif"
+              alt="WinAZ banner"
+              className="aspect-[728/90] h-auto max-h-[50px] w-full object-contain object-center sm:max-h-[70px]"
+              loading="eager"
+              width={728}
+              height={90}
             />
 
             <span className="absolute bottom-1 left-2 text-[9px] text-white/30 font-medium tracking-wide uppercase select-none pointer-events-none">

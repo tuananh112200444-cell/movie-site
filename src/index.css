@@ -538,6 +538,19 @@ input::placeholder, textarea::placeholder {
   pointer-events: none;
 }
 
+@media (max-width: 767px) {
+  .home-section-surface {
+    margin-inline: -0.1rem;
+    padding: 0.9rem 0.15rem 0;
+    border-top-color: rgba(255, 255, 255, 0.075);
+  }
+
+  .home-section-surface::before {
+    width: min(13rem, 58vw);
+    background: linear-gradient(90deg, rgba(236, 180, 102, 0.52), rgba(255,255,255,0.10), transparent);
+  }
+}
+
 @media (min-width: 1024px) {
   .home-section-surface {
     margin-inline: -0.75rem;
@@ -594,6 +607,26 @@ input::placeholder, textarea::placeholder {
   .home-rail-frame::before,
   .home-rail-frame::after {
     display: none;
+  }
+
+  .home-rail-scroll {
+    scroll-behavior: auto;
+  }
+
+  .group:hover .movie-card-img,
+  .group:hover .movie-card-hover,
+  .group:hover .img-cinematic-hover,
+  .group:hover .img-enhanced,
+  .group:hover .img-enhanced-wide {
+    will-change: auto;
+    transform: none;
+  }
+
+  .card-shine-sweep,
+  .glow-pulse::before,
+  .section-border-glow::after,
+  .float-animation {
+    animation: none !important;
   }
 }
 

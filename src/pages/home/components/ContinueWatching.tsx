@@ -11,18 +11,20 @@ export default function ContinueWatching() {
   if (history.length === 0) return null;
 
   return (
-    <section className="mb-8 md:mb-12 home-section-surface">
-      <div className="mb-3 flex items-center justify-between md:mb-5">
-        <div className="flex items-center gap-3">
-          <div className="w-1 h-5 bg-orange-500 rounded-full" />
-          <h3 className="text-lg font-bold text-white">🕐 Xem Tiếp</h3>
+    <section className="mb-6 md:mb-12 home-section-surface">
+      <div className="mb-3 flex items-center justify-between gap-3 md:mb-5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="h-7 w-7 shrink-0 rounded-lg border border-orange-400/20 bg-orange-500/12 text-orange-300 flex items-center justify-center">
+            <i className="ri-history-line text-sm" />
+          </div>
+          <h3 className="truncate text-[1.05rem] font-black text-white md:text-lg">Xem tiếp</h3>
         </div>
-        <Link to="/yeu-thich" className="text-white/40 hover:text-red-400 text-xs transition-colors whitespace-nowrap flex items-center gap-1">
+        <Link to="/yeu-thich" className="flex min-h-8 items-center gap-1 whitespace-nowrap rounded-full border border-white/[0.08] bg-white/[0.045] px-3 text-xs font-bold text-white/58 transition-colors hover:text-red-400">
           Lịch sử đầy đủ <i className="ri-arrow-right-line" />
         </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6 md:gap-3 lg:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] lg:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]">
+      <div className="grid grid-cols-3 gap-x-2.5 gap-y-4 sm:grid-cols-4 md:grid-cols-6 md:gap-3 lg:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] lg:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]">
         {history.slice(0, 6).map((entry) => (
           <HistoryCard key={entry._id} entry={entry} onRemove={removeEntry} />
         ))}
@@ -100,7 +102,7 @@ function HistoryCard({ entry, onRemove }: HistoryCardProps) {
             </div>
           )}
         </div>
-        <p className="mt-1.5 min-h-[34px] text-[11px] font-semibold leading-snug text-white/90 line-clamp-2 transition-colors group-hover:text-orange-400 md:mt-2 md:text-xs">
+        <p className="mt-1.5 min-h-[32px] text-[11px] font-bold leading-4 text-white/90 line-clamp-2 transition-colors group-hover:text-orange-400 md:mt-2 md:text-xs">
           {entry.name}
         </p>
       </Link>

@@ -1,8 +1,8 @@
-import NavBanner from './NavBanner';
 import { lazy, Suspense, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { prefetchRoute } from '../../utils/prefetchRoute';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
+import StickyBanner from './StickyBanner';
 
 const SearchSuggestions = lazy(() => import('./SearchSuggestions'));
 
@@ -548,10 +548,9 @@ export default function Navbar() {
             </button>
           </div>
         </div>
+
+        <StickyBanner />
         
-         <NavBanner />
-
-
         {/* Mobile Search Overlay */}
         {searchOpen && (
           <>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getOptimizedImageUrl, getPosterUrl, getImageUrl, fetchMoviesByType } from '../../../services/movieApi';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import type { MovieItem } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
 
@@ -46,6 +47,8 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
   const sliderRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const visibleMovies = movies.slice(0, isDesktop ? 20 : 10);
 
   /* ── Fetch phim chiếu rạp ── */
   useEffect(() => {
@@ -152,7 +155,7 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
 
   return (
     <div className="mb-7 md:mb-10 home-section-surface">
-      <SectionHeader count={movies.length} />
+      <SectionHeader count={visibleMovies.length} />
 
       {/* ── Slider ── */}
       <div className="home-rail-frame relative group/slider">
@@ -163,7 +166,7 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
           className={`
             absolute left-0 top-1/2 -translate-y-1/2 z-20
             w-9 h-9 md:w-10 md:h-10 rounded-full
-            flex items-center justify-center
+            hidden md:flex items-center justify-center
             bg-black/70 hover:bg-black/90 text-white
             border border-white/10
             transition-all duration-200 cursor-pointer
@@ -183,7 +186,7 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
           className={`
             absolute right-0 top-1/2 -translate-y-1/2 z-20
             w-9 h-9 md:w-10 md:h-10 rounded-full
-            flex items-center justify-center
+            hidden md:flex items-center justify-center
             bg-black/70 hover:bg-black/90 text-white
             border border-white/10
             transition-all duration-200 cursor-pointer
@@ -201,7 +204,7 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
           className="home-rail-scroll flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-smooth pb-8 pt-2 px-0.5 md:gap-3 lg:gap-4 xl:gap-5"
           style={{ scrollbarWidth: 'none' }}
         >
-          {movies.slice(0, 20).map((movie, idx) => (
+          {visibleMovies.map((movie, idx) => (
             <CinemaCard
               key={`cinema-${movie._id}`}
               movie={movie}
@@ -270,10 +273,10 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
             bg-[#16192a] border contain-paint
             transition-[transform,box-shadow,border-color] duration-300 ease-out
             ${isTop3
-              ? 'border-amber-500/15 hover:border-amber-400/50 hover:shadow-2xl hover:shadow-amber-500/15'
-              : 'border-white/[0.06] hover:border-white/[0.25] hover:shadow-xl hover:shadow-black/50'
+              ? 'border-amber-500/15 md:hover:border-amber-400/50 md:hover:shadow-2xl md:hover:shadow-amber-500/15'
+              : 'border-white/[0.06] md:hover:border-white/[0.25] md:hover:shadow-xl md:hover:shadow-black/50'
             }
-            hover:-translate-y-1 hover:scale-[1.01]
+            md:hover:-translate-y-1 md:hover:scale-[1.01]
           `}
         >
           <div className="aspect-[2/3] relative overflow-hidden">
@@ -292,7 +295,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
                 w-full h-full object-cover object-top
                 transition-transform duration-200 ease-out
                 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}
-                group-hover:scale-105
+                md:group-hover:scale-105
               `}
               style={{ filter: 'contrast(1.04) saturate(1.1)' }}
               onLoad={() => setImgLoaded(true)}
@@ -310,7 +313,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
                   font-black ${rc.size} ${rc.bg} ${rc.text}
                   border-2 border-gray-900/80 shadow-xl ${rc.shadow}
                   transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
-                  group-hover:scale-110
+                  md:group-hover:scale-110
                 `}
               >
                 {rc.icon ?? <span>{rank}</span>}
@@ -354,13 +357,13 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
             </div>
 
             {/* ── Hover play overlay ── */}
-            <div className="absolute inset-0 z-[8] flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors duration-300">
+            <div className="absolute inset-0 z-[8] hidden items-center justify-center bg-black/0 transition-colors duration-300 md:flex md:group-hover:bg-black/40">
               <div className="
                 w-10 h-10 md:w-11 md:h-11 rounded-full
                 bg-white/25
                 flex items-center justify-center
                 opacity-0 scale-75
-                group-hover:opacity-100 group-hover:scale-100
+                md:group-hover:opacity-100 md:group-hover:scale-100
                 transition-[transform,opacity] duration-300 ease-out
               ">
                 <i className="ri-play-fill text-white text-lg md:text-xl ml-0.5" />
@@ -370,7 +373,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
             {/* Top shimmer bar for top 3 */}
             {isTop3 && (
               <div className="absolute top-0 left-0 right-0 h-[2px] z-[10] overflow-hidden bg-amber-500/20">
-                <div className="h-full w-full bg-gradient-to-r from-transparent via-amber-300/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="h-full w-full bg-gradient-to-r from-transparent via-amber-300/60 to-transparent opacity-0 transition-opacity duration-500 md:group-hover:opacity-100" />
               </div>
             )}
           </div>

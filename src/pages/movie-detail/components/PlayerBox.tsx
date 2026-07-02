@@ -39,15 +39,15 @@ function isBlvietsubWatchPageUrl(url: string): boolean {
   if (!raw) return false;
   try {
     const parsed = new URL(raw);
-    return /(^|\.)blvietsub\.com$/i.test(parsed.hostname) && /\/+xem-phim\//i.test(parsed.pathname);
+    return /(^|\.)blvietsub\.com$/i.test(parsed.hostname);
   } catch {
-    return /blvietsub\.com\/+xem-phim\//i.test(raw);
+    return /(^|\/\/|[./])blvietsub\.com(\/|$)/i.test(raw);
   }
 }
 
 function getSafeEmbedUrl(url: string): string {
   if (isBlvietsubWatchPageUrl(url)) return '';
-  return normalizeDailymotionUrl(url);
+  return isIframeSource(url) ? normalizeDailymotionUrl(url) : '';
 }
 
 function isDirectVideo(url: string): boolean {
@@ -107,6 +107,7 @@ function getPlayerMode(ep: EpisodeData | null): 'hls' | 'embed' | 'video' {
   }
   
   if (ep?.link_embed) {
+    if (isBlvietsubWatchPageUrl(ep.link_embed)) return 'embed';
     if (isDirectVideo(ep.link_embed)) return 'video';
     if (isIframeSource(ep.link_embed)) return 'embed';
     return 'embed';
@@ -305,7 +306,9 @@ export default function PlayerBox({
   const directVideoSrc = useMemo(() => {
     const streamUrl = episode?.link_m3u8 ?? '';
     if (streamUrl && !isHlsUrl(streamUrl)) return normalizeVideoCdnUrl(streamUrl);
-    return normalizeVideoCdnUrl(episode?.link_embed ?? '');
+    const embedUrl = episode?.link_embed ?? '';
+    if (!embedUrl || isBlvietsubWatchPageUrl(embedUrl) || !isDirectVideo(embedUrl)) return '';
+    return normalizeVideoCdnUrl(embedUrl);
   }, [episode?.link_m3u8, episode?.link_embed]);
   const hlsSrc = useMemo(() => getHlsProxyUrl(episode?.link_m3u8 ?? ''), [episode?.link_m3u8]);
   const streamIsHls = Boolean(episode?.link_m3u8 && isHlsUrl(episode.link_m3u8));
@@ -777,7 +780,7 @@ export default function PlayerBox({
             <i className="ri-refresh-line text-base" />
           </button>
 
-          {streamIsHls && episode?.link_embed && (
+          {streamIsHls && episode?.link_embed && !isBlvietsubWatchPageUrl(episode.link_embed) && (
             <div className="flex items-center gap-0.5 bg-black/25 border border-white/[0.08] rounded-xl p-0.5 ml-1">
               <button onClick={() => setPlayerMode('hls')}
                 className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
@@ -785,7 +788,9 @@ export default function PlayerBox({
                 }`}>
                 HLS
               </button>
-              <button onClick={() => setPlayerMode(isIframeSource(episode.link_embed) ? 'embed' : 'video')}
+              <button
+                onClick={() => setPlayerMode(isIframeSource(episode.link_embed) ? 'embed' : 'video')}
+                disabled={!isIframeSource(episode.link_embed) && !isDirectVideo(episode.link_embed)}
                 className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   playerMode === 'video' ? 'bg-white/15 text-white' : 'text-white/35 hover:text-white/70'
                 }`}>

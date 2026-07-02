@@ -21,10 +21,37 @@ import {
   epSortKey,
   getPosterUrl,
 } from '@/services/movieApi';
+import { runWhenIdle } from '@/utils/performance';
 
 const UserComments = lazy(() => import('./components/UserComments'));
 const MovieReviewSection = lazy(() => import('@/components/feature/MovieReview'));
 const MovieDetailSEOBlock = lazy(() => import('./components/MovieDetailSEOBlock'));
+
+function getPlayableSourceUrl(ep: EpisodeData): string {
+  return ep.link_m3u8?.trim() || ep.link_embed?.trim() || '';
+}
+
+function shouldWarmMoviePlayer(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const nav = navigator as Navigator & {
+    connection?: { saveData?: boolean; effectiveType?: string };
+  };
+  if (nav.connection?.saveData) return false;
+  return !/(^|-)2g$/.test(nav.connection?.effectiveType ?? '');
+}
+
+function addWarmupHint(rel: 'dns-prefetch' | 'preconnect', href: string): () => void {
+  const selector = `link[rel="${rel}"][href="${href}"]`;
+  const existing = document.querySelector<HTMLLinkElement>(selector);
+  if (existing) return () => {};
+
+  const link = document.createElement('link');
+  link.rel = rel;
+  link.href = href;
+  if (rel === 'preconnect') link.crossOrigin = 'anonymous';
+  document.head.appendChild(link);
+  return () => link.remove();
+}
 
 function getTrailerEmbedUrl(url: string): string | null {
   if (!url) return null;
@@ -155,6 +182,8 @@ export default function MovieDetailPage() {
     if (!slug) return;
     const isFresh = searchParams.has('fresh');
     const source = searchParams.get('source') || undefined;
+    let cancelled = false;
+    let relatedTimer: ReturnType<typeof setTimeout> | null = null;
     if (isFresh) {
       setSearchParams({}, { replace: true });
     }
@@ -165,10 +194,11 @@ export default function MovieDetailPage() {
     setShowBottom(false);
     relatedFetchedRef.current = false;
     setRelated([]);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
 
     fetchMovieDetail(slug, isFresh, source)
       .then((data) => {
+        if (cancelled) return;
         if (!data) {
           setError(`Không thể tải thông tin phim "${slug}". Phim không tồn tại hoặc đang được cập nhật.`);
           return;
@@ -192,11 +222,13 @@ export default function MovieDetailPage() {
           relatedFetchedRef.current = true;
           const run = () => {
             fetchMoviesByCategory({ category: genre, country, page: 1 })
-              .then((r) => setRelated(r.items?.filter((m) => m.slug !== slug).slice(0, 6) ?? []))
+              .then((r) => {
+                if (!cancelled) setRelated(r.items?.filter((m) => m.slug !== slug).slice(0, 6) ?? []);
+              })
               .catch(() => {});
           };
-          // Defer 3s to prioritize player loading first
-          setTimeout(run, 3000);
+          // Defer to prioritize player loading first.
+          relatedTimer = setTimeout(run, 3000);
         }
 
         if (!isFresh && shouldRefreshEpisodeDetail(data)) {
@@ -221,9 +253,17 @@ export default function MovieDetailPage() {
         }
       })
       .catch(() => {
+        if (cancelled) return;
         setError(`Không thể tải thông tin phim "${slug}". Phim có thể chưa được lưu hoặc slug không khớp.`);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (relatedTimer) clearTimeout(relatedTimer);
+    };
   }, [slug]);
 
   /* ── ESC to exit cinema mode ── */
@@ -259,24 +299,26 @@ export default function MovieDetailPage() {
 
   useEffect(() => {
     if (!hasEpisodes) return;
-    void import('./components/LightweightHlsPlayer');
-
-    const firstPlayableUrl = filteredEpisodes
+    const firstPlayableEpisode = filteredEpisodes
       .flatMap((server) => server.server_data ?? [])
-      .find((ep) => hasPlayableUrl(ep))?.link_m3u8;
-    if (!firstPlayableUrl) return;
+      .find((ep) => hasPlayableUrl(ep));
+    if (!firstPlayableEpisode) return;
 
     try {
+      const firstPlayableUrl = getPlayableSourceUrl(firstPlayableEpisode);
       const origin = new URL(firstPlayableUrl).origin;
-      const existing = document.querySelector<HTMLLinkElement>(`link[rel="preconnect"][href="${origin}"]`);
-      if (existing) return;
+      const cleanups = [
+        addWarmupHint('dns-prefetch', origin),
+        addWarmupHint('preconnect', origin),
+      ];
 
-      const link = document.createElement('link');
-      link.rel = 'preconnect';
-      link.href = origin;
-      link.crossOrigin = 'anonymous';
-      document.head.appendChild(link);
-      return () => link.remove();
+      if (firstPlayableEpisode.link_m3u8 && shouldWarmMoviePlayer()) {
+        runWhenIdle(() => {
+          import('./components/LightweightHlsPlayer').catch(() => {});
+        }, 1800);
+      }
+
+      return () => cleanups.forEach((cleanup) => cleanup());
     } catch {
       return;
     }

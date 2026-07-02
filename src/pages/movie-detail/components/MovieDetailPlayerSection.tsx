@@ -94,7 +94,16 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     const [episodesCollapsed, setEpisodesCollapsed] = useState(true);
     const [isDesktopEpisodeLayout, setIsDesktopEpisodeLayout] = useState(false);
     const [serverTypeTab, setServerTypeTab] = useState<'all' | 'khophim' | 'vietsub' | 'thuyetminh' | 'longtieng' | 'other'>('all');
-    const serverNow = useServerNow(true);
+    const hasScheduledState = useMemo(
+      () => Boolean(
+        movie.next_episode_at ||
+        movie.release_at ||
+        movie.schedule_type ||
+        episodes.some((server) => server.server_data?.some((ep) => ep.is_scheduled))
+      ),
+      [episodes, movie.next_episode_at, movie.release_at, movie.schedule_type],
+    );
+    const serverNow = useServerNow(hasScheduledState);
     const scheduledCountdown = useMemo(() => getMovieCountdownInfo(movie, serverNow), [movie, serverNow]);
     const scheduledEpisode = useMemo<MergedEpisode | null>(() => {
       if (!scheduledCountdown || scheduledCountdown.kind !== 'countdown' || !scheduledCountdown.targetAt || !scheduledCountdown.targetEpisodeNumber) {

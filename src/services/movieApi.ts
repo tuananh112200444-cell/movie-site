@@ -15,9 +15,9 @@ function isBlvietsubWatchPageUrl(url: string): boolean {
   if (!raw) return false;
   try {
     const parsed = new URL(raw);
-    return /(^|\.)blvietsub\.com$/i.test(parsed.hostname) && /\/+xem-phim\//i.test(parsed.pathname);
+    return /(^|\.)blvietsub\.com$/i.test(parsed.hostname);
   } catch {
-    return /blvietsub\.com\/+xem-phim\//i.test(raw);
+    return /(^|\/\/|[./])blvietsub\.com(\/|$)/i.test(raw);
   }
 }
 
@@ -3485,7 +3485,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (host.includes('ssplay')) score += 45;
   if (host.includes('abyssplayer') || host.includes('short.icu')) score += 20;
   if (host.includes('versondd.top')) score -= 1200;
-  if (host.includes('blvietsub.com') && lower.includes('/xem-phim/')) score -= 250;
+  if (host.includes('blvietsub.com')) score -= 250;
   if (embed && !m3u8 && score < 20) score += 10;
 
   return score - getRecentBadHostPenalty(ep);
@@ -3619,7 +3619,8 @@ export function findHighestQualityEpisodeBySlug(
 
 /** Kiểm tra episode có ít nhất một URL phát được không */
 export function hasPlayableUrl(ep: EpisodeData): boolean {
-  return !!(ep.link_m3u8?.trim() || ep.link_embed?.trim());
+  const embed = String(ep.link_embed || '').trim();
+  return !!(ep.link_m3u8?.trim() || (embed && !isBlvietsubWatchPageUrl(embed)));
 }
 
 /** Kiểm tra server có ít nhất một episode phát được không */

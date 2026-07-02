@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import MovieCard from '../../../components/base/MovieCard';
 import type { Movie } from '../../../types/movie';
 import { useScrollReveal } from '../../../hooks/useScrollReveal';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
 
 interface MovieSectionProps {
@@ -280,6 +281,7 @@ export default function MovieSection({
   theme = 'cinematic',
 }: MovieSectionProps) {
   const sectionRef = useScrollReveal<HTMLElement>();
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const t = getTheme(theme);
 
   const displayMovies = movies.slice(0, Math.max(cols * rows, 12));
@@ -295,26 +297,29 @@ export default function MovieSection({
           </div>
           <div className="h-8 w-20 skeleton rounded-md flex-shrink-0" />
         </div>
-      <div className="grid grid-cols-3 gap-x-2 gap-y-4 pb-3 md:hidden">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i}>
-            <div className="aspect-[2/3] skeleton rounded-lg" />
-            <div className="mt-2 h-3 skeleton rounded w-3/4" />
-            <div className="mt-1 h-2.5 skeleton rounded w-1/2" />
+        {!isDesktop ? (
+          <div className="grid grid-cols-3 gap-x-2.5 gap-y-4 pb-2 md:hidden">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i}>
+                <div className="aspect-[2/3] skeleton rounded-lg" />
+                <div className="mt-2 h-3 skeleton rounded w-3/4" />
+                <div className="mt-1 h-2.5 skeleton rounded w-1/2" />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="home-rail-frame hidden md:block">
-        <div className="home-rail-scroll flex snap-x snap-mandatory gap-2.5 overflow-hidden pb-2 md:gap-4">
-          {Array.from({ length: Math.max(cols, 8) }).map((_, i) => (
-            <div key={i} className={carouselItemClass}>
-              <div className="aspect-[2/3] skeleton rounded-lg" />
-              <div className="mt-2 h-3 skeleton rounded w-3/4" />
-              <div className="mt-1 h-2.5 skeleton rounded w-1/2" />
+        ) : (
+          <div className="home-rail-frame hidden md:block">
+            <div className="home-rail-scroll flex snap-x snap-mandatory gap-2.5 overflow-hidden pb-2 md:gap-4">
+              {Array.from({ length: Math.max(cols, 8) }).map((_, i) => (
+                <div key={i} className={carouselItemClass}>
+                  <div className="aspect-[2/3] skeleton rounded-lg" />
+                  <div className="mt-2 h-3 skeleton rounded w-3/4" />
+                  <div className="mt-1 h-2.5 skeleton rounded w-1/2" />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        )}
       </section>
     );
   }
@@ -353,9 +358,9 @@ export default function MovieSection({
   }
 
   return (
-    <section ref={sectionRef} className="mb-7 md:mb-11 home-section-surface group/section">
+    <section ref={sectionRef} className="mb-6 md:mb-11 home-section-surface group/section">
       {/* Header */}
-      <div className="reveal flex items-center gap-2.5 mb-3 md:mb-5 px-1">
+      <div className="reveal flex items-center gap-2.5 mb-3 md:mb-5 px-0.5 md:px-1">
         {/* Icon box — shape varies by theme */}
         <div className={`relative hidden items-center justify-center w-7 h-7 rounded-md bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} border ${t.iconBorder} flex-shrink-0 md:flex`}>
           <i className={`${t.icon} ${t.iconText} text-sm`} />
@@ -366,7 +371,7 @@ export default function MovieSection({
         </div>
 
         <div className="flex-1 min-w-0">
-          <h3 className={`text-lg md:text-2xl lg:text-[1.55rem] font-black tracking-tight text-white truncate`}>
+          <h3 className={`text-[1.05rem] md:text-2xl lg:text-[1.55rem] font-black tracking-tight text-white truncate`}>
             {title}
           </h3>
           <p className="home-section-eyebrow mt-0.5 hidden md:block">Lua chon nhanh cac phim dang duoc xem nhieu</p>
@@ -375,7 +380,7 @@ export default function MovieSection({
         {/* View All — ghost pill with theme hover */}
         <Link
           to={viewAllLink}
-          className={`group/btn flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-xs font-bold text-white/58 ${t.btnHoverText} transition-all duration-300 cursor-pointer whitespace-nowrap flex-shrink-0 hover:bg-white/[0.08] active:scale-95 active:text-white`}
+          className={`group/btn flex min-h-8 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.055] px-3 py-1.5 text-xs font-bold text-white/68 ${t.btnHoverText} transition-all duration-300 cursor-pointer whitespace-nowrap flex-shrink-0 hover:bg-white/[0.08] active:scale-95 active:text-white`}
         >
           Xem tất cả
           <i className="ri-arrow-right-line text-xs transition-transform duration-300 group-hover/btn:translate-x-1" />
@@ -383,39 +388,41 @@ export default function MovieSection({
       </div>
 
       {/* Grid — stagger delays từ CSS nth-child, không cần inline style */}
-      <div className="grid grid-cols-3 gap-x-2 gap-y-4 pb-3 md:hidden">
-        {displayMovies.slice(0, 6).map((movie, index) => (
-          <div
-            key={`${movie._id}-mobile-${index}`}
-            className="min-w-0"
-          >
-            <MovieCard
-              movie={movie}
-              rank={variant === 'rank' ? index + 1 : undefined}
-              priority={prioritizeFirstRow && index < 3}
-            />
-          </div>
-        ))}
-      </div>
-
-      <div className="home-rail-frame hidden md:block">
-        <div className="home-rail-scroll reveal flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-8 pt-2 scrollbar-hide md:gap-4 md:pb-10 lg:gap-4 xl:gap-5">
-          {displayMovies.map((movie, index) => (
+      {!isDesktop ? (
+        <div className="grid grid-cols-3 gap-x-2.5 gap-y-4 pb-2 md:hidden">
+          {displayMovies.slice(0, 6).map((movie, index) => (
             <div
-              key={`${movie._id}-${index}`}
-              className={`stagger-item group/card h-full ${carouselItemClass}`}
+              key={`${movie._id}-mobile-${index}`}
+              className="min-w-0"
             >
-              <div className="h-full rounded-lg transition-transform duration-200 ease-out group-hover/card:-translate-y-1">
-                <MovieCard
-                  movie={movie}
-                  rank={variant === 'rank' ? index + 1 : undefined}
-                  priority={prioritizeFirstRow && index < 2}
-                />
-              </div>
+              <MovieCard
+                movie={movie}
+                rank={variant === 'rank' ? index + 1 : undefined}
+                priority={prioritizeFirstRow && index < 3}
+              />
             </div>
           ))}
         </div>
-      </div>
+      ) : (
+        <div className="home-rail-frame hidden md:block">
+          <div className="home-rail-scroll reveal flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-8 pt-2 scrollbar-hide md:gap-4 md:pb-10 lg:gap-4 xl:gap-5">
+            {displayMovies.map((movie, index) => (
+              <div
+                key={`${movie._id}-${index}`}
+                className={`stagger-item group/card h-full ${carouselItemClass}`}
+              >
+                <div className="h-full rounded-lg transition-transform duration-200 ease-out group-hover/card:-translate-y-1">
+                  <MovieCard
+                    movie={movie}
+                    rank={variant === 'rank' ? index + 1 : undefined}
+                    priority={prioritizeFirstRow && index < 2}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

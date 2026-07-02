@@ -867,6 +867,33 @@ async function findMovieIdForPersist(
   return null;
 }
 
+async function removeConflictingMovieIdentityFields(
+  supabase: ReturnType<typeof createClient>,
+  movieId: string,
+  update: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const safeUpdate = { ...update };
+  const checks: Array<[string, unknown]> = [
+    ['ophim_slug', safeUpdate.ophim_slug],
+    ['ophim_id', safeUpdate.ophim_id],
+  ];
+
+  for (const [column, rawValue] of checks) {
+    const value = String(rawValue || '').trim();
+    if (!value) continue;
+    const { data, error } = await supabase
+      .from('movies')
+      .select('id')
+      .eq(column, value)
+      .neq('id', movieId)
+      .limit(1)
+      .maybeSingle();
+    if (!error && data?.id) delete safeUpdate[column];
+  }
+
+  return safeUpdate;
+}
+
 async function persistExternalMovie(
   supabase: ReturnType<typeof createClient>,
   external: { movie: Record<string, unknown>; episodes: Array<{ server_name: string; server_data: unknown[] }> },
@@ -907,9 +934,10 @@ async function persistExternalMovie(
         movieUpdate.ophim_id = payload.ophim_id;
         movieUpdate.ophim_slug = payload.ophim_slug;
       }
+      const safeMovieUpdate = await removeConflictingMovieIdentityFields(supabase, movieId, movieUpdate);
       await supabase
         .from('movies')
-        .update(movieUpdate)
+        .update(safeMovieUpdate)
         .eq('id', movieId);
     } else {
       const conflictColumn = String(payload.ophim_slug || '').trim() ? 'ophim_slug' : 'slug';

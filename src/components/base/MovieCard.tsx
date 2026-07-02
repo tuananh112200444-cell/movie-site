@@ -177,19 +177,19 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
         </div>
 
         {/* Info below — mobile: hiện rating + tập luôn */}
-        <div className="mt-1 flex min-h-[58px] flex-col px-0.5 transition-[padding] duration-300 sm:mt-1.5 md:mt-2 md:min-h-[68px] md:group-hover:px-2 md:group-hover:pb-2">
-          <p className="min-h-[30px] text-[10px] font-semibold leading-tight text-white/90 line-clamp-2 group-hover:text-white transition-colors duration-200 sm:min-h-[30px] sm:text-[11px] md:min-h-[34px] md:text-[13px]">
+          <div className="mt-1.5 flex min-h-[52px] flex-col px-0.5 transition-[padding] duration-300 sm:mt-1.5 md:mt-2 md:min-h-[68px] md:group-hover:px-2 md:group-hover:pb-2">
+          <p className="min-h-[32px] text-[11px] font-bold leading-4 text-white/92 line-clamp-2 group-hover:text-white transition-colors duration-200 sm:min-h-[30px] sm:text-[11px] md:min-h-[34px] md:text-[13px]">
             {getDisplayTitle(movie)}
           </p>
           <p className="mt-0.5 hidden min-h-[13px] text-white/30 text-[9px] md:min-h-[18px] md:text-[11px] truncate sm:block">
             {getDisplayOrigin(movie) && getDisplayOrigin(movie) !== getDisplayTitle(movie) ? getDisplayOrigin(movie) : '\u00a0'}
           </p>
           <div className="mt-auto flex min-h-[18px] items-center gap-1 md:gap-2 pt-0.5 md:min-h-[18px]">
-            {movie.year && <span className="text-[9px] md:text-[11px] text-white/40 font-medium">{movie.year}</span>}
+            {movie.year && <span className="text-[9px] md:text-[11px] text-white/48 font-semibold">{movie.year}</span>}
             {epText && (
               <>
                 <span className="text-white/15 text-[9px]">·</span>
-                <span className={`text-[9px] md:text-[11px] font-semibold ${epText.cls}`}>{epText.label}</span>
+                <span className={`max-w-[3.9rem] truncate text-[9px] md:text-[11px] font-semibold ${epText.cls}`}>{epText.label}</span>
               </>
             )}
             <span className="ml-auto flex items-center gap-0.5 flex-shrink-0">

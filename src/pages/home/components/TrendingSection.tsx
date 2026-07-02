@@ -4,6 +4,7 @@ import { getOptimizedImageUrl, getPosterUrl } from '../../../services/movieApi';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
 import { useImageFallback } from '../../../hooks/useImageFallback';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import type { Movie } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
 
@@ -78,6 +79,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
   const sliderRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const isDesktop = useMediaQuery('(min-width: 768px)');
 
   // ── CHỈ dùng props từ home-proxy, KHÔNG auto-fetch ──
   const movies = propMovies ?? [];
@@ -93,6 +95,10 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
       default:       return movies;
     }
   }, [movies, activeTab]);
+  const visibleMovies = useMemo(
+    () => filtered.slice(0, isDesktop ? 40 : 12),
+    [filtered, isDesktop],
+  );
 
   const checkScroll = useCallback(() => {
     const el = sliderRef.current;
@@ -141,7 +147,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
 
   return (
     <div className="mb-11 home-section-surface">
-      <SectionHeader count={filtered.length} />
+      <SectionHeader count={visibleMovies.length} />
 
       {/* ── Tabs ── */}
       <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
@@ -175,7 +181,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
           className={`
             absolute left-0 top-1/2 -translate-y-1/2 z-20
             w-9 h-9 md:w-10 md:h-10 rounded-full
-            flex items-center justify-center
+            hidden md:flex items-center justify-center
             bg-black/70 hover:bg-black/90 text-white
             border border-white/10
             transition-all duration-200 cursor-pointer
@@ -195,7 +201,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
           className={`
             absolute right-0 top-1/2 -translate-y-1/2 z-20
             w-9 h-9 md:w-10 md:h-10 rounded-full
-            flex items-center justify-center
+            hidden md:flex items-center justify-center
             bg-black/70 hover:bg-black/90 text-white
             border border-white/10
             transition-all duration-200 cursor-pointer
@@ -213,7 +219,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
           className="home-rail-scroll flex gap-2.5 overflow-x-auto scroll-smooth pb-8 pt-2 px-0.5 lg:gap-4 xl:gap-5"
           style={{ scrollbarWidth: 'none' }}
         >
-          {filtered.slice(0, 40).map((movie, idx) => (
+          {visibleMovies.map((movie, idx) => (
             <TrendingCard
               key={`${activeTab}-${movie._id}`}
               movie={movie}
@@ -289,10 +295,10 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
             bg-[#16192a] border contain-paint
             transition-[transform,box-shadow,border-color] duration-300 ease-out
             ${isTop3
-              ? 'border-amber-500/15 hover:border-amber-400/50 hover:shadow-2xl hover:shadow-amber-500/15'
-              : 'border-white/[0.06] hover:border-white/[0.25] hover:shadow-xl hover:shadow-black/50'
+              ? 'border-amber-500/15 md:hover:border-amber-400/50 md:hover:shadow-2xl md:hover:shadow-amber-500/15'
+              : 'border-white/[0.06] md:hover:border-white/[0.25] md:hover:shadow-xl md:hover:shadow-black/50'
             }
-            hover:-translate-y-1 hover:scale-[1.01]
+            md:hover:-translate-y-1 md:hover:scale-[1.01]
           `}
         >
           <div className="aspect-[2/3] relative overflow-hidden">
@@ -311,7 +317,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
                 w-full h-full object-cover object-center
                 transition-[transform,opacity] duration-300 ease-out
                 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}
-                group-hover:scale-105
+                md:group-hover:scale-105
               `}
               style={{ filter: 'contrast(1.04) saturate(1.1)' }}
               onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
@@ -329,7 +335,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
                   font-black ${rc.size} ${rc.bg} ${rc.text}
                   border-2 border-gray-900/80 shadow-xl ${rc.shadow}
                   transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
-                  group-hover:scale-110
+                  md:group-hover:scale-110
                 `}
               >
                 {rc.icon ?? <span>{rank}</span>}
@@ -370,13 +376,13 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
             </div>
 
             {/* ── Hover play overlay — pure CSS group-hover, no JS state ── */}
-            <div className="absolute inset-0 z-[8] flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors duration-300">
+            <div className="absolute inset-0 z-[8] hidden items-center justify-center bg-black/0 transition-colors duration-300 md:flex md:group-hover:bg-black/40">
               <div className="
                 w-10 h-10 md:w-11 md:h-11 rounded-full
                 bg-white/25
                 flex items-center justify-center
                 opacity-0 scale-75
-                group-hover:opacity-100 group-hover:scale-100
+                md:group-hover:opacity-100 md:group-hover:scale-100
                 transition-[transform,opacity] duration-300 ease-out
               ">
                 <i className="ri-play-fill text-white text-lg md:text-xl ml-0.5" />
@@ -386,7 +392,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
             {/* Top shimmer bar for top 3 */}
             {isTop3 && (
               <div className="absolute top-0 left-0 right-0 h-[2px] z-[10] overflow-hidden bg-amber-500/20">
-                <div className="h-full w-full bg-gradient-to-r from-transparent via-amber-300/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="h-full w-full bg-gradient-to-r from-transparent via-amber-300/60 to-transparent opacity-0 transition-opacity duration-500 md:group-hover:opacity-100" />
               </div>
             )}
           </div>

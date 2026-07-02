@@ -385,7 +385,7 @@ serve(async (req) => {
             }
 
             // ─── INSERT into movie_episodes (admin table) ───
-            const { error: insertErr } = await supabase.from('movie_episodes').insert({
+            const { error: insertErr } = await supabase.from('movie_episodes').upsert({
               movie_id: movie.id,
               ophim_id: detail.id || detail.slug,
               episode_number: episodeNumber,
@@ -398,7 +398,7 @@ serve(async (req) => {
               duration: '',
               source: 'ophim',
               is_backup: false,
-            });
+            }, { onConflict: 'movie_id,server_name,episode_number', ignoreDuplicates: true });
 
             if (insertErr) {
               if (insertErr.code === '23505' || insertErr.message.toLowerCase().includes('duplicate')) {
@@ -411,7 +411,7 @@ serve(async (req) => {
             }
 
             // ─── INSERT into episodes (normalized per-episode table) ───
-            const { error: epInsertErr } = await supabase.from('episodes').insert({
+            const { error: epInsertErr } = await supabase.from('episodes').upsert({
               movie_id: movie.id,
               ophim_id: detail.id || detail.slug,
               server_name: serverName,
@@ -421,7 +421,7 @@ serve(async (req) => {
               link_m3u8: ep.link_m3u8 || '',
               link_embed: ep.link_embed || '',
               server_data: ep,
-            });
+            }, { onConflict: 'movie_id,episode_slug,source,server_name', ignoreDuplicates: true });
 
             if (epInsertErr) {
               if (!(epInsertErr.code === '23505' || epInsertErr.message.toLowerCase().includes('duplicate'))) {
@@ -430,7 +430,7 @@ serve(async (req) => {
             }
 
             // ─── INSERT into streams (individual stream per row) ───
-            const { error: streamInsertErr } = await supabase.from('streams').insert({
+            const { error: streamInsertErr } = await supabase.from('streams').upsert({
               movie_id: movie.id,
               ophim_id: detail.id || detail.slug,
               server_name: serverName,
@@ -439,7 +439,7 @@ serve(async (req) => {
               embed_url: ep.link_embed || '',
               source: 'ophim',
               is_active: true,
-            });
+            }, { onConflict: 'movie_id,episode_slug,source,server_name', ignoreDuplicates: true });
 
             if (streamInsertErr) {
               if (!(streamInsertErr.code === '23505' || streamInsertErr.message.toLowerCase().includes('duplicate'))) {

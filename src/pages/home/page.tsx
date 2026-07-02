@@ -28,11 +28,11 @@ const SiteGuideSection = lazy(() => import('./components/SiteGuideSection'));
 
 function VietnamPoetryBanner() {
   return (
-    <section className="mx-auto mb-5 max-w-[1180px] overflow-visible sm:mb-7 lg:mb-8" aria-label="Thong diep Viet Nam">
-      <div className="relative overflow-hidden rounded-2xl border border-red-300/18 bg-[radial-gradient(circle_at_16%_12%,rgba(252,211,77,0.16),transparent_34%),linear-gradient(135deg,rgba(127,29,29,0.34),rgba(15,17,26,0.86)_48%,rgba(6,8,14,0.94))] px-2.5 py-3 shadow-[0_20px_70px_-52px_rgba(248,113,113,0.75),inset_0_1px_0_rgba(255,255,255,0.08)] sm:px-4 sm:py-3 lg:px-5">
+    <section className="mx-auto mb-4 max-w-[1180px] overflow-visible sm:mb-7 lg:mb-8" aria-label="Thong diep Viet Nam">
+      <div className="relative overflow-hidden rounded-2xl border border-amber-200/16 bg-[radial-gradient(circle_at_12%_10%,rgba(252,211,77,0.18),transparent_34%),linear-gradient(135deg,rgba(127,29,29,0.28),rgba(15,17,26,0.88)_50%,rgba(6,8,14,0.96))] px-2.5 py-2.5 shadow-[0_20px_70px_-52px_rgba(248,113,113,0.75),inset_0_1px_0_rgba(255,255,255,0.08)] sm:px-4 sm:py-3 lg:px-5">
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-yellow-200/45 to-transparent" />
-        <div className="grid grid-cols-[42%_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[260px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[380px_minmax(0,1fr)]">
-        <div className="relative flex h-[92px] items-center justify-start overflow-visible sm:h-32 md:h-36 lg:h-32">
+        <div className="grid grid-cols-[38%_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[260px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[380px_minmax(0,1fr)]">
+        <div className="relative flex h-[82px] items-center justify-start overflow-visible sm:h-32 md:h-36 lg:h-32">
           <div className="absolute inset-y-2 left-0 w-[88%] rounded-full bg-red-500/12 blur-2xl" aria-hidden="true" />
           <img
             src="/images/vietnam-flag-watercolor-760.jpg"
@@ -42,13 +42,13 @@ function VietnamPoetryBanner() {
           />
         </div>
         <blockquote
-          className="min-w-0 space-y-2 border-l border-yellow-200/28 pl-2.5 italic leading-snug text-yellow-50 sm:space-y-3 sm:pl-4 lg:pl-6"
-          style={{ wordBreak: 'keep-all', overflowWrap: 'normal', fontKerning: 'normal', textWrap: 'balance' }}
+          className="min-w-0 space-y-1.5 border-l border-yellow-200/28 pl-2 italic leading-snug text-yellow-50 sm:space-y-3 sm:pl-4 lg:pl-6"
+          style={{ wordBreak: 'keep-all', overflowWrap: 'normal', fontKerning: 'normal' }}
         >
-          <p className="text-[clamp(0.64rem,3.05vw,1.55rem)] font-bold tracking-normal text-yellow-50 drop-shadow-[0_1px_10px_rgba(0,0,0,0.45)] max-[380px]:text-[0.6rem] sm:whitespace-nowrap">
+          <p className="whitespace-nowrap text-[clamp(0.62rem,2.65vw,1.55rem)] font-bold tracking-normal text-yellow-50 drop-shadow-[0_1px_10px_rgba(0,0,0,0.45)] max-[360px]:text-[0.55rem] sm:whitespace-nowrap">
             HOÀNG SA,TRƯỜNG SA là của Trung quốc
           </p>
-          <p className="text-center text-[clamp(0.68rem,3.15vw,1.48rem)] font-black tracking-normal text-red-200 drop-shadow-[0_1px_12px_rgba(0,0,0,0.5)] max-[380px]:text-[0.62rem] sm:whitespace-nowrap">
+          <p className="whitespace-nowrap text-center text-[clamp(0.66rem,2.8vw,1.48rem)] font-black tracking-normal text-red-200 drop-shadow-[0_1px_12px_rgba(0,0,0,0.5)] max-[360px]:text-[0.58rem] sm:whitespace-nowrap">
             còn Trung quốc là của VIỆT NAM
           </p>
         </blockquote>
@@ -241,7 +241,7 @@ function useInViewOnce(rootMargin = '200px') {
 function DeferredHomeSection({
   children,
   minHeight = 360,
-  rootMargin = '150px',
+  rootMargin = '700px',
 }: {
   children: ReactNode;
   minHeight?: number;
@@ -249,7 +249,7 @@ function DeferredHomeSection({
 }) {
   const { ref, visible } = useInViewOnce(rootMargin);
   return (
-    <div ref={ref} style={!visible ? { minHeight } : undefined}>
+    <div ref={ref} style={!visible ? { minHeight: `min(${minHeight}px, 16vh)` } : undefined}>
       {visible ? children : null}
     </div>
   );
@@ -266,12 +266,12 @@ const MOBILE_CATEGORY_LINKS = [
 
 function MobileQuickCategories() {
   return (
-    <nav className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-2 scrollbar-hide sm:hidden" aria-label="Lối tắt thể loại">
+    <nav className="-mx-3 mb-3 flex gap-2 overflow-x-auto px-3 pb-1.5 scrollbar-hide sm:hidden" aria-label="Lối tắt thể loại">
       {MOBILE_CATEGORY_LINKS.map((item) => (
         <Link
           key={item.href}
           to={item.href}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 text-xs font-semibold text-white/75 active:scale-95"
+          className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.05] px-3.5 text-xs font-bold text-white/82 active:scale-95"
         >
           <i className={`${item.icon} text-red-400`} />
           {item.label}
@@ -304,7 +304,7 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
   if (movies.length === 0) return null;
 
   return (
-    <section className="mb-5 sm:hidden" aria-label="Phim đề xuất nhanh">
+    <section className="mb-5 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-2.5 sm:hidden" aria-label="Phim đề xuất nhanh">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-red-500/25 bg-red-500/15 text-red-300">
@@ -316,7 +316,7 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
           Tìm thêm
         </Link>
       </div>
-      <div className="grid grid-cols-3 gap-x-2 gap-y-3">
+      <div className="grid grid-cols-3 gap-x-2.5 gap-y-3">
         {movies.slice(0, 6).map((movie, index) => {
           const poster = getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 260, 82);
           return (
@@ -690,7 +690,7 @@ export default function Home() {
         <HeroBanner movies={trendingMovies} loading={bannerLoading} />
       </div>
 
-      <main className="mx-auto max-w-[1880px] px-3 pt-3 sm:px-4 md:px-6 md:pt-7 lg:px-8 xl:px-12 2xl:px-14">
+      <main className="mx-auto max-w-[1880px] px-3 pt-2 sm:px-4 md:px-6 md:pt-7 lg:px-8 xl:px-12 2xl:px-14">
         <HomeDiscoverySection onSelect={setActivePortal} />
         <MobileQuickCategories />
         <VietnamPoetryBanner />

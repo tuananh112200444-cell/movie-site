@@ -7,6 +7,14 @@ import { fetchMoviesByCategory } from '../../../services/movieApi';
 
 const carouselItemClass = HOME_POSTER_ITEM_CLASS;
 
+function isMobileViewport() {
+  return typeof window !== 'undefined' && window.innerWidth < 768;
+}
+
+function shouldTriggerImmediately(sectionIndex: number, hasData: boolean) {
+  return isMobileViewport() && hasData && sectionIndex <= 1;
+}
+
 type SectionProps = Omit<ComponentProps<typeof MovieSection>, 'movies' | 'loading'>;
 
 interface LazyMovieSectionProps extends SectionProps {
@@ -35,22 +43,21 @@ export default function LazyMovieSection({
 }: LazyMovieSectionProps) {
   const ref = useRef<HTMLDivElement>(null);
   const hasData = Boolean(propMovies?.length);
-  const [triggered, setTriggered] = useState(() => (
-    typeof window !== 'undefined' && window.innerWidth < 768 && hasData
-  ));
+  const [triggered, setTriggered] = useState(() => shouldTriggerImmediately(sectionIndex, hasData));
   const [fallbackMovies, setFallbackMovies] = useState<Movie[]>([]);
   const [fallbackLoading, setFallbackLoading] = useState(false);
   const [fallbackAttempted, setFallbackAttempted] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768 && hasData) {
+    if (shouldTriggerImmediately(sectionIndex, hasData)) {
       setTriggered(true);
     }
-  }, [hasData]);
+  }, [hasData, sectionIndex]);
 
   useEffect(() => {
     const el = ref.current;
     if (!el || triggered) return;
+    const observerRootMargin = isMobileViewport() ? '480px' : rootMargin;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -59,7 +66,7 @@ export default function LazyMovieSection({
           observer.disconnect();
         }
       },
-      { rootMargin }
+      { rootMargin: observerRootMargin }
     );
 
     observer.observe(el);
