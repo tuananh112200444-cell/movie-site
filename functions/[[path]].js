@@ -1,7 +1,7 @@
 ﻿const SITE_URL = 'https://khophim.org';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1';
-const SEO_PRERENDER_VERSION = '20260622-seo-landing-system-v3';
+const SEO_PRERENDER_VERSION = '20260702-clean-prerender-seo-v1';
 
 const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
@@ -59,169 +59,6 @@ const BOT_PATTERNS = [
   'petalbot',
   'bytespider',
 ];
-
-const STATIC_META = {
-  '/': {
-    title: 'KhoPhim - Xem Phim Online Vietsub HD',
-    description: 'KhoPhim lÃ  trang xem phim online Vietsub HD miá»…n phÃ­, cáº­p nháº­t phim láº», phim bá»™, phim chiáº¿u ráº¡p, anime, phim HÃ n, Trung, Ã‚u Má»¹ háº±ng ngÃ y.',
-    h1: 'KhoPhim - Xem phim online Vietsub HD',
-  },
-  '/phim-moi-nhat': {
-    title: 'Phim Má»›i Nháº¥t Vietsub HD | KhoPhim',
-    description: 'Xem phim má»›i nháº¥t Vietsub HD táº¡i KhoPhim. Cáº­p nháº­t phim láº», phim bá»™, phim chiáº¿u ráº¡p vÃ  anime má»›i má»—i ngÃ y.',
-    h1: 'Phim má»›i nháº¥t',
-  },
-  '/phim-hot-2026': {
-    title: 'Phim Hot 2026 - Bom Táº¥n Äiá»‡n áº¢nh Má»›i | KhoPhim',
-    description: 'Danh sÃ¡ch phim hot 2026, bom táº¥n Ä‘iá»‡n áº£nh, phim chiáº¿u ráº¡p, phim hÃ nh Ä‘á»™ng vÃ  anime Ä‘Æ°á»£c quan tÃ¢m nháº¥t trÃªn KhoPhim.',
-    h1: 'Phim hot 2026',
-  },
-  '/phim-le': {
-    title: 'Phim Láº» Vietsub HD - Xem Phim Láº» Hay | KhoPhim',
-    description: 'Kho phim láº» Vietsub HD trÃªn KhoPhim: hÃ nh Ä‘á»™ng, tÃ¬nh cáº£m, kinh dá»‹, hÃ i hÆ°á»›c, viá»…n tÆ°á»Ÿng vÃ  phim chiáº¿u ráº¡p má»›i.',
-    h1: 'Phim láº» Vietsub HD',
-  },
-  '/phim-bo': {
-    title: 'Phim Bá»™ Vietsub HD - Series Má»›i Nháº¥t | KhoPhim',
-    description: 'Xem phim bá»™ Vietsub HD, series HÃ n Quá»‘c, Trung Quá»‘c, Ã‚u Má»¹ vÃ  ThÃ¡i Lan cáº­p nháº­t táº­p má»›i táº¡i KhoPhim.',
-    h1: 'Phim bá»™ Vietsub HD',
-  },
-  '/phim-chieu-rap': {
-    title: 'Phim Chiáº¿u Ráº¡p Vietsub HD - Bom Táº¥n Má»›i | KhoPhim',
-    description: 'Danh sÃ¡ch phim chiáº¿u ráº¡p, bom táº¥n Hollywood, phim HÃ n, Trung vÃ  Viá»‡t Nam Vietsub HD trÃªn KhoPhim.',
-    h1: 'Phim chiáº¿u ráº¡p Vietsub HD',
-  },
-  '/hoat-hinh': {
-    title: 'Anime Vietsub HD - Hoáº¡t HÃ¬nh Má»›i Nháº¥t | KhoPhim',
-    description: 'Xem anime Vietsub, hoáº¡t hÃ¬nh Nháº­t Báº£n, Trung Quá»‘c vÃ  phim gia Ä‘Ã¬nh HD cáº­p nháº­t má»›i táº¡i KhoPhim.',
-    h1: 'Anime vÃ  hoáº¡t hÃ¬nh Vietsub',
-  },
-  '/anime': {
-    title: 'Anime Vietsub HD - Anime Má»›i Nháº¥t 2026 | KhoPhim',
-    description: 'Xem anime Vietsub HD, anime mÃ¹a má»›i, anime hÃ nh Ä‘á»™ng, tÃ¬nh cáº£m, isekai vÃ  hoáº¡t hÃ¬nh Nháº­t Báº£n cáº­p nháº­t trÃªn KhoPhim.',
-    h1: 'Anime Vietsub HD',
-  },
-  '/my-nam': {
-    title: 'Phim Má»¹ Nam Vietsub HD - BL, NgÃ´n TÃ¬nh, Tháº§n TÆ°á»£ng | KhoPhim',
-    description: 'Xem phim má»¹ nam Vietsub HD, phim BL, ngÃ´n tÃ¬nh, tháº§n tÆ°á»£ng vÃ  phim tÃ¬nh cáº£m cÃ³ dÃ n diá»…n viÃªn Ä‘áº¹p trÃªn KhoPhim.',
-    h1: 'Phim má»¹ nam Vietsub HD',
-  },
-  '/phim-ma': {
-    title: 'Phim Ma Kinh Dá»‹ Vietsub HD - Phim Kinh Dá»‹ Hay | KhoPhim',
-    description: 'Xem phim ma, phim kinh dá»‹, giáº­t gÃ¢n, tÃ¢m linh vÃ  thriller Vietsub HD cáº­p nháº­t má»›i trÃªn KhoPhim.',
-    h1: 'Phim ma vÃ  kinh dá»‹ Vietsub HD',
-  },
-  '/vu-tru-dam-my': {
-    title: 'VÅ© Trá»¥ Äam Má»¹ / BL / GL Vietsub HD | KhoPhim',
-    description: 'KhÃ´ng gian phim Äam Má»¹, BL, GL vÃ  BÃ¡ch Há»£p Vietsub HD trÃªn KhoPhim, cáº­p nháº­t phim má»›i vÃ  táº­p má»›i tá»« BLVietsub.',
-    h1: 'VÅ© Trá»¥ Äam Má»¹ / BL / GL Vietsub HD',
-  },
-  '/tv-shows': {
-    title: 'TV Shows Vietsub HD - Show Truyá»n HÃ¬nh Má»›i | KhoPhim',
-    description: 'Xem TV shows Vietsub HD, reality show, series truyá»n hÃ¬nh vÃ  show giáº£i trÃ­ cáº­p nháº­t háº±ng ngÃ y trÃªn KhoPhim.',
-    h1: 'TV Shows Vietsub HD',
-  },
-  '/phim-sap-chieu': {
-    title: 'Phim Sáº¯p Chiáº¿u 2026 - Trailer VÃ  Lá»‹ch Chiáº¿u | KhoPhim',
-    description: 'Theo dÃµi phim sáº¯p chiáº¿u 2026, trailer phim má»›i, lá»‹ch chiáº¿u, ná»™i dung vÃ  thÃ´ng tin diá»…n viÃªn trÃªn KhoPhim.',
-    h1: 'Phim sáº¯p chiáº¿u vÃ  trailer má»›i',
-  },
-  '/phim-han-quoc': {
-    title: 'Phim HÃ n Quá»‘c Vietsub HD - Drama HÃ n | KhoPhim',
-    description: 'Xem phim HÃ n Quá»‘c Vietsub HD, drama tÃ¬nh cáº£m, hÃ nh Ä‘á»™ng, hÃ i hÆ°á»›c vÃ  series má»›i cáº­p nháº­t trÃªn KhoPhim.',
-    h1: 'Phim HÃ n Quá»‘c Vietsub HD',
-  },
-  '/phim-trung-quoc': {
-    title: 'Phim Trung Quá»‘c Vietsub HD - Cá»• Trang, TiÃªn Hiá»‡p | KhoPhim',
-    description: 'Xem phim Trung Quá»‘c Vietsub HD, cá»• trang, tiÃªn hiá»‡p, ngÃ´n tÃ¬nh, hÃ nh Ä‘á»™ng vÃ  phim bá»™ má»›i táº¡i KhoPhim.',
-    h1: 'Phim Trung Quá»‘c Vietsub HD',
-  },
-  '/phim-au-my': {
-    title: 'Phim Ã‚u Má»¹ Vietsub HD - Hollywood Má»›i | KhoPhim',
-    description: 'Xem phim Ã‚u Má»¹ Vietsub HD, Hollywood, hÃ nh Ä‘á»™ng, viá»…n tÆ°á»Ÿng, kinh dá»‹ vÃ  phim chiáº¿u ráº¡p má»›i trÃªn KhoPhim.',
-    h1: 'Phim Ã‚u Má»¹ Vietsub HD',
-  },
-  '/phim-nhat-ban': {
-    title: 'Phim Nháº­t Báº£n Anime Vietsub HD | KhoPhim',
-    description: 'Xem phim Nháº­t Báº£n, anime Vietsub, live action vÃ  phim tÃ¬nh cáº£m Nháº­t Báº£n HD trÃªn KhoPhim.',
-    h1: 'Phim Nháº­t Báº£n vÃ  anime Vietsub',
-  },
-  '/phim-thai-lan': {
-    title: 'Phim ThÃ¡i Lan Vietsub HD - Lakorn, BL | KhoPhim',
-    description: 'Xem phim ThÃ¡i Lan Vietsub HD, lakorn, BL, tÃ¬nh cáº£m, hÃ i hÆ°á»›c vÃ  phim bá»™ ThÃ¡i cáº­p nháº­t trÃªn KhoPhim.',
-    h1: 'Phim ThÃ¡i Lan Vietsub HD',
-  },
-  '/phim-viet-nam': {
-    title: 'Phim Viá»‡t Nam HD - Phim Viá»‡t Má»›i Nháº¥t | KhoPhim',
-    description: 'Xem phim Viá»‡t Nam HD, phim chiáº¿u ráº¡p Viá»‡t, phim bá»™ Viá»‡t vÃ  phim gia Ä‘Ã¬nh má»›i cáº­p nháº­t trÃªn KhoPhim.',
-    h1: 'Phim Viá»‡t Nam HD',
-  },
-  '/xem-phim-online': {
-    title: 'Xem Phim Online Vietsub HD Miá»…n PhÃ­ | KhoPhim',
-    description: 'Xem phim online miá»…n phÃ­ táº¡i KhoPhim vá»›i phim láº», phim bá»™, phim chiáº¿u ráº¡p, anime, TV shows Vietsub HD cáº­p nháº­t má»—i ngÃ y.',
-    h1: 'Xem phim online Vietsub HD miá»…n phÃ­',
-  },
-  '/phim-vietsub': {
-    title: 'Phim Vietsub HD - Xem Phim Phá»¥ Äá» Viá»‡t | KhoPhim',
-    description: 'Tá»•ng há»£p phim Vietsub HD cÃ³ phá»¥ Ä‘á» tiáº¿ng Viá»‡t: phim láº», phim bá»™, phim chiáº¿u ráº¡p, anime, phim HÃ n, Trung, Ã‚u Má»¹ vÃ  ThÃ¡i Lan.',
-    h1: 'Phim Vietsub HD phá»¥ Ä‘á» Viá»‡t',
-  },
-  '/phim-thuyet-minh': {
-    title: 'Phim Thuyáº¿t Minh HD - Xem Phim Lá»“ng Tiáº¿ng Viá»‡t | KhoPhim',
-    description: 'Xem phim thuyáº¿t minh, phim lá»“ng tiáº¿ng Viá»‡t vÃ  phim Vietsub HD trÃªn KhoPhim, cáº­p nháº­t nhiá»u phim hay dá»… xem cho má»i thiáº¿t bá»‹.',
-    h1: 'Phim thuyáº¿t minh vÃ  lá»“ng tiáº¿ng Viá»‡t',
-  },
-  '/phim-long-tieng': {
-    title: 'Phim Lá»“ng Tiáº¿ng Viá»‡t HD | KhoPhim',
-    description: 'Kho phim lá»“ng tiáº¿ng Viá»‡t, phim thuyáº¿t minh vÃ  phim Vietsub HD dá»… xem trÃªn Ä‘iá»‡n thoáº¡i, mÃ¡y tÃ­nh vÃ  TV.',
-    h1: 'Phim lá»“ng tiáº¿ng Viá»‡t HD',
-  },
-  '/phim-full-hd': {
-    title: 'Phim Full HD - Xem Phim HD NÃ©t | KhoPhim',
-    description: 'Xem phim Full HD, phim HD Vietsub, phim chiáº¿u ráº¡p, phim bá»™ vÃ  anime cháº¥t lÆ°á»£ng cao trÃªn KhoPhim.',
-    h1: 'Phim Full HD cháº¥t lÆ°á»£ng cao',
-  },
-  '/phim-hay': {
-    title: 'Phim Hay - Xem Phim Hay Chá»n Lá»c | KhoPhim',
-    description: 'KhÃ¡m phÃ¡ phim hay, phim hot, phim má»›i cáº­p nháº­t, phim láº», phim bá»™ vÃ  phim chiáº¿u ráº¡p Ä‘Ã¡ng xem trÃªn KhoPhim.',
-    h1: 'Phim hay chá»n lá»c trÃªn KhoPhim',
-  },
-  '/phim-2026': {
-    title: 'Phim 2026 - Xem Phim Má»›i 2026 Vietsub HD | KhoPhim',
-    description: 'Danh sÃ¡ch phim 2026 má»›i, phim hot 2026, phim chiáº¿u ráº¡p 2026, phim bá»™ 2026 vÃ  anime 2026 Vietsub HD trÃªn KhoPhim.',
-    h1: 'Phim 2026 má»›i cáº­p nháº­t',
-  },
-  '/phim-2025': {
-    title: 'Phim 2025 - Xem Láº¡i Phim Hay 2025 | KhoPhim',
-    description: 'Tá»•ng há»£p phim 2025 hay, phim láº» 2025, phim bá»™ 2025, phim chiáº¿u ráº¡p 2025 vÃ  anime 2025 Vietsub HD.',
-    h1: 'Phim 2025 hay vÃ  Ä‘Ã¡ng xem',
-  },
-  '/phim-2024': {
-    title: 'Phim 2024 - Xem Phim Hay 2024 Vietsub HD | KhoPhim',
-    description: 'Xem láº¡i phim 2024 hay, phim chiáº¿u ráº¡p 2024, phim bá»™ 2024 vÃ  anime 2024 Vietsub HD trÃªn KhoPhim.',
-    h1: 'Phim 2024 Vietsub HD',
-  },
-  '/phim-4k': {
-    title: 'Phim 4K - Xem Phim Cháº¥t LÆ°á»£ng Cao | KhoPhim',
-    description: 'TÃ¬m phim 4K, phim Full HD, phim HD cháº¥t lÆ°á»£ng cao, phim chiáº¿u ráº¡p vÃ  phim láº» nÃ©t trÃªn KhoPhim.',
-    h1: 'Phim 4K vÃ  phim cháº¥t lÆ°á»£ng cao',
-  },
-  '/phim-hoan-tat': {
-    title: 'Phim HoÃ n Táº¥t - Xem Phim Full Trá»n Bá»™ | KhoPhim',
-    description: 'Xem phim hoÃ n táº¥t, phim full, phim trá»n bá»™ Vietsub HD, phim bá»™ Ä‘Ã£ Ä‘á»§ táº­p vÃ  phim láº» xem ngay trÃªn KhoPhim.',
-    h1: 'Phim hoÃ n táº¥t, phim full trá»n bá»™',
-  },
-  '/phim-dang-chieu': {
-    title: 'Phim Äang Chiáº¿u - Phim Äang Cáº­p Nháº­t Táº­p Má»›i | KhoPhim',
-    description: 'Theo dÃµi phim Ä‘ang chiáº¿u, phim Ä‘ang cáº­p nháº­t táº­p má»›i, phim bá»™ má»›i, anime mÃ¹a má»›i vÃ  phim hot trÃªn KhoPhim.',
-    h1: 'Phim Ä‘ang chiáº¿u vÃ  Ä‘ang cáº­p nháº­t',
-  },
-  '/phim-trailer': {
-    title: 'Trailer Phim - Phim Sáº¯p Chiáº¿u VÃ  Lá»‹ch Chiáº¿u | KhoPhim',
-    description: 'Xem trailer phim, lá»‹ch chiáº¿u, thÃ´ng tin phim sáº¯p ra máº¯t, phim hot 2026 vÃ  ná»™i dung phim má»›i trÃªn KhoPhim.',
-    h1: 'Trailer phim vÃ  phim sáº¯p chiáº¿u',
-  },
-};
 
 const CLEAN_STATIC_META = {
   '/': {
@@ -610,8 +447,7 @@ function isUpcomingMovie(movie) {
   const ep = normalizeSearchText(movie.episode_current);
   const status = normalizeSearchText(movie.seo_catalog_status || movie.status);
   const releaseAt = movie.release_at ? new Date(movie.release_at).getTime() : 0;
-  if (status === 'upcoming' || ep.includes('sap chieu') || releaseAt > Date.now()) return true;
-  return status === 'upcoming' || ep.includes('sap chieu') || ep.includes('sáº¯p chiáº¿u') || releaseAt > Date.now();
+  return status === 'upcoming' || ep.includes('sap chieu') || ep.includes('sắp chiếu') || releaseAt > Date.now();
 }
 
 function formatVietnamDate(value) {
@@ -768,7 +604,7 @@ function renderHtml({ title, description, canonical, h1, body, schema, ogType = 
 
 function renderStaticPrerender(pathname) {
   const cleanPath = getCanonicalPath(pathname);
-  const meta = CLEAN_STATIC_META[cleanPath] || STATIC_META[cleanPath] || dynamicStaticMeta(cleanPath);
+  const meta = CLEAN_STATIC_META[cleanPath] || dynamicStaticMeta(cleanPath);
   if (!meta) return null;
 
   const canonical = `${SITE_URL}${cleanPath === '/' ? '/' : cleanPath}`;
@@ -970,7 +806,7 @@ function renderMoviePrerender(pathname, movie, slug) {
       releasedEvent: movie.release_at ? {
         '@type': 'PublicationEvent',
         startDate: movie.release_at,
-        name: `Lá»‹ch chiáº¿u ${name}`,
+        name: `Lịch chiếu ${name}`,
       } : undefined,
       genre: genres,
       countryOfOrigin: countries.map((country) => ({ '@type': 'Country', name: country })),

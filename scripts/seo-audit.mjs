@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { SITE_URL, seoLandingUrls } from './seo-data.mjs';
+import { MHOPHIM_URL, satellitePages } from './mhophim-satellite-data.mjs';
 
 const errors = [];
 const warnings = [];
@@ -58,10 +59,22 @@ if (/Disallow:\s*\/\s*$/im.test(globalRobotsBlock)) {
 }
 
 const redirects = await read('public/_redirects');
-for (const host of ['mhophim.com', 'www.mhophim.com', 'www.khophim.org']) {
+for (const host of ['www.khophim.org']) {
   const expected = `https://${host}/* https://khophim.org/:splat 301!`;
   if (!redirects.includes(expected)) {
     addError(`public/_redirects is missing canonical redirect: ${expected}`);
+  }
+}
+for (const expected of [
+  'https://www.mhophim.com/* https://mhophim.com/:splat 301!',
+  'https://mhophim.com/phim/* https://khophim.org/phim/:splat 301!',
+  'https://mhophim.com/search* https://khophim.org/search:splat 301!',
+  'https://mhophim.com/robots.txt /mhophim/robots.txt 200!',
+  'https://mhophim.com/sitemap.xml /mhophim/sitemap.xml 200!',
+  'https://mhophim.com/ /mhophim/index.html 200!',
+]) {
+  if (!redirects.includes(expected)) {
+    addError(`public/_redirects is missing MHoPhim satellite rule: ${expected}`);
   }
 }
 if (!redirects.includes('/* /index.html 200')) {
@@ -170,6 +183,54 @@ const staticLocs = extractLocs(staticSitemap);
 const duplicateStaticLocs = staticLocs.filter((loc, index) => staticLocs.indexOf(loc) !== index);
 if (duplicateStaticLocs.length > 0) {
   addWarning(`sitemap-static.xml has duplicate locs: ${[...new Set(duplicateStaticLocs)].join(', ')}`);
+}
+
+const mhophimRobots = await read('public/mhophim/robots.txt').catch(() => '');
+if (!mhophimRobots.includes(`Sitemap: ${MHOPHIM_URL}/sitemap.xml`)) {
+  addError('public/mhophim/robots.txt must point to the MHoPhim sitemap.');
+}
+if (!/Disallow:\s*\/phim\//i.test(mhophimRobots) || !/Disallow:\s*\/search/i.test(mhophimRobots)) {
+  addError('public/mhophim/robots.txt must block duplicate movie/search paths.');
+}
+
+const mhophimSitemap = await read('public/mhophim/sitemap.xml').catch(() => '');
+const mhophimLocs = extractLocs(mhophimSitemap);
+const expectedMhophimLocs = satellitePages.map((page) => `${MHOPHIM_URL}${page.path === '/' ? '/' : page.path}`);
+const missingMhophimLocs = expectedMhophimLocs.filter((loc) => !mhophimLocs.includes(loc));
+const duplicateMhophimLocs = mhophimLocs.filter((loc, index) => mhophimLocs.indexOf(loc) !== index);
+if (mhophimLocs.length !== satellitePages.length) {
+  addError(`public/mhophim/sitemap.xml has ${mhophimLocs.length} URLs; expected ${satellitePages.length}.`);
+}
+if (missingMhophimLocs.length > 0) {
+  addError(`public/mhophim/sitemap.xml is missing: ${missingMhophimLocs.join(', ')}`);
+}
+if (duplicateMhophimLocs.length > 0) {
+  addError(`public/mhophim/sitemap.xml has duplicate locs: ${[...new Set(duplicateMhophimLocs)].join(', ')}`);
+}
+for (const loc of mhophimLocs) {
+  if (!loc.startsWith(`${MHOPHIM_URL}/`)) {
+    addError(`MHoPhim sitemap loc is not canonical: ${loc}`);
+  }
+  if (/\/(?:phim|search)(?:\/|$|\?)/.test(new URL(loc).pathname)) {
+    addError(`MHoPhim sitemap must not include duplicate movie/search URL: ${loc}`);
+  }
+}
+
+for (const page of satellitePages) {
+  const filePath = page.path === '/'
+    ? 'public/mhophim/index.html'
+    : `public/mhophim/${page.path.replace(/^\/+/, '')}/index.html`;
+  const html = await read(filePath).catch(() => '');
+  const canonical = `${MHOPHIM_URL}${page.path === '/' ? '/' : page.path}`;
+  if (!html.includes(`<link rel="canonical" href="${canonical}">`)) {
+    addError(`${filePath} must declare self canonical ${canonical}.`);
+  }
+  if (!html.includes('MHoPhim') || !html.includes('khophim.org')) {
+    addError(`${filePath} must brand MHoPhim and link to khophim.org.`);
+  }
+  if (hasMojibake(html)) {
+    addError(`${filePath} contains mojibake text.`);
+  }
 }
 
 if (warnings.length > 0) {

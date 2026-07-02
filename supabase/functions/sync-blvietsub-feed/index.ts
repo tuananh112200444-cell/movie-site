@@ -71,6 +71,7 @@ interface MovieRow {
   episode_current?: string | null;
   current_episode?: number | null;
   total_episodes?: number | null;
+  status?: string | null;
   year?: number | null;
 }
 
@@ -387,6 +388,22 @@ function getMovieCurrentEpisode(movie: MovieRow): number {
     Number(movie.current_episode || 0),
     Number(String(movie.episode_current || '').match(/\d+/)?.[0] || 0),
   );
+}
+
+function isCompletedText(value: unknown): boolean {
+  const text = normalizeText(String(value || ''));
+  return text.includes('completed') || text.includes('complete') || text.includes('hoan tat') || text.includes('full');
+}
+
+function shouldRoutineRepairMovie(movie: MovieRow, includeCompleted: boolean): boolean {
+  if (includeCompleted) return true;
+  const current = getMovieCurrentEpisode(movie);
+  const total = Number(movie.total_episodes || 0);
+  const looksCompleted = isCompletedText(movie.status) || isCompletedText(movie.episode_current);
+
+  if (!looksCompleted) return true;
+  if (!total) return true;
+  return current > 0 && current < total;
 }
 
 function playableEpisodeCount(episodes: ParsedEpisode[]): number {
@@ -1131,8 +1148,11 @@ async function syncEntryToMovie(
 async function repairExistingBlvietsubMovies(
   supabase: SupabaseClient,
   limit: number,
+  includeCompleted = false,
 ): Promise<{
   scanned: number;
+  scanned_pool: number;
+  completed_skipped: number;
   checked: number;
   repaired: number;
   inserted: number;
@@ -1143,13 +1163,14 @@ async function repairExistingBlvietsubMovies(
   errors: string[];
 }> {
   const cappedLimit = Math.max(1, Math.min(limit, 80));
+  const queryLimit = includeCompleted ? cappedLimit : Math.min(cappedLimit * 4, 320);
   const { data, error } = await supabase
     .from('movies')
-    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year, last_synced_at')
+    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, status, year, last_synced_at')
     .eq('is_published', true)
     .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub.com/phim/%,source_url.ilike.%blvietsub.com/phim/%')
     .order('updated_at', { ascending: false })
-    .limit(cappedLimit);
+    .limit(queryLimit);
 
   if (error) throw new Error(`existing BLVietsub select: ${error.message}`);
 
@@ -1161,7 +1182,10 @@ async function repairExistingBlvietsubMovies(
   const transientDetails: string[] = [];
   const drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }> = [];
   const errors: string[] = [];
-  const rows = (data || []) as MovieRow[];
+  const pool = (data || []) as MovieRow[];
+  const rows = pool
+    .filter((movie) => shouldRoutineRepairMovie(movie, includeCompleted))
+    .slice(0, cappedLimit);
 
   for (const movie of rows) {
     const movieUrl = getBlvietsubMovieUrl(movie);
@@ -1196,6 +1220,8 @@ async function repairExistingBlvietsubMovies(
 
   return {
     scanned: rows.length,
+    scanned_pool: pool.length,
+    completed_skipped: pool.length - rows.length,
     checked,
     repaired,
     inserted,
@@ -1213,7 +1239,7 @@ async function writeSyncLog(
 ): Promise<void> {
   try {
     await supabase.from('sync_logs').insert({
-      function_name: 'sync-blvietsub-feed',
+      function_name: String(payload.function_name || 'sync-blvietsub-feed'),
       run_at: new Date().toISOString(),
       scanned: payload.scanned,
       added: payload.inserted,
@@ -1507,7 +1533,8 @@ serve(async (req) => {
 
     if (url.searchParams.get('repair_existing') === '1') {
       const repairLimit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 24), 80));
-      const result = await repairExistingBlvietsubMovies(supabase, repairLimit);
+      const includeCompleted = url.searchParams.get('include_completed') === '1';
+      const result = await repairExistingBlvietsubMovies(supabase, repairLimit, includeCompleted);
       const changedSlugs = result.drift.map((item) => item.slug);
       const seoAutomation = await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs);
       await writeSyncLog(supabase, {
@@ -1516,12 +1543,24 @@ serve(async (req) => {
         inserted: result.inserted,
         matched: result.checked,
         errors: result.errors,
+        metadata: {
+          checked: result.checked,
+          repaired: result.repaired,
+          updated: result.updated,
+          completed_skipped: result.completed_skipped,
+          scanned_pool: result.scanned_pool,
+          transient_skipped: result.transient_skipped,
+          transient_details: result.transient_details,
+          include_completed: includeCompleted,
+          seo_automation: seoAutomation,
+        },
         seo_automation: seoAutomation,
         elapsed_ms: Date.now() - started,
       });
       return json({
         success: result.errors.length === 0,
         ...result,
+        include_completed: includeCompleted,
         seo_automation: seoAutomation,
         elapsed_ms: Date.now() - started,
       }, result.errors.length ? 207 : 200);

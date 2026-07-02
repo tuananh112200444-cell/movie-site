@@ -1,12 +1,24 @@
 # Canonical host redirects. Keep these above the SPA fallback so secondary
 # domains never serve duplicate indexable content.
 https://www.khophim.org/* https://khophim.org/:splat 301!
-https://mhophim.com/* https://khophim.org/:splat 301!
-https://www.mhophim.com/* https://khophim.org/:splat 301!
-http://mhophim.com/* https://khophim.org/:splat 301!
-http://www.mhophim.com/* https://khophim.org/:splat 301!
+http://mhophim.com/* https://mhophim.com/:splat 301!
+http://www.mhophim.com/* https://mhophim.com/:splat 301!
+https://www.mhophim.com/* https://mhophim.com/:splat 301!
 http://khophim.org/* https://khophim.org/:splat 301!
 http://www.khophim.org/* https://khophim.org/:splat 301!
+
+# MHoPhim is a satellite SEO domain with unique editorial pages.
+# Do not serve duplicate movie/search pages on the secondary domain.
+https://mhophim.com/phim/* https://khophim.org/phim/:splat 301!
+https://mhophim.com/search* https://khophim.org/search:splat 301!
+https://mhophim.com/robots.txt /mhophim/robots.txt 200!
+https://mhophim.com/sitemap.xml /mhophim/sitemap.xml 200!
+https://mhophim.com/ /mhophim/index.html 200!
+https://mhophim.com/top/* /mhophim/top/:splat/index.html 200!
+https://mhophim.com/lich-chieu/* /mhophim/lich-chieu/:splat/index.html 200!
+https://mhophim.com/huong-dan/* /mhophim/huong-dan/:splat/index.html 200!
+https://mhophim.com/review/* /mhophim/review/:splat/index.html 200!
+https://mhophim.com/* /mhophim/404.html 404
 
 # Dynamic XML endpoints for Google. Keep these above the SPA fallback.
 /sitemap.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-index 200!
