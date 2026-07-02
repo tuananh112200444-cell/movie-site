@@ -35,6 +35,45 @@ const STALL_PROGRESS_CHECK_MS = 2500;
 const STALL_MIN_PROGRESS_SECONDS = 0.05;
 const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
 
+function getPlaybackProfile() {
+  if (typeof window === 'undefined') {
+    return {
+      maxBufferLength: 36,
+      maxMaxBufferLength: 72,
+      maxBufferSize: 55_000_000,
+      backBufferLength: 20,
+    };
+  }
+
+  const nav = navigator as Navigator & {
+    connection?: { effectiveType?: string; saveData?: boolean };
+    deviceMemory?: number;
+  };
+  const isSmallScreen = window.innerWidth < 768;
+  const saveData = Boolean(nav.connection?.saveData);
+  const effectiveType = String(nav.connection?.effectiveType || '').toLowerCase();
+  const slowNetwork = saveData || /(^|-)2g$|3g/.test(effectiveType);
+  const lowMemory = typeof nav.deviceMemory === 'number' && nav.deviceMemory > 0 && nav.deviceMemory <= 4;
+  const lowCpu = Number.isFinite(navigator.hardwareConcurrency) && navigator.hardwareConcurrency <= 4;
+  const lightDevice = isSmallScreen || slowNetwork || lowMemory || lowCpu;
+
+  if (lightDevice) {
+    return {
+      maxBufferLength: slowNetwork ? 18 : 24,
+      maxMaxBufferLength: slowNetwork ? 36 : 48,
+      maxBufferSize: slowNetwork ? 24_000_000 : 34_000_000,
+      backBufferLength: 10,
+    };
+  }
+
+  return {
+    maxBufferLength: 45,
+    maxMaxBufferLength: 90,
+    maxBufferSize: 70_000_000,
+    backBufferLength: 30,
+  };
+}
+
 function PlayerWatermark() {
   return (
     <div className="pointer-events-none absolute left-2 top-2 z-30 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-white/85 shadow-lg shadow-black/30 backdrop-blur-md sm:left-4 sm:top-4 sm:gap-2 sm:px-2.5">
@@ -260,13 +299,14 @@ export default function LightweightHlsPlayer({
     }
 
     if (Hls.isSupported()) {
+      const playbackProfile = getPlaybackProfile();
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
-        maxBufferLength: 45,
-        maxMaxBufferLength: 90,
-        maxBufferSize: 70_000_000,
-        backBufferLength: 30,
+        maxBufferLength: playbackProfile.maxBufferLength,
+        maxMaxBufferLength: playbackProfile.maxMaxBufferLength,
+        maxBufferSize: playbackProfile.maxBufferSize,
+        backBufferLength: playbackProfile.backBufferLength,
         maxBufferHole: 0.75,
         nudgeOffset: 0.1,
         nudgeMaxRetry: 5,
@@ -857,7 +897,7 @@ export default function LightweightHlsPlayer({
         poster={poster}
         title={title}
         playsInline
-        preload="auto"
+        preload="metadata"
         crossOrigin="anonymous"
       >
         {subtitleUrl && (

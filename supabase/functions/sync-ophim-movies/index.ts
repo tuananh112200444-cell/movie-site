@@ -504,12 +504,44 @@ function protectExistingSlug(existing: Record<string, unknown>, update: Record<s
   return update;
 }
 
+async function removeConflictingUniqueIdentityFields(
+  supabase: SupabaseClient,
+  existingId: unknown,
+  update: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const safeUpdate = { ...update };
+  const currentId = String(existingId || '').trim();
+  if (!currentId) return safeUpdate;
+
+  const checks: Array<[string, unknown]> = [
+    ['ophim_slug', safeUpdate.ophim_slug],
+    ['ophim_id', safeUpdate.ophim_id],
+    ['tmdb_id', safeUpdate.tmdb_id],
+    ['imdb_id', safeUpdate.imdb_id],
+  ];
+
+  for (const [column, rawValue] of checks) {
+    const value = String(rawValue || '').trim();
+    if (!value) continue;
+    const { data, error } = await supabase
+      .from('movies')
+      .select('id')
+      .eq(column, value)
+      .neq('id', currentId)
+      .limit(1)
+      .maybeSingle();
+    if (!error && data?.id) delete safeUpdate[column];
+  }
+
+  return safeUpdate;
+}
+
 async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, detail: ParsedDetail): Promise<{ id: string; created: boolean; updated: boolean }> {
   const payload = moviePayload(provider, detail);
   const existing = await findExistingMovie(supabase, payload);
 
   if (existing?.id) {
-    const update = protectExistingSlug(existing, updatePayloadForExisting(existing, payload));
+    let update = protectExistingSlug(existing, updatePayloadForExisting(existing, payload));
     if (!provider.trackOphimIdentity) {
       if (existing.ophim_id) delete update.ophim_id;
       if (existing.ophim_slug) delete update.ophim_slug;
@@ -518,6 +550,7 @@ async function upsertMovie(supabase: SupabaseClient, provider: ProviderConfig, d
         delete update.source_name;
       }
     }
+    update = await removeConflictingUniqueIdentityFields(supabase, existing.id, update);
     const { error } = await supabase.from('movies').update(update).eq('id', existing.id as string);
     if (error) {
       if (isDuplicateError(error) && (update.ophim_id || update.ophim_slug)) {

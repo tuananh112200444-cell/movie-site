@@ -57,7 +57,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
 
   if (loading) {
     return (
-      <div className="relative w-full bg-[#0a0c14]" style={{ aspectRatio: '16/5.7', minHeight: 'clamp(210px, 52vw, 460px)' }}>
+      <div className="relative w-full bg-[#0a0c14]" style={{ aspectRatio: '16/5.7', minHeight: 'clamp(188px, 48vw, 460px)' }}>
         <div className="absolute inset-0 skeleton" />
         <div className="absolute inset-0 flex items-center justify-center">
           <i className="ri-loader-4-line animate-spin text-2xl text-red-500/40" />
@@ -79,7 +79,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
   const nextIndex = (activeIndex + 1) % featured.length;
 
   return (
-    <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/5.7', minHeight: 'clamp(210px, 52vw, 460px)' }}>
+    <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/5.7', minHeight: 'clamp(188px, 48vw, 460px)' }}>
 
       {/* Only render active + next slides to reduce initial DOM & image count */}
       <MemoSlideBackground
@@ -119,7 +119,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#080a10] to-transparent pointer-events-none" />
 
       {/* Content */}
-      <div className="absolute inset-0 flex items-center px-3 pt-14 pb-8 sm:px-8 sm:pt-20 sm:pb-6 md:px-12 md:pt-24 md:pb-4 lg:px-10 xl:px-12">
+      <div className="absolute inset-0 flex items-center px-3 pt-7 pb-7 sm:px-8 sm:pt-20 sm:pb-6 md:px-12 md:pt-24 md:pb-4 lg:px-10 xl:px-12">
         <div key={contentKey} className="hero-content-enter mx-auto flex w-full max-w-[1880px] items-center justify-between gap-3 md:gap-8 2xl:px-2">
 
           {/* Left: Text info */}
@@ -137,7 +137,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
               </span>
             </div>
 
-            <h2 className="hero-title-enter mb-1 text-lg font-black leading-snug tracking-tight text-white line-clamp-2 sm:mb-1.5 sm:text-2xl sm:leading-tight md:text-4xl lg:text-5xl 2xl:text-[3.6rem]">
+            <h2 className="hero-title-enter mb-1 text-[1.35rem] font-black leading-tight tracking-tight text-white line-clamp-2 sm:mb-1.5 sm:text-2xl sm:leading-tight md:text-4xl lg:text-5xl 2xl:text-[3.6rem]">
               {active.name}
             </h2>
 
@@ -184,19 +184,19 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
 
             <div className="hero-cta-enter flex items-center gap-2 md:gap-3">
               <Link to={movieDetailUrl(active.slug)}
-                className="group flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white text-xs md:text-sm font-bold px-3 py-2 sm:px-6 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-200 hover:scale-[1.04] active:scale-[0.97] whitespace-nowrap shadow-lg shadow-red-500/30">
+                className="group flex min-h-10 items-center gap-2 bg-red-500 hover:bg-red-600 text-white text-xs md:text-sm font-bold px-3.5 py-2 sm:px-6 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-200 hover:scale-[1.04] active:scale-[0.97] whitespace-nowrap shadow-lg shadow-red-500/30">
                 <div className="w-4 h-4 md:w-5 md:h-5 flex items-center justify-center bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
                   <i className="ri-play-fill text-[10px] md:text-xs ml-0.5" />
                 </div>
                 Xem Ngay
               </Link>
               <Link to={activeDetailHref}
-                className="flex items-center gap-1.5 bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs md:text-sm font-semibold px-3 py-2 md:gap-2 md:px-5 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 border border-white/[0.12] hover:border-white/25 hover:scale-[1.02] active:scale-[0.97] whitespace-nowrap">
+                className="flex min-h-10 items-center gap-1.5 bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs md:text-sm font-semibold px-3 py-2 md:gap-2 md:px-5 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 border border-white/[0.12] hover:border-white/25 hover:scale-[1.02] active:scale-[0.97] whitespace-nowrap">
                 <i className="ri-information-line text-white/60 text-xs" />Chi Tiết
               </Link>
               <button
                 onClick={(e) => { e.preventDefault(); toggle(active); }}
-                className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl transition-all duration-200 border cursor-pointer whitespace-nowrap active:scale-[0.93] ${
+                className={`flex h-10 w-10 items-center justify-center rounded-lg sm:w-10 sm:h-10 sm:rounded-xl transition-all duration-200 border cursor-pointer whitespace-nowrap active:scale-[0.93] ${
                   favored
                     ? 'bg-red-500/20 border-red-500/40 text-red-400 hover:bg-red-500/30'
                     : 'bg-white/[0.08] border-white/[0.12] text-white/60 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10'
@@ -262,12 +262,12 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
         ))}
       </div>
 
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 md:hidden" role="tablist" aria-label="Điều hướng slide">
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 rounded-full bg-black/24 px-2 py-1 md:hidden" role="tablist" aria-label="Điều hướng slide">
         {featured.map((m, i) => (
           <button key={i} onClick={() => handleSelectSlide(i)}
             role="tab" aria-selected={i === activeIndex} aria-label={`Chuyển đến slide ${i + 1}: ${m.name}`}
             className={`rounded-full transition-all duration-300 cursor-pointer active:scale-90 ${
-              i === activeIndex ? 'h-1 w-4 bg-red-500' : 'h-1 w-1 bg-white/30 active:bg-white/50'
+              i === activeIndex ? 'h-1.5 w-4 bg-red-500' : 'h-1.5 w-1.5 bg-white/35 active:bg-white/60'
             }`} />
         ))}
       </div>
