@@ -46,9 +46,7 @@ type ActionItem = {
 
 const EXPECTED_SYNC_FUNCTIONS = [
   'sync-ophim-movies',
-  'auto-sync-ophim-episodes',
   'sync-blvietsub-feed',
-  'sync-tmdb-catalog',
   'auto-repair-player-issues',
 ];
 
@@ -103,6 +101,46 @@ function getEpisodeNumberFromText(value: string | null | undefined): number {
   return Number(String(value || '').match(/\d+/)?.[0] || 0);
 }
 
+function stringifyLogValue(value: unknown): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function isDuplicateLog(row: SyncLogRow): boolean {
+  const text = `${stringifyLogValue(row.details)} ${stringifyLogValue(row.metadata)}`.toLowerCase();
+  return text.includes('duplicate key') || text.includes('unique constraint') || text.includes('23505');
+}
+
+function isTransientLog(row: SyncLogRow): boolean {
+  const text = `${stringifyLogValue(row.details)} ${stringifyLogValue(row.metadata)}`.toLowerCase();
+  return (
+    text.includes('transient_error') ||
+    text.includes('error 521') ||
+    text.includes('"status":521') ||
+    text.includes('web server is down') ||
+    text.includes('cloudflare') ||
+    text.includes('timeout') ||
+    text.includes('timed out') ||
+    text.includes('signal has been aborted') ||
+    text.includes('fetch failed') ||
+    text.includes('rate limit') ||
+    text.includes('too many requests') ||
+    text.includes('502') ||
+    text.includes('503') ||
+    text.includes('504')
+  );
+}
+
+function isHardErrorLog(row: SyncLogRow): boolean {
+  const hasError = row.success === false || Number(row.errors || 0) > 0;
+  return hasError && !isTransientLog(row);
+}
+
 function hoursAgo(iso: string | null | undefined): number | null {
   if (!iso) return null;
   const time = new Date(iso).getTime();
@@ -140,11 +178,16 @@ async function fetchPagedRows<T>(
 }
 
 function summarizeSyncLogs(logs: SyncLogRow[]) {
-  return EXPECTED_SYNC_FUNCTIONS.map((name) => {
+  const names = EXPECTED_SYNC_FUNCTIONS.map((function_name) => ({ function_name, stale_hours: 6 }));
+
+  return names.map(({ function_name: name, stale_hours: staleHours }) => {
     const rows = logs.filter((row) => row.function_name === name);
     const latest = rows[0] || null;
     const recent = rows.slice(0, 12);
     const failures = recent.filter((row) => row.success === false || Number(row.errors || 0) > 0).length;
+    const transientFailures = recent.filter(isTransientLog).length;
+    const duplicateFailures = recent.filter(isDuplicateLog).length;
+    const hardFailures = recent.filter(isHardErrorLog).length;
     const lastRunHoursAgo = hoursAgo(latest?.run_at);
 
     return {
@@ -158,11 +201,15 @@ function summarizeSyncLogs(logs: SyncLogRow[]) {
       latest_elapsed_ms: Number(latest?.elapsed_ms || 0),
       recent_runs: recent.length,
       recent_failures: failures,
+      recent_transient_failures: transientFailures,
+      recent_duplicate_failures: duplicateFailures,
+      recent_hard_failures: hardFailures,
       status:
         !latest ? 'missing'
-          : lastRunHoursAgo != null && lastRunHoursAgo > 6 ? 'stale'
-            : failures >= 3 ? 'unstable'
-              : latest.success === false ? 'failed'
+          : lastRunHoursAgo != null && lastRunHoursAgo > staleHours ? 'stale'
+            : hardFailures >= 3 ? 'unstable'
+              : isHardErrorLog(latest) ? 'failed'
+                : failures > 0 ? 'warning'
                 : 'ok',
     };
   });
@@ -178,7 +225,17 @@ function buildActionItems(syncStatus: ReturnType<typeof summarizeSyncLogs>, mism
       severity: badSync.some((item) => item.status === 'missing' || item.status === 'stale') ? 'critical' : 'warning',
       title: 'Sync source can kiem tra',
       detail: `${badSync.length} job dang co dau hieu bat thuong: ${names}.`,
-      action: 'Kiem tra cron va chay thu function bi stale/failed truoc khi backfill hang loat.',
+      action: 'Uu tien hard error/duplicate truoc; transient warning thuong la nguon ngoai timeout va se retry.',
+    });
+  }
+
+  const duplicateSync = syncStatus.filter((item) => item.recent_duplicate_failures > 0);
+  if (duplicateSync.length > 0) {
+    items.push({
+      severity: 'critical',
+      title: 'Co duplicate database error',
+      detail: `${duplicateSync.length} job co duplicate key trong cac lan chay gan day.`,
+      action: 'Kiem tra upsert/onConflict cua job do truoc khi tang tan suat sync.',
     });
   }
 

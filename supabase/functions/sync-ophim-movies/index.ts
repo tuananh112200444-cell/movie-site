@@ -375,13 +375,29 @@ async function fetchListPage(provider: ProviderConfig, page: number): Promise<Re
 
 function listItems(payload: Record<string, unknown> | null): OPhimMovie[] {
   if (!payload) return [];
+  if (isProviderErrorPayload(payload)) return [];
   const data = payload.data as Record<string, unknown> | undefined;
   const items = (data?.items || payload.items || []) as unknown[];
   return items.filter((item): item is OPhimMovie => Boolean(item && typeof item === 'object'));
 }
 
+function isProviderErrorPayload(payload: Record<string, unknown> | null): boolean {
+  if (!payload) return false;
+  const status = Number(payload.status || payload.error_code || 0);
+  const text = JSON.stringify(payload).toLowerCase();
+  return (
+    status >= 400 ||
+    text.includes('error 521') ||
+    text.includes('web server is down') ||
+    text.includes('cloudflare') ||
+    text.includes('origin_down') ||
+    text.includes('temporarily unavailable')
+  );
+}
+
 function parseDetail(payload: DetailPayload | null, fallbackSlug: string): ParsedDetail | null {
   if (!payload) return null;
+  if (isProviderErrorPayload(payload as Record<string, unknown>)) return null;
   const item = payload.data?.item || payload.item || payload.movie || null;
   if (!item) return null;
   const episodes = payload.data?.item?.episodes || payload.item?.episodes || payload.episodes || [];
