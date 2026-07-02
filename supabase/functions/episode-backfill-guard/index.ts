@@ -38,6 +38,18 @@ interface RepairCandidate {
   playable_episode: number;
 }
 
+interface MetadataAnomaly {
+  id: string;
+  slug: string;
+  name: string;
+  source_site: string;
+  source_name: string;
+  displayed_episode: number;
+  playable_episode: number;
+  gap: number;
+  reason: string;
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -56,6 +68,21 @@ function appendParams(url: URL, params: Record<string, string | number | boolean
     if (value === null || value === undefined) continue;
     url.searchParams.set(key, String(value));
   }
+}
+
+function isTransientCallFailure(call: FunctionCallResult): boolean {
+  if (call.ok) return false;
+  const text = JSON.stringify(call.result || '').toLowerCase();
+  return (
+    call.status === 0 &&
+    (
+      text.includes('signal has been aborted') ||
+      text.includes('timeout') ||
+      text.includes('timed out') ||
+      text.includes('fetch failed') ||
+      text.includes('network')
+    )
+  );
 }
 
 function episodeNumberFromText(value: unknown): number {
@@ -204,6 +231,79 @@ async function findEpisodeMismatchCandidates(
   return { candidates, scanned: (data || []).length, next_page: nextPage };
 }
 
+async function findMetadataAnomalies(
+  supabase: SupabaseClient,
+  options: {
+    limit: number;
+    displayedThreshold: number;
+    maxPlayableForAnomaly: number;
+    minGap: number;
+  },
+): Promise<{ anomalies: MetadataAnomaly[]; scanned: number }> {
+  if (options.limit <= 0) return { anomalies: [], scanned: 0 };
+
+  const { data, error } = await supabase
+    .from('movies')
+    .select('id, slug, name, source_site, source_name, ophim_slug, episode_current, current_episode')
+    .eq('is_published', true)
+    .or('source_site.ilike.%ophim%,source_name.ilike.%ophim%,source_site.ilike.%phimapi%,source_name.ilike.%kkphim%,ophim_slug.not.is.null')
+    .gte('current_episode', options.displayedThreshold)
+    .order('updated_at', { ascending: false, nullsFirst: false })
+    .limit(Math.max(options.limit * 8, 40));
+  if (error) throw new Error(`metadata anomaly scan: ${error.message}`);
+
+  const movies = ((data || []) as MovieCandidate[])
+    .map((movie) => ({ ...movie, displayed: displayedEpisode(movie) }))
+    .filter((movie) => movie.displayed >= options.displayedThreshold);
+  const ids = movies.map((movie) => movie.id).filter(Boolean);
+
+  const [movieEpisodes, episodes, streams] = await Promise.all([
+    queryRowsByMovieIds(supabase, 'movie_episodes', 'movie_id, episode_number, slug, episode_name, link_m3u8, link_embed, source', ids),
+    queryRowsByMovieIds(supabase, 'episodes', 'movie_id, episode_number, episode_slug, episode_name, link_m3u8, link_embed', ids),
+    queryRowsByMovieIds(supabase, 'streams', 'movie_id, episode_slug, stream_url, embed_url, is_active', ids),
+  ]);
+
+  const playableByMovie = new Map<string, number>();
+  for (const row of [
+    ...movieEpisodes.filter((row) => String(row.source || '').toLowerCase() !== 'hidden'),
+    ...episodes,
+    ...streams.filter((row) => row.is_active !== false),
+  ]) {
+    const movieId = String(row.movie_id || '');
+    const episode = playableEpisodeNumber(row);
+    if (!movieId || episode <= 0) continue;
+    playableByMovie.set(movieId, Math.max(playableByMovie.get(movieId) || 0, episode));
+  }
+
+  const anomalies = movies
+    .map((movie) => {
+      const playable = playableByMovie.get(movie.id) || 0;
+      const displayed = movie.displayed;
+      const gap = displayed - playable;
+      return {
+        id: movie.id,
+        slug: movie.slug,
+        name: String(movie.name || movie.slug),
+        source_site: String(movie.source_site || ''),
+        source_name: String(movie.source_name || ''),
+        displayed_episode: displayed,
+        playable_episode: playable,
+        gap,
+        reason: 'metadata_episode_is_far_above_playable_episode',
+      } as MetadataAnomaly;
+    })
+    .filter((movie) =>
+      movie.displayed_episode >= options.displayedThreshold &&
+      movie.playable_episode > 0 &&
+      movie.playable_episode <= options.maxPlayableForAnomaly &&
+      movie.gap >= options.minGap
+    )
+    .sort((a, b) => b.gap - a.gap)
+    .slice(0, options.limit);
+
+  return { anomalies, scanned: (data || []).length };
+}
+
 async function callFunction(
   baseUrl: string,
   serviceKey: string,
@@ -293,6 +393,10 @@ serve(async (req) => {
   const mismatchSevereOnly = url.searchParams.get('mismatch_severe_only') !== '0';
   const mismatchCursorKey = url.searchParams.get('mismatch_cursor_key') || 'episode-backfill-guard:mismatch:v1';
   const mismatchOnly = url.searchParams.get('mismatch_only') === '1';
+  const anomalyLimit = clampNumber(url.searchParams.get('metadata_anomaly_limit'), mismatchOnly ? 0 : 8, 0, 50);
+  const anomalyDisplayedThreshold = clampNumber(url.searchParams.get('metadata_anomaly_displayed_threshold'), 500, 100, 5000);
+  const anomalyMaxPlayable = clampNumber(url.searchParams.get('metadata_anomaly_max_playable'), 200, 1, 1000);
+  const anomalyMinGap = clampNumber(url.searchParams.get('metadata_anomaly_min_gap'), 300, 50, 5000);
   const skipBlvietsub = url.searchParams.get('skip_blvietsub') === '1';
   const skipDirectOphim = url.searchParams.get('skip_direct_ophim') === '1';
   const childTimeoutMs = clampNumber(url.searchParams.get('child_timeout_ms'), 25000, 5000, 120000);
@@ -302,6 +406,9 @@ serve(async (req) => {
   const calls: FunctionCallResult[] = [];
   let mismatchRepair:
     | { candidates: RepairCandidate[]; scanned: number; next_page: number; calls: FunctionCallResult[]; error?: string }
+    | null = null;
+  let metadataAnomalies:
+    | { anomalies: MetadataAnomaly[]; scanned: number; error?: string }
     | null = null;
 
   if (!mismatchOnly) for (const provider of ['ophim', 'kkphim']) {
@@ -416,6 +523,23 @@ serve(async (req) => {
     }
   }
 
+  if (anomalyLimit > 0) {
+    try {
+      metadataAnomalies = await findMetadataAnomalies(supabase, {
+        limit: anomalyLimit,
+        displayedThreshold: anomalyDisplayedThreshold,
+        maxPlayableForAnomaly: anomalyMaxPlayable,
+        minGap: anomalyMinGap,
+      });
+    } catch (error) {
+      metadataAnomalies = {
+        anomalies: [],
+        scanned: 0,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   if (refreshCaches && !dryRun) {
     calls.push(await callFunction(supabaseUrl, serviceKey, internalSecret, 'search-index-proxy', {
       refresh: '1',
@@ -426,13 +550,34 @@ serve(async (req) => {
     }, { 'x-home-proxy-refresh': '1' }, childTimeoutMs));
   }
 
-  const failed = calls.filter((call) => !call.ok);
+  const nonCriticalFailed = calls.filter((call) =>
+    !call.ok &&
+    (
+      call.name === 'search-index-proxy' ||
+      call.name === 'home-proxy' ||
+      (call.name === 'sync-ophim-movies' && isTransientCallFailure(call))
+    )
+  );
+  const failed = calls.filter((call) =>
+    !call.ok &&
+    call.name !== 'search-index-proxy' &&
+    call.name !== 'home-proxy' &&
+    !(call.name === 'sync-ophim-movies' && isTransientCallFailure(call))
+  );
   return json({
     success: failed.length === 0,
     dry_run: dryRun,
     mismatch_only: mismatchOnly,
     calls,
     mismatch_repair: mismatchRepair,
+    metadata_anomalies: metadataAnomalies,
+    warning_count: nonCriticalFailed.length,
+    warnings: nonCriticalFailed.map((call) => ({
+      name: call.name,
+      status: call.status,
+      elapsed_ms: call.elapsed_ms,
+      result: call.result,
+    })),
     failed_count: failed.length,
     elapsed_ms: Date.now() - started,
   }, failed.length ? 207 : 200);

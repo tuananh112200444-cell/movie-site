@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /phim/
+Disallow: /search
+Disallow: /api/
+
+Sitemap: https://mhophim.com/sitemap.xml

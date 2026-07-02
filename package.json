@@ -40,7 +40,7 @@
     "build": "vite build",
     "dev": "vite",
     "seo:audit": "node scripts/seo-audit.mjs",
-    "seo:generate": "node scripts/generate-seo-sitemap.mjs",
+    "seo:generate": "node scripts/generate-seo-sitemap.mjs && node scripts/generate-mhophim-satellite.mjs",
     "watch:test": "node scripts/watch-page-regression.mjs",
     "diagnostics:test": "node scripts/diagnostics-regression.mjs",
     "movie:data:test": "node scripts/movie-data-quality.mjs",

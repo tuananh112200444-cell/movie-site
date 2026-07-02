@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MHoPhim - Tin phim, lịch chiếu và gợi ý phim hay</title>
+  <meta name="description" content="MHoPhim là trang vệ tinh của KhoPhim, tổng hợp tin phim, lịch chiếu, review và gợi ý phim hay để người xem tìm phim nhanh hơn.">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://mhophim.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="MHoPhim">
+  <meta property="og:title" content="MHoPhim - Tin phim, lịch chiếu và gợi ý phim hay">
+  <meta property="og:description" content="MHoPhim là trang vệ tinh của KhoPhim, tổng hợp tin phim, lịch chiếu, review và gợi ý phim hay để người xem tìm phim nhanh hơn.">
+  <meta property="og:url" content="https://mhophim.com/">
+  <meta name="twitter:card" content="summary">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","@id":"https://mhophim.com/#webpage","url":"https://mhophim.com/","name":"MHoPhim - Tin phim, lịch chiếu và gợi ý phim hay","description":"MHoPhim là trang vệ tinh của KhoPhim, tổng hợp tin phim, lịch chiếu, review và gợi ý phim hay để người xem tìm phim nhanh hơn.","isPartOf":{"@type":"WebSite","@id":"https://mhophim.com/#website","name":"MHoPhim","url":"https://mhophim.com"},"about":["tin phim","review phim","lịch chiếu phim","gợi ý phim hay"],"dateModified":"2026-07-02"}</script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07080d;
+      --panel: #11151f;
+      --panel-strong: #171d2a;
+      --text: #f7f7fb;
+      --muted: #a8afbd;
+      --line: rgba(255,255,255,.12);
+      --accent: #ff3d46;
+      --gold: #f5c15c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(255,61,70,.18), transparent 28rem),
+        linear-gradient(180deg, #10131c 0%, var(--bg) 26rem);
+      color: var(--text);
+      line-height: 1.65;
+    }
+    a { color: inherit; text-decoration: none; }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      display: flex;
+      gap: .55rem;
+      overflow-x: auto;
+      padding: .8rem max(1rem, calc((100vw - 1120px) / 2));
+      background: rgba(7,8,13,.84);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(14px);
+    }
+    nav a {
+      flex: 0 0 auto;
+      padding: .55rem .8rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: .92rem;
+      font-weight: 700;
+    }
+    nav a[aria-current="page"], nav a:hover {
+      color: #fff;
+      border-color: rgba(255,61,70,.55);
+      background: rgba(255,61,70,.16);
+    }
+    main {
+      width: min(1120px, calc(100vw - 2rem));
+      margin: 0 auto;
+      padding: 3rem 0 4rem;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
+      gap: 1.4rem;
+      align-items: stretch;
+    }
+    .hero-copy, .side-card, .content-block, .related {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(23,29,42,.9), rgba(13,16,24,.9));
+      border-radius: 18px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.24);
+    }
+    .hero-copy { padding: clamp(1.4rem, 3vw, 2.4rem); }
+    .eyebrow {
+      margin: 0 0 .75rem;
+      color: var(--gold);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-size: .78rem;
+    }
+    h1 {
+      margin: 0;
+      max-width: 820px;
+      font-size: clamp(2.2rem, 5vw, 4.4rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+    .intro {
+      margin: 1rem 0 0;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.4vw, 1.18rem);
+    }
+    .cta {
+      display: inline-flex;
+      margin-top: 1.4rem;
+      padding: .82rem 1rem;
+      border-radius: 999px;
+      background: var(--accent);
+      color: white;
+      font-weight: 900;
+    }
+    .side-card {
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 280px;
+    }
+    .side-card strong { font-size: 1.15rem; }
+    .side-card p { color: var(--muted); margin: .6rem 0 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .content-block { padding: 1.2rem; }
+    h2 { margin: 0 0 .5rem; font-size: 1.25rem; }
+    p { margin: 0; }
+    .related {
+      margin-top: 1rem;
+      padding: 1.2rem;
+    }
+    .related ul {
+      margin: .8rem 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .6rem;
+    }
+    .related a {
+      display: block;
+      padding: .75rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--muted);
+    }
+    footer {
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      padding: 1.2rem max(1rem, calc((100vw - 1120px) / 2));
+      background: #080910;
+    }
+    @media (max-width: 760px) {
+      main { width: min(100% - 1rem, 1120px); padding-top: 1rem; }
+      .hero, .grid, .related ul { grid-template-columns: 1fr; }
+      .hero-copy, .side-card, .content-block, .related { border-radius: 14px; }
+      nav { padding-inline: .5rem; }
+      h1 { font-size: 2.2rem; }
+    }
+  </style>
+</head>
+<body>
+  <nav aria-label="Chuyên mục MHoPhim"><a href="/">MHoPhim</a><a href="/top/phim-thai-hay">Phim Thái Lan</a><a href="/top/phim-dam-my-moi">Vũ trụ đam mỹ</a><a href="/lich-chieu/phim-moi">Lịch cập nhật</a><a href="/huong-dan/tim-phim">Hướng dẫn tìm phim</a><a href="/review/phim-hay-nen-xem">Review và gợi ý</a><a href="https://khophim.org">Xem phim</a></nav>
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Tin phim và gợi ý xem phim</p>
+        <h1>MHoPhim</h1>
+        <p class="intro">Nơi này không copy kho phim của khophim.org. MHoPhim được dùng để viết nội dung riêng: top phim, review, lịch chiếu và hướng dẫn tìm phim.</p>
+        <a class="cta" href="https://khophim.org">Vào KhoPhim để xem phim</a>
+      </div>
+      <aside class="side-card">
+        <div>
+      <strong>SEO sạch cho domain phụ</strong>
+      <p>MHoPhim có nội dung riêng và liên kết về KhoPhim, không tạo bản sao trang xem phim.</p>
+        </div>
+        <p>Domain chinh: <a href="https://khophim.org">khophim.org</a></p>
+      </aside>
+    </section>
+    <div class="grid">
+      <section class="content-block">
+        <h2>Vai trò của MHoPhim</h2>
+        <p>MHoPhim giúp người xem khám phá phim theo chủ đề, năm phát hành, quốc gia và nhu cầu tìm kiếm. Khi cần xem phim, người dùng được dẫn về domain chính khophim.org.</p>
+      </section>
+      <section class="content-block">
+        <h2>Domain chính để xem phim</h2>
+        <p>KhoPhim.org vẫn là nơi chứa trang phim, tìm kiếm phim, danh sách tập và player. Cách tách vai trò này giúp SEO sạch hơn và tránh trùng lặp nội dung.</p>
+      </section></div>
+    <section class="related">
+    <h2>Đọc tiếp trên MHoPhim</h2>
+      <ul><li><a href="/top/phim-thai-hay">Top phim Thái hay đang được tìm nhiều</a></li><li><a href="/top/phim-dam-my-moi">Phim đam mỹ mới và BL đang được quan tâm</a></li><li><a href="/lich-chieu/phim-moi">Lịch chiếu phim mới và tập mới</a></li><li><a href="/huong-dan/tim-phim">Hướng dẫn tìm phim khi không nhớ tên chính xác</a></li><li><a href="/review/phim-hay-nen-xem">Review phim hay nên xem trên KhoPhim</a></li></ul>
+    </section>
+  </main>
+  <footer>
+    MHoPhim là domain vệ tinh nội dung của KhoPhim. Trang xem phim chính thức nằm tại <a href="https://khophim.org">khophim.org</a>.
+  </footer>
+</body>
+</html>

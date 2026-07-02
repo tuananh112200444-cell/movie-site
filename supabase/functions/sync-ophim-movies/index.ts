@@ -98,6 +98,7 @@ interface SyncStats {
   episodesInserted: number;
   skipped: number;
   errors: string[];
+  transientErrors: string[];
 }
 
 function json(body: unknown, status = 200): Response {
@@ -190,6 +191,38 @@ function isDuplicateError(error: unknown): boolean {
   const record = (error && typeof error === 'object') ? error as Record<string, unknown> : {};
   const text = dbErrorMessage(error).toLowerCase();
   return record.code === '23505' || text.includes('duplicate key') || text.includes('unique constraint');
+}
+
+function isTransientExternalError(value: unknown): boolean {
+  const text = dbErrorMessage(value).toLowerCase();
+  return (
+    text.includes('error 521') ||
+    text.includes('"status":521') ||
+    text.includes('web server is down') ||
+    text.includes('cloudflare') ||
+    text.includes('timeout') ||
+    text.includes('timed out') ||
+    text.includes('networkerror') ||
+    text.includes('failed to fetch') ||
+    text.includes('fetch failed') ||
+    text.includes('429') ||
+    text.includes('too many requests') ||
+    text.includes('rate limit') ||
+    text.includes('temporarily unavailable') ||
+    text.includes('latest list returned 0 items') ||
+    text.includes('from all mirrors') ||
+    text.includes('503') ||
+    text.includes('502') ||
+    text.includes('504')
+  );
+}
+
+function recordSyncError(stats: SyncStats, message: string): void {
+  if (isTransientExternalError(message)) {
+    stats.transientErrors.push(message);
+    return;
+  }
+  stats.errors.push(message);
 }
 
 function episodeNumber(ep: OPhimEpisode): number {
@@ -827,7 +860,14 @@ async function writeLog(supabase: SupabaseClient, stats: SyncStats, elapsedMs: n
       details: stats.errors,
       elapsed_ms: elapsedMs,
       success: stats.errors.length === 0,
-      metadata: { ...metadata, created: stats.created, updated: stats.updated, episodes_inserted: stats.episodesInserted },
+      metadata: {
+        ...metadata,
+        created: stats.created,
+        updated: stats.updated,
+        episodes_inserted: stats.episodesInserted,
+        transient_errors: stats.transientErrors.slice(0, 20),
+        transient_error_count: stats.transientErrors.length,
+      },
     });
   } catch {
     /* optional log table */
@@ -957,7 +997,7 @@ serve(async (req) => {
   const strictMissingDetail = url.searchParams.get('strict_missing_detail') === '1';
   const provider = providerFromParam(url.searchParams.get('provider'));
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
-  const stats: SyncStats = { scanned: 0, created: 0, updated: 0, episodesInserted: 0, skipped: 0, errors: [] };
+  const stats: SyncStats = { scanned: 0, created: 0, updated: 0, episodesInserted: 0, skipped: 0, errors: [], transientErrors: [] };
   const changedSlugs: string[] = [];
 
   try {
@@ -985,7 +1025,7 @@ serve(async (req) => {
       }
       slugs = Array.from(candidates.keys()).slice(0, limit);
       if (pagesWithItems === 0 && startPage === 1) {
-        stats.errors.push(`[${provider.sourceSite}] latest list returned 0 items from all mirrors`);
+        recordSyncError(stats, `[${provider.sourceSite}] latest list returned 0 items from all mirrors`);
       }
     }
 
@@ -1010,7 +1050,7 @@ serve(async (req) => {
           changedSlugs.push(String(detail.movie.slug || slug));
         }
       } catch (error) {
-        stats.errors.push(`[${slug}] ${error instanceof Error ? error.message : String(error)}`);
+        recordSyncError(stats, `[${slug}] ${error instanceof Error ? error.message : String(error)}`);
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
@@ -1054,14 +1094,22 @@ serve(async (req) => {
       episodes_inserted: stats.episodesInserted,
       skipped: stats.skipped,
       errors: stats.errors,
+      transient_errors: stats.transientErrors.slice(0, 20),
+      transient_error_count: stats.transientErrors.length,
       include_episodes: includeEpisodes,
       seo_automation: seoAutomation,
       elapsed_ms: elapsedMs,
     }, stats.errors.length ? 207 : 200);
   } catch (error) {
     const elapsedMs = Date.now() - started;
-    stats.errors.push(error instanceof Error ? error.message : String(error));
+    recordSyncError(stats, error instanceof Error ? error.message : String(error));
     await writeLog(supabase, stats, elapsedMs, { provider: provider.sourceSite, pages, limit, dry_run: dryRun, include_episodes: includeEpisodes });
-    return json({ success: false, error: stats.errors[0], elapsed_ms: elapsedMs }, 500);
+    return json({
+      success: stats.errors.length === 0,
+      error: stats.errors[0] || null,
+      transient_errors: stats.transientErrors.slice(0, 20),
+      transient_error_count: stats.transientErrors.length,
+      elapsed_ms: elapsedMs,
+    }, stats.errors.length ? 500 : 207);
   }
 });

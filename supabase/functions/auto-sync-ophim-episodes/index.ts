@@ -74,6 +74,7 @@ interface MovieRow {
   episode_current?: string | null;
   current_episode?: number | null;
   total_episodes?: number | null;
+  status?: string | null;
   source_site?: string | null;
   source_name?: string | null;
   showtimes?: string | null;
@@ -117,6 +118,22 @@ function getMovieCurrentEpisode(movie: MovieRow): number {
     Number(movie.current_episode || 0),
     Number(String(movie.episode_current || '').match(/\d+/)?.[0] || 0),
   );
+}
+
+function isCompletedText(value: unknown): boolean {
+  const text = normalizeText(String(value || ''));
+  return text.includes('completed') || text.includes('complete') || text.includes('hoan tat') || text.includes('full');
+}
+
+function shouldRoutineSyncMovie(movie: MovieRow, includeCompleted: boolean): boolean {
+  if (includeCompleted) return true;
+  const current = getMovieCurrentEpisode(movie);
+  const total = Number(movie.total_episodes || 0);
+  const looksCompleted = isCompletedText(movie.status) || isCompletedText(movie.episode_current);
+
+  if (!looksCompleted) return true;
+  if (!total) return true;
+  return current > 0 && current < total;
 }
 
 function tokenCount(value = ''): number {
@@ -297,13 +314,15 @@ serve(async (req) => {
     const targetSlug = url.searchParams.get('slug')?.trim() || '';
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 80), 1), 200);
     const delayMs = Math.min(Math.max(Number(url.searchParams.get('delay_ms') || 250), 0), 1000);
+    const includeCompleted = url.searchParams.get('include_completed') === '1' || Boolean(targetSlug);
+    const queryLimit = targetSlug ? 1 : Math.min(limit * 4, 500);
 
     let moviesQuery = supabase
       .from('movies')
-      .select('id, ophim_id, ophim_slug, slug, name, origin_name, title_vi, title_en, year, episode_current, current_episode, total_episodes, source_site, source_name, showtimes, updated_at, last_synced_at')
+      .select('id, ophim_id, ophim_slug, slug, name, origin_name, title_vi, title_en, year, episode_current, current_episode, total_episodes, status, source_site, source_name, showtimes, updated_at, last_synced_at')
       .eq('is_published', true)
       .order('last_synced_at', { ascending: true, nullsFirst: true })
-      .limit(limit);
+      .limit(queryLimit);
 
     if (targetSlug) {
       moviesQuery = moviesQuery.eq('slug', targetSlug);
@@ -317,14 +336,20 @@ serve(async (req) => {
       throw new Error(`Failed to fetch movies: ${moviesErr.message}`);
     }
 
-    if (!movies || movies.length === 0) {
+    const eligibleMovies = ((movies || []) as MovieRow[])
+      .filter((movie) => shouldRoutineSyncMovie(movie, includeCompleted))
+      .slice(0, limit);
+
+    if (eligibleMovies.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'No movies eligible for OPhim sync found.',
+          message: 'No ongoing or incomplete movies eligible for OPhim sync found.',
           movies_processed: 0,
           episodes_inserted: 0,
           episodes_skipped: 0,
+          scanned_pool: movies?.length || 0,
+          completed_skipped: (movies?.length || 0) - eligibleMovies.length,
           errors: [],
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -337,7 +362,7 @@ serve(async (req) => {
     const skippedDetails: string[] = [];
 
     // ─── Process each movie ───
-    for (const movie of movies) {
+    for (const movie of eligibleMovies) {
       try {
         const detail = await resolveOPhimDetail(movie as MovieRow);
         if (!detail) {
@@ -491,7 +516,7 @@ serve(async (req) => {
     await logSyncResult(supabase, {
       function_name: 'auto-sync-ophim-episodes',
       run_at: new Date().toISOString(),
-      scanned: movies.length,
+      scanned: eligibleMovies.length,
       added: totalInserted,
       skipped: totalSkipped,
       errors: errorDetails.length,
@@ -503,8 +528,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Processed ${movies.length} movies | Inserted ${totalInserted} new episodes | Skipped ${totalSkipped} existing | Errors: ${errorDetails.length}`,
-        movies_processed: movies.length,
+        message: `Processed ${eligibleMovies.length} movies | Inserted ${totalInserted} new episodes | Skipped ${totalSkipped} existing | Errors: ${errorDetails.length}`,
+        movies_processed: eligibleMovies.length,
+        scanned_pool: movies?.length || 0,
+        completed_skipped: (movies?.length || 0) - eligibleMovies.length,
+        include_completed: includeCompleted,
         episodes_inserted: totalInserted,
         episodes_skipped: totalSkipped,
         errors: errorDetails.length > 0 ? errorDetails : undefined,
