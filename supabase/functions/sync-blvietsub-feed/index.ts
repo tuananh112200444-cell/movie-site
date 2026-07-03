@@ -107,6 +107,12 @@ interface WordPressMovieUrl {
   originName?: string;
 }
 
+interface WordPressFetchIssue {
+  url: string;
+  type: 'fetch_error' | 'parse_empty';
+  message: string;
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -121,7 +127,6 @@ function proxiedBlvietsubUrl(rawUrl: string): string {
     if (url.protocol !== 'https:' || url.hostname !== 'blvietsub.com') return rawUrl;
     const proxy = new URL(BLVIETSUB_PROXY_URL);
     proxy.searchParams.set('url', url.toString());
-    proxy.searchParams.set('fresh', '1');
     return proxy.toString();
   } catch {
     return rawUrl;
@@ -134,9 +139,10 @@ async function fetchBlvietsubText(rawUrl: string, timeoutMs: number): Promise<st
   let lastError: unknown = null;
   for (const candidate of candidates) {
     try {
+      const candidateTimeoutMs = candidate === rawUrl ? timeoutMs : Math.max(timeoutMs, 110000);
       const response = await fetch(candidate, {
         headers: BLVIETSUB_HEADERS,
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(candidateTimeoutMs),
       });
       if (!response.ok) {
         lastError = new Error(`${candidate} ${response.status}`);
@@ -149,6 +155,62 @@ async function fetchBlvietsubText(rawUrl: string, timeoutMs: number): Promise<st
     }
   }
   throw lastError instanceof Error ? lastError : new Error(`BLVietsub fetch failed: ${rawUrl}`);
+}
+
+async function diagnoseBlvietsubFetch(rawUrl: string, timeoutMs: number): Promise<Array<{
+  target: string;
+  ok: boolean;
+  status: number;
+  bytes: number;
+  has_blvietsub_marker: boolean;
+  has_movie_marker: boolean;
+  error?: string;
+}>> {
+  const proxiedUrl = proxiedBlvietsubUrl(rawUrl);
+  const candidates = Array.from(new Set([proxiedUrl, rawUrl]));
+  const results: Array<{
+    target: string;
+    ok: boolean;
+    status: number;
+    bytes: number;
+    has_blvietsub_marker: boolean;
+    has_movie_marker: boolean;
+    error?: string;
+  }> = [];
+
+  for (const candidate of candidates) {
+    const parsed = new URL(candidate);
+    const isProxy = candidate !== rawUrl;
+    try {
+      const candidateTimeoutMs = candidate === rawUrl ? timeoutMs : Math.max(timeoutMs, 110000);
+      const response = await fetch(candidate, {
+        headers: BLVIETSUB_HEADERS,
+        signal: AbortSignal.timeout(candidateTimeoutMs),
+      });
+      const text = await response.text().catch(() => '');
+      const lower = text.toLowerCase();
+      results.push({
+        target: isProxy ? `${parsed.hostname}${parsed.pathname}?url=<blvietsub>` : `${parsed.hostname}${parsed.pathname}`,
+        ok: response.ok,
+        status: response.status,
+        bytes: text.length,
+        has_blvietsub_marker: lower.includes('blvietsub'),
+        has_movie_marker: /\/xem-phim\/|streaming-server|data-link|og:title/i.test(text),
+      });
+    } catch (error) {
+      results.push({
+        target: isProxy ? `${parsed.hostname}${parsed.pathname}?url=<blvietsub>` : `${parsed.hostname}${parsed.pathname}`,
+        ok: false,
+        status: 0,
+        bytes: 0,
+        has_blvietsub_marker: false,
+        has_movie_marker: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return results;
 }
 
 function normalizeText(value = ''): string {
@@ -772,6 +834,12 @@ function addParsedEpisode(
   });
 }
 
+function parseEpisodeToken(value: string): number {
+  const numbers = String(value || '').match(/\d+/g);
+  if (!numbers?.length) return 1;
+  return Number(numbers[numbers.length - 1] || 1) || 1;
+}
+
 function parseStreamingServerEpisodes(html: string): Map<string, ParsedEpisode> {
   const episodes = new Map<string, ParsedEpisode>();
   const perEpisodeCount = new Map<number, number>();
@@ -780,7 +848,7 @@ function parseStreamingServerEpisodes(html: string): Map<string, ParsedEpisode> 
     const link = extractAttr(tag, 'data-link');
     const type = extractAttr(tag, 'data-type') || 'embed';
     const episodeId = extractAttr(tag, 'data-id');
-    const episodeNumber = Number(episodeId.match(/\d+/)?.[0] || 0);
+    const episodeNumber = parseEpisodeToken(episodeId);
     if (!episodeNumber || !link) continue;
     const serverNumber = (perEpisodeCount.get(episodeNumber) || 0) + 1;
     perEpisodeCount.set(episodeNumber, serverNumber);
@@ -792,9 +860,10 @@ function parseStreamingServerEpisodes(html: string): Map<string, ParsedEpisode> 
 function getWordPressWatchUrls(html: string, movieSlug: string): Array<{ episodeNumber: number; serverNumber: number; url: string }> {
   const urls = new Map<string, { episodeNumber: number; serverNumber: number; url: string }>();
   const escapedSlug = movieSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const watchUrlPattern = new RegExp(`https?:\\/\\/blvietsub\\.com\\/+(?:xem-phim)\\/${escapedSlug}\\/tap-([0-9]+)-sv-([0-9]+)`, 'gi');
-  const relativeWatchUrlPattern = new RegExp(`(?:^|["'\\s])((?:\\/\\/?)?xem-phim\\/${escapedSlug}\\/tap-([0-9]+)-sv-([0-9]+))`, 'gi');
-  const addUrl = (episodeNumber: number, serverNumber: number, rawLink: string) => {
+  const watchUrlPattern = new RegExp(`https?:\\/\\/blvietsub\\.com\\/+(?:xem-phim)\\/${escapedSlug}\\/tap-([a-z0-9-]+)-sv-([0-9]+)`, 'gi');
+  const relativeWatchUrlPattern = new RegExp(`(?:^|["'\\s])((?:\\/\\/?)?xem-phim\\/${escapedSlug}\\/tap-([a-z0-9-]+)-sv-([0-9]+))`, 'gi');
+  const addUrl = (episodeToken: string, serverNumber: number, rawLink: string) => {
+    const episodeNumber = parseEpisodeToken(episodeToken);
     if (!episodeNumber) return;
     const link = normalizeBlvietsubWatchUrl(rawLink);
     if (!link) return;
@@ -802,10 +871,10 @@ function getWordPressWatchUrls(html: string, movieSlug: string): Array<{ episode
   };
 
   for (const match of html.matchAll(watchUrlPattern)) {
-    addUrl(Number(match[1] || 0), Number(match[2] || 1), match[0]);
+    addUrl(match[1] || '', Number(match[2] || 1), match[0]);
   }
   for (const match of html.matchAll(relativeWatchUrlPattern)) {
-    addUrl(Number(match[2] || 0), Number(match[3] || 1), match[1]);
+    addUrl(match[2] || '', Number(match[3] || 1), match[1]);
   }
   return [...urls.values()].sort((a, b) => a.episodeNumber - b.episodeNumber || a.serverNumber - b.serverNumber);
 }
@@ -824,7 +893,8 @@ function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: stri
   if (!movieSlug) return null;
   const title = getMetaContent(html, 'og:title')
     .replace(/\s*-\s*BLVietsub\s*$/i, '')
-    || decodeHtml(stripTags(firstMatch(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i)));
+    || decodeHtml(stripTags(firstMatch(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i)))
+    || decodeHtml(stripTags(firstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i))).replace(/\s*-\s*BLVietsub\s*$/i, '');
   const image = getMetaContent(html, 'og:image');
   const content = getMetaContent(html, 'og:description');
   const postId = firstMatch(html, /https?:\/\/blvietsub\.com\/\?p=(\d+)/i) || movieSlug;
@@ -858,26 +928,27 @@ function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: stri
 async function fetchWordPressPlayerPages(html: string, movieSlug: string): Promise<string> {
   const watchUrls = getWordPressWatchUrls(html, movieSlug);
   const seenWatchUrls = new Set<string>();
+  const seenEpisodes = new Set<number>();
   const playerPages: string[] = [];
-  for (let watchIndex = 0; watchIndex < watchUrls.length && watchIndex < 120; watchIndex += 4) {
-    const batch = watchUrls.slice(watchIndex, Math.min(watchIndex + 4, 120)).filter((watch) => {
-      if (seenWatchUrls.has(watch.url)) return false;
-      seenWatchUrls.add(watch.url);
-      return true;
-    });
-    const pages = await Promise.all(batch.map(async (watch) => {
-      try {
-        const pageHtml = await fetchBlvietsubText(watch.url, 20000);
-        for (const discovered of getWordPressWatchUrls(pageHtml, movieSlug)) {
-          if (!seenWatchUrls.has(discovered.url) && watchUrls.length < 120) watchUrls.push(discovered);
-        }
-        return pageHtml;
-      } catch {
-        return '';
-      }
-    }));
-    for (const pageHtml of pages) {
+  for (let watchIndex = 0; watchIndex < watchUrls.length && playerPages.length < 40; watchIndex += 1) {
+    const watch = watchUrls[watchIndex];
+    if (!watch || seenWatchUrls.has(watch.url) || seenEpisodes.has(watch.episodeNumber)) continue;
+    seenWatchUrls.add(watch.url);
+    seenEpisodes.add(watch.episodeNumber);
+    try {
+      const pageHtml = await fetchBlvietsubText(watch.url, 35000);
       if (pageHtml) playerPages.push(pageHtml);
+      for (const discovered of getWordPressWatchUrls(pageHtml, movieSlug)) {
+        if (
+          !seenWatchUrls.has(discovered.url) &&
+          !seenEpisodes.has(discovered.episodeNumber) &&
+          (discovered.serverNumber === 1 || !watchUrls.some((item) => item.episodeNumber === discovered.episodeNumber))
+        ) {
+          watchUrls.push(discovered);
+        }
+      }
+    } catch {
+      // Keep metadata sync alive when a BLVietsub watch page is temporarily slow.
     }
   }
   return playerPages.join('\n');
@@ -888,11 +959,22 @@ async function fetchWordPressEntries(limit: number, offset: number): Promise<Par
   return result.entries;
 }
 
-async function fetchWordPressEntriesWithMeta(limit: number, offset: number): Promise<{ entries: ParsedEntry[]; scanned: number; total: number }> {
+async function fetchWordPressEntriesWithMeta(limit: number, offset: number): Promise<{
+  entries: ParsedEntry[];
+  scanned: number;
+  total: number;
+  issues: WordPressFetchIssue[];
+}> {
   let sitemapUrls: WordPressMovieUrl[] = [];
+  const issues: WordPressFetchIssue[] = [];
   try {
     sitemapUrls = parseWordPressSitemap(await fetchBlvietsubText(FEED_URL, 25000));
-  } catch {
+  } catch (error) {
+    issues.push({
+      url: FEED_URL,
+      type: 'fetch_error',
+      message: error instanceof Error ? error.message : String(error),
+    });
     // Continue with discovery URLs when the upstream sitemap is temporarily unreachable.
   }
   const discoveryUrls = uniqWordPressMovieUrls([
@@ -913,21 +995,39 @@ async function fetchWordPressEntriesWithMeta(limit: number, offset: number): Pro
         const movieSlug = getWordPressMovieSlug(item.url);
         const playerHtml = movieSlug ? await fetchWordPressPlayerPages(html, movieSlug) : '';
         const entry = parseWordPressMoviePage(item.url, item.updatedAt, html, playerHtml);
+        if (!entry) {
+          return {
+            entry: null,
+            issue: {
+              url: item.url,
+              type: 'parse_empty' as const,
+              message: 'Không parse được tiêu đề hoặc tập phim từ trang BLVietsub.',
+            },
+          };
+        }
         if (entry && !entry.originName && item.originName) entry.originName = item.originName;
         if (entry && !entry.title && item.title) entry.title = item.title;
         if (entry) entry.aliasNames = uniqueTextValues([...(entry.aliasNames || []), item.title, item.originName]);
-        return entry;
-      } catch {
-        return null;
+        return { entry, issue: null };
+      } catch (error) {
+        return {
+          entry: null,
+          issue: {
+            url: item.url,
+            type: 'fetch_error' as const,
+            message: error instanceof Error ? error.message : String(error),
+          },
+        };
       }
     }));
-    for (const entry of parsed) {
-      if (!entry) continue;
-      entries.push(entry);
+    for (const item of parsed) {
+      if (item.issue) issues.push(item.issue);
+      if (!item.entry) continue;
+      entries.push(item.entry);
       if (entries.length >= limit) break;
     }
   }
-  return { entries, scanned: urls.length, total: allUrls.length };
+  return { entries, scanned: urls.length, total: allUrls.length, issues };
 }
 
 async function fetchSourceEntries(limit: number, pageSize: number, offset: number): Promise<ParsedEntry[]> {
@@ -935,13 +1035,19 @@ async function fetchSourceEntries(limit: number, pageSize: number, offset: numbe
   return fetchWordPressEntries(limit, offset);
 }
 
-async function fetchSourceEntriesWithMeta(limit: number, pageSize: number, offset: number): Promise<{ entries: ParsedEntry[]; scanned: number; total: number }> {
+async function fetchSourceEntriesWithMeta(limit: number, pageSize: number, offset: number): Promise<{
+  entries: ParsedEntry[];
+  scanned: number;
+  total: number;
+  issues?: WordPressFetchIssue[];
+}> {
   if (/feeds\/posts\/default/i.test(FEED_URL)) {
     const entries = await fetchBloggerEntries(limit, pageSize, offset);
     return {
       entries,
       scanned: entries.length,
       total: offset + entries.length + (entries.length >= limit ? limit : 0),
+      issues: [],
     };
   }
   return fetchWordPressEntriesWithMeta(limit, offset);
@@ -1142,6 +1248,21 @@ async function updateMovieMetadata(
     source_site: movie.slug.startsWith('blvietsub-') ? SOURCE_SITE : undefined,
     source_name: movie.slug.startsWith('blvietsub-') ? SOURCE_NAME : undefined,
   };
+
+  const originName = String(entry.originName || '').trim();
+  if (originName) {
+    if (!String(movie.origin_name || '').trim()) update.origin_name = originName;
+    if (!String(movie.title_en || '').trim() && originName !== entry.title) update.title_en = originName;
+    update.title_original = originName;
+  }
+
+  const normalizedName = slugify(uniqueTextValues([
+    movie.name,
+    entry.title,
+    originName,
+    ...(entry.aliasNames || []),
+  ]).join(' '));
+  if (normalizedName) update.normalized_name = normalizedName;
 
   if (episodeCount !== current || Number(movie.total_episodes || 0) !== episodeCount) {
     update.episode_current = `${TAP_LABEL} ${episodeCount}`;
@@ -1452,6 +1573,21 @@ async function runSeoAutomation(
   };
 }
 
+function skippedSeoAutomation(changedUrlCount = 0): Awaited<ReturnType<typeof runSeoAutomation>> {
+  return {
+    changed_urls: changedUrlCount,
+    caches_cleared: false,
+    search_index_refreshed: false,
+    google_ping: {
+      attempted: false,
+      ok: true,
+      status: 0,
+      urls: changedUrlCount,
+      message: 'skipped by refresh_search=0 or skip_seo=1',
+    },
+  };
+}
+
 function pickPlayableFromWatchPage(html: string, episodeNumber: number): { link_embed: string; link_m3u8: string } | null {
   const tags = Array.from(html.matchAll(/<[^>]+class=["'][^"']*\bstreaming-server\b[^"']*["'][^>]*>/gi))
     .map((match) => match[0]);
@@ -1590,8 +1726,23 @@ serve(async (req) => {
   const cursorKey = url.searchParams.get('cursor_key') || 'blvietsub_sitemap_external';
   const supabase = createClient(supabaseUrl, serviceKey);
   const errors: string[] = [];
+  const shouldRunSeoAutomation = url.searchParams.get('refresh_search') !== '0' && url.searchParams.get('skip_seo') !== '1';
 
   try {
+    const debugUrl = url.searchParams.get('debug_fetch') === '1'
+      ? url.searchParams.get('movie_url')?.trim()
+      : '';
+    if (debugUrl && /^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(debugUrl)) {
+      const diagnostics = await diagnoseBlvietsubFetch(normalizeSourceUrl(debugUrl), 25000);
+      return json({
+        success: diagnostics.some((item) => item.ok && item.has_movie_marker),
+        movie_url: debugUrl,
+        feed_mode: /feeds\/posts\/default/i.test(FEED_URL) ? 'blogger' : 'wordpress',
+        diagnostics,
+        elapsed_ms: Date.now() - started,
+      }, 200);
+    }
+
     if (url.searchParams.get('repair_bad_embeds') === '1') {
       const repairLimit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 200), 500));
       const result = await repairBadBlvietsubEmbeds(supabase, repairLimit);
@@ -1615,7 +1766,9 @@ serve(async (req) => {
       const includeCompleted = url.searchParams.get('include_completed') === '1';
       const result = await repairExistingBlvietsubMovies(supabase, repairLimit, includeCompleted);
       const changedSlugs = result.drift.map((item) => item.slug);
-      const seoAutomation = await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs);
+      const seoAutomation = shouldRunSeoAutomation
+        ? await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs)
+        : skippedSeoAutomation(changedSlugs.length);
       await writeSyncLog(supabase, {
         function_name: 'sync-blvietsub-feed-repair-existing',
         scanned: result.scanned,
@@ -1670,7 +1823,9 @@ serve(async (req) => {
       }
       const syncResult = await syncEntryToMovie(supabase, movie, entry);
       const changedSlugs = created || syncResult.inserted > 0 || syncResult.updated ? [movie.slug] : [];
-      const seoAutomation = await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs);
+      const seoAutomation = shouldRunSeoAutomation
+        ? await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs)
+        : skippedSeoAutomation(changedSlugs.length);
       const result = {
         success: true,
         movie_url: directUrl,
@@ -1704,6 +1859,7 @@ serve(async (req) => {
     const sourceResult = await fetchSourceEntriesWithMeta(limit, pageSize, effectiveOffset);
     const entries = sourceResult.entries;
     const entryIndexes = buildEntryIndexes(entries);
+    const sourceIssues = sourceResult.issues || [];
 
     const movieRows = await fetchExistingQueerMovies(supabase);
     const movieIndexes = buildMovieIndexes(movieRows);
@@ -1749,7 +1905,9 @@ serve(async (req) => {
       if (!findEntryForMovie(movie, entryIndexes)) missing.push(movie.slug);
     }
 
-    const seoAutomation = await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs);
+    const seoAutomation = shouldRunSeoAutomation
+      ? await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs)
+      : skippedSeoAutomation(changedSlugs.length);
 
     const result = {
       success: errors.length === 0,
@@ -1768,6 +1926,11 @@ serve(async (req) => {
       updated,
       seo_automation: seoAutomation,
       errors,
+      metadata: {
+        feed_mode: /feeds\/posts\/default/i.test(FEED_URL) ? 'blogger' : 'wordpress',
+        source_issue_count: sourceIssues.length,
+        source_issue_sample: sourceIssues.slice(0, 20),
+      },
       elapsed_ms: Date.now() - started,
     };
     if (useCursor) {

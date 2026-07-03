@@ -189,6 +189,71 @@ function pushEpisode(serverMap: Map<string, unknown[]>, serverName: string, epDa
   serverMap.get(serverName)!.push(epData);
 }
 
+function normalizePlayableUrl(value = ''): string {
+  return String(value || '').trim().replace(/&amp;/g, '&').replace(/\/+$/, '');
+}
+
+function streamRowUrl(row: Record<string, unknown>): string {
+  return normalizePlayableUrl(String(row.stream_url || row.embed_url || ''));
+}
+
+function buildStreamHealthIndex(streams: unknown[] = []): Map<string, Record<string, unknown>> {
+  const index = new Map<string, Record<string, unknown>>();
+  for (const raw of streams) {
+    const row = raw as Record<string, unknown>;
+    const url = streamRowUrl(row);
+    const serverName = String(row.server_name || 'Nguá»“n');
+    const episodeSlug = String(row.episode_slug || '');
+    if (url) index.set(`url:${url}`, row);
+    if (serverName && episodeSlug) {
+      index.set(`server:${normalizeEpisodeKeyPart(serverName)}|slug:${normalizeEpisodeKeyPart(episodeSlug)}`, row);
+      const episodeNumber = extractEpNumber(episodeSlug);
+      if (Number.isFinite(episodeNumber)) {
+        index.set(`server:${normalizeEpisodeKeyPart(serverName)}|num:${episodeNumber}`, row);
+      }
+    }
+  }
+  return index;
+}
+
+function getEpisodeHealthRow(
+  healthIndex: Map<string, Record<string, unknown>>,
+  serverName: string,
+  slug: string,
+  episodeNumber: number,
+  epData: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const url = normalizePlayableUrl(String(epData.link_m3u8 || epData.link_embed || ''));
+  if (url && healthIndex.has(`url:${url}`)) return healthIndex.get(`url:${url}`) || null;
+  const server = normalizeEpisodeKeyPart(serverName || 'Nguá»“n');
+  const normalizedSlug = normalizeEpisodeKeyPart(slug || '');
+  if (server && normalizedSlug && healthIndex.has(`server:${server}|slug:${normalizedSlug}`)) {
+    return healthIndex.get(`server:${server}|slug:${normalizedSlug}`) || null;
+  }
+  if (server && Number.isFinite(episodeNumber) && healthIndex.has(`server:${server}|num:${episodeNumber}`)) {
+    return healthIndex.get(`server:${server}|num:${episodeNumber}`) || null;
+  }
+  return null;
+}
+
+function shouldSuppressUnhealthyStream(row: Record<string, unknown> | null): boolean {
+  if (!row) return false;
+  const healthStatus = String(row.health_status || '').toLowerCase();
+  const failureCount = Number(row.failure_count || 0);
+  return healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 3);
+}
+
+function attachStreamHealth(epData: Record<string, unknown>, row: Record<string, unknown> | null): Record<string, unknown> {
+  if (!row) return epData;
+  return {
+    ...epData,
+    source_health_status: String(row.health_status || 'unchecked').toLowerCase(),
+    source_response_time_ms: Number(row.response_time_ms || 0) || undefined,
+    source_failure_count: Number(row.failure_count || 0) || undefined,
+    source_priority: Number(row.priority || 0) || undefined,
+  };
+}
+
 function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
@@ -1145,6 +1210,7 @@ serve(async (req) => {
         console.log('[movie-detail-proxy] movie_episodes error:', meErr.message);
       }
 
+      const streamHealthIndex = buildStreamHealthIndex(streams ?? []);
       const movieEpisodeRows = [...(meRows ?? [])].sort((a, b) => {
         const am = a as Record<string, unknown>;
         const bm = b as Record<string, unknown>;
@@ -1164,7 +1230,7 @@ serve(async (req) => {
         const slugVal = String(em.slug || `tap-${num}`);
         const serverName = String(em.server_name || 'Nguồn');
         const source = String(em.source || 'manual');
-        const epData = {
+        let epData = {
           name: String(em.episode_name || `Tập ${num}`),
           slug: slugVal,
           filename: '',
@@ -1172,6 +1238,9 @@ serve(async (req) => {
           link_m3u8: String(em.link_m3u8 || ''),
           subtitle_url: String(em.subtitle_url || ''),
         };
+        const healthRow = getEpisodeHealthRow(streamHealthIndex, serverName, slugVal, num, epData);
+        if (shouldSuppressUnhealthyStream(healthRow)) continue;
+        epData = attachStreamHealth(epData, healthRow);
         if (isKnownBlockedEmbedHost(String(epData.link_embed || epData.link_m3u8 || ''))) continue;
         const alreadySeen = hasSeenEpisode(seen, serverName, slugVal, num, String(epData.name));
         markSeenEpisode(seen, serverName, slugVal, num, String(epData.name));
@@ -1214,7 +1283,7 @@ serve(async (req) => {
             const epNum = extractEpNumber(epSlug || epName);
             if (hasSeenEpisode(seen, serverName, epSlug, epNum, epName)) continue;
             markSeenEpisode(seen, serverName, epSlug, epNum, epName);
-            const nestedEpData = {
+            let nestedEpData = {
               name: String(ep.name || ''),
               slug: epSlug,
               filename: String(ep.filename || ''),
@@ -1222,6 +1291,9 @@ serve(async (req) => {
               link_m3u8: String(ep.link_m3u8 || ''),
               subtitle_url: String(ep.subtitle_url || ep.subtitle || ''),
             };
+            const healthRow = getEpisodeHealthRow(streamHealthIndex, serverName, epSlug, epNum, nestedEpData);
+            if (shouldSuppressUnhealthyStream(healthRow)) continue;
+            nestedEpData = attachStreamHealth(nestedEpData, healthRow);
             if (isKnownBlockedEmbedHost(String(nestedEpData.link_embed || nestedEpData.link_m3u8 || ''))) continue;
             pushEpisode(serverMap, serverName, nestedEpData);
           }
@@ -1230,6 +1302,9 @@ serve(async (req) => {
           continue;
         }
 
+        const healthRow = getEpisodeHealthRow(streamHealthIndex, serverName, slugVal, num, epData);
+        if (shouldSuppressUnhealthyStream(healthRow)) continue;
+        epData = attachStreamHealth(epData, healthRow);
         if (isKnownBlockedEmbedHost(String(epData.link_embed || epData.link_m3u8 || ''))) continue;
         if (hasSeenEpisode(seen, serverName, slugVal, num, String(epData.name || ''))) continue;
         markSeenEpisode(seen, serverName, slugVal, num, String(epData.name || ''));

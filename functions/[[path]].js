@@ -1060,7 +1060,7 @@ async function proxyBlvietsub(request, context) {
         'Referer': 'https://blvietsub.com/',
       },
       cf: { cacheTtl: targetUrl.pathname.endsWith('.xml') ? 900 : 3600, cacheEverything: true },
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(110000),
     });
     if (!upstream.ok) throw new Error(`BLVietsub upstream ${upstream.status}`);
 

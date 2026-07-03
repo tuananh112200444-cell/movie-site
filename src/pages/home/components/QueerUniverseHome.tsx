@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import QueerUniverseHero from './QueerUniverseHero';
 import PortalGateway from './PortalGateway';
@@ -335,7 +335,7 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
         <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-black uppercase tracking-[0.24em] text-cyan-200">Không gian riêng</p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-white md:text-3xl">Vũ trụ Đam mỹ / BL / GL</h2>
+            <h2 className="mt-1 text-2xl font-black tracking-tight text-white md:text-3xl">Vũ Trụ Đam Mỹ / BL / GL</h2>
           </div>
           <button
             type="button"
@@ -410,9 +410,9 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
 
         {!loading && !hasMovies && (
           <section className="rounded-md border border-white/[0.08] bg-white/[0.04] p-6">
-            <h3 className="text-lg font-bold text-white">Chưa đọc được feed BLVietsub</h3>
+            <h3 className="text-lg font-bold text-white">Chưa tải được danh sách phim</h3>
             <p className="mt-2 text-sm leading-relaxed text-white/55">
-              Kiểm tra proxy blvietsub-feed-proxy hoặc endpoint feed Blogger.
+              Hệ thống đang thử tải lại danh sách. Vui lòng quay lại sau ít phút.
             </p>
           </section>
         )}
@@ -479,15 +479,6 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
 
           <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
             <RankingList movies={rankedMovies} />
-            <a
-              href="https://www.blvietsub.top/feeds/posts/default?alt=json"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-between rounded-md border border-white/[0.08] bg-white/[0.035] px-4 py-3 text-xs font-bold text-white/52 transition-colors hover:border-cyan-300/35 hover:text-cyan-100"
-            >
-              Nguồn API BLVietsub
-              <i className="ri-external-link-line" />
-            </a>
           </div>
         </div>
       </main>

@@ -965,8 +965,11 @@ export async function searchMovies(keyword: string, page = 1, signal?: AbortSign
 
   const apiData = apiResult.status === 'fulfilled' ? apiResult.value : fallbackApiData;
   const queerItems = queerResult.status === 'fulfilled' ? queerResult.value : [];
+  const aliasItems = page === 1 && supabaseItems.length === 0
+    ? await searchMoviesByAliasInSupabase(kw, { limit: 12 }).catch(() => [])
+    : [];
   const items = sortMoviesForSearch(
-    mergeMoviesUnique([...(page === 1 ? queerItems : []), ...supabaseItems, ...(apiData.items ?? [])]),
+    mergeMoviesUnique([...(page === 1 ? queerItems : []), ...aliasItems, ...supabaseItems, ...(apiData.items ?? [])]),
     kw,
     'relevance',
   );
@@ -1019,6 +1022,7 @@ function promiseAllSettledWithTimeout<T>(promises: Promise<T>[], timeoutMs: numb
    MOVIE DETAIL — EDGE FUNCTION PROXY (production CORS bypass)
    ════════════════════════════════════════════ */
 const SUPABASE_URL = typeof import.meta.env !== 'undefined' ? (import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined) : undefined;
+const SUPABASE_ANON_KEY = typeof import.meta.env !== 'undefined' ? (import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY as string | undefined) : undefined;
 
 const ENABLE_SUPABASE_TEXT_SEARCH =
   typeof import.meta.env === 'undefined' || import.meta.env.VITE_DISABLE_SUPABASE_TEXT_SEARCH !== 'true';
@@ -1536,6 +1540,60 @@ function escapePostgrestIlike(value: string): string {
 
 let supabaseSearchRpcUnavailable = false;
 
+async function searchMoviesByAliasInSupabase(
+  keyword: string,
+  options: { limit?: number; signal?: AbortSignal } = {},
+): Promise<MovieItem[]> {
+  if (!ENABLE_SUPABASE_TEXT_SEARCH || !SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
+  const kw = keyword.trim();
+  if (kw.length < 2) return [];
+
+  const limit = options.limit ?? 12;
+  const normalizedKw = normalizeSearchText(kw);
+  const safeKw = escapePostgrestIlike(kw);
+  const safeNormalizedKw = escapePostgrestIlike(normalizedKw);
+  const safeSlugKw = escapePostgrestIlike(normalizedKw.replace(/\s+/g, '-'));
+  const filters = Array.from(new Set([
+    `origin_name.ilike.*${safeKw}*`,
+    `title_en.ilike.*${safeKw}*`,
+    `title_original.ilike.*${safeKw}*`,
+    `normalized_name.ilike.*${safeKw}*`,
+    `slug.ilike.*${safeSlugKw}*`,
+    ...(safeNormalizedKw
+      ? [
+          `origin_name.ilike.*${safeNormalizedKw}*`,
+          `title_en.ilike.*${safeNormalizedKw}*`,
+          `title_original.ilike.*${safeNormalizedKw}*`,
+          `normalized_name.ilike.*${safeNormalizedKw}*`,
+          `normalized_name.ilike.*${safeSlugKw}*`,
+        ]
+      : []),
+  ])).join(',');
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/movies`);
+  url.searchParams.set('select', 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,thumb_url,poster_url,type,year,quality,lang,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,category,country,is_published,updated_at,ophim_id,tmdb_id,source_site,source_name,release_at,next_episode_at,next_episode_name,schedule_note');
+  url.searchParams.set('is_published', 'eq.true');
+  url.searchParams.set('or', `(${filters})`);
+  url.searchParams.set('order', 'updated_at.desc');
+  url.searchParams.set('limit', String(Math.max(limit, 12)));
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    signal: options.signal,
+  });
+  if (!response.ok) return [];
+  const data = await response.json() as Record<string, unknown>[];
+  if (!Array.isArray(data)) return [];
+  return sortMoviesForSearch(
+    mergeMoviesUnique((data as Record<string, unknown>[]).map(toSupabaseMovieItem)),
+    kw,
+    'relevance',
+  ).slice(0, limit);
+}
+
 export async function searchMoviesInSupabase(
   keyword: string,
   options: { limit?: number; timeoutMs?: number; minLength?: number; signal?: AbortSignal } = {}
@@ -1563,11 +1621,12 @@ export async function searchMoviesInSupabase(
         .abortSignal(controller.signal);
 
       if (!rpcError && Array.isArray(rpcData)) {
-        return sortMoviesForSearch(
+        const rpcMovies = sortMoviesForSearch(
           mergeMoviesUnique((rpcData as Record<string, unknown>[]).map(toSupabaseMovieItem)),
           kw,
           'relevance',
         ).slice(0, limit);
+        if (rpcMovies.length > 0) return rpcMovies;
       }
 
       const message = (rpcError?.message ?? '').toLowerCase();
@@ -1664,11 +1723,16 @@ export async function searchMoviesInSupabase(
       }
     }
 
-    const items = await enrichMoviesWithSupabaseEpisodeCounts(
-      Array.from(recordsById.values()).map(toSupabaseMovieItem),
-      controller.signal,
-    );
-    return sortMoviesForSearch(mergeMoviesUnique(items), kw, 'relevance').slice(0, limit);
+    const baseItems = Array.from(recordsById.values()).map(toSupabaseMovieItem);
+    try {
+      const items = await enrichMoviesWithSupabaseEpisodeCounts(baseItems, controller.signal);
+      return sortMoviesForSearch(mergeMoviesUnique(items), kw, 'relevance').slice(0, limit);
+    } catch (enrichError) {
+      if ((enrichError as Error)?.name !== 'AbortError') {
+        console.warn('[searchMoviesInSupabase] Episode enrich skipped:', enrichError);
+      }
+      return sortMoviesForSearch(mergeMoviesUnique(baseItems), kw, 'relevance').slice(0, limit);
+    }
   } catch (e) {
     if ((e as Error)?.name !== 'AbortError') {
       console.warn('[searchMoviesInSupabase] Exception:', e);

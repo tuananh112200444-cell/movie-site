@@ -28,7 +28,7 @@ const SiteGuideSection = lazy(() => import('./components/SiteGuideSection'));
 
 function VietnamPoetryBanner() {
   return (
-    <section className="mx-auto mb-4 max-w-[1180px] overflow-visible sm:mb-7 lg:mb-8" aria-label="Thong diep Viet Nam">
+    <section className="home-poetry-banner mx-auto mb-4 overflow-visible sm:mb-7 lg:mb-8" aria-label="Thong diep Viet Nam">
       <div className="relative overflow-hidden rounded-2xl border border-amber-200/16 bg-[radial-gradient(circle_at_12%_10%,rgba(252,211,77,0.18),transparent_34%),linear-gradient(135deg,rgba(127,29,29,0.28),rgba(15,17,26,0.88)_50%,rgba(6,8,14,0.96))] px-2.5 py-2.5 shadow-[0_20px_70px_-52px_rgba(248,113,113,0.75),inset_0_1px_0_rgba(255,255,255,0.08)] sm:px-4 sm:py-3 lg:px-5">
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-yellow-200/45 to-transparent" />
         <div className="grid grid-cols-[38%_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[260px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[380px_minmax(0,1fr)]">
@@ -690,7 +690,7 @@ export default function Home() {
         <HeroBanner movies={trendingMovies} loading={bannerLoading} />
       </div>
 
-      <main className="mx-auto max-w-[1880px] px-3 pt-2 sm:px-4 md:px-6 md:pt-7 lg:px-8 xl:px-12 2xl:px-14">
+      <main className="home-desktop-shell pt-2 md:pt-7">
         <HomeDiscoverySection onSelect={setActivePortal} />
         <MobileQuickCategories />
         <VietnamPoetryBanner />

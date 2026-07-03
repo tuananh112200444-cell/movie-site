@@ -549,7 +549,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        <StickyBanner />
+        {!scrolled && <StickyBanner />}
         
         {/* Mobile Search Overlay */}
         {searchOpen && (

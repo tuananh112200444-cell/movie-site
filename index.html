@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <script>
       (function () {
-        var RESET_KEY = 'kp_emergency_cache_reset_20260621_episode_fix_v1';
+        var RESET_KEY = 'kp_emergency_cache_reset_20260703_blank_page_fix_v2';
         function hasReset() {
           try { return localStorage.getItem(RESET_KEY) === '1'; }
           catch (e) { return window.name.indexOf(RESET_KEY) !== -1; }
@@ -44,7 +44,7 @@
             caches.keys()
               .then(function (names) {
                 return Promise.all(names.map(function (name) {
-                  return name.indexOf('khophim') === 0 ? caches.delete(name) : Promise.resolve(false);
+                  return (/^(khophim|workbox)/i.test(name)) ? caches.delete(name) : Promise.resolve(false);
                 }));
               })
               .catch(function () {})
@@ -260,6 +260,84 @@
         </p>
       </div>
     </noscript>
+    <script>
+      (function () {
+        var RECOVERY_KEY = 'kp_shell_recovery_20260703_blank_page_v1';
+        function readFlag() {
+          try { return sessionStorage.getItem(RECOVERY_KEY) === '1'; }
+          catch (e) { return window.name.indexOf(RECOVERY_KEY) !== -1; }
+        }
+        function writeFlag() {
+          try { sessionStorage.setItem(RECOVERY_KEY, '1'); }
+          catch (e) { window.name = (window.name || '') + ' ' + RECOVERY_KEY; }
+        }
+        function clearLocalState() {
+          try {
+            Object.keys(localStorage).forEach(function (key) {
+              if (/^(kp_|khophim|detail_|search_v|movie_|home_)/i.test(key)) localStorage.removeItem(key);
+            });
+            Object.keys(sessionStorage).forEach(function (key) {
+              if (key !== RECOVERY_KEY && /^(kp_|khophim|detail_|search_v|movie_|home_)/i.test(key)) sessionStorage.removeItem(key);
+            });
+          } catch (e) {}
+        }
+        function clearCachesAndWorkers() {
+          var tasks = [];
+          if ('serviceWorker' in navigator) {
+            tasks.push(
+              navigator.serviceWorker.getRegistrations()
+                .then(function (registrations) {
+                  return Promise.all(registrations.map(function (registration) {
+                    return registration.unregister();
+                  }));
+                })
+                .catch(function () {})
+            );
+          }
+          if ('caches' in window) {
+            tasks.push(
+              caches.keys()
+                .then(function (names) {
+                  return Promise.all(names.map(function (name) {
+                    return (/^(khophim|workbox)/i.test(name)) ? caches.delete(name) : Promise.resolve(false);
+                  }));
+                })
+                .catch(function () {})
+            );
+          }
+          return Promise.all(tasks);
+        }
+        function showRecovery(reason) {
+          var root = document.getElementById('root');
+          if (!root) return;
+          root.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><section style="max-width:430px"><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang tai lai</h1><p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0 0 20px">Trinh duyet dang giu ban cu nen trang khong hien thi dung. Bam nut ben duoi de mo lai phien ban moi.</p><button onclick="location.replace(location.pathname + location.search + (location.search ? '&' : '?') + 'recover=' + Date.now())" style="background:#dc2626;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer">Mo lai KhoPhim</button><p style="margin-top:12px;color:rgba(255,255,255,.38);font-size:12px">Ma phuc hoi: ' + reason + '</p></section></main>';
+        }
+        function recover(reason) {
+          if (readFlag()) {
+            showRecovery(reason);
+            return;
+          }
+          writeFlag();
+          clearLocalState();
+          clearCachesAndWorkers().then(function () {
+            var url = new URL(location.href);
+            url.searchParams.set('__kp_recover', String(Date.now()));
+            location.replace(url.toString());
+          });
+        }
+        window.addEventListener('error', function (event) {
+          var target = event && event.target;
+          var src = target && target.tagName === 'SCRIPT' ? target.src || '' : '';
+          if (/\/assets\/|\/src\/main\.tsx/i.test(src)) recover('script_load_error');
+        }, true);
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          if (!root) return;
+          var empty = root.children.length === 0 && root.textContent.trim().length < 20;
+          if (empty) recover('empty_root');
+        }, 15000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
