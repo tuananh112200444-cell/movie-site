@@ -73,6 +73,14 @@ interface MovieRow {
   total_episodes?: number | null;
   status?: string | null;
   year?: number | null;
+  last_synced_at?: string | null;
+  updated_at?: string | null;
+}
+
+interface LocalEpisodeStats {
+  rows: number;
+  distinctEpisodes: number;
+  maxEpisode: number;
 }
 
 interface ParsedEntry {
@@ -121,7 +129,8 @@ function proxiedBlvietsubUrl(rawUrl: string): string {
 }
 
 async function fetchBlvietsubText(rawUrl: string, timeoutMs: number): Promise<string> {
-  const candidates = Array.from(new Set([rawUrl, proxiedBlvietsubUrl(rawUrl)]));
+  const proxiedUrl = proxiedBlvietsubUrl(rawUrl);
+  const candidates = Array.from(new Set([proxiedUrl, rawUrl]));
   let lastError: unknown = null;
   for (const candidate of candidates) {
     try {
@@ -386,6 +395,7 @@ function extractPostIdFromMovie(movie: MovieRow): string {
 function getMovieCurrentEpisode(movie: MovieRow): number {
   return Math.max(
     Number(movie.current_episode || 0),
+    Number(movie.total_episodes || 0),
     Number(String(movie.episode_current || '').match(/\d+/)?.[0] || 0),
   );
 }
@@ -404,6 +414,77 @@ function shouldRoutineRepairMovie(movie: MovieRow, includeCompleted: boolean): b
   if (!looksCompleted) return true;
   if (!total) return true;
   return current > 0 && current < total;
+}
+
+function toTime(value?: string | null): number {
+  const time = Date.parse(String(value || ''));
+  return Number.isFinite(time) ? time : 0;
+}
+
+async function fetchLocalEpisodeStats(
+  supabase: SupabaseClient,
+  movies: MovieRow[],
+): Promise<Map<string, LocalEpisodeStats>> {
+  const stats = new Map<string, LocalEpisodeStats>();
+  const ids = movies.map((movie) => movie.id).filter(Boolean);
+  if (ids.length === 0) return stats;
+
+  for (let index = 0; index < ids.length; index += 200) {
+    const batchIds = ids.slice(index, index + 200);
+    const { data, error } = await supabase
+      .from('movie_episodes')
+      .select('movie_id, episode_number')
+      .in('movie_id', batchIds);
+    if (error) throw new Error(`movie_episodes stats select: ${error.message}`);
+
+    const perMovieEpisodes = new Map<string, Set<number>>();
+    const perMovieRows = new Map<string, number>();
+    for (const row of data || []) {
+      const movieId = String(row.movie_id || '');
+      const episodeNumber = Number(row.episode_number || 0);
+      if (!movieId || !episodeNumber) continue;
+      if (!perMovieEpisodes.has(movieId)) perMovieEpisodes.set(movieId, new Set());
+      perMovieEpisodes.get(movieId)?.add(episodeNumber);
+      perMovieRows.set(movieId, (perMovieRows.get(movieId) || 0) + 1);
+    }
+
+    for (const movieId of batchIds) {
+      const episodes = perMovieEpisodes.get(movieId) || new Set<number>();
+      stats.set(movieId, {
+        rows: perMovieRows.get(movieId) || 0,
+        distinctEpisodes: episodes.size,
+        maxEpisode: episodes.size ? Math.max(...episodes) : 0,
+      });
+    }
+  }
+
+  return stats;
+}
+
+function scoreRoutineRepairMovie(
+  movie: MovieRow,
+  stats: LocalEpisodeStats | undefined,
+  includeCompleted: boolean,
+  now = Date.now(),
+): number {
+  if (!shouldRoutineRepairMovie(movie, includeCompleted)) return -1;
+
+  const displayedEpisode = getMovieCurrentEpisode(movie);
+  const localMaxEpisode = stats?.maxEpisode || 0;
+  const localRows = stats?.rows || 0;
+  const staleHours = Math.max(0, (now - toTime(movie.last_synced_at)) / 36e5);
+  const updatedHours = Math.max(0, (now - toTime(movie.updated_at)) / 36e5);
+  const looksOngoing = !isCompletedText(movie.status) && !isCompletedText(movie.episode_current);
+  const mismatch = Math.max(0, displayedEpisode - localMaxEpisode);
+
+  let score = 0;
+  if (displayedEpisode > 0 && localRows === 0) score += 10000;
+  if (mismatch > 0) score += 5000 + mismatch * 250;
+  if (looksOngoing) score += 1200;
+  if (staleHours >= 24) score += Math.min(900, Math.floor(staleHours));
+  if (updatedHours <= 48) score += 500 - Math.floor(updatedHours);
+  if (displayedEpisode > 0 && localMaxEpisode >= displayedEpisode) score -= 700;
+  return score;
 }
 
 function playableEpisodeCount(episodes: ParsedEpisode[]): number {
@@ -638,6 +719,7 @@ function normalizeBlvietsubWatchUrl(rawLink = ''): string {
   if (link.startsWith('//')) link = `https:${link}`;
   if (link.startsWith('/')) link = `https://blvietsub.com${link}`;
   if (!/^https?:\/\//i.test(link)) link = `https://blvietsub.com/${link.replace(/^\/+/, '')}`;
+  link = link.replace(/^(https?:\/\/blvietsub\.com)\/+(xem-phim\/)/i, '$1/$2');
   return link;
 }
 
@@ -1104,12 +1186,7 @@ function getBlvietsubMovieUrl(movie: MovieRow): string {
 }
 
 async function fetchWordPressEntryByUrl(movieUrl: string): Promise<ParsedEntry | null> {
-  const page = await fetch(proxiedBlvietsubUrl(movieUrl), {
-    headers: BLVIETSUB_HEADERS,
-    signal: AbortSignal.timeout(25000),
-  });
-  if (!page.ok) throw new Error(`BLVietsub movie ${page.status}`);
-  const html = await page.text();
+  const html = await fetchBlvietsubText(movieUrl, 25000);
   const movieSlug = getWordPressMovieSlug(movieUrl);
   const playerHtml = movieSlug ? await fetchWordPressPlayerPages(html, movieSlug) : '';
   const entry = parseWordPressMoviePage(movieUrl, new Date().toISOString(), html, playerHtml);
@@ -1164,13 +1241,13 @@ async function repairExistingBlvietsubMovies(
   errors: string[];
 }> {
   const cappedLimit = Math.max(1, Math.min(limit, 80));
-  const queryLimit = includeCompleted ? cappedLimit : Math.min(cappedLimit * 4, 320);
+  const queryLimit = includeCompleted ? 800 : 1000;
   const { data, error } = await supabase
     .from('movies')
-    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, status, year, last_synced_at')
+    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, status, year, last_synced_at, updated_at')
     .eq('is_published', true)
     .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub.com/phim/%,source_url.ilike.%blvietsub.com/phim/%')
-    .order('updated_at', { ascending: false })
+    .order('last_synced_at', { ascending: true, nullsFirst: true })
     .limit(queryLimit);
 
   if (error) throw new Error(`existing BLVietsub select: ${error.message}`);
@@ -1184,9 +1261,17 @@ async function repairExistingBlvietsubMovies(
   const drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }> = [];
   const errors: string[] = [];
   const pool = (data || []) as MovieRow[];
+  const episodeStats = await fetchLocalEpisodeStats(supabase, pool);
+  const now = Date.now();
   const rows = pool
-    .filter((movie) => shouldRoutineRepairMovie(movie, includeCompleted))
-    .slice(0, cappedLimit);
+    .map((movie) => ({
+      movie,
+      score: scoreRoutineRepairMovie(movie, episodeStats.get(movie.id), includeCompleted, now),
+    }))
+    .filter((item) => item.score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, cappedLimit)
+    .map((item) => item.movie);
 
   for (const movie of rows) {
     const movieUrl = getBlvietsubMovieUrl(movie);
@@ -1415,15 +1500,8 @@ async function repairBadBlvietsubEmbeds(
         return;
       }
       try {
-        const response = await fetch(proxiedBlvietsubUrl(watchUrl), {
-          headers: BLVIETSUB_HEADERS,
-          signal: AbortSignal.timeout(20000),
-        });
-        if (!response.ok) {
-          unresolved += 1;
-          return;
-        }
-        const playable = pickPlayableFromWatchPage(await response.text(), episodeNumber);
+        const normalizedWatchUrl = normalizeBlvietsubWatchUrl(watchUrl);
+        const playable = pickPlayableFromWatchPage(await fetchBlvietsubText(normalizedWatchUrl, 20000), episodeNumber);
         if (!playable || (!playable.link_embed && !playable.link_m3u8)) {
           unresolved += 1;
           return;
