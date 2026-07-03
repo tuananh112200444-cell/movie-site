@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+﻿import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getOptimizedImageUrl, getPosterUrl } from '../../../services/movieApi';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
@@ -8,7 +8,7 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import type { Movie } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
 
-/* ── Helpers ── */
+/* â”€â”€ Helpers â”€â”€ */
 function getViewerCount(rank: number): string {
   const base = [18600, 14200, 11500, 8900, 7200, 5600, 4100, 3200, 2400, 1700];
   const count = (base[rank] ?? 900) + Math.floor(Math.sin(rank * 7.3) * 400 + 400);
@@ -24,7 +24,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 1440)} ngày trước`;
 }
 
-/** Chuẩn hoá episode_current thành badge label + màu */
+/** Chuáº©n hoÃ¡ episode_current thÃ nh badge label + mÃ u */
 function getEpInfo(ep?: string): { label: string; color: 'green' | 'blue' | 'amber' } {
   if (!ep) return { label: 'Xem Ngay', color: 'green' };
   const s = ep.toLowerCase().trim();
@@ -39,7 +39,7 @@ const EP_COLOR = {
   amber: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
 };
 
-/* ── Tab filter helpers ── */
+/* â”€â”€ Tab filter helpers â”€â”€ */
 function isRecentlyUpdated(m: Movie): boolean {
   const t = m.modified?.time;
   if (!t) return false;
@@ -81,7 +81,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
   const [canScrollRight, setCanScrollRight] = useState(true);
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
-  // ── CHỈ dùng props từ home-proxy, KHÔNG auto-fetch ──
+  // â”€â”€ CHá»ˆ dÃ¹ng props tá»« home-proxy, KHÃ”NG auto-fetch â”€â”€
   const movies = propMovies ?? [];
   const loading = propLoading ?? false;
 
@@ -120,7 +120,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
     el.scrollBy({ left: dir === 'left' ? -step : step, behavior: 'smooth' });
   }, []);
 
-  /* ── Loading skeleton ── */
+  /* â”€â”€ Loading skeleton â”€â”€ */
   if (loading) {
     return (
       <div className="mb-12 home-section-surface">
@@ -149,7 +149,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
     <div className="mb-11 home-section-surface">
       <SectionHeader count={visibleMovies.length} />
 
-      {/* ── Tabs ── */}
+      {/* â”€â”€ Tabs â”€â”€ */}
       <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
         {TABS.map((tab) => {
           const active = activeTab === tab.key;
@@ -172,7 +172,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
         })}
       </div>
 
-      {/* ── Slider ── */}
+      {/* â”€â”€ Slider â”€â”€ */}
       <div className="home-rail-frame relative group/slider">
         {/* Prev */}
         <button
@@ -237,7 +237,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
   );
 }
 
-/* ── Trending Card — ZERO JS hover state, pure CSS group-hover ── */
+/* â”€â”€ Trending Card â€” ZERO JS hover state, pure CSS group-hover â”€â”€ */
 interface TrendingCardProps {
   movie: Movie;
   rank: number;
@@ -288,7 +288,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
   return (
     <div data-tcard className={`${HOME_POSTER_ITEM_CLASS} contain-layout`}>
       <Link to={`${movieDetailUrl(movie.slug || '')}?source=ophim`} className="block cursor-pointer group">
-        {/* Poster frame — all hover via CSS group-hover, zero JS re-renders */}
+        {/* Poster frame â€” all hover via CSS group-hover, zero JS re-renders */}
         <div
           className={`
             relative rounded-xl overflow-hidden
@@ -327,7 +327,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
             {/* Bottom gradient for text */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent z-[2]" />
 
-            {/* ── Big Rank Badge (top-left) ── */}
+            {/* â”€â”€ Big Rank Badge (top-left) â”€â”€ */}
             <div className="absolute top-2 left-2 z-[15]">
               <div
                 className={`
@@ -342,7 +342,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
               </div>
             </div>
 
-            {/* ── Quality / Lang badges (top-right) ── */}
+            {/* â”€â”€ Quality / Lang badges (top-right) â”€â”€ */}
             <div className="absolute top-2 right-2 z-[12] flex flex-col items-end gap-1">
               {movie.quality && (
                 <span className="text-[9px] md:text-[10px] font-bold bg-red-500/90 text-white px-1.5 py-0.5 rounded-md shadow-sm">
@@ -356,14 +356,14 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
               )}
             </div>
 
-            {/* ── Episode badge (bottom-left) ── */}
+            {/* â”€â”€ Episode badge (bottom-left) â”€â”€ */}
             <div className="absolute bottom-2 left-2 z-[12]">
               <span className={`text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 rounded-md border leading-none ${EP_COLOR[ep.color]}`}>
                 {ep.label}
               </span>
             </div>
 
-            {/* ── Views + time (bottom-right) ── */}
+            {/* â”€â”€ Views + time (bottom-right) â”€â”€ */}
             <div className="absolute bottom-2 right-2 z-[12] flex flex-col items-end gap-0.5">
               <span className="text-[9px] md:text-[10px] font-semibold text-white/60 bg-black/40 px-1.5 py-0.5 rounded-md">
                 {getViewerCount(rank)} xem
@@ -375,7 +375,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
               )}
             </div>
 
-            {/* ── Hover play overlay — pure CSS group-hover, no JS state ── */}
+            {/* â”€â”€ Hover play overlay â€” pure CSS group-hover, no JS state â”€â”€ */}
             <div className="absolute inset-0 z-[8] hidden items-center justify-center bg-black/0 transition-colors duration-300 md:flex md:group-hover:bg-black/40">
               <div className="
                 w-10 h-10 md:w-11 md:h-11 rounded-full
@@ -398,7 +398,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
           </div>
         </div>
 
-        {/* ── Info below poster ── */}
+        {/* â”€â”€ Info below poster â”€â”€ */}
         <div className="mt-1.5 flex min-h-[48px] flex-col px-0.5 md:mt-2 md:min-h-[54px]">
           <p className="h-[28px] text-[11px] font-semibold leading-snug text-white/90 line-clamp-2 transition-colors duration-300 group-hover:text-red-400 md:h-[18px] md:text-sm md:line-clamp-1">
             {movie.name}
@@ -412,7 +412,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
   );
 }
 
-/* ── Section Header ── */
+/* â”€â”€ Section Header â”€â”€ */
 function SectionHeader({ count }: { count?: number }) {
   return (
     <div className="flex items-center justify-between mb-3 lg:mb-5 gap-2 flex-wrap">

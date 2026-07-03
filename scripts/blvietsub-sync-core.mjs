@@ -40,6 +40,12 @@ function firstMatch(value, pattern) {
   return decodeHtml(String(value || '').match(pattern)?.[1] || '').trim();
 }
 
+function parseEpisodeToken(value = '') {
+  const numbers = String(value || '').match(/\d+/g);
+  if (!numbers?.length) return 1;
+  return Number(numbers[numbers.length - 1] || 1) || 1;
+}
+
 function getMetaContent(html, property) {
   const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return firstMatch(
@@ -228,7 +234,7 @@ function parseStreamingServerEpisodes(html = '') {
     const link = extractAttr(tag, 'data-link');
     const type = extractAttr(tag, 'data-type') || 'embed';
     const episodeId = extractAttr(tag, 'data-id');
-    const episodeNumber = Number(episodeId.match(/\d+/)?.[0] || 0);
+    const episodeNumber = parseEpisodeToken(episodeId);
     if (!episodeNumber || !link) continue;
     const nextServer = (perEpisodeCount.get(episodeNumber) || 0) + 1;
     perEpisodeCount.set(episodeNumber, nextServer);
@@ -241,18 +247,19 @@ function getWatchUrls(html = '', movieSlug = '') {
   const urls = new Map();
   if (!movieSlug) return [];
   const escapedSlug = movieSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const absolutePattern = new RegExp(`https?:\\/\\/blvietsub\\.com\\/+(?:xem-phim)\\/${escapedSlug}\\/tap-([0-9]+)-sv-([0-9]+)`, 'gi');
-  const relativePattern = new RegExp(`(?:^|["'\\s])((?:\\/\\/?)?xem-phim\\/${escapedSlug}\\/tap-([0-9]+)-sv-([0-9]+))`, 'gi');
+  const absolutePattern = new RegExp(`https?:\\/\\/blvietsub\\.com\\/+(?:xem-phim)\\/${escapedSlug}\\/tap-([a-z0-9-]+)-sv-([0-9]+)`, 'gi');
+  const relativePattern = new RegExp(`(?:^|["'\\s])((?:\\/\\/?)?xem-phim\\/${escapedSlug}\\/tap-([a-z0-9-]+)-sv-([0-9]+))`, 'gi');
 
-  const addUrl = (episodeNumber, serverNumber, rawLink) => {
+  const addUrl = (episodeToken, serverNumber, rawLink) => {
+    const episodeNumber = parseEpisodeToken(episodeToken);
     if (!episodeNumber) return;
     const link = normalizeBlvietsubWatchUrl(rawLink);
     if (!link) return;
     urls.set(`${episodeNumber}|${serverNumber || 1}`, { episodeNumber, serverNumber: serverNumber || 1, url: link });
   };
 
-  for (const match of html.matchAll(absolutePattern)) addUrl(Number(match[1] || 0), Number(match[2] || 1), match[0]);
-  for (const match of html.matchAll(relativePattern)) addUrl(Number(match[2] || 0), Number(match[3] || 1), match[1]);
+  for (const match of html.matchAll(absolutePattern)) addUrl(match[1] || '', Number(match[2] || 1), match[0]);
+  for (const match of html.matchAll(relativePattern)) addUrl(match[2] || '', Number(match[3] || 1), match[1]);
   return [...urls.values()].sort((a, b) => a.episodeNumber - b.episodeNumber || a.serverNumber - b.serverNumber);
 }
 
@@ -282,7 +289,8 @@ export function parseMoviePage(movieUrl, updatedAt, html, playerHtml = '') {
   if (!movieSlug) return null;
   const title =
     getMetaContent(html, 'og:title').replace(/\s*-\s*BLVietsub\s*$/i, '') ||
-    stripTags(firstMatch(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i));
+    stripTags(firstMatch(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i)) ||
+    stripTags(firstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i)).replace(/\s*-\s*BLVietsub\s*$/i, '');
   const image = getMetaContent(html, 'og:image');
   const content = getMetaContent(html, 'og:description');
   const postId = firstMatch(html, /https?:\/\/blvietsub\.com\/\?p=(\d+)/i) || movieSlug;

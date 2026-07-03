@@ -268,6 +268,7 @@ export default function PlayerBox({
   const directVideoStallMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const directVideoLastTimeRef = useRef(0);
   const directVideoRecoveryAttemptsRef = useRef(0);
+  const sourcePageRecoveryKeyRef = useRef<string | null>(null);
   const embedContainerRef = useRef<HTMLDivElement>(null);
   const directVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -419,6 +420,31 @@ export default function PlayerBox({
     }
     return false;
   }, [activeServer, activeSourceHost, allServers, episode?.slug, onSelectEp, onSwitchServer]);
+
+  useEffect(() => {
+    if (!embedIsSourcePage || playerMode !== 'embed') return;
+    const recoveryKey = `${movieSlug || movieTitle}:${episode?.slug || episode?.name || activeServer}`;
+    if (sourcePageRecoveryKeyRef.current === recoveryKey) return;
+    sourcePageRecoveryKeyRef.current = recoveryKey;
+    reportIssue({
+      event_type: 'iframe_blocked',
+      error_message: 'Blocked source-page embed before rendering player',
+    });
+    if (!switchToFallbackServer()) {
+      onRefetchMovie?.();
+    }
+  }, [
+    activeServer,
+    embedIsSourcePage,
+    episode?.name,
+    episode?.slug,
+    movieSlug,
+    movieTitle,
+    onRefetchMovie,
+    playerMode,
+    reportIssue,
+    switchToFallbackServer,
+  ]);
 
   const handleHlsFatal = useCallback(() => {
     reportIssue({

@@ -87,10 +87,10 @@ export default function StickyBanner() {
   return (
     <div
       className={`relative z-0 w-full overflow-hidden border-t border-white/[0.04] bg-[#0d0f1a]/90 transition-all duration-500 ease-out ${
-        visible ? 'max-h-[62px] opacity-100 sm:max-h-[82px]' : 'max-h-0 opacity-0'
+        visible ? 'max-h-[58px] opacity-100 sm:max-h-[72px] lg:max-h-[56px]' : 'max-h-0 opacity-0'
       }`}
     >
-      <div className="relative mx-auto w-full max-w-[728px] px-2 py-1.5 sm:px-3">
+      <div className="relative mx-auto w-full max-w-[728px] px-2 py-1 sm:px-3 lg:max-w-[620px]">
         <div className="relative overflow-hidden rounded-lg border border-white/10 shadow-lg shadow-black/35">
           <a
             href={BANNER_URL}
@@ -102,7 +102,7 @@ export default function StickyBanner() {
             <img
               src="/banners/winaz-728x90.gif"
               alt="WinAZ banner"
-              className="aspect-[728/90] h-auto max-h-[50px] w-full object-contain object-center sm:max-h-[70px]"
+              className="aspect-[728/90] h-auto max-h-[46px] w-full object-contain object-center sm:max-h-[62px] lg:max-h-[48px]"
               loading="eager"
               width={728}
               height={90}

@@ -22,6 +22,22 @@ const STALE_TAB_RELOAD_KEY = 'kp_stale_tab_reload_v2';
 const STALE_TAB_RELOAD_COOLDOWN_MS = 2 * 60 * 1000;
 const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|dynamically imported module/i;
 
+function safeSessionGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSessionSet(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // Some embedded browsers block sessionStorage. Recovery should remain best-effort.
+  }
+}
+
 function hasActiveMediaPlayback(): boolean {
   return Array.from(document.querySelectorAll('video, audio')).some((media) => {
     const element = media as HTMLMediaElement;
@@ -31,10 +47,10 @@ function hasActiveMediaPlayback(): boolean {
 
 function reloadOnceForFreshShell(reason: string): void {
   const key = `${STALE_TAB_RELOAD_KEY}_${reason}`;
-  const previous = Number(sessionStorage.getItem(key) || 0);
+  const previous = Number(safeSessionGet(key) || 0);
   if (Number.isFinite(previous) && Date.now() - previous < STALE_TAB_RELOAD_COOLDOWN_MS) return;
   if (hasActiveMediaPlayback()) return;
-  sessionStorage.setItem(key, String(Date.now()));
+  safeSessionSet(key, String(Date.now()));
   const eventType = reason === 'bfcache_restore'
     ? 'bfcache_restore_reload'
     : reason.includes('chunk')
@@ -138,8 +154,8 @@ if ('serviceWorker' in navigator) {
 
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type !== 'KHOPHIM_SW_REMOVED') return;
-    if (sessionStorage.getItem('kp_sw_removed_reload_v1') === '1') return;
-    sessionStorage.setItem('kp_sw_removed_reload_v1', '1');
+    if (safeSessionGet('kp_sw_removed_reload_v1') === '1') return;
+    safeSessionSet('kp_sw_removed_reload_v1', '1');
     window.location.reload();
   });
 }
@@ -150,8 +166,8 @@ if (ENABLE_SERVICE_WORKER && 'serviceWorker' in navigator && import.meta.env.PRO
       .register('/service-worker.js')
       .then((registration) => {
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (sessionStorage.getItem('kp_sw_refreshed_v1') === '1') return;
-          sessionStorage.setItem('kp_sw_refreshed_v1', '1');
+          if (safeSessionGet('kp_sw_refreshed_v1') === '1') return;
+          safeSessionSet('kp_sw_refreshed_v1', '1');
           window.location.reload();
         });
 

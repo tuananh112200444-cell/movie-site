@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import MovieCard from '../../../components/base/MovieCard';
 import type { Movie } from '../../../types/movie';
 import { useScrollReveal } from '../../../hooks/useScrollReveal';
@@ -17,7 +17,7 @@ interface MovieSectionProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   prioritizeFirstRow?: boolean;
-  /** Visual theme — each section gets a unique look */
+  /** Visual theme â€” each section gets a unique look */
   theme?:
     | 'cinematic'
     | 'trending'
@@ -29,12 +29,12 @@ interface MovieSectionProps {
     | 'hollywood';
 }
 
-// Map số cột → tailwind grid class
+// Map sá»‘ cá»™t â†’ tailwind grid class
 const carouselItemClass = HOME_POSTER_ITEM_CLASS;
 
-// ───────────────────────────────────────────────
-// THEME DEFINITIONS — each section gets a unique visual identity
-// ───────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// THEME DEFINITIONS â€” each section gets a unique visual identity
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface ThemeConfig {
   icon: string;
   iconBgFrom: string;
@@ -61,7 +61,7 @@ interface ThemeConfig {
 }
 
 const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
-  // 1. PHIM LẺ — Cinematic Film
+  // 1. PHIM Láºº â€” Cinematic Film
   cinematic: {
     icon: 'ri-film-line',
     iconBgFrom: 'from-amber-500/20',
@@ -86,7 +86,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
     cornerAccentHover: 'border-amber-500/70',
     glowColor: 'rgba(245,158,11,0.40)',
   },
-  // 2. PHIM BỘ — Trending Fire
+  // 2. PHIM Bá»˜ â€” Trending Fire
   trending: {
     icon: 'ri-fire-line',
     iconBgFrom: 'from-fuchsia-500/20',
@@ -111,7 +111,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
     cornerAccentHover: 'border-fuchsia-500/70',
     glowColor: 'rgba(192,38,211,0.40)',
   },
-  // 3. HOẠT HÌNH — Soft Anime
+  // 3. HOáº T HÃŒNH â€” Soft Anime
   anime: {
     icon: 'ri-sparkling-line',
     iconBgFrom: 'from-sky-400/20',
@@ -136,7 +136,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
     cornerAccentHover: 'border-sky-400/70',
     glowColor: 'rgba(56,189,248,0.40)',
   },
-  // 4. TV SHOWS — Broadcast Signal
+  // 4. TV SHOWS â€” Broadcast Signal
   broadcast: {
     icon: 'ri-tv-line',
     iconBgFrom: 'from-emerald-500/20',
@@ -161,7 +161,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
     cornerAccentHover: 'border-emerald-500/70',
     glowColor: 'rgba(16,185,129,0.40)',
   },
-  // 5. HÀN QUỐC — K-Drama Romance
+  // 5. HÃ€N QUá»C â€” K-Drama Romance
   kdrama: {
     icon: 'ri-heart-3-line',
     iconBgFrom: 'from-rose-500/20',
@@ -186,7 +186,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
     cornerAccentHover: 'border-rose-500/70',
     glowColor: 'rgba(244,63,94,0.40)',
   },
-  // 6. TRUNG QUỐC — Oriental Classic
+  // 6. TRUNG QUá»C â€” Oriental Classic
   oriental: {
     icon: 'ri-building-3-line',
     iconBgFrom: 'from-red-500/20',
@@ -211,7 +211,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
     cornerAccentHover: 'border-red-500/70',
     glowColor: 'rgba(239,68,68,0.40)',
   },
-  // 7. THÁI LAN — Tropical Vibe
+  // 7. THÃI LAN â€” Tropical Vibe
   tropical: {
     icon: 'ri-sun-line',
     iconBgFrom: 'from-lime-500/20',
@@ -236,7 +236,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
     cornerAccentHover: 'border-lime-500/70',
     glowColor: 'rgba(132,204,22,0.40)',
   },
-  // 8. ÂU MỸ — Hollywood Glam
+  // 8. Ã‚U Má»¸ â€” Hollywood Glam
   hollywood: {
     icon: 'ri-star-smile-line',
     iconBgFrom: 'from-yellow-500/20',
@@ -288,7 +288,7 @@ export default function MovieSection({
 
   if (loading && movies.length === 0) {
     return (
-      <section className="mb-8 md:mb-14 home-section-surface">
+      <section className="home-section-surface mb-8 md:mb-12">
         {/* Header Skeleton */}
         <div className="flex items-center gap-3 mb-4 px-1">
           <div className={`w-7 h-7 rounded-md skeleton ${t.iconBorder} flex-shrink-0`} />
@@ -326,22 +326,22 @@ export default function MovieSection({
 
   if (movies.length === 0) {
     return (
-      <section ref={sectionRef} className="mb-7 md:mb-11 home-section-surface group/section">
-        <div className="reveal flex items-center gap-2.5 mb-3 md:mb-5 px-1">
-          <div className={`relative hidden items-center justify-center w-7 h-7 rounded-md bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} border ${t.iconBorder} flex-shrink-0 md:flex`}>
+      <section ref={sectionRef} className="home-section-surface group/section mb-7 md:mb-10">
+        <div className="reveal mb-3 flex items-center gap-2.5 px-1 md:mb-4">
+          <div className={`relative hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder} md:flex`}>
             <i className={`${t.icon} ${t.iconText} text-sm`} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="truncate text-lg md:text-2xl lg:text-[1.55rem] font-black tracking-tight text-white">
+            <h3 className="truncate text-lg font-black tracking-tight text-white md:text-2xl lg:text-[1.65rem]">
               {title}
             </h3>
-            <p className="home-section-eyebrow mt-0.5 hidden md:block">Dang cap nhat danh sach phim moi</p>
+            <p className="home-section-eyebrow mt-0.5 hidden md:block">Đang cập nhật danh sách phim mới</p>
           </div>
           <Link
             to={viewAllLink}
-            className={`group/btn flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.045] px-3 py-1.5 text-xs font-bold text-white/58 ${t.btnHoverText} transition-all duration-300 cursor-pointer whitespace-nowrap flex-shrink-0 hover:bg-white/[0.08] active:scale-95 active:text-white`}
+            className={`group/btn flex flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.09] bg-white/[0.035] px-3.5 py-2 text-xs font-bold text-white/62 transition-all duration-300 hover:bg-white/[0.08] active:scale-95 active:text-white ${t.btnHoverText}`}
           >
-            Xem tat ca
+            Xem tất cả
             <i className="ri-arrow-right-line text-xs transition-transform duration-300 group-hover/btn:translate-x-1" />
           </Link>
         </div>
@@ -350,44 +350,44 @@ export default function MovieSection({
           to={viewAllLink}
           className="block rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-5 text-center transition-colors active:bg-white/[0.06] md:px-6"
         >
-          <p className="text-sm font-semibold text-white/70">Danh sach dang duoc cap nhat</p>
-          <p className="mt-1 text-xs text-white/38">Bam de xem tat ca phim trong muc nay</p>
+          <p className="text-sm font-semibold text-white/70">Danh sách đang được cập nhật</p>
+          <p className="mt-1 text-xs text-white/38">Bấm để xem tất cả phim trong mục này</p>
         </Link>
       </section>
     );
   }
 
   return (
-    <section ref={sectionRef} className="mb-6 md:mb-11 home-section-surface group/section">
+    <section ref={sectionRef} className="home-section-surface group/section mb-6 md:mb-10">
       {/* Header */}
-      <div className="reveal flex items-center gap-2.5 mb-3 md:mb-5 px-0.5 md:px-1">
-        {/* Icon box — shape varies by theme */}
-        <div className={`relative hidden items-center justify-center w-7 h-7 rounded-md bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} border ${t.iconBorder} flex-shrink-0 md:flex`}>
+      <div className="reveal mb-3 flex items-center gap-2.5 px-0.5 md:mb-4 md:px-1">
+        {/* Icon box â€” shape varies by theme */}
+        <div className={`relative hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder} md:flex`}>
           <i className={`${t.icon} ${t.iconText} text-sm`} />
           {/* Subtle pulse dot for trending */}
           {theme === 'trending' && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-fuchsia-400 rounded-full animate-pulse" />
+            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-fuchsia-400 animate-pulse" />
           )}
         </div>
 
         <div className="flex-1 min-w-0">
-          <h3 className={`text-[1.05rem] md:text-2xl lg:text-[1.55rem] font-black tracking-tight text-white truncate`}>
+          <h3 className="truncate text-[1.05rem] font-black tracking-tight text-white md:text-2xl lg:text-[1.65rem]">
             {title}
           </h3>
-          <p className="home-section-eyebrow mt-0.5 hidden md:block">Lua chon nhanh cac phim dang duoc xem nhieu</p>
+          <p className="home-section-eyebrow mt-1 hidden md:block">Lựa chọn phim mới, nổi bật và dễ xem nhất trong mục này</p>
         </div>
 
-        {/* View All — ghost pill with theme hover */}
+        {/* View All â€” ghost pill with theme hover */}
         <Link
           to={viewAllLink}
-          className={`group/btn flex min-h-8 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.055] px-3 py-1.5 text-xs font-bold text-white/68 ${t.btnHoverText} transition-all duration-300 cursor-pointer whitespace-nowrap flex-shrink-0 hover:bg-white/[0.08] active:scale-95 active:text-white`}
+          className={`group/btn flex min-h-9 flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.09] bg-white/[0.04] px-3.5 py-2 text-xs font-bold text-white/68 transition-all duration-300 hover:bg-white/[0.08] active:scale-95 active:text-white ${t.btnHoverText}`}
         >
           Xem tất cả
           <i className="ri-arrow-right-line text-xs transition-transform duration-300 group-hover/btn:translate-x-1" />
         </Link>
       </div>
 
-      {/* Grid — stagger delays từ CSS nth-child, không cần inline style */}
+      {/* Grid â€” stagger delays tá»« CSS nth-child, khÃ´ng cáº§n inline style */}
       {!isDesktop ? (
         <div className="grid grid-cols-3 gap-x-2.5 gap-y-4 pb-2 md:hidden">
           {displayMovies.slice(0, 6).map((movie, index) => (
@@ -405,7 +405,7 @@ export default function MovieSection({
         </div>
       ) : (
         <div className="home-rail-frame hidden md:block">
-          <div className="home-rail-scroll reveal flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-8 pt-2 scrollbar-hide md:gap-4 md:pb-10 lg:gap-4 xl:gap-5">
+          <div className="home-rail-scroll reveal flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-7 pt-2 scrollbar-hide md:gap-4 md:pb-8 lg:gap-4 xl:gap-5">
             {displayMovies.map((movie, index) => (
               <div
                 key={`${movie._id}-${index}`}

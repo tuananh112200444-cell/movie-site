@@ -106,7 +106,7 @@ export default function PortalGateway({ onSelect, compact }: PortalGatewayProps)
               Vu Tru Dam My / GL
             </h3>
             <p className="text-sm text-white/50 leading-relaxed mb-5">
-              Khong gian rieng cho phim Dam My, BL, GL va Bach Hop. Du lieu doc truc tiep tu feed BLVietsub.
+              Khong gian rieng cho phim Dam My, BL, GL va Bach Hop. Cap nhat phim moi va tap moi lien tuc.
             </p>
             <span className="inline-flex items-center gap-2 text-sm font-bold text-cyan-300 transition-colors group-hover:text-cyan-200">
               Kham pha ngay
