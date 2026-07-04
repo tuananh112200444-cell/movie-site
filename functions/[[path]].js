@@ -49,6 +49,9 @@ const BOT_PATTERNS = [
   'linkedinbot',
   'whatsapp',
   'telegrambot',
+];
+
+const BLOCKED_CRAWLER_PATTERNS = [
   'semrushbot',
   'ahrefsbot',
   'mj12bot',
@@ -58,6 +61,12 @@ const BOT_PATTERNS = [
   'dotbot',
   'petalbot',
   'bytespider',
+  'ccbot',
+  'dataforseobot',
+  'barkrowler',
+  'megaindex',
+  'serpstatbot',
+  'seokicks',
 ];
 
 const CLEAN_STATIC_META = {
@@ -338,6 +347,11 @@ function parseEpisodeCount(value) {
 function isBot(userAgent) {
   const ua = String(userAgent || '').toLowerCase();
   return BOT_PATTERNS.some((pattern) => ua.includes(pattern));
+}
+
+function isBlockedCrawler(userAgent) {
+  const ua = String(userAgent || '').toLowerCase();
+  return BLOCKED_CRAWLER_PATTERNS.some((pattern) => ua.includes(pattern));
 }
 
 function shouldPrerender(pathname) {
@@ -1169,6 +1183,18 @@ function removedForCopyrightResponse() {
   });
 }
 
+function blockedCrawlerResponse() {
+  return new Response('Crawler access limited', {
+    status: 403,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+      'X-Robots-Tag': 'noindex, nofollow',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
 function isDmcaRemovedPath(pathname) {
   const movieMatch = /^\/phim\/([^/?#]+)/.exec(pathname);
   return Boolean(movieMatch && DMCA_REMOVED_MOVIE_SLUGS.has(decodeURIComponent(movieMatch[1]).toLowerCase()));
@@ -1185,6 +1211,10 @@ export async function onRequest(context) {
 
   if (isDmcaRemovedPath(pathname)) {
     return removedForCopyrightResponse();
+  }
+
+  if (isBlockedCrawler(request.headers.get('user-agent') || '')) {
+    return blockedCrawlerResponse();
   }
 
   if (

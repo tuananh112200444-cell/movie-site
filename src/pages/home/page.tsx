@@ -349,8 +349,10 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
 }
 
 const ALL_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
+const HOME_CACHE_KEY = 'kp_home_proxy_v6_short';
 const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
+const HOME_CACHE_TTL = 30 * 1000;
 const HOME_REFRESH_ON_RETURN_MS = 60 * 1000;
 const EMPTY_MOVIES: MovieItem[] = [];
 
@@ -381,6 +383,35 @@ function clearHomeStorageCache(): void {
     }
   } catch { /* ignore */ }
 }
+
+function hasHomeMovies(sections: Record<string, MovieItem[]>): boolean {
+  return Object.values(sections).some((items) => Array.isArray(items) && items.length > 0);
+}
+
+function readWarmHomeCache(): Record<string, MovieItem[]> {
+  try {
+    clearHomeStorageCache();
+    const raw = sessionStorage.getItem(HOME_CACHE_KEY);
+    if (!raw) return {};
+    const entry = JSON.parse(raw) as { sections?: Record<string, MovieItem[]>; ts?: number };
+    if (!entry.sections || !entry.ts || Date.now() - entry.ts > HOME_CACHE_TTL) {
+      sessionStorage.removeItem(HOME_CACHE_KEY);
+      return {};
+    }
+    const sections = normalizeHomeSections(entry.sections);
+    return hasHomeMovies(sections) ? sections : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeWarmHomeCache(sections: Record<string, MovieItem[]>): void {
+  if (!hasHomeMovies(sections)) return;
+  try {
+    sessionStorage.setItem(HOME_CACHE_KEY, JSON.stringify({ sections, ts: Date.now() }));
+  } catch { /* quota */ }
+}
+
 export default function Home() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -392,8 +423,10 @@ export default function Home() {
     navigate(nextPortal === 'queer' ? QUEER_PORTAL_PATH : '/');
   };
   // ── SINGLE REQUEST: all homepage data from home-proxy ──
-  const [homeData, setHomeData] = useState<Record<string, MovieItem[]>>({});
-  const [homeLoading, setHomeLoading] = useState(true);
+  const warmHomeRef = useRef<Record<string, MovieItem[]> | null>(null);
+  if (warmHomeRef.current === null) warmHomeRef.current = readWarmHomeCache();
+  const [homeData, setHomeData] = useState<Record<string, MovieItem[]>>(() => warmHomeRef.current ?? {});
+  const [homeLoading, setHomeLoading] = useState(() => !hasHomeMovies(warmHomeRef.current ?? {}));
   const [homeError, setHomeError] = useState(false);
   const homeDataRef = useRef(homeData);
   const lastHomeFetchRef = useRef(0);
@@ -429,6 +462,7 @@ export default function Home() {
             setHomeData(nextSections);
             setHomeError(false);
             clearHomeStorageCache();
+            writeWarmHomeCache(nextSections);
           }
         })
         .catch((err) => {
@@ -440,7 +474,7 @@ export default function Home() {
         });
     };
 
-    fetchHome(true);
+    fetchHome(!hasHomeMovies(homeDataRef.current));
 
     const refreshIfStale = () => {
       if (document.visibilityState !== 'visible') return;
