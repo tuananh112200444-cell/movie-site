@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { getImageFallbacks } from '../services/movieApi';
+import { getOptimizedImageFallbacks } from '../services/movieApi';
 
 interface UseImageFallbackResult {
   currentSrc: string;
@@ -14,8 +14,13 @@ export function useImageFallback(
   primaryPath?: string,
   altPath?: string,
   preloaded = false,
+  width = 620,
+  quality = 88,
 ): UseImageFallbackResult {
-  const fallbackUrls = useMemo(() => getImageFallbacks(primaryPath, altPath), [primaryPath, altPath]);
+  const fallbackUrls = useMemo(
+    () => getOptimizedImageFallbacks(primaryPath, altPath, width, quality),
+    [primaryPath, altPath, width, quality],
+  );
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState(preloaded);
   const [exhausted, setExhausted] = useState(false);

@@ -2,7 +2,7 @@ import { memo, useMemo, useState, useCallback, useRef } from 'react';
 import { useImageFallback } from '../../hooks/useImageFallback';
 import { Link } from 'react-router-dom';
 import type { MovieItem } from '../../types/movie';
-import { getImageUrl, getOptimizedImageUrl, getMovieDisplayName } from '../../services/movieApi';
+import { getImageUrl, getMovieDisplayName } from '../../services/movieApi';
 import { movieDetailUrl } from '../../utils/slugEncoder';
 import { prefetchMovieDetail, cancelPrefetchMovieDetail } from '../../utils/prefetchRoute';
 import { isImagePreloaded, markImagePreloaded } from '../../utils/imagePreloader';
@@ -59,8 +59,8 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
   const fallbackPath = movie.thumb_url || movie.poster_url;
   
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(posterPath, 620, 88),
-    getOptimizedImageUrl(fallbackPath, 620, 88),
+    posterPath,
+    fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -225,8 +225,8 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
   const fallbackPath = movie.thumb_url || movie.poster_url;
 
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(posterPath, 620, 88),
-    getOptimizedImageUrl(fallbackPath, 620, 88),
+    posterPath,
+    fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -357,8 +357,8 @@ function RankCard({ movie, rank, priority }: MovieCardProps) {
   const fallbackPath = movie.thumb_url || movie.poster_url;
   
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(posterPath, 620, 88),
-    getOptimizedImageUrl(fallbackPath, 620, 88),
+    posterPath,
+    fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
   );
   const altText = buildAlt(movie);
@@ -440,9 +440,11 @@ function WideCard({ movie, priority }: MovieCardProps) {
   const fallbackPath = movie.poster_url || movie.thumb_url;
   
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(thumbPath, 760, 88),
-    getOptimizedImageUrl(fallbackPath, 760, 88),
+    thumbPath,
+    fallbackPath,
     isImagePreloaded(getImageUrl(thumbPath)),
+    760,
+    88,
   );
   const altText = buildAlt(movie);
 
