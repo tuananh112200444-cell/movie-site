@@ -615,12 +615,36 @@ export function getOptimizedImageUrl(path: string, width = 360, quality = 82): s
   return `https://wsrv.nl/?url=${encoded}&w=${safeWidth}&q=${safeQuality}&output=webp&fit=cover&we`;
 }
 
+function getOriginalImageFromProxy(url: string): string | null {
+  if (!url.includes('wsrv.nl/?url=')) return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.searchParams.get('url');
+  } catch {
+    return null;
+  }
+}
+
 export function getImageFallbacks(primaryPath?: string, altPath?: string): string[] {
   const urls: string[] = [];
-  if (primaryPath && primaryPath.trim()) urls.push(getImageUrl(primaryPath.trim()));
-  if (altPath && altPath.trim() && altPath.trim() !== primaryPath?.trim()) urls.push(getImageUrl(altPath.trim()));
+  const seen = new Set<string>();
+  const pushUrl = (url?: string | null) => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    urls.push(url);
+  };
+  const addCandidate = (path?: string) => {
+    const trimmed = path?.trim();
+    if (!trimmed) return;
+    const normalized = getImageUrl(trimmed);
+    pushUrl(normalized);
+    pushUrl(getOriginalImageFromProxy(normalized));
+  };
+
+  addCandidate(primaryPath);
+  if (altPath?.trim() !== primaryPath?.trim()) addCandidate(altPath);
   if (urls.length === 0 || urls[0] === FALLBACK_IMG) return [FALLBACK_IMG];
-  urls.push(FALLBACK_IMG);
+  pushUrl(FALLBACK_IMG);
   return urls;
 }
 
@@ -771,11 +795,12 @@ function sortListItems(
   return [...items].sort((a, b) => (valueOf(a) - valueOf(b)) * direction);
 }
 
-const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, chieurap, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
 const SUPABASE_LIST_PAGE_SIZE = 36;
 
 function typeFilterValues(type?: string): string[] {
   if (!type || type === 'phim-moi-cap-nhat') return [];
+  if (type === 'phim-chieu-rap') return [];
   if (type === 'phim-le') return ['single', 'phim-le'];
   if (type === 'phim-bo') return ['series', 'phim-bo'];
   if (type === 'hoat-hinh') return ['hoathinh'];
@@ -794,7 +819,6 @@ async function fetchMoviesFromSupabaseList(params: {
   sortType?: 'asc' | 'desc';
 }): Promise<MovieListResponse | null> {
   if (!ENABLE_SUPABASE_TEXT_SEARCH) return null;
-  if (params.type === 'phim-chieu-rap') return null;
   const page = Math.max(1, params.page ?? 1);
   const from = (page - 1) * SUPABASE_LIST_PAGE_SIZE;
   const to = from + SUPABASE_LIST_PAGE_SIZE - 1;
@@ -804,6 +828,10 @@ async function fetchMoviesFromSupabaseList(params: {
       .from('movies')
       .select(SUPABASE_LIST_SELECT, { count: 'exact' })
       .eq('is_published', true);
+
+    if (params.type === 'phim-chieu-rap') {
+      query = query.eq('chieurap', true);
+    }
 
     const typeValues = typeFilterValues(params.type);
     if (typeValues.length === 1) {
@@ -828,8 +856,15 @@ async function fetchMoviesFromSupabaseList(params: {
       ].join(','));
     }
 
-    const orderColumn = params.sortField === 'year' ? 'year' : 'updated_at';
-    query = query.order(orderColumn, { ascending: params.sortType === 'asc', nullsFirst: false }).range(from, to);
+    const ascending = params.sortType === 'asc';
+    if (params.sortField === 'year') {
+      query = query
+        .order('year', { ascending, nullsFirst: false })
+        .order('updated_at', { ascending: false, nullsFirst: false });
+    } else {
+      query = query.order('updated_at', { ascending, nullsFirst: false });
+    }
+    query = query.range(from, to);
     const { data, count, error } = await query;
     if (error || !data || data.length === 0) return null;
 
@@ -859,6 +894,16 @@ export async function fetchNewMovies(page = 1): Promise<MovieListResponse> {
   const supabaseResult = await fetchMoviesFromSupabaseList({ page, sortField: 'modified.time', sortType: 'desc' });
   if (supabaseResult) return supabaseResult;
   return fetchNewMoviesMultiSource(page);
+}
+
+export async function fetchLatestReleaseMovies(page = 1): Promise<MovieListResponse> {
+  const supabaseResult = await fetchMoviesFromSupabaseList({ page, sortField: 'year', sortType: 'desc' });
+  if (supabaseResult) return supabaseResult;
+  const result = await fetchNewMoviesMultiSource(page);
+  return {
+    ...result,
+    items: sortListItems(result.items ?? [], 'year', 'desc'),
+  };
 }
 
 export async function fetchMoviesByType(
