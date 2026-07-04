@@ -1021,8 +1021,18 @@ function promiseAllSettledWithTimeout<T>(promises: Promise<T>[], timeoutMs: numb
 /* ════════════════════════════════════════════
    MOVIE DETAIL — EDGE FUNCTION PROXY (production CORS bypass)
    ════════════════════════════════════════════ */
-const SUPABASE_URL = typeof import.meta.env !== 'undefined' ? (import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined) : undefined;
-const SUPABASE_ANON_KEY = typeof import.meta.env !== 'undefined' ? (import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY as string | undefined) : undefined;
+const FALLBACK_SUPABASE_URL = 'https://dzpddbthdeqbkrcjlzap.supabase.co';
+const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
+const SUPABASE_URL = typeof import.meta.env !== 'undefined'
+  ? ((import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined) ||
+     (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
+     FALLBACK_SUPABASE_URL)
+  : FALLBACK_SUPABASE_URL;
+const SUPABASE_ANON_KEY = typeof import.meta.env !== 'undefined'
+  ? ((import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY as string | undefined) ||
+     (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
+     FALLBACK_SUPABASE_ANON_KEY)
+  : FALLBACK_SUPABASE_ANON_KEY;
 
 const ENABLE_SUPABASE_TEXT_SEARCH =
   typeof import.meta.env === 'undefined' || import.meta.env.VITE_DISABLE_SUPABASE_TEXT_SEARCH !== 'true';
@@ -4470,20 +4480,14 @@ export async function fetchHomePageData(
   source: 'cache' | 'stale' | 'fresh';
   sections: Record<string, Movie[]>;
 }> {
-  const supabaseUrl = typeof import.meta.env !== 'undefined'
-    ? (import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined)
-    : undefined;
-  const supabaseAnonKey = typeof import.meta.env !== 'undefined'
-    ? (import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY as string | undefined)
-    : undefined;
-  if (!supabaseUrl) {
+  if (!SUPABASE_URL) {
     throw new Error('Supabase config missing');
   }
-  if (!supabaseAnonKey) {
+  if (!SUPABASE_ANON_KEY) {
     throw new Error('Supabase anon key missing');
   }
 
-  const url = new URL(`${supabaseUrl}/functions/v1/home-proxy`);
+  const url = new URL(`${SUPABASE_URL}/functions/v1/home-proxy`);
   url.searchParams.set('sections', sections.join(','));
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort(options.signal?.reason);
@@ -4496,8 +4500,8 @@ export async function fetchHomePageData(
       signal: controller.signal,
       cache: 'no-store',
       headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
     });
     clearTimeout(timer);
