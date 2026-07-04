@@ -642,6 +642,21 @@ export default function Home() {
         <MobileQuickMovies movies={mobileQuickMovies} loading={homeLoading} />
         <ContinueWatching />
         <TrendingSection movies={trendingMovies} loading={bannerLoading} />
+        <DeferredHomeSection minHeight={260}>
+          <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? EMPTY_MOVIES} loading={homeLoading} />
+        </DeferredHomeSection>
+        <DeferredHomeSection minHeight={240}>
+          <Top10TodaySection initialMovies={trendingMovies} loading={homeLoading} />
+        </DeferredHomeSection>
+        <DeferredHomeSection minHeight={220}>
+          <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} />
+        </DeferredHomeSection>
+        <Year2026Banner />
+        <DeferredHomeSection minHeight={180}>
+          <TrailerMoviesSection />
+        </DeferredHomeSection>
+
+        {/* Category shelves sit below the discovery/ranking sections for a cleaner viewing flow. */}
         <LazyMovieSection
           fetchType="type" fetchKey="phim-le" limit={18}
           title="Phim Lẻ Hay" viewAllLink="/phim-le"
@@ -656,18 +671,6 @@ export default function Home() {
           movies={homeData['phim-bo'] ?? []}
           loading={homeLoading}
         />
-        <DeferredHomeSection minHeight={260}>
-          <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? EMPTY_MOVIES} loading={homeLoading} />
-        </DeferredHomeSection>
-        <DeferredHomeSection minHeight={240}>
-          <Top10TodaySection initialMovies={trendingMovies} loading={homeLoading} />
-        </DeferredHomeSection>
-        <DeferredHomeSection minHeight={220}>
-          <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} />
-        </DeferredHomeSection>
-        <Year2026Banner />
-
-        {/* Lazy sections — data already loaded from home-proxy, render on scroll */}
         <LazyMovieSection
           fetchType="type" fetchKey="hoat-hinh" limit={18}
           title="Hoạt Hình Mới Nhất" viewAllLink="/hoat-hinh"
@@ -703,9 +706,6 @@ export default function Home() {
           movies={homeData['thai-lan'] ?? []}
           loading={homeLoading}
         />
-        <DeferredHomeSection minHeight={180}>
-          <TrailerMoviesSection />
-        </DeferredHomeSection>
 
         {/* Bottom sections — lazy render khi gần cuối trang */}
         <div ref={bottomRef}>
