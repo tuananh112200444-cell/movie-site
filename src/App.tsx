@@ -95,39 +95,22 @@ function AnimatedContent() {
   }, [location.pathname]);
 
   useEffect(() => {
-    let ticking = false;
-    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
     const handleScroll = () => {
-      document.body.classList.add('is-scrolling');
-      if (scrollTimer) clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        document.body.classList.remove('is-scrolling');
-      }, 150);
-
       latestScrollYRef.current = window.scrollY;
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         saveScrollPosition(location.pathname, latestScrollYRef.current);
       }, 350);
-
-      if (!ticking) {
-        requestAnimationFrame(() => {
-          ticking = false;
-        });
-        ticking = true;
-      }
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", handleScroll);
-      if (scrollTimer) clearTimeout(scrollTimer);
       if (saveTimer) {
         clearTimeout(saveTimer);
         saveScrollPosition(location.pathname, latestScrollYRef.current);
       }
-      document.body.classList.remove('is-scrolling');
     };
   }, [location.pathname]);
 
