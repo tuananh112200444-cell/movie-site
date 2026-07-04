@@ -12,9 +12,11 @@ if (!rootElement) {
   document.body.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><div><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang cap nhat</h1><p style="color:rgba(255,255,255,.72);margin:0 0 20px">Vui long tai lai trang de nhan phien ban moi nhat.</p><button onclick="location.reload()" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer">Tai lai</button></div></main>';
 } else {
   try {
-    createRoot(rootElement).render(<App />);
+    rootElement.querySelector('#kp-boot-fallback')?.remove();
     rootElement.dataset.kpMounted = '1';
+    createRoot(rootElement).render(<App />);
   } catch (error) {
+    delete rootElement.dataset.kpMounted;
     reportClientIssue('app_error', error instanceof Error ? error.message : 'react mount failed');
     rootElement.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><section style="max-width:460px"><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang tai lai</h1><p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0 0 20px">Trinh duyet gap loi khi mo phien ban hien tai. Bam nut ben duoi de tai lai phien ban moi.</p><button onclick="location.replace(location.pathname+location.search+(location.search?\'&\':\'?\')+\'recover=\'+Date.now())" style="background:#dc2626;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer">Tai lai phien ban moi</button></section></main>';
   }
@@ -23,7 +25,7 @@ if (!rootElement) {
 // Report Core Web Vitals after render.
 reportWebVitals()
 
-const STALE_TAB_RELOAD_MS = 10 * 60 * 1000;
+const STALE_TAB_RELOAD_MS = 30 * 60 * 1000;
 const STALE_TAB_RELOAD_KEY = 'kp_stale_tab_reload_v2';
 const STALE_TAB_RELOAD_COOLDOWN_MS = 2 * 60 * 1000;
 const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|dynamically imported module/i;

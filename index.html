@@ -222,6 +222,7 @@
           radial-gradient(ellipse at 70% 80%, rgba(20,25,45,0.5) 0%, transparent 50%),
           #13151f;
       }
+      @keyframes kp-spin{to{transform:rotate(360deg)}}
     </style>
     <meta name="google-site-verification" content="GM4SuQdGYgfPLXKhjCaiAyZOHaH-aSGFZLPNkXS-CI8" />
 
@@ -241,9 +242,9 @@
     <div id="root">
       <main id="kp-boot-fallback" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center">
         <section style="max-width:460px">
-          <h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang tai</h1>
-          <p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0 0 20px">Neu man hinh dung qua lau, trinh duyet co the dang giu ban cu. Bam nut ben duoi de tai lai phien ban moi.</p>
-          <button type="button" onclick="(function(){try{localStorage.clear();sessionStorage.clear()}catch(e){};if('caches'in window){caches.keys().then(function(names){return Promise.all(names.map(function(n){return caches.delete(n)}))}).finally(function(){location.replace(location.pathname+location.search+(location.search?'&':'?')+'recover='+Date.now())})}else{location.replace(location.pathname+location.search+(location.search?'&':'?')+'recover='+Date.now())}})()" style="background:#dc2626;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer">Tai lai phien ban moi</button>
+          <div style="width:34px;height:34px;margin:0 auto 18px;border:3px solid rgba(255,255,255,.18);border-top-color:#ef4444;border-radius:999px;animation:kp-spin .8s linear infinite"></div>
+          <h1 style="font-size:24px;margin:0 0 12px">KhoPhim đang mở</h1>
+          <p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0">Đang tải phiên bản mới nhất, vui lòng chờ một chút.</p>
         </section>
       </main>
     </div>
@@ -336,8 +337,31 @@
         function showRecovery(reason) {
           var root = document.getElementById('root');
           if (!root) return;
-          root.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><section style="max-width:430px"><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang tai lai</h1><p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0 0 20px">Trinh duyet dang giu ban cu nen trang khong hien thi dung. Bam nut ben duoi de mo lai phien ban moi.</p><button id="kp-recovery-button" type="button" style="background:#dc2626;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer">Mo lai KhoPhim</button><p style="margin-top:12px;color:rgba(255,255,255,.38);font-size:12px">Ma phuc hoi: ' + reason + '</p></section></main>';
-          var button = document.getElementById('kp-recovery-button');
+          root.textContent = '';
+          var main = document.createElement('main');
+          main.style.cssText = 'min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center';
+          var section = document.createElement('section');
+          section.style.cssText = 'max-width:430px';
+          var title = document.createElement('h1');
+          title.style.cssText = 'font-size:24px;margin:0 0 12px';
+          title.textContent = 'KhoPhim đang tải lại';
+          var message = document.createElement('p');
+          message.style.cssText = 'color:rgba(255,255,255,.72);line-height:1.6;margin:0 0 20px';
+          message.textContent = 'Trình duyệt đang giữ bản cũ nên trang không hiển thị đúng. Bấm nút bên dưới để mở lại phiên bản mới.';
+          var button = document.createElement('button');
+          button.id = 'kp-recovery-button';
+          button.type = 'button';
+          button.style.cssText = 'background:#dc2626;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer';
+          button.textContent = 'Mở lại KhoPhim';
+          var code = document.createElement('p');
+          code.style.cssText = 'margin-top:12px;color:rgba(255,255,255,.38);font-size:12px';
+          code.textContent = 'Mã phục hồi: ' + reason;
+          section.appendChild(title);
+          section.appendChild(message);
+          section.appendChild(button);
+          section.appendChild(code);
+          main.appendChild(section);
+          root.appendChild(main);
           if (button) {
             button.onclick = function () {
               location.replace(location.pathname + location.search + (location.search ? '&' : '?') + 'recover=' + Date.now());
@@ -358,12 +382,10 @@
           });
         }
         var assetScriptFailed = false;
-        var bootError = false;
         window.addEventListener('error', function (event) {
           var target = event && event.target;
           var src = target && target.tagName === 'SCRIPT' ? target.src || '' : '';
           if (/\/assets\/|\/src\/main\.tsx/i.test(src)) assetScriptFailed = true;
-          if (!src) bootError = true;
         }, true);
         setTimeout(function () {
           var root = document.getElementById('root');
@@ -371,10 +393,10 @@
           var mounted = root.getAttribute('data-kp-mounted') === '1';
           var fallbackVisible = !!document.getElementById('kp-boot-fallback');
           var empty = root.children.length === 0 && root.textContent.trim().length < 20;
-          if (!mounted && (fallbackVisible || empty || assetScriptFailed || bootError)) {
-            recover(assetScriptFailed ? 'script_load_error' : bootError ? 'boot_error' : 'app_not_mounted');
+          if (!mounted && (assetScriptFailed || fallbackVisible || empty)) {
+            recover(assetScriptFailed ? 'script_load_error' : 'app_not_mounted');
           }
-        }, 12000);
+        }, 25000);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

@@ -353,7 +353,7 @@ const HOME_CACHE_KEY = 'kp_home_proxy_v5';
 const LEGACY_HOME_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', HOME_CACHE_KEY];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
 const HOME_CACHE_TTL = 5 * 60 * 1000;
-const HOME_REFRESH_ON_RETURN_MS = 2 * 60 * 1000;
+const HOME_REFRESH_ON_RETURN_MS = 10 * 60 * 1000;
 const EMPTY_MOVIES: MovieItem[] = [];
 
 const HOME_SEED_TRENDING: MovieItem[] = [

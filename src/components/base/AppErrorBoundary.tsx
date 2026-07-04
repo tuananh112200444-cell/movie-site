@@ -3,6 +3,30 @@ import { reportClientIssue } from '@/services/playerDiagnostics';
 
 const RECOVERY_KEY = 'kp_chunk_recovery_v1';
 
+function safeSessionGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSessionSet(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // Storage can be blocked in some embedded browsers.
+  }
+}
+
+function safeSessionRemove(key: string): void {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // Best-effort only.
+  }
+}
+
 function isChunkLoadError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '');
   return /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|dynamically imported module/i.test(message);
@@ -48,8 +72,8 @@ export default class AppErrorBoundary extends Component<Props, State> {
       error instanceof Error ? error.message : String(error ?? 'unknown app error'),
     );
 
-    if (isChunkLoadError(error) && sessionStorage.getItem(RECOVERY_KEY) !== '1') {
-      sessionStorage.setItem(RECOVERY_KEY, '1');
+    if (isChunkLoadError(error) && safeSessionGet(RECOVERY_KEY) !== '1') {
+      safeSessionSet(RECOVERY_KEY, '1');
       clearBrowserCaches().finally(() => {
         window.location.reload();
       });
@@ -57,7 +81,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
   }
 
   handleRetry = () => {
-    sessionStorage.removeItem(RECOVERY_KEY);
+    safeSessionRemove(RECOVERY_KEY);
     clearBrowserCaches().finally(() => {
       window.location.reload();
     });

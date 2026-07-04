@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "include": [
+    "/*"
+  ],
+  "exclude": [
+    "/assets/*",
+    "/images/*",
+    "/banners/*",
+    "/favicon.svg",
+    "/logo.svg",
+    "/site.webmanifest",
+    "/robots.txt",
+    "/llms.txt",
+    "/service-worker.js",
+    "/mhophim/*"
+  ]
+}

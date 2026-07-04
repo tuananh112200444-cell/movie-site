@@ -1179,18 +1179,6 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  if (/^\/assets\/.+\.js$/i.test(pathname) && !url.searchParams.has('__kp_asset')) {
-    url.searchParams.set('__kp_asset', '20260704-js-cache-bust');
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: url.toString(),
-        'Cache-Control': 'no-store',
-        ...SECURITY_HEADERS,
-      },
-    });
-  }
-
   if (url.hostname === 'www.khophim.org' || url.hostname === 'mhophim.com' || url.hostname === 'www.mhophim.com' || url.protocol === 'http:') {
     return canonicalRedirect(url, pathname);
   }
