@@ -6,25 +6,83 @@ import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import Pagination from '@/components/base/Pagination';
 import SEO, { SITE_URL } from '@/components/base/SEO';
-import { fetchMoviesByType, getFeaturedUrl, getSmallThumbUrl } from '@/services/movieApi';
+import { fetchLatestReleaseMovies, fetchMoviesByType, getFeaturedUrl, getSmallThumbUrl } from '@/services/movieApi';
 import { useLazySection } from '@/hooks/useLazySection';
 import { isImagePreloaded, markImagePreloaded } from '@/utils/imagePreloader';
 import { movieDetailUrl } from '@/utils/slugEncoder';
 import type { Movie } from '@/types/movie';
 
 const PAGE_SIZE = 36;
-const INITIAL_BATCHES = 3;
-
 function getMovieKey(movie: Movie): string {
   return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
 }
 
-function sortByModified(movies: Movie[]): Movie[] {
+function sortByNewReleasePriority(movies: Movie[]): Movie[] {
   return [...movies].sort((a, b) => {
+    const ya = Number(a.year) || 0;
+    const yb = Number(b.year) || 0;
+    if (ya !== yb) return yb - ya;
+    const ea = firstNumber(a.current_episode) || firstNumber(a.episode_current);
+    const eb = firstNumber(b.current_episode) || firstNumber(b.episode_current);
+    const fa = String(a.episode_current ?? '').toLowerCase().includes('full') ? 1 : 0;
+    const fb = String(b.episode_current ?? '').toLowerCase().includes('full') ? 1 : 0;
+    if (fa !== fb) return fa - fb;
+    if (ea !== eb) return eb - ea;
     const ta = new Date(a.modified?.time ?? 0).getTime();
     const tb = new Date(b.modified?.time ?? 0).getTime();
     return tb - ta;
   });
+}
+
+function firstNumber(value?: string | number): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const match = String(value ?? '').match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+function recoverJoinedEpisode(rawNumber: number, totalEpisodes: number): number {
+  if (!rawNumber || !totalEpisodes) return 0;
+  const rawText = String(rawNumber);
+  const totalText = String(totalEpisodes);
+  if (!rawText.endsWith(totalText) || rawText.length <= totalText.length) return 0;
+  const current = Number(rawText.slice(0, -totalText.length));
+  return current > 0 && current <= totalEpisodes ? current : 0;
+}
+
+function normalizeEpisodeCurrent(movie: Movie): string {
+  const raw = String(movie.episode_current ?? '').trim();
+  const lower = raw.toLowerCase();
+  const fixedLabels = ['full', 'full hd', 'hoàn tất', 'hoan tat', 'trailer', 'sắp chiếu', 'sap chieu'];
+  if (!raw) return 'Đang cập nhật';
+  if (fixedLabels.includes(lower)) return raw;
+
+  const rawNumber = firstNumber(raw);
+  const year = firstNumber(movie.year);
+  const total = firstNumber(movie.total_episodes) || firstNumber(movie.episode_total);
+  const currentRaw = firstNumber(movie.current_episode);
+  const recoveredCurrent = recoverJoinedEpisode(rawNumber, total);
+  const current = recoveredCurrent || (
+    currentRaw > 0 && currentRaw !== year && currentRaw < 500 ? currentRaw : 0
+  );
+
+  if (current > 0) {
+    return total > 0 && total >= current ? `Tập ${current}/${total}` : `Tập ${current}`;
+  }
+
+  if (rawNumber === year || rawNumber >= 500) {
+    return 'Đang cập nhật';
+  }
+
+  return raw;
+}
+
+function normalizeNewMovieItem(movie: Movie): Movie | null {
+  const key = getMovieKey(movie);
+  if (!key || !movie.name || !movie.slug) return null;
+  return {
+    ...movie,
+    episode_current: normalizeEpisodeCurrent(movie),
+  };
 }
 
 const newMoviesSchema = [
@@ -127,15 +185,19 @@ export default function NewMoviesPage() {
   const { heroRef, showHeroBg, heroImgLoaded, setHeroImgLoaded } = useHeroLazyLoad();
 
   const addToPool = useCallback((items: Movie[]) => {
+    const normalized = items
+      .map(normalizeNewMovieItem)
+      .filter((movie): movie is Movie => Boolean(movie));
     // Filter out movies that have already been seen
-    const fresh = items.filter((m) => {
+    const fresh = normalized.filter((m) => {
       const key = getMovieKey(m);
       return key && !seenRef.current.has(key);
     });
     if (fresh.length === 0) return;
     fresh.forEach((m) => seenRef.current.add(getMovieKey(m)));
-    // Keep pool order stable after multi-source batches resolve in different timings.
-    poolRef.current = sortByModified([...poolRef.current, ...fresh]);
+    // Keep this page ordered by what viewers expect as "new movies": release year first,
+    // then actively updating episodes, then database update time.
+    poolRef.current = sortByNewReleasePriority([...poolRef.current, ...fresh]);
     setPool(poolRef.current);
   }, []);
 
@@ -144,18 +206,12 @@ export default function NewMoviesPage() {
     initRef.current = true;
     setLoading(true);
 
-    const types = ['phim-le', 'phim-bo', 'phim-chieu-rap', 'hoat-hinh', 'tv-shows'];
-    const batchPromises = types.flatMap((type) =>
-      Array.from({ length: INITIAL_BATCHES }, (_, i) =>
-        fetchMoviesByType(type, i + 1, 'modified.time', 'desc').then((r) => r.items ?? [])
-      )
-    );
-
-    Promise.allSettled(batchPromises).then((results) => {
-      results.forEach((r) => {
-        if (r.status === 'fulfilled') addToPool(r.value);
-      });
-      nextApiRef.current = INITIAL_BATCHES + 1;
+    fetchLatestReleaseMovies(1).then((result) => {
+      addToPool(result.items ?? []);
+      nextApiRef.current = 2;
+      setPoolReady(true);
+      setLoading(false);
+    }).catch(() => {
       setPoolReady(true);
       setLoading(false);
     });
@@ -165,22 +221,17 @@ export default function NewMoviesPage() {
     if (fetchingRef.current || apiDoneRef.current) return;
     fetchingRef.current = true;
     setFetchingMore(true);
-    const types = ['phim-le', 'phim-bo', 'phim-chieu-rap', 'hoat-hinh', 'tv-shows'];
-    const results = await Promise.allSettled(
-      types.map((t) => fetchMoviesByType(t, nextApiRef.current, 'modified.time', 'desc').then((r) => r.items ?? []))
-    );
-    let hasMore = false;
-    results.forEach((r) => {
-      if (r.status === 'fulfilled' && r.value.length > 0) {
-        addToPool(r.value);
-        hasMore = true;
-      }
-    });
+    const nextPage = nextApiRef.current;
+    const result = filterType === 'all'
+      ? await fetchLatestReleaseMovies(nextPage).catch(() => null)
+      : await fetchMoviesByType(filterType, nextPage, 'modified.time', 'desc').catch(() => null);
+    const items = result?.items ?? [];
+    if (items.length > 0) addToPool(items);
     nextApiRef.current += 1;
-    if (!hasMore) apiDoneRef.current = true;
+    if (items.length === 0) apiDoneRef.current = true;
     fetchingRef.current = false;
     setFetchingMore(false);
-  }, [addToPool]);
+  }, [addToPool, filterType]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -189,6 +240,9 @@ export default function NewMoviesPage() {
   // Reset to page 1 when filter changes (skip on mount)
   useEffect(() => {
     if (!didResetFilterRef.current) { didResetFilterRef.current = true; return; }
+    apiDoneRef.current = false;
+    fetchingRef.current = false;
+    nextApiRef.current = filterType === 'all' ? 2 : 1;
     navigate({ pathname: basePath, search: '' }, { replace: true });
   }, [filterType, basePath, navigate]);
 
@@ -544,9 +598,9 @@ export default function NewMoviesPage() {
 
 /* ── Featured Main Card ── */
 function FeaturedCard({ movie }: { movie: Movie }) {
-  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(getFeaturedUrl(movie.thumb_url)));
   const [imgError, setImgError] = useState(false);
   const imgUrl = getFeaturedUrl(movie.thumb_url || movie.poster_url);
+  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(imgUrl));
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
   const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
   const isTrailer = ep === 'trailer';
@@ -623,9 +677,9 @@ function FeaturedCard({ movie }: { movie: Movie }) {
 
 /* ── Side Featured Card (smaller) ── */
 function SideFeaturedCard({ movie }: { movie: Movie }) {
-  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(getSmallThumbUrl(movie.thumb_url)));
   const [imgError, setImgError] = useState(false);
   const imgUrl = getSmallThumbUrl(movie.thumb_url || movie.poster_url);
+  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(imgUrl));
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
   const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
 

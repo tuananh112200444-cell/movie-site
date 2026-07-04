@@ -253,6 +253,9 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
   const uiMeta = CATEGORY_META_UI[seoKey] ?? DEFAULT_UI;
   const displayTitle = countryMeta?.title ?? title;
   const { sectionRef: seoRef, visible: seoVisible } = useLazySection('300px');
+  const showFeatured = page === 1 && sortBy === 'new' && movies.length >= 5;
+  const featuredMovies = showFeatured ? movies.slice(0, 5) : [];
+  const gridMovies = showFeatured ? movies.slice(5) : movies;
 
   return (
     <div className="min-h-screen kp-cinema-page text-white">
@@ -332,8 +335,8 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
         </div>
 
         {/* ── Featured Section (page 1 only) ── */}
-        {page === 1 && sortBy === 'new' && movies.length >= 5 && (
-          <FeaturedSection movies={movies.slice(0, 5)} type={type} />
+        {showFeatured && (
+          <FeaturedSection movies={featuredMovies} type={type} />
         )}
 
         {/* ── Movie Grid ── */}
@@ -372,7 +375,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
               ))}
             </div>
           </div>
-        ) : movies.length === 0 ? (
+        ) : gridMovies.length === 0 ? (
           <div className="cinema-empty-state flex flex-col items-center justify-center py-24 text-center text-white/20 sm:py-32">
             <div className="w-16 h-16 flex items-center justify-center rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-4">
               <i className="ri-film-line text-3xl" />
@@ -382,7 +385,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
           </div>
         ) : (
           <div className="grid movie-grid-desktop">
-              {movies.map((m, idx) => (
+              {gridMovies.map((m, idx) => (
                 <MovieCard key={m._id} movie={m} priority={idx < 2} />
               ))}
             </div>
