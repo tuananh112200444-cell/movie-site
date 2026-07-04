@@ -59,6 +59,27 @@ function dedupeAndSortNewest(movies: Movie[]): Movie[] {
     });
 }
 
+function isEpisodicBadge(value?: string): boolean {
+  const text = (value ?? '').toLowerCase().trim();
+  if (!text) return false;
+  return /^t[aậ]p\s*\d+/.test(text) || /^ep(isode)?\s*\d+/.test(text);
+}
+
+function isSingleLikeMovie(movie: Movie): boolean {
+  const type = String(movie.type ?? '').toLowerCase();
+  if (type === 'series' || type === 'phim-bo' || type === 'tvshows' || type === 'tv-shows') return false;
+  if (isEpisodicBadge(movie.episode_current)) return false;
+  const currentEpisode = Number((movie as unknown as { current_episode?: unknown }).current_episode ?? 0);
+  const totalEpisodes = Number((movie as unknown as { total_episodes?: unknown }).total_episodes ?? 0);
+  if (currentEpisode > 1 || totalEpisodes > 1) return false;
+  return true;
+}
+
+function filterMoviesForType(movies: Movie[], type: string): Movie[] {
+  if (type !== 'phim-le') return movies;
+  return movies.filter(isSingleLikeMovie);
+}
+
 function pageSlice<T>(items: T[], page: number): T[] {
   const start = (page - 1) * DEFAULT_PAGE_SIZE;
   return items.slice(start, start + DEFAULT_PAGE_SIZE);
@@ -176,8 +197,8 @@ export function useMoviesByType(
       );
       const results = await Promise.allSettled(promises);
       const allMovies = stableNewest
-        ? pageSlice(dedupeAndSortNewest(extractMovies(results)), page)
-        : extractMovies(results);
+        ? pageSlice(dedupeAndSortNewest(filterMoviesForType(extractMovies(results), type)), page)
+        : filterMoviesForType(extractMovies(results), type);
       let tp = inferTotalPages(extractTotalPages(results), allMovies.length, page, pagesToLoad);
 
       // Fallback: nếu API trả totalPages ≤ 1 nhưng có nhiều items,

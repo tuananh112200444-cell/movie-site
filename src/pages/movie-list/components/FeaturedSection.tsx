@@ -82,9 +82,10 @@ export default function FeaturedSection({ movies, type }: FeaturedSectionProps) 
 
 /* ─── Main Card (16:9 large) ─── */
 function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PALETTE['phim-le'] }) {
-  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(getFeaturedUrl(movie.thumb_url)));
+  const imagePath = movie.thumb_url || movie.poster_url;
+  const imgUrl = getFeaturedUrl(imagePath);
+  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(imgUrl));
   const [imgError, setImgError] = useState(false);
-  const imgUrl = getFeaturedUrl(movie.thumb_url || movie.poster_url);
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
   const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
   const isTrailer = ep === 'trailer';
@@ -175,9 +176,10 @@ function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PA
 
 /* ─── Side Card (horizontal list item) ─── */
 function FeaturedSideCard({ movie, palette }: { movie: Movie; palette: typeof PALETTE['phim-le'] }) {
-  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(getSmallThumbUrl(movie.thumb_url)));
+  const imagePath = movie.thumb_url || movie.poster_url;
+  const imgUrl = getSmallThumbUrl(imagePath);
+  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(imgUrl));
   const [imgError, setImgError] = useState(false);
-  const imgUrl = getSmallThumbUrl(movie.thumb_url || movie.poster_url);
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
   const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
 
