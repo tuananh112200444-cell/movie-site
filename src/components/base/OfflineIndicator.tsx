@@ -3,23 +3,6 @@ import { reportClientIssue } from '@/services/playerDiagnostics';
 
 type OfflineStatus = 'online' | 'offline';
 
-async function canReachApp(): Promise<boolean> {
-  const probes = ['/', '/robots.txt'];
-  for (const path of probes) {
-    try {
-      const response = await fetch(`${path}${path.includes('?') ? '&' : '?'}kp_probe=${Date.now()}`, {
-        method: 'HEAD',
-        cache: 'no-store',
-        signal: AbortSignal.timeout(4500),
-      });
-      if (response.ok || response.status === 404 || response.status === 405) return true;
-    } catch {
-      // Try the next lightweight same-origin endpoint before declaring offline.
-    }
-  }
-  return false;
-}
-
 export default function OfflineIndicator() {
   const [status, setStatus] = useState<OfflineStatus>('online');
   const [visible, setVisible] = useState(false);
@@ -42,22 +25,17 @@ export default function OfflineIndicator() {
       });
     };
 
-    const verifyAndRecover = async () => {
+    const verifyAndRecover = () => {
       if (disposed) return;
-      if (navigator.onLine) {
-        const reachable = await canReachApp();
-        if (!disposed && reachable) showRecovered();
-      }
+      if (navigator.onLine) showRecovered();
     };
 
     const updateStatus = () => {
       if (!navigator.onLine) {
         if (offlineTimer) clearTimeout(offlineTimer);
-        offlineTimer = window.setTimeout(async () => {
+        offlineTimer = window.setTimeout(() => {
           if (disposed || navigator.onLine) return;
-          const reachable = await canReachApp();
-          if (disposed || reachable) return;
-          reportClientIssue('offline', 'browser reported offline and app probe failed');
+          reportClientIssue('offline', 'browser reported offline');
           setStatus('offline');
           setVisible(true);
           setDismissed(false);

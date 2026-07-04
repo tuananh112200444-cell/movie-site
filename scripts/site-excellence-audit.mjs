@@ -161,7 +161,9 @@ async function assertAppShellRecoveryClean() {
   const offline = await readFile('src/components/base/OfflineIndicator.tsx', 'utf8').catch(() => '');
   if (!main.includes('removeLegacyServiceWorkers')) failures.push('src/main.tsx no longer removes legacy service workers.');
   if (!main.includes('visible_after_stale')) failures.push('src/main.tsx no longer refreshes stale restored tabs.');
-  if (!offline.includes('canReachApp')) failures.push('OfflineIndicator does not verify app reachability before showing offline state.');
+  if (offline.includes('kp_probe') || offline.includes("fetch('/") || offline.includes('fetch(`${path}')) {
+    failures.push('OfflineIndicator should not create same-origin network probes on focus/visibility.');
+  }
 
   return failures;
 }
@@ -224,6 +226,7 @@ async function assertProductionBuildClean() {
 
 async function assertHeadersClean() {
   const headers = await readFile('public/_headers', 'utf8').catch(() => '');
+  const routes = await readFile('public/_routes.json', 'utf8').catch(() => '');
   const failures = [];
   for (const needle of [
     'Strict-Transport-Security: max-age=31536000; includeSubDomains; preload',
@@ -243,6 +246,9 @@ async function assertHeadersClean() {
   for (const route of ['/', '/phim/*', '/search*']) {
     const block = `${route}\n  Cache-Control: no-cache, must-revalidate, max-age=0`;
     if (!headers.includes(block)) failures.push(`public/_headers should keep ${route} fresh without no-store.`);
+  }
+  for (const excludedRoute of ['/assets/*', '/images/*', '/banners/*', '/robots.txt', '/llms.txt']) {
+    if (!routes.includes(excludedRoute)) failures.push(`public/_routes.json should exclude ${excludedRoute} from Pages Functions.`);
   }
   return failures;
 }
