@@ -625,11 +625,15 @@ function getOriginalImageFromProxy(url: string): string | null {
   }
 }
 
+function isVolatileOphimVodImage(url: string): boolean {
+  return /img\.ophim\.live\/uploads\/movies\/upload\/vod\//i.test(url);
+}
+
 export function getImageFallbacks(primaryPath?: string, altPath?: string): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
   const pushUrl = (url?: string | null) => {
-    if (!url || seen.has(url)) return;
+    if (!url || seen.has(url) || isVolatileOphimVodImage(url)) return;
     seen.add(url);
     urls.push(url);
   };
@@ -824,9 +828,12 @@ async function fetchMoviesFromSupabaseList(params: {
   const to = from + SUPABASE_LIST_PAGE_SIZE - 1;
 
   try {
+    const needsExactCount = Boolean(
+      params.type || params.category || params.country || params.year || params.keyword?.trim()
+    );
     let query = supabase
       .from('movies')
-      .select(SUPABASE_LIST_SELECT, { count: 'exact' })
+      .select(SUPABASE_LIST_SELECT, { count: needsExactCount ? 'exact' : 'estimated' })
       .eq('is_published', true);
 
     if (params.type === 'phim-chieu-rap') {
@@ -865,7 +872,12 @@ async function fetchMoviesFromSupabaseList(params: {
       query = query.order('updated_at', { ascending, nullsFirst: false });
     }
     query = query.range(from, to);
-    const { data, count, error } = await query;
+    const response = await Promise.race([
+      query,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 6500)),
+    ]);
+    if (!response) return null;
+    const { data, count, error } = response;
     if (error || !data || data.length === 0) return null;
 
     const items = await enrichMoviesWithSupabaseEpisodeCounts(sortListItems(
