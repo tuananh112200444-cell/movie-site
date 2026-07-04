@@ -7,6 +7,7 @@ import {
   getServerTypeStyle,
   epSortKey,
   getThumbUrl,
+  hasPlayableUrl,
 } from '@/services/movieApi';
 import { useServerNow } from '@/hooks/useServerNow';
 import { getMovieCountdownInfo } from '@/utils/movieSchedule';
@@ -189,6 +190,20 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
         typeKey: detectServerType(getServerIdentityText(srv)),
       }));
     }, [episodes]);
+    const serverTypeCounts = useMemo(() => {
+      const counts: Record<'all' | 'khophim' | 'vietsub' | 'thuyetminh' | 'longtieng' | 'other', number> = {
+        all: episodes.length,
+        khophim: 0,
+        vietsub: 0,
+        thuyetminh: 0,
+        longtieng: 0,
+        other: 0,
+      };
+      visibleServerOptions.forEach(({ typeKey }) => {
+        counts[typeKey] += 1;
+      });
+      return counts;
+    }, [episodes.length, visibleServerOptions]);
 
     /* Auto-switch to episodes tab when user selects an episode while on trailer tab */
     useEffect(() => {
@@ -200,6 +215,12 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     useEffect(() => {
       setEpGroup(0);
     }, [serverTypeTab]);
+
+    useEffect(() => {
+      if (serverTypeTab !== 'all' && serverTypeCounts[serverTypeTab] === 0) {
+        setServerTypeTab('all');
+      }
+    }, [serverTypeCounts, serverTypeTab]);
 
     useEffect(() => {
       if (serverTypeTab === 'all' || activeServer < 0) return;
@@ -252,7 +273,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       const allAvailableServers = item.serverIndices
         .map((idx) => {
           const srv = episodes[idx];
-          const matched = srv?.server_data?.find((ep) => getEpisodeMergeKey(ep) === item.key);
+          const matched = srv?.server_data?.find((ep) => getEpisodeMergeKey(ep) === item.key && hasPlayableUrl(ep));
           return srv && matched ? { ...srv, server_data: [matched], originalIndex: idx } : null;
         })
         .filter(Boolean) as Array<EpisodeServer & { originalIndex: number }>;
@@ -260,18 +281,20 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
         ? allAvailableServers
         : allAvailableServers.filter((srv) => detectServerType(getServerIdentityText(srv)) === serverTypeTab);
       const availableServers = tabMatchedServers.length > 0 ? tabMatchedServers : allAvailableServers;
-      if (serverTypeTab !== 'all' && tabMatchedServers.length === 0) return;
       const best = pickBestEpisodeByPriority(availableServers);
       if (best) {
         onSwitchServer(availableServers[best.serverIndex].originalIndex);
         onSelectEp(best.episode);
         return;
       }
-      const fallbackIdx = item.serverIndices[0];
-      const fallbackServer = episodes[fallbackIdx];
-      const fallbackEp = fallbackServer?.server_data?.find((ep) => getEpisodeMergeKey(ep) === item.key) || item.ep;
-      onSwitchServer(fallbackIdx);
-      onSelectEp(fallbackEp);
+      if (hasPlayableUrl(item.ep)) {
+        onSelectEp(item.ep);
+        return;
+      }
+      const fallback = allAvailableServers[0];
+      if (!fallback?.server_data?.[0]) return;
+      onSwitchServer(fallback.originalIndex);
+      onSelectEp(fallback.server_data[0]);
     }, [episodes, onSwitchServer, onSelectEp, serverTypeTab]);
 
     const handlePrev = useCallback(() => {
@@ -526,10 +549,10 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       { key: 'thuyetminh' as const, label: 'Thuyết Minh', icon: 'ri-mic-2-line', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20 hover:bg-orange-500/20' },
                       { key: 'longtieng' as const, label: 'Lồng Tiếng', icon: 'ri-volume-up-line', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20' },
                       { key: 'other' as const, label: 'Khác', icon: 'ri-server-line', color: 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10' },
-                    ].map((t) => {
-                      const count = episodes.filter((srv) =>
-                        t.key === 'all' ? true : detectServerType(srv.server_name ?? '') === t.key
-                      ).length;
+                    ]
+                      .filter((t) => t.key === 'all' || serverTypeCounts[t.key] > 0)
+                      .map((t) => {
+                      const count = serverTypeCounts[t.key];
                       const isActive = serverTypeTab === t.key;
                       const activeColor =
                         t.key === 'all'

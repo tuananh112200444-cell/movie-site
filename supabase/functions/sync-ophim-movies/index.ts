@@ -151,9 +151,10 @@ function titleCandidates(record: Record<string, unknown>): string[] {
 
 function sourcePriority(record: Record<string, unknown>): number {
   const source = `${record.source_site || ''} ${record.source_name || ''}`.toLowerCase();
-  if (source.includes('admin') || source.includes('supabase') || source.includes('blvietsub')) return 4;
-  if (record.tmdb_id) return 3;
-  if (source.includes('ophim')) return 2;
+  if (source.includes('ophim') || source.includes('phimapi') || source.includes('kkphim')) return 5;
+  if (source.includes('admin') || source.includes('supabase')) return 4;
+  if (source.includes('blvietsub')) return 3;
+  if (record.tmdb_id) return 2;
   return 1;
 }
 
@@ -418,13 +419,11 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
   const slug = String(movie.slug || slugify(name));
   const currentEpisode = getCurrentEpisode(movie, detail.episodes);
   const hasSourceEpisodeRows = detail.episodes.some((server) => (server.server_data || []).length > 0);
-  const totalEpisode = hasSourceEpisodeRows
-    ? currentEpisode
-    : Math.max(
-        currentEpisode,
-        totalEpisodeNumber(movie.episode_current || ''),
-        totalEpisodeNumber(movie.episode_total || ''),
-      );
+  const sourceAdvertisedTotal = Math.max(
+    totalEpisodeNumber(movie.episode_current || ''),
+    totalEpisodeNumber(movie.episode_total || ''),
+  );
+  const totalEpisode = Math.max(currentEpisode, sourceAdvertisedTotal);
   const rawCurrent = firstEpisodeNumber(movie.episode_current || '');
   const sourceCurrentLooksClean = rawCurrent > 0 && rawCurrent === currentEpisode;
 
@@ -528,17 +527,33 @@ function updatePayloadForExisting(existing: Record<string, unknown>, incoming: R
     repairConcatenatedEpisodeNumber(firstEpisodeNumber(String(existing.episode_current || '')), existingTotal),
   );
   const incomingCurrent = Number(incoming.current_episode || 0);
+  const incomingTotal = Math.max(
+    Number(incoming.total_episodes || 0),
+    totalEpisodeNumber(String(incoming.episode_total || '')),
+    totalEpisodeNumber(String(incoming.episode_current || '')),
+  );
+  const mergedCurrent = Math.max(current, incomingCurrent) || null;
+  const mergedTotal = Math.max(existingTotal, incomingTotal, Number(mergedCurrent || 0)) || null;
 
-  if (!managed) return incoming;
+  if (!managed) {
+    return {
+      ...incoming,
+      current_episode: mergedCurrent,
+      total_episodes: mergedTotal,
+      episode_current: incomingCurrent > current ? incoming.episode_current : existing.episode_current || incoming.episode_current,
+      episode_total: incomingTotal >= existingTotal ? incoming.episode_total : existing.episode_total || incoming.episode_total,
+    };
+  }
 
   return {
     ophim_id: incoming.ophim_id,
     ophim_slug: incoming.ophim_slug,
     last_synced_at: incoming.last_synced_at,
     updated_at: incoming.updated_at,
-    current_episode: Math.max(current, incomingCurrent) || null,
-    total_episodes: Math.max(Number(existing.total_episodes || 0), Number(incoming.total_episodes || 0)) || null,
+    current_episode: mergedCurrent,
+    total_episodes: mergedTotal,
     episode_current: incomingCurrent > current ? incoming.episode_current : existing.episode_current,
+    episode_total: incomingTotal >= existingTotal ? incoming.episode_total : existing.episode_total,
   };
 }
 
@@ -1009,7 +1024,9 @@ serve(async (req) => {
   const pages = Math.max(1, Math.min(Number(url.searchParams.get('pages') || 2), 20));
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 48), 200));
   const dryRun = url.searchParams.get('dry_run') === '1';
-  const includeEpisodes = url.searchParams.get('episodes') === '1';
+  const includeEpisodes =
+    url.searchParams.get('episodes') === '1' ||
+    url.searchParams.get('include_episodes') === '1';
   const strictMissingDetail = url.searchParams.get('strict_missing_detail') === '1';
   const provider = providerFromParam(url.searchParams.get('provider'));
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
