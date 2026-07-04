@@ -10,6 +10,15 @@ declare const __IS_PREVIEW__: boolean;
 const BASE_URL = 'https://ophim1.com';
 export const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 
+function isAbortLikeError(error: unknown): boolean {
+  const err = error as Error | undefined;
+  const message = String(err?.message ?? error ?? '').toLowerCase();
+  return err?.name === 'AbortError'
+    || message.includes('abort')
+    || message.includes('signal is aborted')
+    || message.includes('request timeout');
+}
+
 /* ─── URL helpers ─── */
 function isBlvietsubWatchPageUrl(url: string): boolean {
   const raw = String(url || '').replace(/&amp;/g, '&').trim();
@@ -62,7 +71,9 @@ async function fetchDetailRaw(url: string, timeoutMs = 10000, retries = 2): Prom
       clearTimeout(timer);
     }
   }
-  console.warn(`[fetchDetailRaw] Failed after ${retries + 1} attempts: ${url}`, lastErr?.message);
+  if (import.meta.env.DEV && !isAbortLikeError(lastErr)) {
+    console.warn(`[fetchDetailRaw] Failed after ${retries + 1} attempts: ${url}`, lastErr?.message);
+  }
   return null;
 }
 
@@ -1064,7 +1075,7 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false): Pr
     if (!data?.movie?.slug && !data?.movie?.name) return null;
     return data;
   } catch (e) {
-    console.warn('[movieApi] Proxy fetch failed:', e);
+    if (!isAbortLikeError(e)) console.warn('[movieApi] Proxy fetch failed:', e);
     return null;
   }
 }
@@ -1707,6 +1718,7 @@ export async function searchMoviesInSupabase(
       .limit(queryLimit)
       .abortSignal(controller.signal);
     if (error || !data) {
+      if (isAbortLikeError(error?.message)) return [];
       console.warn('[searchMoviesInSupabase] Error:', error?.message);
       return [];
     }
@@ -1853,6 +1865,7 @@ const QUEER_UNIVERSE_TERMS = [
 ];
 const QUEER_SOURCE_TERMS = ['blvietsub', 'bl vietsub', 'bl-vietsub', 'vu tru dam my'];
 const BLVIETSUB_SLUG_PREFIX = 'blvietsub-';
+const QUEER_FALLBACK_URL = '/queer-fallback.json?v=202607041605';
 const SUPABASE_QUEER_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
 const BLVIETSUB_SEARCH_TERMS = [
   'bl',
@@ -1949,8 +1962,14 @@ function normalizeMatchText(value: string): string {
 
 function getEpisodeNumberFromText(value?: string): number {
   if (!value) return 0;
-  const match = String(value).match(/\d+/);
-  return match ? Number(match[0]) || 0 : 0;
+  const text = String(value).toLowerCase();
+  if (text.includes('full')) return 1;
+  const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+  if (slash) return Number(slash[1] || 0) || 0;
+  const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
+  const matches = [...text.matchAll(/(\d{1,4})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+  return matches.length ? Math.max(...matches) : 0;
 }
 
 function getEpisodeNumberFromData(ep: EpisodeData): number {
@@ -2419,7 +2438,9 @@ async function fetchMovieDetailFromBlvietsub(slug: string): Promise<MovieDetailR
     const entry = data.entry;
     return entry ? buildBlvietsubDetail(entry) : null;
   } catch (e) {
-    console.warn('[fetchMovieDetailFromBlvietsub] Exception:', e);
+    if (import.meta.env.DEV && !isAbortLikeError(e)) {
+      console.warn('[fetchMovieDetailFromBlvietsub] Exception:', e);
+    }
     return null;
   }
 }
@@ -2451,7 +2472,7 @@ async function fetchMovieDetailFromBlvietsubForMovie(movie?: Partial<MovieDetail
         : entry ? buildBlvietsubDetail(entry) : null;
       if (detail && detailHasPlayableEpisodes(detail)) return detail;
     } catch (e) {
-      if ((e as Error)?.name !== 'AbortError') {
+      if (import.meta.env.DEV && !isAbortLikeError(e)) {
         console.warn('[fetchMovieDetailFromBlvietsubForMovie] Exception:', e);
       }
     }
@@ -2503,7 +2524,7 @@ async function fetchMovieDetailFromOPhimForMovie(movie?: Partial<MovieDetail> | 
         return markOphimServers(detail);
       }
     } catch (e) {
-      if ((e as Error)?.name !== 'AbortError') {
+      if (import.meta.env.DEV && !isAbortLikeError(e)) {
         console.warn('[fetchMovieDetailFromOPhimForMovie] Exception:', e);
       }
     }
@@ -2786,6 +2807,23 @@ function uniqueMoviesBySlug(items: MovieItem[]): MovieItem[] {
   }
   return result;
 }
+
+async function loadStaticQueerFallback(signal?: AbortSignal): Promise<MovieItem[]> {
+  try {
+    const res = await fetch(QUEER_FALLBACK_URL, {
+      cache: 'force-cache',
+      signal,
+    });
+    if (!res.ok) return [];
+    const data = await res.json() as { sections?: { newUpdates?: Record<string, unknown>[] } };
+    return ((data.sections?.newUpdates ?? []) as Record<string, unknown>[])
+      .map(toSupabaseMovieItem)
+      .filter((movie) => Boolean(movie.slug && movie.name));
+  } catch {
+    return [];
+  }
+}
+
 function getMovieUpdateTime(movie: MovieItem): number {
   const time = new Date(movie.modified?.time ?? 0).getTime();
   return Number.isFinite(time) ? time : 0;
@@ -2886,7 +2924,8 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
     if ((e as Error)?.name !== 'AbortError') {
       console.warn('[fetchQueerUniverseSections] Exception:', e);
     }
-    return { featured: [], newUpdates: [], byYear: {} };
+    const fallbackMovies = await loadStaticQueerFallback(options.signal);
+    return { featured: fallbackMovies, newUpdates: fallbackMovies, byYear: {} };
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', abortFromParent);
@@ -2972,7 +3011,7 @@ async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailRe
           // Chỉ log warn nếu slug mismatch để debug, không reject
           const extSlug = String(result.movie.slug || '').trim().toLowerCase().normalize('NFC');
           const expectedSlug = slug.trim().toLowerCase().normalize('NFC');
-          if (extSlug && extSlug !== expectedSlug) {
+          if (import.meta.env.DEV && extSlug && extSlug !== expectedSlug) {
             console.warn(
               `[fetchMovieDetailFromExternal] Slug mismatch (accepted): expected "${expectedSlug}" got "${extSlug}" from ${name}`
             );
@@ -2983,7 +3022,9 @@ async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailRe
       })
       .catch((err) => {
         clearTimeout(t);
-        console.warn(`[fetchMovieDetailFromExternal] ${name} failed:`, (err as Error).message);
+        if (import.meta.env.DEV && !isAbortLikeError(err)) {
+          console.warn(`[fetchMovieDetailFromExternal] ${name} failed:`, (err as Error).message);
+        }
         return null;
       });
   });
@@ -3997,8 +4038,7 @@ export function deduplicateAndLimitServers(episodes: EpisodeServer[]): EpisodeSe
 }
 
 export function extractEpNumber(text: string): number {
-  const m = text.match(/(\d+)/);
-  return m ? Number(m[1]) : 0;
+  return getEpisodeNumberFromText(text);
 }
 
 export interface FlatEpisode {
@@ -4047,6 +4087,10 @@ function isHiddenEpisodeSource(source: unknown): boolean {
   return String(source || '').trim().toLowerCase() === 'hidden';
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+}
+
 /**
  * Query & merge episodes from ALL three tables:
  * - movie_episodes (admin manual)
@@ -4065,6 +4109,13 @@ export async function getMergedEpisodes(
   flatEpisodes: FlatEpisode[];
   maxEpisodeNumber: number;
 }> {
+  if (!isUuid(movieId)) {
+    return {
+      episodeServers: [],
+      flatEpisodes: [],
+      maxEpisodeNumber: 0,
+    };
+  }
   const includeLiveFallbacks = options.includeLiveFallbacks ?? true;
   const querySignal = signal ?? new AbortController().signal;
   const [{ data: meRows, error: meErr }, { data: oldEps }, { data: streams }, { data: movieRow }] = await Promise.all([
@@ -4499,7 +4550,7 @@ export async function fetchHomePageData(
   try {
     const res = await fetch(url.toString(), {
       signal: controller.signal,
-      cache: 'no-store',
+      cache: 'default',
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,

@@ -353,7 +353,8 @@ const ALL_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-
 const HOME_CACHE_KEY = 'kp_home_proxy_v6_short';
 const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
-const HOME_CACHE_TTL = 30 * 1000;
+const HOME_FALLBACK_URL = '/home-fallback.json';
+const HOME_CACHE_TTL = 5 * 60 * 1000;
 const HOME_REFRESH_ON_RETURN_MS = 60 * 1000;
 const EMPTY_MOVIES: MovieItem[] = [];
 
@@ -413,6 +414,25 @@ function writeWarmHomeCache(sections: Record<string, MovieItem[]>): void {
   } catch { /* quota */ }
 }
 
+async function loadStaticHomeFallback(signal?: AbortSignal): Promise<Record<string, MovieItem[]>> {
+  const res = await fetch(HOME_FALLBACK_URL, {
+    cache: 'force-cache',
+    signal,
+  });
+  if (!res.ok) return {};
+
+  const data = await res.json() as { sections?: Record<string, unknown[]> };
+  const parsedSections: Record<string, MovieItem[]> = {};
+  for (const [key, items] of Object.entries(data.sections ?? {})) {
+    parsedSections[key] = (items ?? []).filter((item) => {
+      const movie = item as Partial<MovieItem>;
+      return Boolean(movie?.slug && movie?.name);
+    }) as MovieItem[];
+  }
+
+  return hasHomeMovies(parsedSections) ? parsedSections : {};
+}
+
 export default function Home() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -447,6 +467,7 @@ export default function Home() {
 
     let cancelled = false;
     let controller: AbortController | null = null;
+    let fallbackController: AbortController | null = null;
     const fetchHome = (showLoading = false) => {
       const hadPlaceholder = Object.keys(homeDataRef.current).length > 0;
       if (!hadPlaceholder || showLoading) setHomeLoading(true);
@@ -475,6 +496,19 @@ export default function Home() {
         });
     };
 
+    if (!hasHomeMovies(homeDataRef.current)) {
+      fallbackController = new AbortController();
+      loadStaticHomeFallback(fallbackController.signal)
+        .then((fallbackSections) => {
+          if (cancelled || !hasHomeMovies(fallbackSections) || hasHomeMovies(homeDataRef.current)) return;
+          setHomeData(fallbackSections);
+          homeDataRef.current = fallbackSections;
+          writeWarmHomeCache(fallbackSections);
+          setHomeLoading(false);
+        })
+        .catch(() => undefined);
+    }
+
     fetchHome(!hasHomeMovies(homeDataRef.current));
 
     const refreshIfStale = () => {
@@ -496,6 +530,7 @@ export default function Home() {
     return () => {
       cancelled = true;
       controller?.abort();
+      fallbackController?.abort();
       document.removeEventListener('visibilitychange', refreshIfStale);
       window.removeEventListener('focus', refreshIfStale);
       window.removeEventListener('pageshow', handlePageShow);

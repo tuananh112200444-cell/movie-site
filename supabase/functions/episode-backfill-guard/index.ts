@@ -91,6 +91,8 @@ function episodeNumberFromText(value: unknown): number {
   if (text.includes('full')) return 1;
   const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
   if (slash) return Number(slash[1] || 0) || 0;
+  const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
   const match = text.match(/(\d{1,4})/);
   return match ? Number(match[1] || 0) || 0 : 0;
 }

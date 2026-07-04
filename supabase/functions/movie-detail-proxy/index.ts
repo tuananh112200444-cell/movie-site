@@ -89,16 +89,20 @@ function normalizeDailymotionUrl(url: string): string {
 
 function epSortKey(ep: { slug?: string; name?: string }): number {
   const text = ep.slug || ep.name || '';
-  const match = text.match(/(\d+)/);
-  if (match) return Number(match[1]);
+  const number = extractEpNumber(text);
+  if (number) return number;
   if (text.toLowerCase().includes('full')) return 0;
   return Infinity;
 }
 function extractEpNumber(text: string): number {
-  const match = text.match(/(\d+)/);
-  if (match) return Number(match[1]);
-  if (text.toLowerCase().includes('full')) return 0;
-  return 0;
+  const normalized = String(text || '').toLowerCase();
+  if (normalized.includes('full')) return 0;
+  const slash = normalized.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+  if (slash) return Number(slash[1] || 0) || 0;
+  const range = normalized.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
+  const matches = [...normalized.matchAll(/(\d{1,4})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+  return matches.length ? Math.max(...matches) : 0;
 }
 
 function extractMaxEpNumber(text: string): number {
@@ -191,6 +195,11 @@ function pushEpisode(serverMap: Map<string, unknown[]>, serverName: string, epDa
 
 function normalizePlayableUrl(value = ''): string {
   return String(value || '').trim().replace(/&amp;/g, '&').replace(/\/+$/, '');
+}
+
+function isDuplicateDbError(error: { code?: string; message?: string } | null | undefined): boolean {
+  const text = String(error?.message || '').toLowerCase();
+  return error?.code === '23505' || text.includes('duplicate') || text.includes('unique constraint');
 }
 
 function streamRowUrl(row: Record<string, unknown>): string {
@@ -1036,13 +1045,13 @@ async function persistExternalMovie(
           .from('episodes')
           .select('id')
           .eq('movie_id', movieId)
-          .eq('server_name', serverName)
-          .eq('episode_number', episodeNumber)
+          .ilike('server_name', serverName)
+          .ilike('episode_slug', epSlug)
           .limit(1)
           .maybeSingle();
 
         if (!existingEpisode) {
-          await supabase.from('episodes').insert({
+          const { error: insertEpisodeError } = await supabase.from('episodes').insert({
             movie_id: movieId,
             ophim_id: ophimId,
             server_name: serverName,
@@ -1054,6 +1063,27 @@ async function persistExternalMovie(
             subtitle_url: subtitleUrl,
             server_data: ep,
           });
+          if (isDuplicateDbError(insertEpisodeError)) {
+            const { data: duplicateEpisode } = await supabase
+              .from('episodes')
+              .select('id')
+              .eq('movie_id', movieId)
+              .ilike('server_name', serverName)
+              .ilike('episode_slug', epSlug)
+              .limit(1)
+              .maybeSingle();
+            if (duplicateEpisode?.id) {
+              await supabase
+                .from('episodes')
+                .update({
+                  link_m3u8: linkM3u8,
+                  link_embed: linkEmbed,
+                  subtitle_url: subtitleUrl,
+                  server_data: ep,
+                })
+                .eq('id', duplicateEpisode.id);
+            }
+          }
         } else {
           await supabase
             .from('episodes')
@@ -1070,13 +1100,15 @@ async function persistExternalMovie(
           .from('streams')
           .select('id')
           .eq('movie_id', movieId)
-          .eq('server_name', serverName)
-          .eq('episode_slug', epSlug)
+          .eq('source', externalSource || 'ophim')
+          .eq('is_active', true)
+          .ilike('server_name', serverName)
+          .ilike('episode_slug', epSlug)
           .limit(1)
           .maybeSingle();
 
         if (!existingStream) {
-          await supabase.from('streams').insert({
+          const { error: insertStreamError } = await supabase.from('streams').insert({
             movie_id: movieId,
             ophim_id: ophimId,
             server_name: serverName,
@@ -1087,6 +1119,30 @@ async function persistExternalMovie(
             source: externalSource || 'ophim',
             is_active: true,
           });
+          if (isDuplicateDbError(insertStreamError)) {
+            const { data: duplicateStream } = await supabase
+              .from('streams')
+              .select('id')
+              .eq('movie_id', movieId)
+              .eq('source', externalSource || 'ophim')
+              .eq('is_active', true)
+              .ilike('server_name', serverName)
+              .ilike('episode_slug', epSlug)
+              .limit(1)
+              .maybeSingle();
+            if (duplicateStream?.id) {
+              await supabase
+                .from('streams')
+                .update({
+                  stream_url: linkM3u8,
+                  embed_url: linkEmbed,
+                  subtitle_url: subtitleUrl,
+                  source: externalSource || 'ophim',
+                  is_active: true,
+                })
+                .eq('id', duplicateStream.id);
+            }
+          }
         } else {
           await supabase
             .from('streams')

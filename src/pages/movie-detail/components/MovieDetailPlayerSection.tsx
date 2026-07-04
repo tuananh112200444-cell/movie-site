@@ -44,6 +44,14 @@ function getServerDisplayName(srv: EpisodeServer, idx: number): string {
   return getAnonymousServerDisplay(srv.server_name, idx);
 }
 
+function getAvailableEpisodeLabel(episodesCount: number, activeEp?: EpisodeData | null): string {
+  const activeNumber = activeEp ? epSortKey(activeEp) : 0;
+  if (episodesCount === 1 && Number.isFinite(activeNumber) && activeNumber > 1) {
+    return '1 tập có sẵn';
+  }
+  return `${episodesCount} tập`;
+}
+
 interface Props {
   movie: MovieDetail;
   episodes: EpisodeServer[];
@@ -149,6 +157,10 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     }, [episodes, scheduledEpisode]);
 
     const epList = useMemo(() => mergedEpisodes.map((m) => m.ep), [mergedEpisodes]);
+    const availableEpisodeLabel = useMemo(
+      () => getAvailableEpisodeLabel(mergedEpisodes.length || episodes.length, activeEp),
+      [activeEp, episodes.length, mergedEpisodes.length],
+    );
 
     const groups = useMemo(() => {
       const g: MergedEpisode[][] = [];
@@ -357,7 +369,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white sm:text-base">Trình phát phim</p>
                 <p className="truncate text-[11px] text-white/38">
-                  {activeEp ? `${activeEp.name} · ${mergedEpisodes.length} tập` : `${mergedEpisodes.length || episodes.length} tập khả dụng`}
+                  {activeEp ? `${activeEp.name} · ${availableEpisodeLabel}` : `${availableEpisodeLabel} khả dụng`}
                 </p>
               </div>
             </div>

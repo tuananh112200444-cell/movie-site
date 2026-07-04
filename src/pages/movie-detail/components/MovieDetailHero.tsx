@@ -26,6 +26,7 @@ const countryPathMap: Record<string, string> = {
 
 function MobileMovieInfo({ movie }: { movie: MovieDetail }) {
   const [open, setOpen] = useState(false);
+  const displayEpisodeTotal = getDisplayEpisodeTotal(movie);
 
   const items = useMemo(() => [
     movie.director?.filter(Boolean).length > 0 && {
@@ -55,13 +56,13 @@ function MobileMovieInfo({ movie }: { movie: MovieDetail }) {
         </span>
       ), icon: 'ri-map-pin-line',
     },
-    movie.episode_total && {
-      label: 'Số tập', value: `${movie.episode_total} tập`, icon: 'ri-list-ordered',
+    displayEpisodeTotal && {
+      label: 'Số tập', value: `${displayEpisodeTotal} tập`, icon: 'ri-list-ordered',
     },
     movie.time && {
       label: 'Thời lượng', value: movie.time, icon: 'ri-time-line',
     },
-  ].filter(Boolean) as { label: string; value: React.ReactNode; icon: string }[], [movie]);
+  ].filter(Boolean) as { label: string; value: React.ReactNode; icon: string }[], [movie, displayEpisodeTotal]);
 
   if (!items.length) return null;
 
@@ -130,6 +131,19 @@ function stripHtml(text = ''): string {
   return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function parseEpisodeNumber(value?: string | number): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const match = String(value ?? '').match(/\d+/);
+  return match ? Number(match[0]) || 0 : 0;
+}
+
+function getDisplayEpisodeTotal(movie: MovieDetail): string {
+  const total = parseEpisodeNumber(movie.episode_total);
+  const current = parseEpisodeNumber(movie.episode_current);
+  if (!total || (current && current > total)) return '';
+  return String(movie.episode_total).trim();
+}
+
 function toIsoDate(movie: MovieDetail): string {
   if (movie.modified?.time) return new Date(movie.modified.time).toISOString();
   if (movie.year) return `${movie.year}-01-01T00:00:00+07:00`;
@@ -146,7 +160,7 @@ function compactText(value = '', max = 155): string {
 
 function getEpisodeSeoLabel(movie: MovieDetail): string {
   const current = String(movie.episode_current || '').trim();
-  const total = String(movie.episode_total || '').trim();
+  const total = getDisplayEpisodeTotal(movie);
   if (current && total && current !== total && !current.toLowerCase().includes(total.toLowerCase())) {
     return `${current}/${total}`;
   }
@@ -198,6 +212,7 @@ function buildMovieSchema({
     ...countries,
   ].filter(Boolean);
 
+  const displayEpisodeTotal = getDisplayEpisodeTotal(movie);
   const schemas: object[] = [
     {
       '@context': 'https://schema.org',
@@ -226,7 +241,7 @@ function buildMovieSchema({
       datePublished: movie.year ? `${movie.year}-01-01` : undefined,
       dateModified,
       genre: genres,
-      numberOfEpisodes: movie.episode_total ? Number.parseInt(String(movie.episode_total), 10) || undefined : undefined,
+      numberOfEpisodes: displayEpisodeTotal ? Number.parseInt(displayEpisodeTotal, 10) || undefined : undefined,
       episode: getEpisodeSeoLabel(movie) ? {
         '@type': 'Episode',
         name: getEpisodeSeoLabel(movie),
@@ -293,6 +308,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
   const displayTitle = getMovieDisplayName(movie);
   const displayOrigin = movie.title_en?.trim() || movie.origin_name;
   const displayChinese = movie.title_zh?.trim();
+  const displayEpisodeTotal = getDisplayEpisodeTotal(movie);
 
   const seoTitle = useMemo(() => buildCtrMovieTitle(movie, displayTitle), [movie, displayTitle]);
   const seoDesc = useMemo(() => {
@@ -458,10 +474,10 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
                     </div>
                   </div>
                 )}
-                {movie.episode_total && (
+                {displayEpisodeTotal && (
                   <div className="flex gap-2 items-start">
                     <span className="text-white/35 flex-shrink-0 text-xs pt-0.5">Số tập</span>
-                    <span className="text-white/75 text-xs">{movie.episode_total} tập</span>
+                    <span className="text-white/75 text-xs">{displayEpisodeTotal} tập</span>
                   </div>
                 )}
               </div>

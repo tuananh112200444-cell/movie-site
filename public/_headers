@@ -64,13 +64,29 @@
 /images/*
   Cache-Control: public, max-age=86400
 
+/home-fallback.json
+  Cache-Control: public, max-age=300, s-maxage=600, stale-while-revalidate=1800
+  Content-Type: application/json; charset=utf-8
+
+/queer-fallback.json
+  Cache-Control: public, max-age=300, s-maxage=600, stale-while-revalidate=1800
+  Content-Type: application/json; charset=utf-8
+
 /favicon.svg
   Cache-Control: public, max-age=604800
   Content-Type: image/svg+xml
 
+/favicon.png
+  Cache-Control: public, max-age=604800
+  Content-Type: image/png
+
 /logo.svg
   Cache-Control: public, max-age=604800
   Content-Type: image/svg+xml
+
+/logo.png
+  Cache-Control: public, max-age=604800
+  Content-Type: image/png
 
 /site.webmanifest
   Cache-Control: public, max-age=604800
