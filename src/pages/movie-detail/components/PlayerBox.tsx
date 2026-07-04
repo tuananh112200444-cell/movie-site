@@ -29,8 +29,17 @@ function isIframeSource(url: string): boolean {
     u.includes('dailymotion.com/embed') ||
     u.includes('dailymotion.com/video') ||
     u.includes('dai.ly') ||
+    u.includes('ok.ru/videoembed') ||
+    u.includes('short.icu/') ||
     u.includes('vimeo.com') ||
-    u.includes('player.vimeo.com')
+    u.includes('player.vimeo.com') ||
+    u.includes('filemoon') ||
+    u.includes('vidmoly') ||
+    u.includes('streamtape') ||
+    u.includes('mixdrop') ||
+    u.includes('dood') ||
+    u.includes('voe.sx') ||
+    u.includes('uqload')
   );
 }
 
@@ -47,7 +56,15 @@ function isBlvietsubWatchPageUrl(url: string): boolean {
 
 function getSafeEmbedUrl(url: string): string {
   if (isBlvietsubWatchPageUrl(url)) return '';
-  return isIframeSource(url) ? normalizeDailymotionUrl(url) : '';
+  const raw = String(url || '').trim();
+  if (!raw || isDirectVideo(raw) || isHlsUrl(raw)) return '';
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+  } catch {
+    return '';
+  }
+  return normalizeDailymotionUrl(raw);
 }
 
 function isDirectVideo(url: string): boolean {

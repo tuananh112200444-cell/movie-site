@@ -1381,9 +1381,12 @@ const MOVIE_DETAIL_SELECT = [
 
 async function fetchMovieDetailFromSupabase(
   slug: string,
-  _timeoutMs = 3500,
+  timeoutMs = 3500,
   options: { includeLiveFallbacks?: boolean } = {}
 ): Promise<MovieDetailResponse | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = controller.signal;
   try {
     const normalizedSlug = slug.normalize('NFC');
     const urlDecodedSlug = decodeURIComponent(slug);
@@ -1398,6 +1401,7 @@ async function fetchMovieDetailFromSupabase(
         .select(MOVIE_DETAIL_SELECT)
         .eq('slug', variant)
         .eq('is_published', true)
+        .abortSignal(signal)
         .maybeSingle();
       if (!error && data) {
         movie = data as unknown as Record<string, unknown>;
@@ -1412,6 +1416,7 @@ async function fetchMovieDetailFromSupabase(
         .select(MOVIE_DETAIL_SELECT)
         .eq('ophim_slug', slug)
         .eq('is_published', true)
+        .abortSignal(signal)
         .maybeSingle();
       if (!error && data) {
         movie = data as unknown as Record<string, unknown>;
@@ -1427,6 +1432,7 @@ async function fetchMovieDetailFromSupabase(
           .select(MOVIE_DETAIL_SELECT)
           .eq('ophim_slug', variant)
           .eq('is_published', true)
+          .abortSignal(signal)
           .maybeSingle();
         if (!error && data) {
           movie = data as unknown as Record<string, unknown>;
@@ -1447,6 +1453,7 @@ async function fetchMovieDetailFromSupabase(
         .or(`slug.ilike.%${safeSlug}%,normalized_name.ilike.%${safeSlug}%,name.ilike.%${safeSlug}%,origin_name.ilike.%${safeSlug}%,title_vi.ilike.%${safeSlug}%,title_en.ilike.%${safeSlug}%`)
         .eq('is_published', true)
         .limit(1)
+        .abortSignal(signal)
         .maybeSingle();
       if (!error && data) {
         movie = data as unknown as Record<string, unknown>;
@@ -1464,7 +1471,7 @@ async function fetchMovieDetailFromSupabase(
 
     let episodeServers: EpisodeServer[] = [];
     try {
-      const merged = await getMergedEpisodes(movieId, undefined, {
+      const merged = await getMergedEpisodes(movieId, signal, {
         includeLiveFallbacks: options.includeLiveFallbacks ?? false,
       });
       episodeServers = merged.episodeServers;
@@ -1528,6 +1535,8 @@ async function fetchMovieDetailFromSupabase(
   } catch (e) {
     console.warn('[fetchMovieDetailFromSupabase] Exception:', e);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -2911,6 +2920,16 @@ function raceFirstValidWithTimeout<T>(
   });
 }
 
+function withNullTimeout<T>(
+  promise: Promise<T | null>,
+  timeoutMs: number,
+): Promise<T | null> {
+  return Promise.race([
+    promise.catch(() => null),
+    new Promise<T | null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+}
+
 /* ─═══════════════════════════════════════════
    MOVIE DETAIL — EXTERNAL API FALLBACK
    Dùng khi OPhim không có phim hoặc bị lỗi
@@ -3079,7 +3098,10 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       if (!detailHasPlayableEpisodes(sb)) {
         const ophimPromise = fetchMovieDetailFromOPhim(slug, false);
         blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
-        [ophim, blvietsub] = await Promise.all([ophimPromise, blvietsubPromise]);
+        [ophim, blvietsub] = await Promise.all([
+          withNullTimeout(ophimPromise, 4500),
+          withNullTimeout(blvietsubPromise, 6000),
+        ]);
       }
     }
 
@@ -3093,11 +3115,11 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     const canonicalSlug = sbMovie?.slug ? String(sbMovie.slug) : null;
 
     if (!blvietsub && isQueerMovieDetail(sb?.movie)) {
-      blvietsub = await fetchMovieDetailFromBlvietsubForMovie(sb?.movie);
+      blvietsub = await withNullTimeout(fetchMovieDetailFromBlvietsubForMovie(sb?.movie), 6000);
     }
 
     if (sb && isQueerMovieDetail(sb.movie)) {
-      queerOphim = await fetchMovieDetailFromOPhimForMovie(sb.movie);
+      queerOphim = await withNullTimeout(fetchMovieDetailFromOPhimForMovie(sb.movie), 4500);
       const merged = mergeQueerDetailWithSources(sb, blvietsub, queerOphim);
       if (merged && detailHasPlayableEpisodes(merged)) {
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using merged Supabase + OPhim + BLVietsub detail for "${slug}"`);
@@ -3108,7 +3130,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
 
     // ── STEP 2: Pick best result from all sources ──
     if (!sb && blvietsub && isQueerMovieDetail(blvietsub.movie)) {
-      queerOphim = await fetchMovieDetailFromOPhimForMovie(blvietsub.movie);
+      queerOphim = await withNullTimeout(fetchMovieDetailFromOPhimForMovie(blvietsub.movie), 4500);
       const merged = mergeQueerDetailWithSources(blvietsub, null, queerOphim);
       if (merged && detailHasPlayableEpisodes(merged)) {
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using merged BLVietsub + OPhim detail for "${slug}"`);
@@ -3304,10 +3326,12 @@ interface ServerQualityInfo {
   hasM3u8: boolean;
   hasEmbed: boolean;
 }
-export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'DM', 'SUPABASE', 'OPHIM', 'SS', 'OK', 'ABYSS', 'VK'] as const;
+export const STREAM_SERVER_PRIORITY = ['OPHIM', 'KKPHIM', 'KHOPHIM', 'DM', 'SUPABASE', 'SS', 'OK', 'ABYSS', 'VK'] as const;
 const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
 const SERVER_RECENT_BAD_HOST_PENALTY = 900;
-const DAILYMOTION_PREFERRED_SOURCE_BONUS = 360;
+const OPHIM_PREFERRED_SOURCE_BONUS = 380;
+const KKPHIM_PREFERRED_SOURCE_BONUS = 360;
+const DAILYMOTION_PREFERRED_SOURCE_BONUS = 240;
 
 function normalizeServerPriorityText(value: string): string {
   return value
@@ -3327,6 +3351,24 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
 
   const tokens = new Set(text.split(/\s+/).filter(Boolean));
   const compact = text.replace(/\s+/g, '');
+  const joinedUrls = [
+    episode?.link_embed,
+    episode?.link_m3u8,
+  ].filter(Boolean).join(' ').toLowerCase();
+  const hasOphimSource =
+    tokens.has('OPHIM') ||
+    compact.includes('OPHIM') ||
+    joinedUrls.includes('opstream') ||
+    joinedUrls.includes('ophim');
+  const hasKkPhimSource =
+    tokens.has('KKPHIM') ||
+    tokens.has('PHIMAPI') ||
+    compact.includes('KKPHIM') ||
+    compact.includes('PHIMAPI') ||
+    joinedUrls.includes('phimapi.com') ||
+    joinedUrls.includes('phimapi.net') ||
+    joinedUrls.includes('kkphim') ||
+    joinedUrls.includes('kkphimplayer');
   const hasDailymotionSource =
     compact.includes('DAILYMOTION') ||
     compact.includes('DAILY') ||
@@ -3338,8 +3380,11 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('VIDEOKHOPHIMORG') ||
     compact.includes('SUPABASE')
   );
-  if (hasDailymotionSource && !isOwnHlsSource) {
-    return STREAM_SERVER_PRIORITY.indexOf('DM');
+  if (hasOphimSource) {
+    return STREAM_SERVER_PRIORITY.indexOf('OPHIM');
+  }
+  if (hasKkPhimSource) {
+    return STREAM_SERVER_PRIORITY.indexOf('KKPHIM');
   }
   if (
     tokens.has('KHOPHIM') ||
@@ -3359,6 +3404,9 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('MANUAL')
   ) {
     return STREAM_SERVER_PRIORITY.indexOf('SUPABASE');
+  }
+  if (hasDailymotionSource && !isOwnHlsSource) {
+    return STREAM_SERVER_PRIORITY.indexOf('DM');
   }
   if (
     tokens.has('DM') ||
@@ -3387,7 +3435,7 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
   }
 
   const rank = STREAM_SERVER_PRIORITY.findIndex((code) =>
-    code !== 'SUPABASE' && (
+    code !== 'SUPABASE' && code !== 'KKPHIM' && (
     tokens.has(code) ||
     compact.includes(`SERVER${code}`) ||
     compact.includes(`SV${code}`) ||
@@ -3519,6 +3567,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   let score = 0;
 
   if (!url) return -10000;
+  if (!m3u8 && embed && isBlvietsubWatchPageUrl(embed)) return -10000;
   const healthStatus = String(ep.source_health_status || '').trim().toLowerCase();
   const failureCount = Number(ep.source_failure_count || 0);
   const responseMs = Number(ep.source_response_time_ms || 0);
@@ -3544,8 +3593,10 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (m3u8) score += /\.m3u8(?:[?#].*)?$/i.test(m3u8) ? 130 : 115;
   if (/\.(mp4|webm|mov)(?:[?#].*)?$/i.test(embed)) score += 110;
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) score += 120;
+  if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) score += OPHIM_PREFERRED_SOURCE_BONUS;
+  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) score += KKPHIM_PREFERRED_SOURCE_BONUS;
   if (host.includes('dailymotion.com') || host === 'dai.ly') score += DAILYMOTION_PREFERRED_SOURCE_BONUS;
-  if (host.includes('phimapi.com') || host.includes('kkphim') || lower.includes('.m3u8')) score += 70;
+  if (lower.includes('.m3u8')) score += 70;
   if (host.includes('ssplay')) score += 45;
   if (host.includes('abyssplayer') || host.includes('short.icu')) score += 20;
   if (host.includes('versondd.top')) score -= 1200;
@@ -3789,6 +3840,7 @@ export function getAnonymousServerDisplay(serverName: string, index: number): st
   if (compact.includes('KHOPHIM') || (normalized.includes('KHO') && normalized.includes('PHIM'))) return 'KhoPhim';
   if (compact.includes('BLVIETSUB')) return 'BLVietsub';
   if (compact.includes('OPHIM')) return 'OPhim';
+  if (compact.includes('KKPHIM') || compact.includes('PHIMAPI')) return 'KKPhim';
   const match = serverName.match(/\[(.*?)\]/);
   if (match && match[1]) return `[${match[1]}]`;
   return `Server ${index + 1}`;
@@ -3904,9 +3956,13 @@ export function deduplicateAndLimitServers(episodes: EpisodeServer[]): EpisodeSe
   if (!episodes.length) return [];
 
   // 0. Chỉ giữ server có ít nhất 1 episode phát được
-  const playableOnly = episodes.filter((srv) =>
-    srv.server_data?.some((ep) => hasPlayableUrl(ep))
-  );
+  const playableOnly = episodes
+    .map((srv) => {
+      const originalData = srv.server_data ?? [];
+      const cleanData = originalData.filter((ep) => ep.is_scheduled || hasPlayableUrl(ep));
+      return cleanData.length === originalData.length ? srv : { ...srv, server_data: cleanData };
+    })
+    .filter((srv) => srv.server_data.length > 0);
   if (!playableOnly.length) return [];
 
   // 1. Sắp xếp: vietsub → thuyetminh → longtieng → other, trong mỗi nhóm sort by quality
@@ -4043,8 +4099,8 @@ export async function getMergedEpisodes(
     const aHidden = isHiddenEpisodeSource(a.source);
     const bHidden = isHiddenEpisodeSource(b.source);
     if (aHidden !== bHidden) return aHidden ? -1 : 1;
-    const aApi = String(a.source || '').trim().toLowerCase() === 'ophim';
-    const bApi = String(b.source || '').trim().toLowerCase() === 'ophim';
+    const aApi = ['ophim', 'phimapi', 'kkphim'].includes(String(a.source || '').trim().toLowerCase());
+    const bApi = ['ophim', 'phimapi', 'kkphim'].includes(String(b.source || '').trim().toLowerCase());
     if (aApi !== bApi) return aApi ? 1 : -1;
     return Number(a.episode_number ?? 0) - Number(b.episode_number ?? 0);
   });
@@ -4058,7 +4114,7 @@ export async function getMergedEpisodes(
     const serverName = ep.server_name || 'Nguồn';
     const source = String(ep.source || 'manual');
     const isHidden = isHiddenEpisodeSource(source);
-    const sourceOrigin: 'admin' | 'ophim' = source === 'ophim' ? 'ophim' : 'admin';
+    const sourceOrigin: 'admin' | 'ophim' = ['ophim', 'phimapi', 'kkphim'].includes(source.toLowerCase()) ? 'ophim' : 'admin';
     if (!isHidden && num > maxEpisodeNumber) maxEpisodeNumber = num;
     const epData: EpisodeData = {
       name: ep.episode_name || `Tập ${num}`,

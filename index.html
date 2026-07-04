@@ -76,8 +76,10 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://khophim.org" />
     <meta property="og:site_name" content="KhoPhim" />
+    <meta property="og:image" content="https://khophim.org/logo.svg" />
     <meta property="og:locale" content="vi_VN" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://khophim.org/logo.svg" />
     <meta name="twitter:title" content="KhoPhim - Xem Phim Online Vietsub HD Miễn Phí" />
     <meta name="twitter:description" content="KhoPhim (khophim.org) là trang xem phim online miễn phí, phim Vietsub HD, phim lẻ, phim bộ, phim chiếu rạp, anime, phim thuyết minh và phim mới cập nhật hằng ngày." />
     <script type="application/ld+json">
@@ -110,7 +112,23 @@
         }
       }
     </script>
-    <link rel="icon" type="image/png" href="https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://khophim.org/#organization",
+        "name": "KhoPhim",
+        "url": "https://khophim.org",
+        "logo": "https://khophim.org/logo.svg",
+        "sameAs": [
+          "https://www.tiktok.com/@khophim.org"
+        ]
+      }
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/logo.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover" />
 
     <!-- Theme color -->
@@ -220,7 +238,15 @@
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-M7BRFKFQ" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
-    <div id="root"></div>
+    <div id="root">
+      <main id="kp-boot-fallback" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center">
+        <section style="max-width:460px">
+          <h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang tai</h1>
+          <p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0 0 20px">Neu man hinh dung qua lau, trinh duyet co the dang giu ban cu. Bam nut ben duoi de tai lai phien ban moi.</p>
+          <button type="button" onclick="(function(){try{localStorage.clear();sessionStorage.clear()}catch(e){};if('caches'in window){caches.keys().then(function(names){return Promise.all(names.map(function(n){return caches.delete(n)}))}).finally(function(){location.replace(location.pathname+location.search+(location.search?'&':'?')+'recover='+Date.now())})}else{location.replace(location.pathname+location.search+(location.search?'&':'?')+'recover='+Date.now())}})()" style="background:#dc2626;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer">Tai lai phien ban moi</button>
+        </section>
+      </main>
+    </div>
     <!-- noscript: readable fallback for crawlers and browsers without JavaScript -->
     <noscript>
       <div style="font-family:sans-serif;max-width:900px;margin:0 auto;padding:24px;color:#333">
@@ -310,7 +336,13 @@
         function showRecovery(reason) {
           var root = document.getElementById('root');
           if (!root) return;
-          root.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><section style="max-width:430px"><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang tai lai</h1><p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0 0 20px">Trinh duyet dang giu ban cu nen trang khong hien thi dung. Bam nut ben duoi de mo lai phien ban moi.</p><button onclick="location.replace(location.pathname + location.search + (location.search ? '&' : '?') + 'recover=' + Date.now())" style="background:#dc2626;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer">Mo lai KhoPhim</button><p style="margin-top:12px;color:rgba(255,255,255,.38);font-size:12px">Ma phuc hoi: ' + reason + '</p></section></main>';
+          root.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><section style="max-width:430px"><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang tai lai</h1><p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0 0 20px">Trinh duyet dang giu ban cu nen trang khong hien thi dung. Bam nut ben duoi de mo lai phien ban moi.</p><button id="kp-recovery-button" type="button" style="background:#dc2626;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer">Mo lai KhoPhim</button><p style="margin-top:12px;color:rgba(255,255,255,.38);font-size:12px">Ma phuc hoi: ' + reason + '</p></section></main>';
+          var button = document.getElementById('kp-recovery-button');
+          if (button) {
+            button.onclick = function () {
+              location.replace(location.pathname + location.search + (location.search ? '&' : '?') + 'recover=' + Date.now());
+            };
+          }
         }
         function recover(reason) {
           if (readFlag()) {
@@ -325,17 +357,24 @@
             location.replace(url.toString());
           });
         }
+        var assetScriptFailed = false;
+        var bootError = false;
         window.addEventListener('error', function (event) {
           var target = event && event.target;
           var src = target && target.tagName === 'SCRIPT' ? target.src || '' : '';
-          if (/\/assets\/|\/src\/main\.tsx/i.test(src)) recover('script_load_error');
+          if (/\/assets\/|\/src\/main\.tsx/i.test(src)) assetScriptFailed = true;
+          if (!src) bootError = true;
         }, true);
         setTimeout(function () {
           var root = document.getElementById('root');
           if (!root) return;
+          var mounted = root.getAttribute('data-kp-mounted') === '1';
+          var fallbackVisible = !!document.getElementById('kp-boot-fallback');
           var empty = root.children.length === 0 && root.textContent.trim().length < 20;
-          if (empty) recover('empty_root');
-        }, 15000);
+          if (!mounted && (fallbackVisible || empty || assetScriptFailed || bootError)) {
+            recover(assetScriptFailed ? 'script_load_error' : bootError ? 'boot_error' : 'app_not_mounted');
+          }
+        }, 12000);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

@@ -6,10 +6,22 @@ const BLVIETSUB_PROXY_URL = Deno.env.get('BLVIETSUB_PROXY_URL') || 'https://khop
 const DISCOVERY_URLS = [
   'https://blvietsub.com/',
   'https://blvietsub.com/phim/',
+  'https://blvietsub.com/phim/page/2/',
+  'https://blvietsub.com/phim/page/3/',
+  'https://blvietsub.com/phim/page/4/',
+  'https://blvietsub.com/categories/phim-bo/',
+  'https://blvietsub.com/categories/phim-bo/page/2/',
+  'https://blvietsub.com/categories/phim-bo/page/3/',
+  'https://blvietsub.com/categories/phim-le/',
+  'https://blvietsub.com/categories/phim-doc/',
 ];
 const DISCOVERY_QUERIES = [
   'deep in',
   'nhap hi',
+  'my magic prophecy',
+  'loi de nghi cua cong to vien',
+  'in love',
+  'wedding dream',
   'nhập hí',
 ];
 const PRIORITY_SITEMAP_LIMIT = 40;
@@ -133,6 +145,25 @@ function proxiedBlvietsubUrl(rawUrl: string): string {
   }
 }
 
+function looksLikeBlvietsubResponse(rawUrl: string, text: string): boolean {
+  const body = text.trim();
+  if (!body) return false;
+  const target = rawUrl.toLowerCase();
+  const lower = body.slice(0, 250000).toLowerCase();
+  if (target.includes('ophim-sitemap.xml')) {
+    return lower.includes('<urlset') && lower.includes('blvietsub.com/phim/');
+  }
+  if (target.includes('/xem-phim/')) {
+    return lower.includes('blvietsub') && (
+      lower.includes('streaming-server') ||
+      lower.includes('data-link=') ||
+      lower.includes('ssplay.net') ||
+      lower.includes('dailymotion')
+    );
+  }
+  return lower.includes('blvietsub') && (lower.includes('/phim/') || lower.includes('public-list') || lower.includes('og:site_name'));
+}
+
 async function fetchBlvietsubText(rawUrl: string, timeoutMs: number): Promise<string> {
   const proxiedUrl = proxiedBlvietsubUrl(rawUrl);
   const candidates = Array.from(new Set([proxiedUrl, rawUrl]));
@@ -149,7 +180,8 @@ async function fetchBlvietsubText(rawUrl: string, timeoutMs: number): Promise<st
         continue;
       }
       const text = await response.text();
-      if (text.trim()) return text;
+      if (looksLikeBlvietsubResponse(rawUrl, text)) return text;
+      lastError = new Error(`${candidate} returned non-BLVietsub content`);
     } catch (error) {
       lastError = error;
     }
@@ -617,6 +649,48 @@ function buildMovieIndexes(movies: MovieRow[]) {
   }
 
   return { byPostId, byTitle, bySlug, bySourceUrl };
+}
+
+async function findGlobalMovieForEntry(
+  supabase: SupabaseClient,
+  entry: ParsedEntry,
+): Promise<MovieRow | null> {
+  const selectFields = 'id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year';
+  const titles = uniqueTextValues([entry.title, entry.originName, ...(entry.aliasNames || [])])
+    .filter((title) => title.trim().length >= 3);
+
+  for (const title of titles) {
+    for (const column of ['name', 'origin_name', 'title_vi', 'title_en']) {
+      let query = supabase
+        .from('movies')
+        .select(selectFields)
+        .eq(column, title)
+        .eq('is_published', true)
+        .limit(5);
+      if (entry.year) query = query.eq('year', entry.year);
+      const { data, error } = await query;
+      if (error) continue;
+      const match = ((data || []) as MovieRow[])
+        .sort((a, b) => getMovieCurrentEpisode(b) - getMovieCurrentEpisode(a))[0];
+      if (match?.id) return match;
+    }
+  }
+
+  const keys = titles.map(canonicalDuplicateTitle).filter(Boolean);
+  if (keys.length === 0) return null;
+  const primaryKey = keys[0];
+  const safeTerm = primaryKey.replace(/[%_\\]/g, '\\$&');
+  let query = supabase
+    .from('movies')
+    .select(selectFields)
+    .eq('is_published', true)
+    .or(`name.ilike.%${safeTerm}%,origin_name.ilike.%${safeTerm}%,title_vi.ilike.%${safeTerm}%,title_en.ilike.%${safeTerm}%,slug.ilike.%${safeTerm}%`)
+    .limit(20);
+  if (entry.year) query = query.eq('year', entry.year);
+  const { data } = await query;
+  return ((data || []) as MovieRow[])
+    .filter((movie) => getMovieTitleKeys(movie).some((key) => keys.includes(key)))
+    .sort((a, b) => getMovieCurrentEpisode(b) - getMovieCurrentEpisode(a))[0] || null;
 }
 
 async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<MovieRow[]> {
@@ -1264,10 +1338,13 @@ async function updateMovieMetadata(
   ]).join(' '));
   if (normalizedName) update.normalized_name = normalizedName;
 
-  if (episodeCount !== current || Number(movie.total_episodes || 0) !== episodeCount) {
-    update.episode_current = `${TAP_LABEL} ${episodeCount}`;
-    update.current_episode = episodeCount;
-    update.total_episodes = episodeCount;
+  const existingTotal = Math.max(Number(movie.total_episodes || 0), current);
+  const mergedCurrent = Math.max(current, episodeCount);
+  const mergedTotal = Math.max(existingTotal, episodeCount);
+  if (mergedCurrent !== current || Number(movie.total_episodes || 0) !== mergedTotal) {
+    update.episode_current = `${TAP_LABEL} ${mergedCurrent}`;
+    update.current_episode = mergedCurrent;
+    update.total_episodes = mergedTotal;
   }
 
   if (entry.image) {
@@ -1816,6 +1893,10 @@ serve(async (req) => {
       const movieRows = await fetchExistingQueerMovies(supabase);
       const movieIndexes = buildMovieIndexes(movieRows);
       let movie = findMovieForEntry(entry, movieIndexes);
+      if (!movie) {
+        movie = await findGlobalMovieForEntry(supabase, entry);
+        if (movie) movieRows.push(movie);
+      }
       let created = false;
       if (!movie) {
         movie = await createMovieFromEntry(supabase, entry);
@@ -1875,6 +1956,21 @@ serve(async (req) => {
       try {
         let createdThisMovie = false;
         if (!movie) {
+          movie = await findGlobalMovieForEntry(supabase, entry);
+          if (movie) {
+            movieRows.push(movie);
+            const refreshedIndexes = buildMovieIndexes(movieRows);
+            movieIndexes.byPostId.clear();
+            movieIndexes.byTitle.clear();
+            movieIndexes.bySlug.clear();
+            movieIndexes.bySourceUrl.clear();
+            refreshedIndexes.byPostId.forEach((value, key) => movieIndexes.byPostId.set(key, value));
+            refreshedIndexes.byTitle.forEach((value, key) => movieIndexes.byTitle.set(key, value));
+            refreshedIndexes.bySlug.forEach((value, key) => movieIndexes.bySlug.set(key, value));
+            refreshedIndexes.bySourceUrl.forEach((value, key) => movieIndexes.bySourceUrl.set(key, value));
+          }
+        }
+        if (!movie) {
           movie = await createMovieFromEntry(supabase, entry);
           createdThisMovie = true;
           created += 1;
@@ -1883,9 +1979,11 @@ serve(async (req) => {
           movieIndexes.byPostId.clear();
           movieIndexes.byTitle.clear();
           movieIndexes.bySlug.clear();
+          movieIndexes.bySourceUrl.clear();
           refreshedIndexes.byPostId.forEach((value, key) => movieIndexes.byPostId.set(key, value));
           refreshedIndexes.byTitle.forEach((value, key) => movieIndexes.byTitle.set(key, value));
           refreshedIndexes.bySlug.forEach((value, key) => movieIndexes.bySlug.set(key, value));
+          refreshedIndexes.bySourceUrl.forEach((value, key) => movieIndexes.bySourceUrl.set(key, value));
         } else {
           matched += 1;
         }

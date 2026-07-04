@@ -559,7 +559,7 @@ function renderHtml({ title, description, canonical, h1, body, schema, ogType = 
       '@id': `${SITE_URL}/#organization`,
       name: 'KhoPhim',
       url: SITE_URL,
-      logo: `${SITE_URL}/logo.png`,
+      logo: `${SITE_URL}/logo.svg`,
       sameAs: ['https://www.tiktok.com/@khophim.org'],
     },
   ];
@@ -580,6 +580,10 @@ function renderHtml({ title, description, canonical, h1, body, schema, ogType = 
   <link rel="alternate" hreflang="vi" href="${escapeHtml(canonical)}">
   <link rel="alternate" hreflang="vi-VN" href="${escapeHtml(canonical)}">
   <link rel="alternate" hreflang="x-default" href="${escapeHtml(canonical)}">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="shortcut icon" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/logo.svg">
+  <link rel="manifest" href="/site.webmanifest">
   <meta property="og:type" content="${escapeHtml(ogType)}">
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
@@ -1138,6 +1142,18 @@ export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
   const pathname = url.pathname;
+
+  if (/^\/assets\/.+\.js$/i.test(pathname) && !url.searchParams.has('__kp_asset')) {
+    url.searchParams.set('__kp_asset', '20260704-js-cache-bust');
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: url.toString(),
+        'Cache-Control': 'no-store',
+        ...SECURITY_HEADERS,
+      },
+    });
+  }
 
   if (url.hostname === 'www.khophim.org' || url.hostname === 'mhophim.com' || url.hostname === 'www.mhophim.com' || url.protocol === 'http:') {
     return canonicalRedirect(url, pathname);

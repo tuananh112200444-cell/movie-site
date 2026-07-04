@@ -1,11 +1,29 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { resolve } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
 import AutoImport from "unplugin-auto-import/vite";
 import { compression } from "vite-plugin-compression2";
 
 const base = process.env.BASE_PATH || "/";
 const isPreview = process.env.IS_PREVIEW ? true : false;
+const assetVersion = process.env.BUILD_ASSET_VERSION || new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 12);
+
+function appendAssetVersion() {
+  return {
+    name: "append-asset-version",
+    closeBundle() {
+      const indexPath = resolve(__dirname, "out/index.html");
+      let html = readFileSync(indexPath, "utf8");
+      html = html.replace(
+        /(src|href)="(\/assets\/[^"]+\.(?:js|css))(?:\?v=[^"]*)?"/g,
+        `$1="$2?v=${assetVersion}"`
+      );
+      writeFileSync(indexPath, html);
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   define: {
@@ -17,6 +35,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    appendAssetVersion(),
     // Gzip + Brotli compression giup giam manh dung luong truyen tai.
     compression({
       algorithms: ['gzip', 'brotliCompress'],

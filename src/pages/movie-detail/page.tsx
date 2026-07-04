@@ -31,6 +31,25 @@ function getPlayableSourceUrl(ep: EpisodeData): string {
   return ep.link_m3u8?.trim() || ep.link_embed?.trim() || '';
 }
 
+function resolveOriginalServerIndex(targetServer: EpisodeServer, originalServers: EpisodeServer[]): number {
+  const directIdx = originalServers.findIndex((server) => server === targetServer);
+  if (directIdx >= 0) return directIdx;
+
+  const targetLinks = new Set(
+    (targetServer.server_data ?? [])
+      .flatMap((ep) => [ep.link_m3u8?.trim(), ep.link_embed?.trim()])
+      .filter(Boolean) as string[]
+  );
+
+  return originalServers.findIndex((server) => {
+    if ((server.server_name ?? '') !== (targetServer.server_name ?? '')) return false;
+    return (server.server_data ?? []).some((ep) =>
+      targetLinks.has(ep.link_m3u8?.trim() ?? '') ||
+      targetLinks.has(ep.link_embed?.trim() ?? '')
+    );
+  });
+}
+
 function shouldWarmMoviePlayer(): boolean {
   if (typeof navigator === 'undefined') return false;
   const nav = navigator as Navigator & {
@@ -294,7 +313,9 @@ export default function MovieDetailPage() {
   }, [detail?.movie, filteredEpisodes]);
 
   const hasEpisodes = useMemo(() => {
-    return filteredEpisodes.length > 0 && filteredEpisodes.some((s) => (s.server_data?.length ?? 0) > 0);
+    return filteredEpisodes.length > 0 && filteredEpisodes.some((s) =>
+      (s.server_data ?? []).some((ep) => ep.is_scheduled || hasPlayableUrl(ep))
+    );
   }, [filteredEpisodes]);
 
   useEffect(() => {
@@ -326,8 +347,7 @@ export default function MovieDetailPage() {
 
   const activeFilteredIndex = useMemo(() => {
     if (!detail?.episodes || activeServer < 0) return -1;
-    const activeSrv = detail.episodes[activeServer];
-    return filteredEpisodes.findIndex((fe) => fe === activeSrv);
+    return filteredEpisodes.findIndex((fe) => resolveOriginalServerIndex(fe, detail.episodes) === activeServer);
   }, [detail?.episodes, activeServer, filteredEpisodes]);
 
   const isTrailerOnly = useMemo(() => {
@@ -342,6 +362,17 @@ export default function MovieDetailPage() {
     if (allEps.every((ep) => ep.name?.toLowerCase().includes('trailer'))) return true;
     return false;
   }, [detail]);
+
+  useEffect(() => {
+    if (activeEp || !hasEpisodes || isTrailerOnly || !detail?.episodes) return;
+    const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
+    const best = pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
+    if (!best) return;
+    const originalIdx = resolveOriginalServerIndex(filteredEpisodes[best.serverIndex], detail.episodes);
+    setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
+    setActiveEp(best.episode);
+    setInitialSeekTime(0);
+  }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly]);
 
   const trailerEmbedUrl = useMemo(
     () => (detail?.movie?.trailer_url ? getTrailerEmbedUrl(detail.movie.trailer_url) : null),
@@ -368,7 +399,7 @@ export default function MovieDetailPage() {
   const handleSwitchServer = useCallback((filteredIdx: number) => {
     const targetServer = filteredEpisodes[filteredIdx];
     if (!targetServer || !detail?.episodes) return;
-    const originalIdx = detail.episodes.findIndex((ep) => ep === targetServer);
+    const originalIdx = resolveOriginalServerIndex(targetServer, detail.episodes);
     if (originalIdx < 0) return;
     const newServerData = detail.episodes[originalIdx]?.server_data ?? [];
     setActiveServer(originalIdx);
@@ -378,9 +409,9 @@ export default function MovieDetailPage() {
       const newEp = newServerData.find((ep) => {
         const epNumber = ep.episode_number ?? Number((ep.slug || ep.name || '').match(/\d+/)?.[0] ?? 0);
         const epKey = epNumber > 0 ? `num:${epNumber}` : `text:${ep.slug || ep.name}`;
-        return epKey === activeKey;
+        return epKey === activeKey && hasPlayableUrl(ep);
       }) ?? getLatestPlayableEpisode(newServerData);
-      setActiveEp(newEp);
+      if (newEp) setActiveEp(newEp);
     }
   }, [filteredEpisodes, detail?.episodes, activeEp]);
 
@@ -447,7 +478,7 @@ export default function MovieDetailPage() {
 
   /* ── Loading ── */
   if (loading) return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="min-h-screen kp-cinema-page text-white" data-player-fix="blvietsub-embed-autoplay-20260704">
       <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
       <Navbar />
       <div className="max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">

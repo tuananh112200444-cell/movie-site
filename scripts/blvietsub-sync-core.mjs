@@ -4,10 +4,22 @@ const DEFAULT_FEED_URL = 'https://blvietsub.com/ophim-sitemap.xml';
 const DEFAULT_DISCOVERY_URLS = [
   'https://blvietsub.com/',
   'https://blvietsub.com/phim/',
+  'https://blvietsub.com/phim/page/2/',
+  'https://blvietsub.com/phim/page/3/',
+  'https://blvietsub.com/phim/page/4/',
+  'https://blvietsub.com/categories/phim-bo/',
+  'https://blvietsub.com/categories/phim-bo/page/2/',
+  'https://blvietsub.com/categories/phim-bo/page/3/',
+  'https://blvietsub.com/categories/phim-le/',
+  'https://blvietsub.com/categories/phim-doc/',
 ];
 const DEFAULT_DISCOVERY_QUERIES = [
   'deep in',
   'nhap hi',
+  'my magic prophecy',
+  'loi de nghi cua cong to vien',
+  'in love',
+  'wedding dream',
   'nhập hí',
 ];
 const PRIORITY_SITEMAP_LIMIT = 40;
