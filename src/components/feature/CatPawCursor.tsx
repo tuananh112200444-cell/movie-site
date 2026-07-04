@@ -16,23 +16,11 @@ export default function CatPawCursor() {
     style.textContent = `
       @media (pointer: fine) and (hover: hover) {
         html,
-        body,
-        body * {
+        body {
           cursor: ${PAW_CURSOR} !important;
         }
 
-        a,
-        button,
-        [role="button"],
-        summary,
-        label,
-        select,
-        input[type="button"],
-        input[type="submit"],
-        input[type="reset"],
-        .cursor-pointer,
-        video,
-        iframe {
+        :where(a, button, [role="button"], summary, label, select, input[type="button"], input[type="submit"], input[type="reset"], .cursor-pointer, video, iframe) {
           cursor: ${PAW_POINTER} !important;
         }
 

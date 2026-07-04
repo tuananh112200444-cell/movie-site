@@ -27,7 +27,7 @@ body {
     radial-gradient(circle at 18% 0%, rgba(150, 42, 34, 0.16), transparent 32rem),
     radial-gradient(circle at 86% 8%, rgba(194, 125, 42, 0.10), transparent 34rem),
     linear-gradient(180deg, #101620 0%, #090d14 34%, #07090f 100%);
-  background-attachment: fixed;
+  background-attachment: scroll;
   color: #fff;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -1251,9 +1251,23 @@ body.is-scrolling .card-glow-border::before,
 body.is-scrolling .transition-transform,
 body.is-scrolling .transition-all,
 body.is-scrolling .transition-colors,
-body.is-scrolling .transition-opacity {
+body.is-scrolling .transition-opacity,
+body.is-scrolling img[style*="filter"] {
   transition: none !important;
   animation: none !important;
+  filter: none !important;
+}
+
+body.is-scrolling .backdrop-blur-md,
+body.is-scrolling .backdrop-blur-xl,
+body.is-scrolling .backdrop-blur-sm {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+body.is-scrolling .kp-cinema-page::before,
+body.is-scrolling .kp-cinema-page::after {
+  opacity: 0.12;
 }
 
 /* Tab hidden — freeze all animations to save CPU/GPU */
@@ -1503,7 +1517,7 @@ body.tab-hidden .animate-pulse {
   height: 2px;
   background: linear-gradient(90deg, #ef4444, #f97316, #ef4444);
   z-index: 9999;
-  transition: width 0.1s linear;
+  transition: none;
 }
 
 /* ─── Cinematic badge styles — NO backdrop-filter ─── */

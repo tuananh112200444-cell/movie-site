@@ -91,6 +91,11 @@ interface ParsedOPhimDetail {
   episodes: OPhimServer[];
 }
 
+function isDuplicateDbError(error: { code?: string; message?: string } | null | undefined): boolean {
+  const text = String(error?.message || '').toLowerCase();
+  return error?.code === '23505' || text.includes('duplicate') || text.includes('unique constraint');
+}
+
 function getCorsHeaders(): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -114,10 +119,96 @@ function getMovieTitle(movie: MovieRow): string {
 }
 
 function getMovieCurrentEpisode(movie: MovieRow): number {
+  const parse = (value = ''): number => {
+    const text = String(value || '').toLowerCase();
+    const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+    if (slash) return Number(slash[1] || 0) || 0;
+    const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+    if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
+    const matches = [...text.matchAll(/(\d{1,4})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+    return matches.length ? Math.max(...matches) : 0;
+  };
   return Math.max(
     Number(movie.current_episode || 0),
-    Number(String(movie.episode_current || '').match(/\d+/)?.[0] || 0),
+    parse(movie.episode_current || ''),
   );
+}
+
+async function upsertNormalizedEpisodeSafely(
+  supabase: ReturnType<typeof createClient>,
+  row: Record<string, unknown>,
+): Promise<string | null> {
+  const { error } = await supabase.from('episodes').upsert(row, {
+    onConflict: 'movie_id,server_name,episode_slug',
+    ignoreDuplicates: true,
+  });
+  if (!error) return null;
+  if (!isDuplicateDbError(error)) return error.message;
+
+  const { data: existing, error: lookupError } = await supabase
+    .from('episodes')
+    .select('id')
+    .eq('movie_id', row.movie_id as string)
+    .ilike('server_name', String(row.server_name || '').trim())
+    .ilike('episode_slug', String(row.episode_slug || '').trim())
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) return lookupError.message;
+  if (!existing?.id) return null;
+
+  const { error: updateError } = await supabase
+    .from('episodes')
+    .update({
+      ophim_id: row.ophim_id,
+      server_name: row.server_name,
+      episode_number: row.episode_number,
+      episode_name: row.episode_name,
+      episode_slug: row.episode_slug,
+      link_m3u8: row.link_m3u8,
+      link_embed: row.link_embed,
+      server_data: row.server_data,
+    })
+    .eq('id', existing.id);
+  return updateError?.message || null;
+}
+
+async function upsertStreamSafely(
+  supabase: ReturnType<typeof createClient>,
+  row: Record<string, unknown>,
+): Promise<string | null> {
+  const { error } = await supabase.from('streams').upsert(row, {
+    onConflict: 'movie_id,episode_slug,source,server_name',
+    ignoreDuplicates: true,
+  });
+  if (!error) return null;
+  if (!isDuplicateDbError(error)) return error.message;
+
+  const { data: existing, error: lookupError } = await supabase
+    .from('streams')
+    .select('id')
+    .eq('movie_id', row.movie_id as string)
+    .eq('source', String(row.source || '').trim())
+    .eq('is_active', true)
+    .ilike('server_name', String(row.server_name || '').trim())
+    .ilike('episode_slug', String(row.episode_slug || '').trim())
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) return lookupError.message;
+  if (!existing?.id) return null;
+
+  const { error: updateError } = await supabase
+    .from('streams')
+    .update({
+      ophim_id: row.ophim_id,
+      server_name: row.server_name,
+      episode_slug: row.episode_slug,
+      stream_url: row.stream_url,
+      embed_url: row.embed_url,
+      source: row.source,
+      is_active: row.is_active,
+    })
+    .eq('id', existing.id);
+  return updateError?.message || null;
 }
 
 function isCompletedText(value: unknown): boolean {
@@ -141,9 +232,18 @@ function tokenCount(value = ''): number {
 }
 
 function getEpisodeNumber(ep: OPhimEpisode): number {
-  const fromName = Number(String(ep.name || '').match(/\d+/)?.[0] || 0);
+  const parse = (value = ''): number => {
+    const text = String(value || '').toLowerCase();
+    const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+    if (slash) return Number(slash[1] || 0) || 0;
+    const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+    if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
+    const matches = [...text.matchAll(/(\d{1,4})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+    return matches.length ? Math.max(...matches) : 0;
+  };
+  const fromName = parse(ep.name || '');
   if (fromName) return fromName;
-  return Number(String(ep.slug || '').match(/\d+/)?.[0] || 0);
+  return parse(ep.slug || '');
 }
 
 function parseOPhimDetail(data: OPhimResponse, fallbackSlug: string): ParsedOPhimDetail | null {
@@ -436,7 +536,7 @@ serve(async (req) => {
             }
 
             // ─── INSERT into episodes (normalized per-episode table) ───
-            const { error: epInsertErr } = await supabase.from('episodes').upsert({
+            const epInsertError = await upsertNormalizedEpisodeSafely(supabase, {
               movie_id: movie.id,
               ophim_id: detail.id || detail.slug,
               server_name: serverName,
@@ -446,16 +546,14 @@ serve(async (req) => {
               link_m3u8: ep.link_m3u8 || '',
               link_embed: ep.link_embed || '',
               server_data: ep,
-            }, { onConflict: 'movie_id,episode_slug,source,server_name', ignoreDuplicates: true });
+            });
 
-            if (epInsertErr) {
-              if (!(epInsertErr.code === '23505' || epInsertErr.message.toLowerCase().includes('duplicate'))) {
-                errorDetails.push(`[${movie.slug}] ep ${episodeNumber} episodes: ${epInsertErr.message}`);
-              }
+            if (epInsertError) {
+              errorDetails.push(`[${movie.slug}] ep ${episodeNumber} episodes: ${epInsertError}`);
             }
 
             // ─── INSERT into streams (individual stream per row) ───
-            const { error: streamInsertErr } = await supabase.from('streams').upsert({
+            const streamInsertError = await upsertStreamSafely(supabase, {
               movie_id: movie.id,
               ophim_id: detail.id || detail.slug,
               server_name: serverName,
@@ -464,12 +562,10 @@ serve(async (req) => {
               embed_url: ep.link_embed || '',
               source: 'ophim',
               is_active: true,
-            }, { onConflict: 'movie_id,episode_slug,source,server_name', ignoreDuplicates: true });
+            });
 
-            if (streamInsertErr) {
-              if (!(streamInsertErr.code === '23505' || streamInsertErr.message.toLowerCase().includes('duplicate'))) {
-                errorDetails.push(`[${movie.slug}] ep ${episodeNumber} streams: ${streamInsertErr.message}`);
-              }
+            if (streamInsertError) {
+              errorDetails.push(`[${movie.slug}] ep ${episodeNumber} streams: ${streamInsertError}`);
             }
 
             movieInserted++;
@@ -480,7 +576,13 @@ serve(async (req) => {
         totalSkipped += movieSkipped;
 
         const previousCurrent = getMovieCurrentEpisode(movie as MovieRow);
-        const currentEpisode = Math.max(previousCurrent, maxEpisode);
+        const sourceCurrent = Math.max(getMovieCurrentEpisode({ ...movie, current_episode: 0, episode_current: detail.episodeCurrent } as MovieRow), maxEpisode);
+        const previousLooksAheadOfSource =
+          sourceCurrent > 0 &&
+          previousCurrent > sourceCurrent &&
+          Number(movie.total_episodes || 0) > 0 &&
+          previousCurrent > Math.max(Number(movie.total_episodes || 0), sourceCurrent);
+        const currentEpisode = previousLooksAheadOfSource ? sourceCurrent : Math.max(previousCurrent, sourceCurrent);
         const movieUpdate: Record<string, unknown> = {
           ophim_id: detail.id || movie.ophim_id || '',
           ophim_slug: detail.slug || movie.ophim_slug || '',
@@ -488,7 +590,7 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         };
 
-        if (currentEpisode > previousCurrent) {
+        if (currentEpisode !== previousCurrent) {
           movieUpdate.episode_current = `Tập ${currentEpisode}`;
           movieUpdate.current_episode = currentEpisode;
           if (!movie.total_episodes || Number(movie.total_episodes) < currentEpisode) {

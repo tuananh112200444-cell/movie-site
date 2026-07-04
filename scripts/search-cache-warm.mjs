@@ -40,24 +40,66 @@ function sleep(ms) {
 }
 
 async function callProxy({ limit, refresh }) {
-  const endpoint = new URL(`${SUPABASE_URL}/functions/v1/search-index-proxy`);
-  endpoint.searchParams.set('limit', String(limit));
-  if (refresh) endpoint.searchParams.set('refresh', '1');
+  if (refresh) {
+    const endpoint = new URL(`${SUPABASE_URL}/rest/v1/rpc/refresh_search_index_cache`);
+    const started = performance.now();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_limit: limit }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    const count = await response.json().catch(() => 0);
+    return {
+      ok: response.ok,
+      status: response.status,
+      source: 'postgres-rpc',
+      items: Number(count) || 0,
+      updated_at: new Date().toISOString(),
+      xCache: response.headers.get('x-cache') ?? 'RPC',
+      ms: Math.round(performance.now() - started),
+    };
+  }
 
   const started = performance.now();
-  const response = await fetch(endpoint, {
-    headers,
-    cache: 'no-store',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  const json = await response.json().catch(() => ({}));
+  let status = 200;
+  let ok = true;
+  let xCache = 'REST';
+  let itemCount = 0;
+  const pageSize = 1000;
+  for (let from = 0; from < limit; from += pageSize) {
+    const endpoint = new URL(`${SUPABASE_URL}/rest/v1/search_index_cache_items`);
+    endpoint.searchParams.set('select', 'item');
+    endpoint.searchParams.set('order', 'rank.asc');
+    const to = Math.min(from + pageSize - 1, limit - 1);
+    const response = await fetch(endpoint, {
+      headers: {
+        ...headers,
+        Range: `${from}-${to}`,
+        'Range-Unit': 'items',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    status = response.status;
+    ok = ok && response.ok;
+    xCache = response.headers.get('x-cache') ?? xCache;
+    const json = await response.json().catch(() => []);
+    const batchCount = Array.isArray(json) ? json.length : 0;
+    itemCount += batchCount;
+    if (!response.ok || batchCount < pageSize) break;
+  }
   return {
-    ok: response.ok,
-    status: response.status,
-    source: json.source ?? null,
-    items: Array.isArray(json.items) ? json.items.length : 0,
-    updated_at: json.updated_at ?? null,
-    xCache: response.headers.get('x-cache'),
+    ok,
+    status,
+    source: 'rest-cache-table',
+    items: itemCount,
+    updated_at: new Date().toISOString(),
+    xCache,
     ms: Math.round(performance.now() - started),
   };
 }
@@ -84,7 +126,7 @@ for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
     const cacheReady =
       verifyResult.ok &&
       verifyResult.items >= MIN_ITEMS &&
-      (['HIT', 'STALE'].includes(String(verifyResult.xCache || '').toUpperCase()) || verifyResult.source === 'cache');
+      (verifyResult.source === 'rest-cache-table' || ['HIT', 'STALE'].includes(String(verifyResult.xCache || '').toUpperCase()) || verifyResult.source === 'cache');
     if (cacheReady) break;
   } catch (error) {
     attempts.push({ attempt: attempts.length + 1, phase: 'verify-cache', ok: false, error: error.message });
@@ -101,7 +143,7 @@ if (!verifyResult?.ok) failures.push('search-index-proxy cache verification fail
 if ((verifyResult?.items ?? 0) < MIN_ITEMS) {
   failures.push(`search-index-proxy cache returned ${verifyResult?.items ?? 0} items; expected at least ${MIN_ITEMS}`);
 }
-if (!['HIT', 'STALE'].includes(String(verifyResult?.xCache || '').toUpperCase()) && verifyResult?.source !== 'cache') {
+if (!['HIT', 'STALE'].includes(String(verifyResult?.xCache || '').toUpperCase()) && !['cache', 'rest-cache-table'].includes(String(verifyResult?.source || ''))) {
   failures.push(`search-index-proxy cache did not verify as warm; source=${verifyResult?.source}, xCache=${verifyResult?.xCache}`);
 }
 

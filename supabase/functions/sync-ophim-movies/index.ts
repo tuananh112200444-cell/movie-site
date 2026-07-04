@@ -229,8 +229,12 @@ function recordSyncError(stats: SyncStats, message: string): void {
 function episodeNumber(ep: OPhimEpisode): number {
   const text = `${ep.name || ''} ${ep.slug || ''}`.toLowerCase();
   if (text.includes('full')) return 1;
-  const value = Number(text.match(/\d+/)?.[0] || 0);
-  return Number.isFinite(value) ? value : 0;
+  const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+  if (slash) return Number(slash[1] || 0) || 0;
+  const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
+  const matches = [...text.matchAll(/(\d{1,4})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+  return matches.length ? Math.max(...matches) : 0;
 }
 
 function hasPlayableEpisodeLink(ep: OPhimEpisode): boolean {
@@ -242,6 +246,8 @@ function firstEpisodeNumber(value = ''): number {
   if (text.includes('full')) return 1;
   const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
   if (slash) return Number(slash[1] || 0) || 0;
+  const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
   const valueNumber = Number(text.match(/\d{1,4}/)?.[0] || 0);
   return Number.isFinite(valueNumber) ? valueNumber : 0;
 }
@@ -532,7 +538,13 @@ function updatePayloadForExisting(existing: Record<string, unknown>, incoming: R
     totalEpisodeNumber(String(incoming.episode_total || '')),
     totalEpisodeNumber(String(incoming.episode_current || '')),
   );
-  const mergedCurrent = Math.max(current, incomingCurrent) || null;
+  const existingLooksAheadOfSource =
+    incomingCurrent > 0 &&
+    current > incomingCurrent &&
+    existingTotal > 0 &&
+    incomingTotal > 0 &&
+    current > Math.max(existingTotal, incomingTotal);
+  const mergedCurrent = (existingLooksAheadOfSource ? incomingCurrent : Math.max(current, incomingCurrent)) || null;
   const mergedTotal = Math.max(existingTotal, incomingTotal, Number(mergedCurrent || 0)) || null;
 
   if (!managed) {

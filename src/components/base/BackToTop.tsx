@@ -4,9 +4,26 @@ export default function BackToTop() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    const handle = () => setShow(window.scrollY > 400);
+    let shown = window.scrollY > 400;
+    let rafId: number | null = null;
+    setShow(shown);
+
+    const handle = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        const nextShown = window.scrollY > 400;
+        if (nextShown !== shown) {
+          shown = nextShown;
+          setShow(nextShown);
+        }
+        rafId = null;
+      });
+    };
     window.addEventListener('scroll', handle, { passive: true });
-    return () => window.removeEventListener('scroll', handle);
+    return () => {
+      window.removeEventListener('scroll', handle);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, []);
 
   if (!show) return null;

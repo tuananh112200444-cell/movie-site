@@ -75,6 +75,7 @@ function saveScrollPosition(key: string, y: number) {
 function AnimatedContent() {
   const location = useLocation();
   const prevPathRef = useRef(location.pathname);
+  const latestScrollYRef = useRef(0);
 
   useEffect(() => {
     const prevPath = prevPathRef.current;
@@ -96,6 +97,7 @@ function AnimatedContent() {
   useEffect(() => {
     let ticking = false;
     let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
     const handleScroll = () => {
       document.body.classList.add('is-scrolling');
@@ -104,9 +106,14 @@ function AnimatedContent() {
         document.body.classList.remove('is-scrolling');
       }, 150);
 
+      latestScrollYRef.current = window.scrollY;
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        saveScrollPosition(location.pathname, latestScrollYRef.current);
+      }, 350);
+
       if (!ticking) {
         requestAnimationFrame(() => {
-          saveScrollPosition(location.pathname, window.scrollY);
           ticking = false;
         });
         ticking = true;
@@ -116,6 +123,10 @@ function AnimatedContent() {
     return () => {
       window.removeEventListener("scroll", handleScroll);
       if (scrollTimer) clearTimeout(scrollTimer);
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveScrollPosition(location.pathname, latestScrollYRef.current);
+      }
       document.body.classList.remove('is-scrolling');
     };
   }, [location.pathname]);

@@ -27,6 +27,18 @@ const EMPTY_SECTIONS: QueerSections = {
 };
 
 const MOVIES_PER_PAGE = 24;
+const QUEER_FALLBACK_URL = '/queer-fallback.json?v=202607041605';
+
+async function loadStaticQueerFallback(signal?: AbortSignal): Promise<MovieItem[]> {
+  try {
+    const res = await fetch(QUEER_FALLBACK_URL, { cache: 'force-cache', signal });
+    if (!res.ok) return [];
+    const data = await res.json() as { sections?: { newUpdates?: MovieItem[] } };
+    return (data.sections?.newUpdates ?? []).filter((movie) => Boolean(movie.slug && movie.name));
+  } catch {
+    return [];
+  }
+}
 
 function getMovieHref(movie: MovieItem): string {
   const href = movieDetailUrl(movie.slug);
@@ -247,9 +259,25 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
 
   useEffect(() => {
     const controller = new AbortController();
+    let resolved = false;
     setLoading(true);
+
+    const fallbackTimer = window.setTimeout(() => {
+      if (resolved || controller.signal.aborted) return;
+      loadStaticQueerFallback(controller.signal).then((fallbackMovies) => {
+        if (resolved || controller.signal.aborted || fallbackMovies.length === 0) return;
+        setSections({
+          featured: sortNewestFirst(fallbackMovies),
+          newUpdates: sortNewestFirst(fallbackMovies),
+          byYear: {},
+        });
+        setLoading(false);
+      });
+    }, 1200);
+
     fetchQueerUniverseSections({ signal: controller.signal, limit: 1000, timeoutMs: 9000 })
       .then((data) => {
+        resolved = true;
         const newUpdates = sortNewestFirst(data.newUpdates);
         setSections({
           featured: sortNewestFirst(data.featured.length ? data.featured : newUpdates),
@@ -258,9 +286,13 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
         });
       })
       .finally(() => {
+        window.clearTimeout(fallbackTimer);
         if (!controller.signal.aborted) setLoading(false);
       });
-    return () => controller.abort();
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      controller.abort();
+    };
   }, []);
 
   const allMovies = useMemo(() => sortNewestFirst(sections.newUpdates), [sections.newUpdates]);

@@ -301,6 +301,10 @@ function applyMovieOverride(item: Record<string, unknown>, override: Record<stri
 function extractEpisodeNumber(value: unknown): number {
   const text = String(value ?? '').toLowerCase();
   if (!text || /\b(trailer|teaser)\b/.test(text)) return 0;
+  const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+  if (slash) return Number(slash[1] || 0) || 0;
+  const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
   const matches = [...text.matchAll(/(\d{1,5})/g)]
     .map((match) => Number(match[1]))
     .filter(Number.isFinite);
@@ -825,7 +829,7 @@ serve(async (req) => {
     if (!updateError && (!updatedRows || updatedRows.length === 0)) {
       await supabase
         .from('home_page_cache')
-        .insert({ id: CACHE_KEY, ...payload })
+        .upsert({ id: CACHE_KEY, ...payload }, { onConflict: 'id' })
         .abortSignal(timeoutSignal(1000));
     }
   } catch {

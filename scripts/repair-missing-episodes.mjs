@@ -45,6 +45,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 function episodeNumberFromText(value) {
   if (value == null) return 0;
   const text = String(value).toLowerCase();
+  const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+  if (slash) return Number(slash[1] || 0) || 0;
+  const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
   if (/\b(full|hoan tat|hoàn tất|complete|completed)\b/.test(text)) {
     const matches = [...text.matchAll(/(\d{1,5})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
     return matches.length ? Math.max(...matches) : 0;
