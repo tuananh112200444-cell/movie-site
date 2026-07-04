@@ -349,122 +349,13 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
 }
 
 const ALL_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
-const HOME_CACHE_KEY = 'kp_home_proxy_v5';
-const LEGACY_HOME_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', HOME_CACHE_KEY];
+const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
-const HOME_CACHE_TTL = 5 * 60 * 1000;
-const HOME_REFRESH_ON_RETURN_MS = 10 * 60 * 1000;
+const HOME_REFRESH_ON_RETURN_MS = 60 * 1000;
 const EMPTY_MOVIES: MovieItem[] = [];
 
-const HOME_SEED_TRENDING: MovieItem[] = [
-  {
-    _id: 'seed-mother-mary',
-    name: 'Mother Mary',
-    slug: 'mother-mary-hao-quang-don-doc',
-    origin_name: 'Mother Mary',
-    type: 'single',
-    thumb_url: 'mother-mary-hao-quang-don-doc-thumb-1779333810498.jpg',
-    poster_url: 'mother-mary-hao-quang-don-doc-poster-1779333811679.jpg',
-    sub_docquyen: false,
-    chieurap: false,
-    time: '',
-    episode_current: 'Full',
-    quality: 'HD',
-    lang: 'Vietsub',
-    year: 2026,
-    category: [],
-    country: [],
-    source_site: 'ophim',
-    source_name: 'OPhim',
-  },
-  {
-    _id: 'seed-vu-lam-linh',
-    name: 'Zhan Zhao Adventures',
-    slug: 'vu-lam-linh',
-    origin_name: 'Zhan Zhao Adventures',
-    type: 'series',
-    thumb_url: 'vu-lam-linh-thumb.jpg',
-    poster_url: 'vu-lam-linh-poster.jpg',
-    sub_docquyen: false,
-    chieurap: false,
-    time: '',
-    episode_current: 'Tap 19',
-    quality: 'HD',
-    lang: 'Vietsub',
-    year: 2026,
-    category: [],
-    country: [],
-    source_site: 'ophim',
-    source_name: 'OPhim',
-  },
-  {
-    _id: 'seed-sold-out',
-    name: 'Sold Out on You',
-    slug: 'hom-nay-lai-ban-het',
-    origin_name: 'Sold Out on You',
-    type: 'series',
-    thumb_url: 'hom-nay-lai-ban-het-thumb.jpg',
-    poster_url: 'hom-nay-lai-ban-het-poster.jpg',
-    sub_docquyen: false,
-    chieurap: false,
-    time: '',
-    episode_current: 'Tap 10',
-    quality: 'HD',
-    lang: 'Vietsub',
-    year: 2026,
-    category: [],
-    country: [],
-    source_site: 'ophim',
-    source_name: 'OPhim',
-  },
-  {
-    _id: 'seed-the-heir',
-    name: 'The Heir',
-    slug: 'gia-nghiep',
-    origin_name: 'The Heir',
-    type: 'series',
-    thumb_url: 'gia-nghiep-thumb.jpg',
-    poster_url: 'gia-nghiep-poster.jpg',
-    sub_docquyen: false,
-    chieurap: false,
-    time: '',
-    episode_current: 'Tap 12',
-    quality: 'HD',
-    lang: 'Vietsub',
-    year: 2026,
-    category: [],
-    country: [],
-    source_site: 'ophim',
-    source_name: 'OPhim',
-  },
-  {
-    _id: 'seed-citadel',
-    name: 'Citadel',
-    slug: 'citadel-phan-2',
-    origin_name: 'Citadel',
-    type: 'series',
-    thumb_url: 'citadel-phan-2-thumb.jpg',
-    poster_url: 'citadel-phan-2-poster.jpg',
-    sub_docquyen: false,
-    chieurap: false,
-    time: '',
-    episode_current: 'Full',
-    quality: 'HD',
-    lang: 'Vietsub',
-    year: 2026,
-    category: [],
-    country: [],
-    source_site: 'ophim',
-    source_name: 'OPhim',
-  },
-];
-
 function normalizeHomeSections(sections?: Record<string, MovieItem[]>): Record<string, MovieItem[]> {
-  const normalized = sections ? { ...sections } : {};
-  if (!Array.isArray(normalized.trending) || normalized.trending.length === 0) {
-    normalized.trending = HOME_SEED_TRENDING;
-  }
-  return normalized;
+  return sections ? { ...sections } : {};
 }
 
 function mergeHomeSections(
@@ -476,36 +367,19 @@ function mergeHomeSections(
 
   for (const key of keys) {
     const nextItems = incoming[key] ?? [];
-    const prevItems = previous[key] ?? [];
-    merged[key] = nextItems.length > 0 ? nextItems : prevItems;
+    merged[key] = nextItems;
   }
 
   return normalizeHomeSections(merged);
 }
 
-function readCachedHomeData(): { sections: Record<string, MovieItem[]>; isSeed: boolean } {
+function clearHomeStorageCache(): void {
   try {
-    for (const key of LEGACY_HOME_CACHE_KEYS) {
+    for (const key of HOME_STORAGE_CACHE_KEYS) {
       localStorage.removeItem(key);
-      if (key !== HOME_CACHE_KEY) sessionStorage.removeItem(key);
-    }
-    const raw = sessionStorage.getItem(HOME_CACHE_KEY);
-    if (!raw) return { sections: { trending: HOME_SEED_TRENDING }, isSeed: true };
-    const entry = JSON.parse(raw) as { sections?: Record<string, MovieItem[]>; ts?: number };
-    if (!entry.sections || !entry.ts || Date.now() - entry.ts > HOME_CACHE_TTL) {
-      sessionStorage.removeItem(HOME_CACHE_KEY);
-      return { sections: { trending: HOME_SEED_TRENDING }, isSeed: true };
-    }
-    if (Object.values(entry.sections).some((arr) => arr.length > 0)) {
-      return { sections: normalizeHomeSections(entry.sections), isSeed: false };
+      sessionStorage.removeItem(key);
     }
   } catch { /* ignore */ }
-  return { sections: { trending: HOME_SEED_TRENDING }, isSeed: true };
-}
-
-function writeCachedHomeData(sections: Record<string, MovieItem[]>): void {
-  const payload = JSON.stringify({ sections, ts: Date.now() });
-  try { sessionStorage.setItem(HOME_CACHE_KEY, payload); } catch { /* quota */ }
 }
 export default function Home() {
   const location = useLocation();
@@ -518,9 +392,8 @@ export default function Home() {
     navigate(nextPortal === 'queer' ? QUEER_PORTAL_PATH : '/');
   };
   // ── SINGLE REQUEST: all homepage data from home-proxy ──
-  const [initialHome] = useState(readCachedHomeData);
-  const [homeData, setHomeData] = useState<Record<string, MovieItem[]>>(initialHome.sections);
-  const [homeLoading, setHomeLoading] = useState(initialHome.isSeed);
+  const [homeData, setHomeData] = useState<Record<string, MovieItem[]>>({});
+  const [homeLoading, setHomeLoading] = useState(true);
   const [homeError, setHomeError] = useState(false);
   const homeDataRef = useRef(homeData);
   const lastHomeFetchRef = useRef(0);
@@ -531,6 +404,8 @@ export default function Home() {
 
   // ── Fetch home data ONCE via home-proxy ──
   useEffect(() => {
+    clearHomeStorageCache();
+
     if (activePortal === 'queer') {
       setHomeLoading(false);
       return;
@@ -553,7 +428,7 @@ export default function Home() {
             const nextSections = mergeHomeSections(homeDataRef.current, res.sections);
             setHomeData(nextSections);
             setHomeError(false);
-            writeCachedHomeData(nextSections);
+            clearHomeStorageCache();
           }
         })
         .catch((err) => {
@@ -565,7 +440,7 @@ export default function Home() {
         });
     };
 
-    fetchHome(initialHome.isSeed);
+    fetchHome(true);
 
     const refreshIfStale = () => {
       if (document.visibilityState !== 'visible') return;

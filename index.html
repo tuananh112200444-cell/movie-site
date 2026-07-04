@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <script>
       (function () {
-        var RESET_KEY = 'kp_emergency_cache_reset_20260703_blank_page_fix_v2';
+        var RESET_KEY = 'kp_emergency_cache_reset_20260704_fresh_home_v1';
         function hasReset() {
           try { return localStorage.getItem(RESET_KEY) === '1'; }
           catch (e) { return window.name.indexOf(RESET_KEY) !== -1; }
@@ -16,12 +16,12 @@
         if (hasReset()) return;
         markReset();
         try {
-          ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5', 'kp_supabase_search_index_v3'].forEach(function (key) {
+          ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5', 'kp_cinema_v1', 'kp_trending_v5', 'kp_new_movies_v5', 'kp_supabase_search_index_v3', 'kp_supabase_search_index_v4'].forEach(function (key) {
             localStorage.removeItem(key);
             sessionStorage.removeItem(key);
           });
           Object.keys(sessionStorage).forEach(function (key) {
-            if (key.indexOf('detail_') === 0 || key.indexOf('search_v') === 0 || key.indexOf('kp_suggest_') === 0) {
+            if (key.indexOf('detail_') === 0 || key.indexOf('search_v') === 0 || key.indexOf('kp_suggest_') === 0 || key.indexOf('kp_home_proxy') === 0 || key.indexOf('kp_cinema') === 0 || key.indexOf('kp_trending') === 0 || key.indexOf('kp_new_movies') === 0) {
               sessionStorage.removeItem(key);
             }
           });
@@ -153,56 +153,6 @@
     <link rel="dns-prefetch" href="https://www.googletagmanager.com">
 
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;900&display=swap">
-
-    <!-- ========================================================== -->
-    <!-- CRITICAL PRE-REACT SCRIPT: preload hero images before React mounts (from home-proxy cache only) -->
-    <!-- ========================================================== -->
-    <script>
-      (function() {
-        'use strict';
-        var CACHE_KEY = 'kp_home_proxy_v5';
-        var IMG_BASE = 'https://img.ophim.live/uploads/movies/';
-        function getImgUrl(p) { return (!p || p.indexOf('http') === 0) ? (p || '') : IMG_BASE + p; }
-        function injectPreload(url) {
-          if (!url || document.querySelector('link[rel="preload"][href="' + url + '"]')) return;
-          var l = document.createElement('link');
-          l.rel = 'preload'; l.as = 'image'; l.fetchPriority = 'high'; l.href = url;
-          document.head.appendChild(l);
-        }
-        function forceLoad(url) {
-          if (!url) return;
-          var i = new Image(); i.decoding = 'async'; i.loading = 'eager'; i.src = url;
-          i.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
-          function attach() {
-            if (!document.body) return;
-            document.body.appendChild(i);
-          }
-          if (document.body) attach();
-          else window.addEventListener('DOMContentLoaded', attach, { once: true });
-          setTimeout(function(){ if (i.parentNode) i.parentNode.removeChild(i); }, 30000);
-        }
-        try {
-          var raw = sessionStorage.getItem(CACHE_KEY);
-          if (raw) {
-            var data = JSON.parse(raw);
-            var sections = data && data.sections ? data.sections : data;
-            var trending = (sections && sections.trending) ? sections.trending : [];
-            var count = 0;
-            for (var i = 0; i < trending.length && count < 1; i++) {
-              var it = trending[i];
-              var ep = String(it.episode_current || '').toLowerCase().trim();
-              if (ep === 'trailer') continue;
-              count++;
-              if (it.thumb_url) {
-                var heroSrc = getImgUrl(it.thumb_url);
-                injectPreload(heroSrc);
-                forceLoad(heroSrc);
-              }
-            }
-          }
-        } catch(e) {}
-      })();
-    </script>
 
     <!-- Icon CSS: defer load -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css" media="print" onload="this.media='all'">
