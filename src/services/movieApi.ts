@@ -652,6 +652,17 @@ export function getImageFallbacks(primaryPath?: string, altPath?: string): strin
   return urls;
 }
 
+export function getOptimizedImageFallbacks(
+  primaryPath?: string,
+  altPath?: string,
+  width = 620,
+  quality = 88,
+): string[] {
+  return getImageFallbacks(primaryPath, altPath).map((url) =>
+    url === FALLBACK_IMG ? url : getOptimizedImageUrl(url, width, quality)
+  );
+}
+
 export function getPosterUrl(path: string): string {
   return getOptimizedImageUrl(path, 620, 88);
 }
