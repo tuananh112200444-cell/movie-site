@@ -16,7 +16,7 @@
         if (hasReset()) return;
         markReset();
         try {
-          ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_supabase_search_index_v3'].forEach(function (key) {
+          ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5', 'kp_supabase_search_index_v3'].forEach(function (key) {
             localStorage.removeItem(key);
             sessionStorage.removeItem(key);
           });
@@ -160,7 +160,7 @@
     <script>
       (function() {
         'use strict';
-        var CACHE_KEY = 'kp_home_proxy_v4';
+        var CACHE_KEY = 'kp_home_proxy_v5';
         var IMG_BASE = 'https://img.ophim.live/uploads/movies/';
         function getImgUrl(p) { return (!p || p.indexOf('http') === 0) ? (p || '') : IMG_BASE + p; }
         function injectPreload(url) {
