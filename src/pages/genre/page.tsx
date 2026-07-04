@@ -6,6 +6,7 @@ import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByCategory, searchMovies } from '@/services/movieApi';
+import { setSmartSessionCache } from '@/utils/smartCache';
 import type { MovieItem } from '@/types/movie';
 import Pagination from '@/components/base/Pagination';
 
@@ -400,7 +401,7 @@ function getPoolCache(slug: string, sort: string): MovieItem[] | null {
 function setPoolCache(slug: string, sort: string, data: MovieItem[]): void {
   try {
     const key = getPoolCacheKey(slug, sort);
-    sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+    setSmartSessionCache(key, JSON.stringify({ data, ts: Date.now() }));
   } catch { /* quota */ }
 }
 

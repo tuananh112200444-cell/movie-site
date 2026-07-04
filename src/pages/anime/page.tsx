@@ -8,6 +8,7 @@ import MovieCard from '@/components/base/MovieCard';
 import Pagination from '@/components/base/Pagination';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByType } from '@/services/movieApi';
+import { setSmartSessionCache } from '@/utils/smartCache';
 import type { MovieItem } from '@/types/movie';
 
 const ANIME_BG = 'https://readdy.ai/api/search-image?query=dark%20anime%20cityscape%20neon%20purple%20pink%20lights%20night%20cyberpunk%20aesthetic%20cherry%20blossom%20petals%20falling%20dramatic%20cinematic%20atmosphere%20stars%20magical%20glowing%20particles%20fantasy%20japanese%20style%20wide%20landscape&width=1400&height=500&seq=anime-hero-bg-v1&orientation=landscape';
@@ -108,7 +109,7 @@ function getPoolCache(slug: string, sort: string, season: string): MovieItem[] |
 function setPoolCache(slug: string, sort: string, season: string, data: MovieItem[]): void {
   try {
     const key = getPoolCacheKey(slug, sort, season);
-    sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+    setSmartSessionCache(key, JSON.stringify({ data, ts: Date.now() }));
   } catch { /* quota */ }
 }
 

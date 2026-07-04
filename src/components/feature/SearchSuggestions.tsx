@@ -5,6 +5,7 @@ import { fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMoviesInSupabase 
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
 import { movieDetailUrl } from '../../utils/slugEncoder';
+import { setSmartSessionCache } from '../../utils/smartCache';
 
 interface Props {
   query: string;
@@ -224,7 +225,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
         setHighlightIndex(-1);
         try {
           if (nextItems.length > 0) {
-            sessionStorage.setItem(cacheKey, JSON.stringify({ items: nextItems, ts: Date.now() }));
+            setSmartSessionCache(cacheKey, JSON.stringify({ items: nextItems, ts: Date.now() }));
           }
         } catch { /* quota */ }
       }

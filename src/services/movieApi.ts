@@ -2,6 +2,7 @@ import type { MovieListResponse, MovieDetailResponse, EpisodeServer, EpisodeData
 import { preloadBatch } from '../utils/imagePreloader';
 import { mergeMoviesUnique, sortMoviesForSearch } from '../utils/searchRanking';
 import { normalizeSearchText } from '../utils/searchHelper';
+import { setSmartSessionCache } from '../utils/smartCache';
 import { supabase } from '@/lib/supabase';
 
 declare const __IS_PREVIEW__: boolean;
@@ -375,7 +376,7 @@ function getSSCache<T>(key: string, ttl: number): T | null {
 }
 
 function setSSCache<T>(key: string, data: T): void {
-  try { sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch { /* quota exceeded */ }
+  try { setSmartSessionCache(key, JSON.stringify({ data, ts: Date.now() })); } catch { /* quota exceeded */ }
 }
 
 /* ════════════════════════════════════════════
@@ -1771,7 +1772,7 @@ const supabaseSearchIndexMemory = new Map<string, { items: MovieItem[]; ts: numb
 function writeSearchIndexCacheLater(cacheKey: string, items: MovieItem[]): void {
   const write = () => {
     try {
-      sessionStorage.setItem(cacheKey, JSON.stringify({ items, ts: Date.now() }));
+      setSmartSessionCache(cacheKey, JSON.stringify({ items, ts: Date.now() }));
     } catch { /* quota */ }
   };
 

@@ -5,6 +5,7 @@ import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByCategory, fetchMoviesByType } from '@/services/movieApi';
+import { setSmartSessionCache } from '@/utils/smartCache';
 import type { Movie } from '@/types/movie';
 import CountryHeroBanner from './components/CountryHeroBanner';
 import CountrySEOContent from './components/CountrySEOContent';
@@ -340,7 +341,7 @@ function getPoolCache(country: string): Movie[] | null {
 
 function setPoolCache(country: string, data: Movie[]): void {
   try {
-    sessionStorage.setItem(getPoolCacheKey(country), JSON.stringify({ data, ts: Date.now() }));
+    setSmartSessionCache(getPoolCacheKey(country), JSON.stringify({ data, ts: Date.now() }));
   } catch { /* quota */ }
 }
 

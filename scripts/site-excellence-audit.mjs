@@ -243,9 +243,14 @@ async function assertHeadersClean() {
   ]) {
     if (!headers.includes(needle)) failures.push(`public/_headers is missing: ${needle}`);
   }
-  for (const route of ['/', '/phim/*', '/search*']) {
-    const block = `${route}\n  Cache-Control: no-cache, must-revalidate, max-age=0`;
-    if (!headers.includes(block)) failures.push(`public/_headers should keep ${route} fresh without no-store.`);
+  const smartCacheBlocks = new Map([
+    ['/', 'Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600'],
+    ['/phim/*', 'Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600'],
+    ['/search*', 'Cache-Control: public, max-age=30, s-maxage=120, stale-while-revalidate=300'],
+  ]);
+  for (const [route, cacheHeader] of smartCacheBlocks) {
+    const block = `${route}\n  ${cacheHeader}`;
+    if (!headers.includes(block)) failures.push(`public/_headers should keep ${route} on smart short cache.`);
   }
   for (const excludedRoute of ['/assets/*', '/images/*', '/banners/*', '/robots.txt', '/llms.txt']) {
     if (!routes.includes(excludedRoute)) failures.push(`public/_routes.json should exclude ${excludedRoute} from Pages Functions.`);

@@ -5,8 +5,11 @@ import './index.css'
 import App from './App.tsx'
 import { reportWebVitals } from './utils/performance'
 import { reportClientIssue } from './services/playerDiagnostics'
+import { pruneSmartClientCaches } from './utils/smartCache'
 
 const rootElement = document.getElementById('root');
+
+pruneSmartClientCaches({ force: true });
 
 if (!rootElement) {
   document.body.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><div><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang cap nhat</h1><p style="color:rgba(255,255,255,.72);margin:0 0 20px">Vui long tai lai trang de nhan phien ban moi nhat.</p><button onclick="location.reload()" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer">Tai lai</button></div></main>';
@@ -125,7 +128,10 @@ if (typeof document !== 'undefined') {
       return;
     }
     if (hiddenAt > 0 && Date.now() - hiddenAt > STALE_TAB_RELOAD_MS) {
+      pruneSmartClientCaches({ force: true });
       reloadOnceForFreshShell('visible_after_stale');
+    } else {
+      pruneSmartClientCaches();
     }
     hiddenAt = 0;
   });

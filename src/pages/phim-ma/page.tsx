@@ -8,6 +8,7 @@ import MovieCard from '@/components/base/MovieCard';
 import Pagination from '@/components/base/Pagination';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByCategory } from '@/services/movieApi';
+import { setSmartSessionCache } from '@/utils/smartCache';
 import type { MovieItem } from '@/types/movie';
 
 const HERO_BG = 'https://readdy.ai/api/search-image?query=dark%20horror%20cinematic%20scene%20abandoned%20gothic%20building%20fog%20mist%20blood%20red%20moon%20eerie%20shadows%20creepy%20atmosphere%20dark%20blue%20black%20tones%20dramatic%20lighting%20thriller%20suspense%20film%20aesthetic%20wide%20landscape&width=1400&height=500&seq=phim-ma-hero-bg-v1&orientation=landscape';
@@ -103,7 +104,7 @@ function getPoolCache(slug: string, sort: string, country: string): MovieItem[] 
 function setPoolCache(slug: string, sort: string, country: string, data: MovieItem[]): void {
   try {
     const key = getPoolCacheKey(slug, sort, country);
-    sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+    setSmartSessionCache(key, JSON.stringify({ data, ts: Date.now() }));
   } catch { /* quota */ }
 }
 
