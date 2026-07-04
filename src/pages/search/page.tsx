@@ -15,6 +15,7 @@ import {
   sortMoviesForSearch,
   type SearchSortMode,
 } from '@/utils/searchRanking';
+import { setSmartSessionCache } from '@/utils/smartCache';
 
 type ViewMode = 'grid' | 'list';
 type SortMode = SearchSortMode;
@@ -420,7 +421,7 @@ export default function SearchPage() {
       try {
         const totalP = apiData.pagination?.totalPages ?? 1;
         if (items.length > 0) {
-          sessionStorage.setItem(cacheKey, JSON.stringify({ data: items, totalPages: totalP, ts: Date.now() }));
+          setSmartSessionCache(cacheKey, JSON.stringify({ data: items, totalPages: totalP, ts: Date.now() }));
         }
       } catch { /* quota */ }
 

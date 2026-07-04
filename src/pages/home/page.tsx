@@ -19,6 +19,7 @@ import { fetchHomePageData, getOptimizedImageUrl } from '../../services/movieApi
 import { prefetchCriticalRoutes } from '../../utils/prefetchRoute';
 import { injectPreloadLink, preloadBatch } from '../../utils/imagePreloader';
 import { movieDetailUrl } from '../../utils/slugEncoder';
+import { removeSmartSessionCache, setSmartSessionCache } from '../../utils/smartCache';
 import type { MovieItem } from '../../types/movie';
 
 // Lazy load bottom sections
@@ -379,7 +380,7 @@ function clearHomeStorageCache(): void {
   try {
     for (const key of HOME_STORAGE_CACHE_KEYS) {
       localStorage.removeItem(key);
-      sessionStorage.removeItem(key);
+      removeSmartSessionCache(key);
     }
   } catch { /* ignore */ }
 }
@@ -395,7 +396,7 @@ function readWarmHomeCache(): Record<string, MovieItem[]> {
     if (!raw) return {};
     const entry = JSON.parse(raw) as { sections?: Record<string, MovieItem[]>; ts?: number };
     if (!entry.sections || !entry.ts || Date.now() - entry.ts > HOME_CACHE_TTL) {
-      sessionStorage.removeItem(HOME_CACHE_KEY);
+      removeSmartSessionCache(HOME_CACHE_KEY);
       return {};
     }
     const sections = normalizeHomeSections(entry.sections);
@@ -408,7 +409,7 @@ function readWarmHomeCache(): Record<string, MovieItem[]> {
 function writeWarmHomeCache(sections: Record<string, MovieItem[]>): void {
   if (!hasHomeMovies(sections)) return;
   try {
-    sessionStorage.setItem(HOME_CACHE_KEY, JSON.stringify({ sections, ts: Date.now() }));
+    setSmartSessionCache(HOME_CACHE_KEY, JSON.stringify({ sections, ts: Date.now() }));
   } catch { /* quota */ }
 }
 
