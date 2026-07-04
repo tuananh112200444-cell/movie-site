@@ -13,6 +13,16 @@ import { movieDetailUrl } from '@/utils/slugEncoder';
 import type { Movie } from '@/types/movie';
 
 const PAGE_SIZE = 36;
+const NEW_MOVIES_INITIAL_TIMEOUT_MS = 4500;
+const NEW_MOVIES_TYPES = ['phim-le', 'phim-bo', 'phim-chieu-rap', 'hoat-hinh', 'tv-shows'] as const;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+}
+
 function getMovieKey(movie: Movie): string {
   return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
 }
@@ -83,6 +93,18 @@ function normalizeNewMovieItem(movie: Movie): Movie | null {
     ...movie,
     episode_current: normalizeEpisodeCurrent(movie),
   };
+}
+
+async function fetchFastLatestMovies(page: number): Promise<Movie[]> {
+  const primary = await withTimeout(fetchLatestReleaseMovies(page), NEW_MOVIES_INITIAL_TIMEOUT_MS);
+  if (primary?.items?.length) return primary.items;
+
+  const results = await Promise.allSettled(
+    NEW_MOVIES_TYPES.map((type) => fetchMoviesByType(type, page, 'year', 'desc'))
+  );
+  return results
+    .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchMoviesByType>>> => result.status === 'fulfilled')
+    .flatMap((result) => result.value.items ?? []);
 }
 
 const newMoviesSchema = [
@@ -206,8 +228,8 @@ export default function NewMoviesPage() {
     initRef.current = true;
     setLoading(true);
 
-    fetchLatestReleaseMovies(1).then((result) => {
-      addToPool(result.items ?? []);
+    fetchFastLatestMovies(1).then((items) => {
+      addToPool(items);
       nextApiRef.current = 2;
       setPoolReady(true);
       setLoading(false);
@@ -223,7 +245,7 @@ export default function NewMoviesPage() {
     setFetchingMore(true);
     const nextPage = nextApiRef.current;
     const result = filterType === 'all'
-      ? await fetchLatestReleaseMovies(nextPage).catch(() => null)
+      ? { items: await fetchFastLatestMovies(nextPage).catch(() => []) }
       : await fetchMoviesByType(filterType, nextPage, 'modified.time', 'desc').catch(() => null);
     const items = result?.items ?? [];
     if (items.length > 0) addToPool(items);
