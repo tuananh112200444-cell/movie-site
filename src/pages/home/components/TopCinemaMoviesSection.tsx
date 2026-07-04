@@ -70,19 +70,6 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
 
     setLoading(true);
 
-    // Thử lấy từ cache trước
-    try {
-      const raw = sessionStorage.getItem('kp_cinema_v1');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.items?.length && Date.now() - (parsed.ts ?? 0) < 30 * 60 * 1000) {
-          setMovies(parsed.items);
-          setLoading(false);
-          return;
-        }
-      }
-    } catch { /* ignore */ }
-
     fetchMoviesByType('phim-chieu-rap', 1, 'modified.time', 'desc')
       .then((res) => {
         if (cancelled) return;
@@ -93,9 +80,6 @@ export default function TopCinemaMoviesSection({ initialMovies = [], loading: pa
           return ep !== 'trailer' && ep !== '';
         });
         setMovies(valid);
-        try {
-          sessionStorage.setItem('kp_cinema_v1', JSON.stringify({ items: valid, ts: Date.now() }));
-        } catch { /* quota exceeded */ }
       })
       .catch(() => {
         if (cancelled) return;
