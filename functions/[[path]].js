@@ -1138,6 +1138,42 @@ function isLegacySitemapAlias(pathname) {
   );
 }
 
+const DMCA_REMOVED_MOVIE_SLUGS = new Set([
+  'deadpool-va-wolverine',
+]);
+
+function removedForCopyrightResponse() {
+  return new Response(`<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Noi dung da duoc go bo | KhoPhim</title>
+</head>
+<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center">
+  <main style="max-width:520px">
+    <h1 style="font-size:24px;margin:0 0 12px">Noi dung da duoc go bo</h1>
+    <p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0">Trang nay da bi vo hieu hoa quyen truy cap theo yeu cau ban quyen hop le.</p>
+    <p style="margin-top:18px"><a href="/" style="color:#f87171;font-weight:700">Ve trang chu KhoPhim</a></p>
+  </main>
+</body>
+</html>`, {
+    status: 410,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'X-Robots-Tag': 'noindex, nofollow',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
+function isDmcaRemovedPath(pathname) {
+  const movieMatch = /^\/phim\/([^/?#]+)/.exec(pathname);
+  return Boolean(movieMatch && DMCA_REMOVED_MOVIE_SLUGS.has(decodeURIComponent(movieMatch[1]).toLowerCase()));
+}
+
 export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
@@ -1157,6 +1193,10 @@ export async function onRequest(context) {
 
   if (url.hostname === 'www.khophim.org' || url.hostname === 'mhophim.com' || url.hostname === 'www.mhophim.com' || url.protocol === 'http:') {
     return canonicalRedirect(url, pathname);
+  }
+
+  if (isDmcaRemovedPath(pathname)) {
+    return removedForCopyrightResponse();
   }
 
   if (
