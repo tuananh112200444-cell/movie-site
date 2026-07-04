@@ -47,7 +47,7 @@ body {
 
 .kp-cinema-page::before {
   content: "";
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: -2;
   pointer-events: none;
@@ -55,18 +55,11 @@ body {
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     linear-gradient(180deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
   background-size: 84px 84px;
-  mask-image: linear-gradient(180deg, rgba(0,0,0,0.5), transparent 58%);
-  opacity: 0.42;
+  opacity: 0.16;
 }
 
 .kp-cinema-page::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse at center, transparent 0%, transparent 48%, rgba(0,0,0,0.34) 100%);
+  display: none;
 }
 
 .kp-cinema-surface {
@@ -1244,32 +1237,6 @@ img {
 }
 
 /* ─── Tắt tất cả transition/animation khi scroll nhanh (JS sẽ toggle class) ─── */
-body.is-scrolling .img-cinematic-hover,
-body.is-scrolling .img-enhanced,
-body.is-scrolling .img-enhanced-wide,
-body.is-scrolling .card-glow-border::before,
-body.is-scrolling .transition-transform,
-body.is-scrolling .transition-all,
-body.is-scrolling .transition-colors,
-body.is-scrolling .transition-opacity,
-body.is-scrolling img[style*="filter"] {
-  transition: none !important;
-  animation: none !important;
-  filter: none !important;
-}
-
-body.is-scrolling .backdrop-blur-md,
-body.is-scrolling .backdrop-blur-xl,
-body.is-scrolling .backdrop-blur-sm {
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-}
-
-body.is-scrolling .kp-cinema-page::before,
-body.is-scrolling .kp-cinema-page::after {
-  opacity: 0.12;
-}
-
 /* Tab hidden — freeze all animations to save CPU/GPU */
 body.tab-hidden .animate-shimmer-sweep,
 body.tab-hidden .animate-rank-pulse,
