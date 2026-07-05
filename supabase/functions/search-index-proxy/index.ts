@@ -61,21 +61,7 @@ async function fetchFreshIndex(
 
   if (error) return { items: [], error: error.message };
 
-  const { data: refreshed, error: readError } = await supabase
-    .from('home_page_cache')
-    .select('sections')
-    .eq('id', CACHE_ID)
-    .abortSignal(timeoutSignal(12000))
-    .maybeSingle();
-
-  if (readError) return { items: [], error: readError.message };
-  const items = readCachedItems((refreshed ? {
-    sections: (refreshed as { sections: Record<string, unknown> }).sections,
-    updated_at: '',
-    expires_at: '',
-  } : null)).slice(0, limit) as Record<string, unknown>[];
-
-  return { items, error: null };
+  return await readCachedRows(supabase, limit);
 }
 
 function readCachedItems(cacheRow: { sections: Record<string, unknown>; updated_at: string; expires_at: string } | null): unknown[] {
@@ -184,11 +170,22 @@ serve(async (req) => {
   const cacheExpiresAt = parsePostgresTimestamp(cacheRow?.expires_at);
   const cacheValid = cacheRow && Number.isFinite(cacheExpiresAt) && cacheExpiresAt > now.getTime() && cacheMetaCount >= limit;
 
-  if (cacheValid && !forceRefresh) {
+  if (forceRefresh && isRefreshLocked(cacheRow)) {
     const cached = await readCachedRows(supabase, limit);
     if (cached.items.length >= Math.min(limit, 100)) {
       return jsonResponse(
-        { status: true, source: 'cache', items: cached.items.slice(0, limit), updated_at: cacheRow!.updated_at },
+        { status: true, source: 'refresh-locked', items: cached.items.slice(0, limit), updated_at: cacheRow?.updated_at },
+        200,
+        cacheHeaders('STALE'),
+      );
+    }
+  }
+
+  if (cacheValid) {
+    const cached = await readCachedRows(supabase, limit);
+    if (cached.items.length >= Math.min(limit, 100)) {
+      return jsonResponse(
+        { status: true, source: forceRefresh ? 'cache-refresh-skipped' : 'cache', items: cached.items.slice(0, limit), updated_at: cacheRow!.updated_at },
         200,
         cacheHeaders('HIT'),
       );

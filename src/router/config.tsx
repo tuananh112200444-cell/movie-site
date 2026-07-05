@@ -11,10 +11,10 @@ function RedirectToPhim() {
 
 /* ─── Eager load: Home ─── */
 import Home from '../pages/home/page';
-import MovieDetailPage from '../pages/movie-detail/page';
 
 /* ─── Core pages ─── */
 const FilterPage        = lazy(() => import('../pages/filter/page'));
+const MovieDetailPage   = lazy(() => import('../pages/movie-detail/page'));
 const MovieListPage     = lazy(() => import('../pages/movie-list/page'));
 const FavoritesPage     = lazy(() => import('../pages/favorites/page'));
 const AboutPage         = lazy(() => import('../pages/about/page'));
@@ -73,7 +73,7 @@ function PageLoader() {
 
 /* ─── Wrapper helpers ─── */
 function LazyFilter()        { return <Suspense fallback={<PageLoader />}><FilterPage /></Suspense>; }
-function LazyMovieDetail()   { return <MovieDetailPage />; }
+function LazyMovieDetail()   { return <Suspense fallback={<PageLoader />}><MovieDetailPage /></Suspense>; }
 function LazyFavorites()     { return <Suspense fallback={<PageLoader />}><FavoritesPage /></Suspense>; }
 function LazyAbout()         { return <Suspense fallback={<PageLoader />}><AboutPage /></Suspense>; }
 function LazyPolicy()        { return <Suspense fallback={<PageLoader />}><PolicyPage /></Suspense>; }

@@ -1,0 +1,14 @@
+{
+  "bucket": "videomeu8",
+  "cdnOrigin": "https://video.khophim.org",
+  "ffmpegPath": "",
+  "rcloneRemote": "b2",
+  "rclonePath": "",
+  "outputRoot": "%USERPROFILE%\\Videos\\khophim-hls-output",
+  "crf": 21,
+  "preset": "veryfast",
+  "audioBitrate": "128k",
+  "segmentSeconds": 20,
+  "uploadAfterConvert": true,
+  "copyLinkToClipboard": true
+}

@@ -7,6 +7,7 @@ import { reportWebVitals } from './utils/performance'
 import { reportClientIssue } from './services/playerDiagnostics'
 import { pruneSmartClientCaches } from './utils/smartCache'
 
+const CLIENT_RELEASE_MARKER = '2026-07-05-cache-routes-v2';
 const rootElement = document.getElementById('root');
 
 pruneSmartClientCaches({ force: true });
@@ -16,6 +17,7 @@ if (!rootElement) {
 } else {
   try {
     rootElement.dataset.kpMounted = '1';
+    rootElement.dataset.kpRelease = CLIENT_RELEASE_MARKER;
     createRoot(rootElement).render(<App />);
     document.getElementById('kp-boot-fallback')?.remove();
   } catch (error) {

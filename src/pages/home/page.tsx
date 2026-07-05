@@ -350,6 +350,7 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
 }
 
 const ALL_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
+const CRITICAL_HOME_SECTIONS = ALL_SECTIONS;
 const HOME_CACHE_KEY = 'kp_home_proxy_v6_short';
 const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
@@ -414,7 +415,7 @@ function writeWarmHomeCache(sections: Record<string, MovieItem[]>): void {
   } catch { /* quota */ }
 }
 
-async function loadStaticHomeFallback(signal?: AbortSignal): Promise<Record<string, MovieItem[]>> {
+async function loadStaticHomeFallback(signal?: AbortSignal, allowedSections?: string[]): Promise<Record<string, MovieItem[]>> {
   const res = await fetch(HOME_FALLBACK_URL, {
     cache: 'force-cache',
     signal,
@@ -423,7 +424,9 @@ async function loadStaticHomeFallback(signal?: AbortSignal): Promise<Record<stri
 
   const data = await res.json() as { sections?: Record<string, unknown[]> };
   const parsedSections: Record<string, MovieItem[]> = {};
+  const allowed = allowedSections?.length ? new Set(allowedSections) : null;
   for (const [key, items] of Object.entries(data.sections ?? {})) {
+    if (allowed && !allowed.has(key)) continue;
     parsedSections[key] = (items ?? []).filter((item) => {
       const movie = item as Partial<MovieItem>;
       return Boolean(movie?.slug && movie?.name);
@@ -476,7 +479,7 @@ export default function Home() {
       controller = new AbortController();
       lastHomeFetchRef.current = Date.now();
 
-      fetchHomePageData(ALL_SECTIONS, { signal: controller.signal })
+      fetchHomePageData(CRITICAL_HOME_SECTIONS, { signal: controller.signal })
         .then((res) => {
           if (cancelled) return;
           if (res.status) {
@@ -500,10 +503,13 @@ export default function Home() {
       fallbackController = new AbortController();
       loadStaticHomeFallback(fallbackController.signal)
         .then((fallbackSections) => {
-          if (cancelled || !hasHomeMovies(fallbackSections) || hasHomeMovies(homeDataRef.current)) return;
-          setHomeData(fallbackSections);
-          homeDataRef.current = fallbackSections;
-          writeWarmHomeCache(fallbackSections);
+          if (cancelled || !hasHomeMovies(fallbackSections)) return;
+          setHomeData((current) => {
+            const merged = { ...fallbackSections, ...current };
+            homeDataRef.current = merged;
+            writeWarmHomeCache(merged);
+            return merged;
+          });
           setHomeLoading(false);
         })
         .catch(() => undefined);
@@ -660,49 +666,49 @@ export default function Home() {
         <LazyMovieSection
           fetchType="type" fetchKey="phim-le" limit={18}
           title="Phim Lẻ Hay" viewAllLink="/phim-le"
-          cols={6} rootMargin="200px" sectionIndex={0} theme="cinematic"
+          cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
           movies={homeData['phim-le'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
           fetchType="type" fetchKey="phim-bo" limit={18}
           title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
-          cols={6} rootMargin="200px" sectionIndex={1} theme="trending"
+          cols={6} rootMargin="120px" sectionIndex={1} theme="trending"
           movies={homeData['phim-bo'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
           fetchType="type" fetchKey="hoat-hinh" limit={18}
           title="Hoạt Hình Mới Nhất" viewAllLink="/hoat-hinh"
-          cols={6} rootMargin="200px" sectionIndex={2} theme="anime"
+          cols={6} rootMargin="120px" sectionIndex={2} theme="anime"
           movies={homeData['hoat-hinh'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
           fetchType="country" fetchKey="han-quoc" limit={18}
           title="Phim Hàn Quốc" viewAllLink="/phim-han-quoc"
-          cols={6} rootMargin="200px" sectionIndex={3} theme="kdrama"
+          cols={6} rootMargin="120px" sectionIndex={3} theme="kdrama"
           movies={homeData['han-quoc'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
           fetchType="country" fetchKey="au-my" limit={18}
           title="Phim Âu Mỹ" viewAllLink="/phim-au-my"
-          cols={6} rootMargin="200px" sectionIndex={4} theme="hollywood"
+          cols={6} rootMargin="120px" sectionIndex={4} theme="hollywood"
           movies={homeData['au-my'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
           fetchType="country" fetchKey="trung-quoc" limit={18}
           title="Phim Trung Quốc" viewAllLink="/phim-trung-quoc"
-          cols={6} rootMargin="200px" sectionIndex={5} theme="oriental"
+          cols={6} rootMargin="120px" sectionIndex={5} theme="oriental"
           movies={homeData['trung-quoc'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
           fetchType="country" fetchKey="thai-lan" limit={18}
           title="Phim Thái Lan" viewAllLink="/phim-thai-lan"
-          cols={6} rootMargin="200px" sectionIndex={6} theme="tropical"
+          cols={6} rootMargin="120px" sectionIndex={6} theme="tropical"
           movies={homeData['thai-lan'] ?? []}
           loading={homeLoading}
         />

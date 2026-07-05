@@ -46,6 +46,18 @@ const CHECKS = [
     required: ['<urlset', '/xem-phim-online', '/phim-vietsub', '/phim-dang-chieu'],
   },
   {
+    name: 'movie-sitemap-chunk',
+    url: `${SITE_URL}/sitemap-movies-1.xml`,
+    maxMs: 2500,
+    required: ['<urlset', '/phim/'],
+  },
+  {
+    name: 'movie-sitemap-recent',
+    url: `${SITE_URL}/sitemap-movies-recent.xml`,
+    maxMs: 2500,
+    required: ['<urlset', '/phim/'],
+  },
+  {
     name: 'llms-txt',
     url: `${SITE_URL}/llms.txt`,
     maxMs: 1200,
@@ -252,7 +264,16 @@ async function assertHeadersClean() {
     const block = `${route}\n  ${cacheHeader}`;
     if (!headers.includes(block)) failures.push(`public/_headers should keep ${route} on smart short cache.`);
   }
-  for (const excludedRoute of ['/assets/*', '/images/*', '/banners/*', '/robots.txt', '/llms.txt']) {
+  for (const excludedRoute of [
+    '/assets/*',
+    '/images/*',
+    '/banners/*',
+    '/robots.txt',
+    '/llms.txt',
+    '/home-fallback.json',
+    '/queer-fallback.json',
+    '/sitemap*.xml',
+  ]) {
     if (!routes.includes(excludedRoute)) failures.push(`public/_routes.json should exclude ${excludedRoute} from Pages Functions.`);
   }
   return failures;

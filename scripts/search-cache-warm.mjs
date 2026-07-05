@@ -41,26 +41,24 @@ function sleep(ms) {
 
 async function callProxy({ limit, refresh }) {
   if (refresh) {
-    const endpoint = new URL(`${SUPABASE_URL}/rest/v1/rpc/refresh_search_index_cache`);
+    const endpoint = new URL(`${SUPABASE_URL}/functions/v1/search-index-proxy`);
+    endpoint.searchParams.set('limit', String(limit));
+    endpoint.searchParams.set('refresh', '1');
     const started = performance.now();
     const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ p_limit: limit }),
+      headers,
       cache: 'no-store',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    const count = await response.json().catch(() => 0);
+    const json = await response.json().catch(() => null);
+    const count = Array.isArray(json?.items) ? json.items.length : 0;
     return {
       ok: response.ok,
       status: response.status,
-      source: 'postgres-rpc',
+      source: json?.source ?? 'edge-refresh',
       items: Number(count) || 0,
-      updated_at: new Date().toISOString(),
-      xCache: response.headers.get('x-cache') ?? 'RPC',
+      updated_at: json?.updated_at ?? new Date().toISOString(),
+      xCache: response.headers.get('x-cache') ?? 'EDGE',
       ms: Math.round(performance.now() - started),
     };
   }
