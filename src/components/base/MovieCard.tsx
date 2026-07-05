@@ -50,6 +50,24 @@ function getDisplayOrigin(movie: MovieItem): string {
   return movie.title_en?.trim() || movie.origin_name;
 }
 
+function getDisplayTime(movie: MovieItem): string | null {
+  const value = String(movie.time ?? '').trim();
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (
+    normalized === 'undefined' ||
+    normalized === 'null' ||
+    normalized.includes('undefined') ||
+    normalized.includes('? phút') ||
+    normalized === '0 phút' ||
+    normalized === '0 phút/tập' ||
+    normalized === 'đang cập nhật'
+  ) {
+    return null;
+  }
+  return value;
+}
+
 /* ─────────────────────────────────────────
    DEFAULT CARD
 ───────────────────────────────────────── */
@@ -68,6 +86,7 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
   const rating  = useMemo(() => (7 + Math.abs(movie.name.charCodeAt(0) % 3) * 0.5).toFixed(1), [movie.name]);
   const altText = buildAlt(movie);
   const isNew   = isNewMovie(movie);
+  const displayTime = getDisplayTime(movie);
 
   const epText = (() => {
     const ep = (movie.episode_current ?? '').toLowerCase().trim();
@@ -158,10 +177,10 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
           {/* Info overlay on hover — visible on mobile via active state */}
           <div className="absolute bottom-0 left-0 right-0 z-[3] hidden translate-y-1 p-2.5 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 sm:block">
             <div className="flex flex-wrap items-center gap-1.5">
-              {movie.time && (
+              {displayTime && (
                 <span className="flex items-center gap-0.5 rounded bg-black/38 px-1.5 py-0.5 text-[10px] font-medium text-white/72 backdrop-blur-sm">
                   <i className="ri-time-line text-[9px]" />
-                  {movie.time}
+                  {displayTime}
                 </span>
               )}
               {movie.category && movie.category[0] && (
@@ -233,6 +252,7 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
   const rating = useMemo(() => (7 + Math.abs(movie.name.charCodeAt(0) % 3) * 0.5).toFixed(1), [movie.name]);
   const altText = buildAlt(movie);
   const isNew = isNewMovie(movie);
+  const displayTime = getDisplayTime(movie);
   const origin = getDisplayOrigin(movie);
   const title = getDisplayTitle(movie);
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
@@ -314,10 +334,10 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
 
           <div className="absolute bottom-0 left-0 right-0 z-[3] hidden translate-y-1 p-3 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 sm:block">
             <div className="flex flex-wrap items-center gap-1.5">
-              {movie.time && (
+              {displayTime && (
                 <span className="flex items-center gap-1 rounded bg-black/42 px-2 py-1 text-[11px] font-semibold text-white/76 backdrop-blur-sm">
                   <i className="ri-time-line text-[10px]" />
-                  {movie.time}
+                  {displayTime}
                 </span>
               )}
               {movie.category?.[0]?.name && (

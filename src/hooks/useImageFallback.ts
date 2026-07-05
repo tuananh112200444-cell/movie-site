@@ -34,6 +34,43 @@ export function useImageFallback(
     setExhausted(false);
   }, [fallbackUrls, preloaded]);
 
+  useEffect(() => {
+    if (!currentSrc || preloaded || exhausted) return;
+
+    let cancelled = false;
+    const img = new Image();
+
+    img.onload = () => {
+      if (cancelled) return;
+      setLoaded(true);
+      setExhausted(false);
+    };
+
+    img.onerror = () => {
+      if (cancelled) return;
+      if (index < fallbackUrls.length - 1) {
+        setLoaded(false);
+        setIndex((i) => i + 1);
+      } else {
+        setLoaded(true);
+        setExhausted(true);
+      }
+    };
+
+    img.src = currentSrc;
+
+    if (img.complete && img.naturalWidth > 0) {
+      setLoaded(true);
+      setExhausted(false);
+    }
+
+    return () => {
+      cancelled = true;
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [currentSrc, exhausted, fallbackUrls.length, index, preloaded]);
+
   const onLoad = useCallback(() => {
     setLoaded(true);
     setExhausted(false);

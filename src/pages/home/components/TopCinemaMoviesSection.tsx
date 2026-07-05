@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getOptimizedImageUrl, getPosterUrl, getImageUrl, fetchMoviesByType } from '../../../services/movieApi';
+import { getPosterUrl, getImageUrl, fetchMoviesByType } from '../../../services/movieApi';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import type { MovieItem } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
+import { useImageFallback } from '../../../hooks/useImageFallback';
 
 /* ── Helpers ── */
 function getViewerCount(rank: number): string {
@@ -208,9 +209,13 @@ interface CinemaCardProps {
 }
 
 function CinemaCard({ movie, rank }: CinemaCardProps) {
-  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(getImageUrl(movie.poster_url || movie.thumb_url)));
-  const [imgError, setImgError] = useState(false);
-  const posterUrl = getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 520, 88);
+  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
+    movie.poster_url || movie.thumb_url,
+    movie.thumb_url || movie.poster_url,
+    isImagePreloaded(getImageUrl(movie.poster_url || movie.thumb_url)),
+    520,
+    88,
+  );
   const ep = getEpInfo(movie.episode_current);
   const mTime = movie.modified?.time ?? '';
   const originName = movie.origin_name ?? '';
@@ -271,7 +276,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
               </div>
             )}
             <img
-              src={posterUrl}
+              src={currentSrc}
               alt={movie.name}
               loading="lazy"
               fetchPriority="low"
@@ -282,8 +287,8 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
                 md:group-hover:scale-105
               `}
               style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-              onLoad={() => setImgLoaded(true)}
-              onError={() => { setImgError(true); setImgLoaded(true); }}
+              onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
+              onError={onError}
             />
 
             {/* Bottom gradient for text */}

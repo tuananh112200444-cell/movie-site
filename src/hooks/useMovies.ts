@@ -150,7 +150,7 @@ export function useMoviesByType(
   pagesToLoad = 1,
   sortField?: string
 ) {
-  const cacheKey = `type_${type}_${initialPage}_${pagesToLoad}_${sortField ?? 'default'}_v3`;
+  const cacheKey = `type_${type}_${initialPage}_${pagesToLoad}_${sortField ?? 'default'}_v4`;
   const cached = getHookCache(cacheKey);
   const [movies, setMovies] = useState<Movie[]>(cached?.movies ?? []);
   const [loading, setLoading] = useState(!cached);
@@ -186,7 +186,7 @@ export function useMoviesByType(
       if (append) setLoadingMore(true);
       else setLoading(true);
 
-      const stableNewest = sortField === 'year_stable';
+      const stableNewest = sortField === 'year_stable' && type !== 'phim-sap-chieu';
       const sourcePagesToLoad = stableNewest
         ? Math.min(Math.max(page + 4, 6), 12)
         : pagesToLoad;

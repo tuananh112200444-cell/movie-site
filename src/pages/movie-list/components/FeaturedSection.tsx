@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getFeaturedUrl, getSmallThumbUrl } from '@/services/movieApi';
+import { getFeaturedUrl, getImageUrl } from '@/services/movieApi';
 import { movieDetailUrl } from '@/utils/slugEncoder';
 import { isImagePreloaded, markImagePreloaded } from '@/utils/imagePreloader';
 import type { Movie } from '@/types/movie';
+import { useImageFallback } from '@/hooks/useImageFallback';
 
 interface FeaturedSectionProps {
   movies: Movie[];
@@ -83,9 +83,13 @@ export default function FeaturedSection({ movies, type }: FeaturedSectionProps) 
 /* ─── Main Card (16:9 large) ─── */
 function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PALETTE['phim-le'] }) {
   const imagePath = movie.thumb_url || movie.poster_url;
-  const imgUrl = getFeaturedUrl(imagePath);
-  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(imgUrl));
-  const [imgError, setImgError] = useState(false);
+  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
+    imagePath,
+    movie.poster_url || movie.thumb_url,
+    isImagePreloaded(getFeaturedUrl(imagePath)),
+    1180,
+    88,
+  );
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
   const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
   const isTrailer = ep === 'trailer';
@@ -103,14 +107,14 @@ function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PA
           </div>
         )}
         <img
-          src={imgUrl}
+          src={currentSrc}
           alt={movie.name}
           loading="eager"
           decoding="sync"
           className={`w-full h-full object-cover object-top transition-all duration-700 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.05) saturate(1.1) brightness(0.92)' }}
-          onLoad={() => { setImgLoaded(true); markImagePreloaded(imgUrl); }}
-          onError={() => { setImgError(true); setImgLoaded(true); }}
+          onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
+          onError={onError}
         />
         <div className={`absolute inset-0 bg-gradient-to-r ${palette.gradientOverlay}`} />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
@@ -177,9 +181,13 @@ function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PA
 /* ─── Side Card (horizontal list item) ─── */
 function FeaturedSideCard({ movie, palette }: { movie: Movie; palette: typeof PALETTE['phim-le'] }) {
   const imagePath = movie.thumb_url || movie.poster_url;
-  const imgUrl = getSmallThumbUrl(imagePath);
-  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(imgUrl));
-  const [imgError, setImgError] = useState(false);
+  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
+    imagePath,
+    movie.poster_url || movie.thumb_url,
+    isImagePreloaded(getImageUrl(imagePath)),
+    420,
+    84,
+  );
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
   const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
 
@@ -196,13 +204,13 @@ function FeaturedSideCard({ movie, palette }: { movie: Movie; palette: typeof PA
           </div>
         )}
         <img
-          src={imgUrl}
+          src={currentSrc}
           alt={movie.name}
           loading="lazy"
           className={`w-full h-full object-cover object-top transition-all duration-500 group-hover:scale-110 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.05) saturate(1.08)' }}
-          onLoad={() => { setImgLoaded(true); markImagePreloaded(imgUrl); }}
-          onError={() => { setImgError(true); setImgLoaded(true); }}
+          onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
+          onError={onError}
         />
         {movie.quality && (
           <span className={`absolute top-1.5 left-1.5 text-[9px] font-black ${palette.badgeBg} text-white px-1.5 py-0.5 rounded shadow-sm`}>

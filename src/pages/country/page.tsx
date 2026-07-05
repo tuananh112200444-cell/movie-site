@@ -1,11 +1,10 @@
-﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useParams, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+﻿import { useState, useEffect, useCallback } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import SEO, { SITE_URL } from '@/components/base/SEO';
-import { fetchMoviesByCategory, fetchMoviesByType } from '@/services/movieApi';
-import { setSmartSessionCache } from '@/utils/smartCache';
+import { fetchMoviesByCategory } from '@/services/movieApi';
 import type { Movie } from '@/types/movie';
 import CountryHeroBanner from './components/CountryHeroBanner';
 import CountrySEOContent from './components/CountrySEOContent';
@@ -322,40 +321,31 @@ export const COUNTRY_CONFIGS: Record<string, CountryConfig> = {
 };
 
 const PAGE_SIZE = 36;
-const API_PAGE_SIZE = 36;
-const POOL_CACHE_TTL = 10 * 60 * 1000;
 
-function getPoolCacheKey(country: string) {
-  return `kp_country_${country}_v1`;
+
+function getMovieKey(movie: Movie): string {
+  return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
 }
 
-function getPoolCache(country: string): Movie[] | null {
-  try {
-    const raw = sessionStorage.getItem(getPoolCacheKey(country));
-    if (!raw) return null;
-    const entry = JSON.parse(raw) as { data: Movie[]; ts: number };
-    if (Date.now() - entry.ts > POOL_CACHE_TTL) { sessionStorage.removeItem(getPoolCacheKey(country)); return null; }
-    return entry.data;
-  } catch { return null; }
-}
-
-function setPoolCache(country: string, data: Movie[]): void {
-  try {
-    setSmartSessionCache(getPoolCacheKey(country), JSON.stringify({ data, ts: Date.now() }));
-  } catch { /* quota */ }
-}
-
-async function apiFetch(type: string, apiPage: number, country: string): Promise<Movie[]> {
-  const res = await fetchMoviesByCategory({ type, country, page: apiPage, sortField: 'modified.time', sortType: 'desc' });
-  return res.items ?? [];
-}
-
-function sortByYear(movies: Movie[]): Movie[] {
-  return [...movies].sort((a, b) => {
-    const yd = (b.year ?? 0) - (a.year ?? 0);
-    if (yd !== 0) return yd;
-    return new Date(b.modified?.time ?? 0).getTime() - new Date(a.modified?.time ?? 0).getTime();
+function dedupeMovies(movies: Movie[]): Movie[] {
+  const seen = new Set<string>();
+  return movies.filter((movie) => {
+    const key = getMovieKey(movie);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
+}
+
+function getHotScore(movie: Movie): number {
+  const currentYear = new Date().getFullYear();
+  const yearDiff = currentYear - (movie.year ?? 0);
+  const yearScore = yearDiff <= 0 ? 60 : yearDiff === 1 ? 45 : yearDiff === 2 ? 30 : yearDiff === 3 ? 15 : yearDiff <= 5 ? 5 : 0;
+  const mtime = new Date(movie.modified?.time ?? 0).getTime();
+  const freshScore = Math.max(0, 80 - (Date.now() - mtime) / 3600000 * 2);
+  const ep = (movie.episode_current ?? '').toLowerCase().trim();
+  const isFull = ep === 'full' || ep === 'full hd' || ep.startsWith('hoàn tất');
+  return yearScore + freshScore + (isFull ? 25 : 0) + (movie.chieurap ? 15 : 0);
 }
 
 interface Props {
@@ -396,125 +386,58 @@ export default function CountryPage({ countrySlug }: Props) {
     ? `${SITE_URL}${config?.path ?? pathname}?page=${page}` 
     : `${SITE_URL}${config?.path ?? pathname}`;
 
-  const poolRef = useRef<Movie[]>([]);
-  const seenRef = useRef(new Set<string>());
-  const nextApiRef = useRef(1);
-  const apiDoneRef = useRef(false);
-  const fetchingRef = useRef(false);
-  const initialised = useRef(false);
-
-  const [pool, setPool] = useState<Movie[]>([]);
-  const [poolLoading, setPoolLoading] = useState(false);
-  const [poolReady, setPoolReady] = useState(false);
-
-  const addToPool = useCallback((items: Movie[]) => {
-    const fresh = items.filter((m) => !seenRef.current.has(m._id));
-    if (fresh.length === 0) return;
-    fresh.forEach((m) => seenRef.current.add(m._id));
-    poolRef.current = sortByYear([...poolRef.current, ...fresh]);
-    setPool([...poolRef.current]);
-  }, []);
-
-  const resetPool = useCallback(() => {
-    poolRef.current = [];
-    seenRef.current = new Set();
-    nextApiRef.current = 1;
-    apiDoneRef.current = false;
-    fetchingRef.current = false;
-    initialised.current = false;
-    setPool([]);
-    setPoolLoading(false);
-    setPoolReady(false);
-  }, []);
+  const [sortedMovies, setSortedMovies] = useState<Movie[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalPages, setTotalPages] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
 
   useEffect(() => {
-    resetPool();
-    setPage(1);
-    navigate({ pathname: config?.path ?? pathname, search: '' }, { replace: true });
-  }, [countrySlug, config?.path, navigate, pathname, resetPool]);
+    if (!config) return;
+    let cancelled = false;
+    setLoading(true);
 
-  useEffect(() => {
-    if (initialised.current) return;
-    initialised.current = true;
-
-    const cached = getPoolCache(countrySlug);
-    if (cached && cached.length >= PAGE_SIZE) {
-      cached.forEach((m) => seenRef.current.add(m._id));
-      poolRef.current = cached;
-      setPool([...cached]);
-      nextApiRef.current = 3;
-      setPoolReady(true);
-      setPoolLoading(false);
-      apiFetch(config.type, 1, countrySlug).then((items) => {
-        addToPool(items);
-        setPoolCache(countrySlug, poolRef.current);
-      }).catch(() => {});
-      return;
-    }
-
-    setPoolLoading(true);
+    const sortField = sortBy === 'new' ? 'modified.time' : 'year';
+    const sourcePage = page * 2 - 1;
     Promise.all([
-      apiFetch(config.type, 1, countrySlug),
-      apiFetch(config.type, 2, countrySlug),
-    ]).then(([r1, r2]) => {
-      addToPool(r1);
-      addToPool(r2);
-      nextApiRef.current = 3;
-      if (!r2 || r2.length < API_PAGE_SIZE) apiDoneRef.current = true;
-      setPoolReady(true);
-      setPoolLoading(false);
-      setPoolCache(countrySlug, poolRef.current);
+      fetchMoviesByCategory({
+        type: config.type,
+        country: countrySlug,
+        page: sourcePage,
+        sortField,
+        sortType: 'desc',
+      }),
+      fetchMoviesByCategory({
+        type: config.type,
+        country: countrySlug,
+        page: sourcePage + 1,
+        sortField,
+        sortType: 'desc',
+      }),
+    ]).then((responses) => {
+      if (cancelled) return;
+      const items = dedupeMovies(responses.flatMap((res) => res.items ?? []));
+      const stableItems = sortBy === 'hot'
+        ? [...items].sort((a, b) => getHotScore(b) - getHotScore(a))
+        : items;
+      const firstPagination = responses[0]?.pagination;
+      const sourceTotalPages = Math.max(...responses.map((res) => res.pagination?.totalPages ?? 1));
+      const sourcePageSize = firstPagination?.totalItemsPerPage || 24;
+      const totalItems = firstPagination?.totalItems ?? sourceTotalPages * sourcePageSize;
+      const nextTotalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+      setSortedMovies(stableItems.slice(0, PAGE_SIZE));
+      setTotalPages(nextTotalPages);
+      setHasNextPage(page < nextTotalPages || items.length >= PAGE_SIZE);
+    }).catch(() => {
+      if (cancelled) return;
+      setSortedMovies([]);
+      setTotalPages(1);
+      setHasNextPage(false);
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
     });
-  }, [countrySlug, config.type, addToPool]);
 
-  const fetchMore = useCallback(async () => {
-    if (fetchingRef.current || apiDoneRef.current) return;
-    fetchingRef.current = true;
-    setPoolLoading(true);
-    try {
-      const [r1, r2] = await Promise.all([
-        apiFetch(config.type, nextApiRef.current, countrySlug),
-        apiFetch(config.type, nextApiRef.current + 1, countrySlug),
-      ]);
-      addToPool(r1);
-      addToPool(r2);
-      nextApiRef.current += 2;
-      if (r1.length === 0 && r2.length === 0) apiDoneRef.current = true;
-      setPoolCache(countrySlug, poolRef.current);
-    } finally {
-      fetchingRef.current = false;
-      setPoolLoading(false);
-    }
-  }, [config.type, countrySlug, addToPool]);
-
-  useEffect(() => {
-    if (!poolReady) return;
-    const needed = (page + 1) * PAGE_SIZE;
-    if (pool.length < needed && !apiDoneRef.current && !fetchingRef.current) {
-      fetchMore();
-    }
-  }, [poolReady, page, pool.length, fetchMore]);
-
-  const sortedMovies = useMemo(() => {
-    if (sortBy === 'new') {
-      return pool.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    }
-    const currentYear = new Date().getFullYear();
-    const score = (m: Movie): number => {
-      const yearDiff = currentYear - (m.year ?? 0);
-      const yearScore = yearDiff <= 0 ? 60 : yearDiff === 1 ? 45 : yearDiff === 2 ? 30 : yearDiff === 3 ? 15 : yearDiff <= 5 ? 5 : 0;
-      const mtime = new Date(m.modified?.time ?? 0).getTime();
-      const freshScore = Math.max(0, 80 - (Date.now() - mtime) / 3600000 * 2);
-      const ep = (m.episode_current ?? '').toLowerCase().trim();
-      const isFull = ep === 'full' || ep === 'full hd' || ep.startsWith('hoàn tất');
-      return yearScore + freshScore + (isFull ? 25 : 0) + (m.chieurap ? 15 : 0);
-    };
-    return [...pool].sort((a, b) => score(b) - score(a)).slice(0, PAGE_SIZE);
-  }, [sortBy, pool, page]);
-
-  const loading = poolLoading && !poolReady;
-  const hasNextPage = !apiDoneRef.current || page * PAGE_SIZE < pool.length;
-  const totalPages = Math.ceil(pool.length / PAGE_SIZE) + (apiDoneRef.current ? 0 : 5);
+    return () => { cancelled = true; };
+  }, [config, config?.type, countrySlug, page, sortBy]);
   const prevPage = page > 1 
     ? (page > 2 ? `${SITE_URL}${config?.path ?? pathname}?page=${page - 1}` : `${SITE_URL}${config?.path ?? pathname}`)
     : undefined;
@@ -604,9 +527,6 @@ export default function CountryPage({ countrySlug }: Props) {
               <span className="text-sm text-white/35 flex items-center gap-1.5">
                 <i className="ri-film-line text-xs" />
                 Trang {page} Â· <span className="text-white/55 font-medium">{sortedMovies.length} phim</span>
-                {poolLoading && poolReady && (
-                  <i className="ri-loader-4-line animate-spin text-xs text-white/25 ml-1" />
-                )}
               </span>
             )}
           </div>
@@ -653,15 +573,6 @@ export default function CountryPage({ countrySlug }: Props) {
             {sortedMovies.map((m, idx) => (
               <MovieCard key={m._id} movie={m} priority={idx < 2} />
             ))}
-          </div>
-        )}
-
-        {/* Fetch-more indicator */}
-        {poolLoading && poolReady && (
-          <div className="flex justify-center mt-6">
-            <span className="flex items-center gap-2 text-sm text-white/30 bg-white/[0.03] border border-white/[0.06] px-4 py-2 rounded-full">
-              <i className="ri-loader-4-line animate-spin" /> Đang tải thêm phim...
-            </span>
           </div>
         )}
 
