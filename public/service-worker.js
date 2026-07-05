@@ -5,14 +5,14 @@
 // registrations update to a tiny worker that unregisters itself and removes
 // KhoPhim caches.
 
-const KHOPHIM_CACHE_PREFIX = 'khophim';
+const LEGACY_CACHE_RE = /^(khophim|workbox)/i;
 
 async function clearKhophimCaches() {
   if (!self.caches) return;
   const names = await caches.keys();
   await Promise.all(
     names
-      .filter((name) => name.startsWith(KHOPHIM_CACHE_PREFIX))
+      .filter((name) => LEGACY_CACHE_RE.test(name))
       .map((name) => caches.delete(name))
   );
 }
