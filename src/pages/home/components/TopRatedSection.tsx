@@ -60,7 +60,7 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false }:
         .slice(0, 10);
       setMovies(filtered);
       setLoading(false);
-      preloadMoviePosters(filtered.slice(0, 4), (movie) => getImageUrl(movie.poster_url || movie.thumb_url), {
+      preloadMoviePosters(filtered.slice(0, 4), getImageUrl, {
         batchSize: 2,
         delayBetweenBatches: 250,
         delayBetweenImages: 40,
@@ -87,7 +87,7 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false }:
         .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
         .slice(0, 10);
       setMovies(filtered);
-      preloadMoviePosters(filtered, (movie) => getImageUrl(movie.poster_url || movie.thumb_url), {
+      preloadMoviePosters(filtered, getImageUrl, {
         batchSize: 3,
         delayBetweenBatches: 200,
         delayBetweenImages: 25,

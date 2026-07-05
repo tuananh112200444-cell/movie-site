@@ -3,16 +3,49 @@ import MovieSection from './MovieSection';
 import type { ComponentProps } from 'react';
 import type { Movie } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
-import { fetchMoviesByCategory } from '../../../services/movieApi';
+import { fetchMoviesByCategory, fetchMoviesByType } from '../../../services/movieApi';
 
 const carouselItemClass = HOME_POSTER_ITEM_CLASS;
+const HOME_FALLBACK_URL = '/home-fallback.json';
+let staticHomeFallbackPromise: Promise<Record<string, Movie[]>> | null = null;
 
 function isMobileViewport() {
   return typeof window !== 'undefined' && window.innerWidth < 768;
 }
 
+function parseRootMarginPx(rootMargin: string): number {
+  const raw = Number.parseInt(rootMargin, 10);
+  return Number.isFinite(raw) ? raw : 200;
+}
+
 function shouldTriggerImmediately(sectionIndex: number, hasData: boolean) {
   return isMobileViewport() && hasData && sectionIndex <= 1;
+}
+
+function withSectionTimeout<T>(promise: Promise<T>, timeoutMs = 8000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error('section fetch timeout')), timeoutMs);
+    promise.then(resolve, reject).finally(() => window.clearTimeout(timer));
+  });
+}
+
+async function loadStaticHomeFallback(): Promise<Record<string, Movie[]>> {
+  if (!staticHomeFallbackPromise) {
+    staticHomeFallbackPromise = withSectionTimeout(fetch(HOME_FALLBACK_URL, { cache: 'force-cache' }), 3000)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('home fallback unavailable'))))
+      .then((data: { sections?: Record<string, unknown[]> }) => {
+        const sections: Record<string, Movie[]> = {};
+        for (const [key, items] of Object.entries(data.sections ?? {})) {
+          sections[key] = (items ?? []).filter((item) => {
+            const movie = item as Partial<Movie>;
+            return Boolean(movie.slug && movie.name && (movie.poster_url || movie.thumb_url));
+          }) as Movie[];
+        }
+        return sections;
+      })
+      .catch(() => ({}));
+  }
+  return staticHomeFallbackPromise;
 }
 
 type SectionProps = Omit<ComponentProps<typeof MovieSection>, 'movies' | 'loading'>;
@@ -58,6 +91,15 @@ export default function LazyMovieSection({
     const el = ref.current;
     if (!el || triggered) return;
     const observerRootMargin = isMobileViewport() ? '480px' : rootMargin;
+    const marginPx = parseRootMarginPx(observerRootMargin);
+
+    const checkPosition = () => {
+      const rect = el.getBoundingClientRect();
+      const viewportH = window.innerHeight || document.documentElement.clientHeight || 0;
+      if (rect.top <= viewportH + marginPx && rect.bottom >= -marginPx) {
+        setTriggered(true);
+      }
+    };
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -70,7 +112,16 @@ export default function LazyMovieSection({
     );
 
     observer.observe(el);
-    return () => observer.disconnect();
+    checkPosition();
+    window.addEventListener('scroll', checkPosition, { passive: true });
+    window.addEventListener('resize', checkPosition);
+    window.addEventListener('focus', checkPosition);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', checkPosition);
+      window.removeEventListener('resize', checkPosition);
+      window.removeEventListener('focus', checkPosition);
+    };
   }, [triggered, rootMargin]);
 
   useEffect(() => {
@@ -80,20 +131,43 @@ export default function LazyMovieSection({
   }, [fetchKey, fetchType]);
 
   useEffect(() => {
-    if (!triggered || hasData || propLoading || fallbackAttempted) return;
+    if (!triggered || hasData || fallbackAttempted) return;
 
     let cancelled = false;
+    const safetyTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      setFallbackMovies([]);
+      setFallbackLoading(false);
+    }, 9000);
+
     setFallbackAttempted(true);
     setFallbackLoading(true);
 
-    fetchMoviesByCategory({
-      ...(fetchType === 'country' ? { country: fetchKey } : { type: fetchKey }),
-      page: 1,
-      sortField: 'modified.time',
-      sortType: 'desc',
-    })
-      .then((res) => {
+    loadStaticHomeFallback()
+      .then((sections) => {
         if (cancelled) return;
+        const staticItems = (sections[fetchKey] ?? [])
+          .filter((movie) => (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer')
+          .slice(0, limit);
+        if (staticItems.length > 0) {
+          setFallbackMovies(staticItems);
+          setFallbackLoading(false);
+          return null;
+        }
+
+        const fetchPromise = fetchType === 'country'
+          ? fetchMoviesByCategory({
+              country: fetchKey,
+              page: 1,
+              sortField: 'modified.time',
+              sortType: 'desc',
+            })
+          : fetchMoviesByType(fetchKey, 1, 'modified.time', 'desc');
+
+        return withSectionTimeout(fetchPromise);
+      })
+      .then((res) => {
+        if (cancelled || !res) return;
         const items = (res.items ?? [])
           .filter((movie) => (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer')
           .slice(0, limit);
@@ -103,17 +177,19 @@ export default function LazyMovieSection({
         if (!cancelled) setFallbackMovies([]);
       })
       .finally(() => {
+        window.clearTimeout(safetyTimer);
         if (!cancelled) setFallbackLoading(false);
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(safetyTimer);
     };
-  }, [fallbackAttempted, fetchKey, fetchType, hasData, limit, propLoading, triggered]);
+  }, [fallbackAttempted, fetchKey, fetchType, hasData, limit, triggered]);
 
   const prioritizeFirstRow = sectionIndex === 0;
   const sectionMovies = hasData ? (propMovies ?? []) : fallbackMovies;
-  const sectionLoading = Boolean(propLoading) || fallbackLoading;
+  const sectionLoading = hasData ? Boolean(propLoading) : fallbackLoading;
 
   return (
     <div ref={ref}>

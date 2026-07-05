@@ -41,7 +41,7 @@
     "dev": "vite",
     "seo:audit": "node scripts/seo-audit.mjs",
     "security:secrets": "node scripts/security-secret-audit.mjs",
-    "seo:generate": "node scripts/generate-seo-sitemap.mjs && node scripts/generate-mhophim-satellite.mjs",
+    "seo:generate": "node scripts/generate-seo-sitemap.mjs && node scripts/generate-movie-sitemap-chunks.mjs && node scripts/generate-mhophim-satellite.mjs",
     "watch:test": "node scripts/watch-page-regression.mjs",
     "diagnostics:test": "node scripts/diagnostics-regression.mjs",
     "movie:data:test": "node scripts/movie-data-quality.mjs",
