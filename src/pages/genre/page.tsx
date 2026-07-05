@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { useHeroLazyLoad } from '@/hooks/useHeroLazyLoad';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
@@ -6,7 +6,6 @@ import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByCategory, searchMovies } from '@/services/movieApi';
-import { setSmartSessionCache } from '@/utils/smartCache';
 import type { MovieItem } from '@/types/movie';
 import Pagination from '@/components/base/Pagination';
 
@@ -353,11 +352,9 @@ const GENRE_META: Record<string, {
 const SORT_OPTIONS = [
   { value: 'modified.time_desc', label: 'Mới cập nhật', icon: 'ri-time-line' },
   { value: 'year_desc', label: 'Năm mới nhất', icon: 'ri-calendar-line' },
-  { value: 'year_asc', label: 'Năm cũ nhất', icon: 'ri-history-line' },
 ];
 
 const PAGE_SIZE = 36;
-const POOL_CACHE_TTL = 10 * 60 * 1000;
 const VIRTUAL_GENRE_KEYWORDS: Record<string, string[]> = {
 };
 
@@ -379,32 +376,6 @@ function inferTotalPages(totalPages: number, itemCount: number, pg: number): num
   if (itemCount >= PAGE_SIZE) return Math.max(totalPages, pg + 1);
   return Math.max(totalPages, pg);
 }
-function inferCachedTotalPages(items: MovieItem[], current = 1): number {
-  return Math.max(current, Math.ceil(items.length / PAGE_SIZE) + (items.length >= PAGE_SIZE ? 1 : 0), 1);
-}
-
-function getPoolCacheKey(slug: string, sort: string) {
-  return `kp_genre_${slug}_${sort}_v2`;
-}
-
-function getPoolCache(slug: string, sort: string): MovieItem[] | null {
-  try {
-    const key = getPoolCacheKey(slug, sort);
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
-    const entry = JSON.parse(raw) as { data: MovieItem[]; ts: number };
-    if (Date.now() - entry.ts > POOL_CACHE_TTL) { sessionStorage.removeItem(key); return null; }
-    return entry.data;
-  } catch { return null; }
-}
-
-function setPoolCache(slug: string, sort: string, data: MovieItem[]): void {
-  try {
-    const key = getPoolCacheKey(slug, sort);
-    setSmartSessionCache(key, JSON.stringify({ data, ts: Date.now() }));
-  } catch { /* quota */ }
-}
-
 /* ─── Skeleton card ─── */
 function SkeletonCard() {
   return (
@@ -456,10 +427,6 @@ export default function GenrePage() {
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('modified.time_desc');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const poolMapRef = useRef<Record<string, MovieItem[]>>({});
-  const seenMapRef = useRef<Record<string, Set<string>>>({});
-  const totalPagesMapRef = useRef<Record<string, number>>({});
-  const totalItemsMapRef = useRef<Record<string, number>>({});
   const { heroRef, showHeroBg, heroImgLoaded, setHeroImgLoaded } = useHeroLazyLoad();
 
   const getSortParams = (sort: string) => {
@@ -471,30 +438,6 @@ export default function GenrePage() {
   const fetchMovies = useCallback(async (pg: number, reset = false, sort = sortBy) => {
     if (!slug) return;
     if (reset) {
-      if (pg === 1) {
-        // In-memory cache hit
-        const cached = poolMapRef.current[sort];
-        if (cached && cached.length > 0) {
-          setMovies(cached);
-          setTotalPages(inferCachedTotalPages(cached, totalPagesMapRef.current[sort] ?? 1));
-          setTotalItems(totalItemsMapRef.current[sort] ?? cached.length);
-          setLoading(false);
-          return;
-        }
-        // SessionStorage cache hit
-        const ssCached = getPoolCache(slug, sort);
-        if (ssCached && ssCached.length > 0) {
-          poolMapRef.current[sort] = ssCached;
-          seenMapRef.current[sort] = new Set(ssCached.map(getMovieKey));
-          setMovies(ssCached);
-          setTotalPages(inferCachedTotalPages(ssCached, totalPagesMapRef.current[sort] ?? 1));
-          setTotalItems(totalItemsMapRef.current[sort] ?? ssCached.length);
-          setLoading(false);
-          return;
-        }
-      }
-      seenMapRef.current[sort] = new Set();
-      poolMapRef.current[sort] = [];
       setMovies([]);
       setTotalPages(1);
       setTotalItems(0);
@@ -503,42 +446,39 @@ export default function GenrePage() {
     try {
       const sortParams = getSortParams(sort);
       const virtualKeywords = VIRTUAL_GENRE_KEYWORDS[slug];
+      const sourcePage = pg * 2 - 1;
       const responses = virtualKeywords
-        ? await Promise.all(virtualKeywords.map((keyword) => searchMovies(keyword, pg)))
-        : [await fetchMoviesByCategory({
-            type: 'phim-moi-cap-nhat',
-            category: slug,
-            page: pg,
-            ...sortParams,
-          })];
+        ? await Promise.all(virtualKeywords.flatMap((keyword) => [
+            searchMovies(keyword, sourcePage),
+            searchMovies(keyword, sourcePage + 1),
+          ]))
+        : await Promise.all([
+            fetchMoviesByCategory({
+              type: 'phim-moi-cap-nhat',
+              category: slug,
+              page: sourcePage,
+              ...sortParams,
+            }),
+            fetchMoviesByCategory({
+              type: 'phim-moi-cap-nhat',
+              category: slug,
+              page: sourcePage + 1,
+              ...sortParams,
+            }),
+          ]);
       const items = mergeUniqueMovies(responses.flatMap((data) => data.items ?? []));
-      const seen = seenMapRef.current[sort] ?? new Set<string>();
       if (reset) {
-        items.forEach((m) => seen.add(m._id));
-        seenMapRef.current[sort] = seen;items.forEach((m) => seen.add(getMovieKey(m)));
-        poolMapRef.current[sort] = items;
-        setMovies(items);
+        setMovies(items.slice(0, PAGE_SIZE));
       } else {
-        const fresh = items.filter((m) => !seen.has(getMovieKey(m)));
-        fresh.forEach((m) => seen.add(getMovieKey(m)));
-        seenMapRef.current[sort] = seen;
-        const updated = [...(poolMapRef.current[sort] ?? []), ...fresh];
-        poolMapRef.current[sort] = updated;
-        setMovies(updated);
+        setMovies(items.slice(0, PAGE_SIZE));
       }
-      const tp = inferTotalPages(
-        Math.max(...responses.map((data) => data.pagination?.totalPages ?? 1)),
-        items.length,
-        pg,
-      );
       const ti = Math.max(...responses.map((data) => data.pagination?.totalItems ?? 0), items.length);
+      const sourcePageTotal = Math.max(...responses.map((data) => data.pagination?.totalPages ?? 1));
+      const tp = ti > 0
+        ? Math.max(1, Math.ceil(ti / PAGE_SIZE))
+        : inferTotalPages(Math.ceil(sourcePageTotal / 2), items.length, pg);
       setTotalPages(tp);
-      totalPagesMapRef.current[sort] = tp;
       setTotalItems(ti);
-      totalItemsMapRef.current[sort] = ti;
-      if (pg === 1 && poolMapRef.current[sort]?.length) {
-        setPoolCache(slug, sort, poolMapRef.current[sort]);
-      }
     } catch {
       if (reset) setMovies([]);
     } finally {
@@ -547,11 +487,6 @@ export default function GenrePage() {
   }, [slug]);
 
   useEffect(() => {
-    // Genre changed — wipe all sort caches
-    poolMapRef.current = {};
-    seenMapRef.current = {};
-    totalPagesMapRef.current = {};
-    totalItemsMapRef.current = {};
     setMovies([]);
     setPage(1);
     setSearchParams({});
@@ -778,7 +713,7 @@ export default function GenrePage() {
             <>
               <div className="grid movie-grid-desktop">
                 {movies.map((m, idx) => (
-                  <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 2} />
+                  <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 12} />
                 ))}
               </div>
 

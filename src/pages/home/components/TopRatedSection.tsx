@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchMoviesByCategory, getPosterUrl } from '../../../services/movieApi';
+import { fetchMoviesByCategory, getImageUrl } from '../../../services/movieApi';
 import { preloadMoviePosters } from '../../../utils/imagePreloader';
 import type { MovieItem } from '../../../types/movie';
+import { useImageFallback } from '../../../hooks/useImageFallback';
 
 function getTopRating(name: string, idx: number): string {
   const code = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
@@ -59,7 +60,7 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false }:
         .slice(0, 10);
       setMovies(filtered);
       setLoading(false);
-      preloadMoviePosters(filtered.slice(0, 4), getPosterUrl, {
+      preloadMoviePosters(filtered.slice(0, 4), (movie) => getImageUrl(movie.poster_url || movie.thumb_url), {
         batchSize: 2,
         delayBetweenBatches: 250,
         delayBetweenImages: 40,
@@ -86,7 +87,7 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false }:
         .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
         .slice(0, 10);
       setMovies(filtered);
-      preloadMoviePosters(filtered, getPosterUrl, {
+      preloadMoviePosters(filtered, (movie) => getImageUrl(movie.poster_url || movie.thumb_url), {
         batchSize: 3,
         delayBetweenBatches: 200,
         delayBetweenImages: 25,
@@ -143,9 +144,13 @@ const RANK_STYLES = [
 ];
 
 function RankedSpotlight({ movie, idx }: RankedCardProps) {
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const [imgError, setImgError] = useState(false);
-  const poster = getPosterUrl(movie.poster_url || movie.thumb_url);
+  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
+    movie.poster_url || movie.thumb_url,
+    movie.thumb_url || movie.poster_url,
+    false,
+    520,
+    88,
+  );
   const rating = getTopRating(movie.name, idx);
   const votes = getVoteCount(idx);
   const genres = movie.category?.slice(0, 2).map((c: { name: string }) => c.name) ?? [];
@@ -164,13 +169,13 @@ function RankedSpotlight({ movie, idx }: RankedCardProps) {
           </div>
         )}
         <img
-          src={poster}
+          src={currentSrc}
           alt={movie.name}
           loading="lazy"
           className={`h-full w-full object-cover object-top transition-opacity duration-500 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-          onLoad={() => setImgLoaded(true)}
-          onError={() => { setImgError(true); setImgLoaded(true); }}
+          onLoad={onLoad}
+          onError={onError}
         />
         <div className="absolute left-1.5 top-1.5 rounded-md bg-amber-400 px-1.5 py-0.5 text-[11px] font-black leading-none text-black">
           #1
@@ -209,9 +214,13 @@ function RankedSpotlight({ movie, idx }: RankedCardProps) {
 }
 
 function RankedMiniCard({ movie, idx }: RankedCardProps) {
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const [imgError, setImgError] = useState(false);
-  const poster = getPosterUrl(movie.poster_url || movie.thumb_url);
+  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
+    movie.poster_url || movie.thumb_url,
+    movie.thumb_url || movie.poster_url,
+    false,
+    360,
+    86,
+  );
   const rating = getTopRating(movie.name, idx);
   const votes = getVoteCount(idx);
   const genres = movie.category?.slice(0, 1).map((c: { name: string }) => c.name) ?? [];
@@ -234,13 +243,13 @@ function RankedMiniCard({ movie, idx }: RankedCardProps) {
           </div>
         )}
         <img
-          src={poster}
+          src={currentSrc}
           alt={movie.name}
           loading="lazy"
           className={`h-full w-full object-cover object-top transition-opacity duration-500 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-          onLoad={() => setImgLoaded(true)}
-          onError={() => { setImgError(true); setImgLoaded(true); }}
+          onLoad={onLoad}
+          onError={onError}
         />
         {style && (
           <div className={`absolute left-1 top-1 rounded border px-1.5 py-0.5 text-[10px] font-black leading-none ${style.bg} ${style.num} ${style.border}`}>

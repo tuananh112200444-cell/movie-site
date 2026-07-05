@@ -177,7 +177,15 @@ export async function fetchNewMoviesMultiSource(page = 1): Promise<MovieListResp
     }
   });
 
-  const sourceResults = await Promise.all(sourcePromises);
+  const firstValidSource = await raceFirstValidWithTimeout(
+    sourcePromises.map((promise) =>
+      promise
+        .then((result) => ((result.result.items?.length ?? 0) > 0 ? result : null))
+        .catch(() => null),
+    ),
+    4500,
+  );
+  const sourceResults = firstValidSource ? [firstValidSource] : await Promise.all(sourcePromises);
 
   // Sort sources by who has most new movies (totalItems descending) — prioritize fresher sources
   sourceResults.sort((a, b) => {
@@ -938,6 +946,15 @@ export async function fetchMoviesByType(
   const supabaseResult = await fetchMoviesFromSupabaseList({ type, page, sortField, sortType });
   if (supabaseResult) return supabaseResult;
 
+  if (type === 'phim-sap-chieu') {
+    const latest = await fetchNewMoviesMultiSource(page).catch(() => null);
+    if (latest && (latest.items?.length ?? 0) > 0) {
+      const currentYear = new Date().getFullYear();
+      const fallbackItems = (latest.items ?? []).filter((item) => (item.year ?? 0) >= currentYear - 1);
+      return withFilteredItemsPagination(latest, sortListItems(fallbackItems.length > 0 ? fallbackItems : latest.items ?? [], 'year', 'desc'), page);
+    }
+  }
+
   const q = new URLSearchParams({ page: String(page) });
   if (sortField) { q.set('sort_field', sortField); q.set('sort_type', sortType); }
 
@@ -961,7 +978,18 @@ export async function fetchMoviesByType(
     const filteredItems = (result.items ?? []).filter(
       (item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer'
     );
-    return withFilteredItemsPagination(result, sortListItems(filteredItems, sortField, sortType), page);
+    if (filteredItems.length > 0 || type !== 'phim-sap-chieu') {
+      return withFilteredItemsPagination(result, sortListItems(filteredItems, sortField, sortType), page);
+    }
+  }
+
+  if (type === 'phim-sap-chieu') {
+    const latest = await fetchNewMoviesMultiSource(page).catch(() => null);
+    if (latest && (latest.items?.length ?? 0) > 0) {
+      const currentYear = new Date().getFullYear();
+      const fallbackItems = (latest.items ?? []).filter((item) => (item.year ?? 0) >= currentYear - 1);
+      return withFilteredItemsPagination(latest, sortListItems(fallbackItems.length > 0 ? fallbackItems : latest.items ?? [], 'year', 'desc'), page);
+    }
   }
 
   // All failed — return empty
