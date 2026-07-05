@@ -14,49 +14,49 @@
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
 /
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim/*
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /search*
   Cache-Control: public, max-age=30, s-maxage=120, stale-while-revalidate=300
 
 /vu-tru-dam-my
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-moi-nhat
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-moi-cap-nhat
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-le
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-bo
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-chieu-rap
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-han-quoc
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-trung-quoc
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-au-my
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-nhat-ban
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-thai-lan
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /phim-viet-nam
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
@@ -112,4 +112,4 @@
   Content-Type: text/plain; charset=utf-8
 
 /index.html
-  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600

@@ -256,8 +256,8 @@ async function assertHeadersClean() {
     if (!headers.includes(needle)) failures.push(`public/_headers is missing: ${needle}`);
   }
   const smartCacheBlocks = new Map([
-    ['/', 'Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600'],
-    ['/phim/*', 'Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=600'],
+    ['/', 'Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600'],
+    ['/phim/*', 'Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600'],
     ['/search*', 'Cache-Control: public, max-age=30, s-maxage=120, stale-while-revalidate=300'],
   ]);
   for (const [route, cacheHeader] of smartCacheBlocks) {
