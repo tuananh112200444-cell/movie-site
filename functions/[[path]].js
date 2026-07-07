@@ -2,7 +2,7 @@
 const MHOPHIM_URL = 'https://mhophim.com';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1';
-const SEO_PRERENDER_VERSION = '20260702-clean-prerender-seo-v1';
+const SEO_PRERENDER_VERSION = '20260707-smart-domain-cluster-v3';
 
 const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
@@ -124,9 +124,9 @@ const BLOCKED_CRAWLER_PATTERNS = [
 
 const CLEAN_STATIC_META = {
   '/': {
-    title: 'KhoPhim - Xem Phim Online Vietsub HD',
-    description: 'KhoPhim là trang xem phim online Vietsub HD miễn phí, cập nhật phim lẻ, phim bộ, phim chiếu rạp, anime, phim Hàn, Trung, Âu Mỹ hằng ngày.',
-    h1: 'KhoPhim - Xem phim online Vietsub HD',
+    title: 'Xem Phim Online Vietsub HD Miễn Phí | KhoPhim',
+    description: 'KhoPhim là trang xem phim online Vietsub HD miễn phí, cập nhật phim lẻ, phim bộ, phim chiếu rạp, phim Việt Nam, Hàn, Trung, Âu Mỹ và anime mỗi ngày.',
+    h1: 'Xem phim online Vietsub HD miễn phí',
   },
   '/phim-moi-nhat': {
     title: 'Phim Mới Nhất Vietsub HD | KhoPhim',
@@ -154,9 +154,9 @@ const CLEAN_STATIC_META = {
     h1: 'Phim bộ Vietsub HD',
   },
   '/phim-chieu-rap': {
-    title: 'Phim Chiếu Rạp Vietsub HD - Bom Tấn Mới | KhoPhim',
-    description: 'Danh sách phim chiếu rạp, bom tấn Hollywood, phim Hàn, Trung và Việt Nam Vietsub HD trên KhoPhim.',
-    h1: 'Phim chiếu rạp Vietsub HD',
+    title: 'Xem Phim Chiếu Rạp Online Vietsub HD | KhoPhim',
+    description: 'Xem phim chiếu rạp online Vietsub HD tại KhoPhim: bom tấn Hollywood, phim rạp Hàn, Trung, Việt Nam, hành động, kinh dị và hoạt hình mới cập nhật.',
+    h1: 'Xem phim chiếu rạp online Vietsub HD',
   },
   '/hoat-hinh': {
     title: 'Anime Vietsub HD - Hoạt Hình Mới Nhất | KhoPhim',
@@ -219,13 +219,13 @@ const CLEAN_STATIC_META = {
     h1: 'Phim Thái Lan Vietsub HD',
   },
   '/phim-viet-nam': {
-    title: 'Phim Việt Nam HD - Phim Việt Mới Nhất | KhoPhim',
-    description: 'Xem phim Việt Nam HD, phim chiếu rạp Việt, phim bộ Việt và phim gia đình mới cập nhật trên KhoPhim.',
-    h1: 'Phim Việt Nam HD',
+    title: 'Xem Phim Việt Nam HD - Phim Việt Mới | KhoPhim',
+    description: 'Xem phim Việt Nam HD trên KhoPhim: phim chiếu rạp Việt, phim bộ VTV, HTV, web drama, phim hài, tình cảm và gia đình mới cập nhật.',
+    h1: 'Xem phim Việt Nam HD',
   },
   '/xem-phim-online': {
-    title: 'Xem Phim Online Vietsub HD Miễn Phí | KhoPhim',
-    description: 'Xem phim online miễn phí tại KhoPhim với phim lẻ, phim bộ, phim chiếu rạp, anime, TV shows Vietsub HD cập nhật mỗi ngày.',
+    title: 'Xem Phim Online Miễn Phí Vietsub HD | KhoPhim',
+    description: 'Xem phim online miễn phí Vietsub HD tại KhoPhim: phim mới, phim hay, phim lẻ, phim bộ, phim chiếu rạp, phim Việt Nam, Hàn, Trung và anime.',
     h1: 'Xem phim online Vietsub HD miễn phí',
   },
   '/phim-vietsub': {
@@ -690,6 +690,323 @@ function renderHtml({ title, description, canonical, h1, body, schema, ogType = 
 </html>`;
 }
 
+const STATIC_TOPIC_CONTENT = {
+  '/': {
+    intro: [
+      'KhoPhim tập trung vào nhu cầu xem phim online hằng ngày của khán giả Việt Nam: tìm nhanh, vào phim nhanh, xem trên điện thoại hoặc máy tính mà không cần cài ứng dụng.',
+      'Trang chủ là điểm vào chính cho các cụm từ khóa rộng như xem phim, xem phim online, xem phim miễn phí, xem phim Vietsub HD và phim mới cập nhật.',
+    ],
+    highlights: [
+      'Phim mới cập nhật, phim lẻ, phim bộ, phim chiếu rạp và anime được liên kết trực tiếp từ trang chủ.',
+      'Các trang danh mục có canonical riêng để Google không nhầm lẫn giữa trang chủ và trang chuyên đề.',
+      'Nội dung ưu tiên tiếng Việt có dấu, đồng thời hỗ trợ các biến thể không dấu thường gặp khi người dùng tìm kiếm.',
+    ],
+    faq: [
+      ['Xem phim online miễn phí ở đâu?', 'Bạn có thể xem phim online miễn phí tại KhoPhim với nhiều nhóm nội dung như phim lẻ, phim bộ, phim chiếu rạp, anime, phim Hàn Quốc, phim Trung Quốc và phim Việt Nam.'],
+      ['KhoPhim phù hợp với từ khóa xem phim nào?', 'KhoPhim được tối ưu cho các truy vấn rộng như xem phim, xem phim online, xem phim Vietsub, xem phim HD, phim mới cập nhật và các truy vấn theo quốc gia hoặc thể loại.'],
+    ],
+  },
+  '/xem-phim-online': {
+    intro: [
+      'Trang xem phim online gom các nhu cầu tìm kiếm phổ biến nhất: xem phim miễn phí, xem phim Vietsub HD, xem phim mới, xem phim hay, xem phim không cần đăng ký và xem trên nhiều thiết bị.',
+      'URL này được dùng như landing page chuyên biệt cho nhóm từ khóa rộng, trong khi từng danh mục như phim chiếu rạp, phim Việt Nam hay phim Hàn Quốc vẫn có trang riêng để tránh loãng chủ đề.',
+    ],
+    highlights: [
+      'Hướng người xem đến phim mới nhất, phim hot, phim lẻ, phim bộ và phim chiếu rạp.',
+      'Có liên kết nội bộ đến các cụm nội dung quan trọng để tăng topical authority cho toàn site.',
+      'Nội dung server-side giúp Googlebot đọc được chủ đề ngay cả trước khi JavaScript chạy.',
+    ],
+    faq: [
+      ['Xem phim online trên KhoPhim có cần tài khoản không?', 'Không, người xem có thể truy cập các danh mục phim và tìm phim trực tiếp trên trình duyệt.'],
+      ['Trang này khác gì trang chủ?', 'Trang này tập trung vào ý định tìm kiếm xem phim online, còn trang chủ là cửa vào tổng hợp cho toàn bộ hệ thống KhoPhim.'],
+    ],
+  },
+  '/phim-chieu-rap': {
+    intro: [
+      'Trang phim chiếu rạp phục vụ nhóm tìm kiếm có ý định rõ hơn: xem phim chiếu rạp online, phim rạp Vietsub HD, phim chiếu rạp mới, bom tấn Hollywood, phim rạp Việt Nam và phim hành động kinh dị mới.',
+      'Nội dung được tách riêng khỏi trang chủ để Google hiểu đây là trang đích chính cho cụm từ khóa phim chiếu rạp, không phải chỉ là một mục nhỏ trong kho phim.',
+    ],
+    highlights: [
+      'Tập trung vào phim rạp mới, bom tấn, phim Việt chiếu rạp và phim điện ảnh quốc tế.',
+      'Liên kết chéo đến phim lẻ, phim Việt Nam, phim Âu Mỹ và phim hot 2026.',
+      'Canonical riêng tại /phim-chieu-rap để giữ tín hiệu SEO không bị đổ về trang chủ.',
+    ],
+    faq: [
+      ['Xem phim chiếu rạp online ở đâu?', 'KhoPhim có trang phim chiếu rạp riêng tại /phim-chieu-rap, tập trung vào phim rạp mới, bom tấn và phim điện ảnh Vietsub HD.'],
+      ['Phim chiếu rạp có bị lẫn với phim bộ không?', 'Không, trang này ưu tiên phim điện ảnh và các phim rạp, còn phim bộ được tách sang trang /phim-bo.'],
+    ],
+  },
+  '/phim-viet-nam': {
+    intro: [
+      'Trang phim Việt Nam tập trung cho các truy vấn như xem phim Việt Nam, phim Việt Nam HD, phim chiếu rạp Việt, phim bộ Việt, phim VTV, HTV, web drama Việt và phim hài Việt Nam.',
+      'Đây là một cụm nội dung quan trọng vì người dùng Việt thường tìm theo quốc gia, tên diễn viên, tên phim truyền hình hoặc nhóm phim chiếu rạp Việt mới.',
+    ],
+    highlights: [
+      'Tách riêng khỏi trang phim chiếu rạp để giữ chủ đề phim Việt Nam rõ ràng.',
+      'Liên kết sang phim chiếu rạp, phim bộ, phim lẻ và các quốc gia lân cận như Hàn Quốc, Thái Lan.',
+      'Tối ưu cả cụm có dấu và không dấu: phim Việt Nam, phim Viet Nam, xem phim Viet Nam.',
+    ],
+    faq: [
+      ['Xem phim Việt Nam online ở đâu?', 'KhoPhim có trang /phim-viet-nam dành riêng cho phim Việt Nam HD, bao gồm phim chiếu rạp Việt, phim bộ truyền hình, phim hài và web drama.'],
+      ['Trang phim Việt Nam có cạnh tranh với phim chiếu rạp không?', 'Không, phim Việt Nam là cụm theo quốc gia, còn phim chiếu rạp là cụm theo loại phát hành. Hai trang liên kết với nhau nhưng canonical riêng.'],
+    ],
+  },
+  '/phim-moi-nhat': {
+    intro: [
+      'Trang phim mới nhất là nơi gom các phim vừa được cập nhật, phim mới ra tập, phim mới thêm nguồn xem và phim vừa có thông tin phát hành.',
+      'Đây là cụm nội dung bắt nhu cầu thời gian thực: người xem không nhớ tên phim cụ thể nhưng muốn biết hôm nay có phim gì mới để xem.',
+    ],
+    highlights: [
+      'Ưu tiên truy vấn phim mới, phim mới cập nhật, phim hôm nay và phim vừa ra tập.',
+      'Liên kết sang phim đang chiếu, phim hot 2026, phim bộ và anime để giữ dòng khám phá tự nhiên.',
+      'Giúp Google hiểu KhoPhim có nhịp cập nhật nội dung thường xuyên, không chỉ là kho lưu trữ tĩnh.',
+    ],
+    faq: [
+      ['Phim mới nhất trên KhoPhim là gì?', 'Đây là trang dành cho phim vừa cập nhật, phim mới ra tập, phim mới thêm thông tin và các nội dung đang được người xem quan tâm.'],
+      ['Trang này khác phim hot 2026 không?', 'Phim mới nhất ưu tiên thời điểm cập nhật, còn phim hot 2026 ưu tiên mức độ quan tâm và xu hướng trong năm.'],
+    ],
+  },
+  '/phim-hot-2026': {
+    intro: [
+      'Trang phim hot 2026 tập trung vào các phim đang được tìm kiếm nhiều trong năm 2026, bao gồm phim chiếu rạp, phim bộ, anime và các phim theo xu hướng mạng xã hội.',
+      'Cụm này giúp KhoPhim bắt tín hiệu trend theo năm, trong khi các trang danh mục vẫn giữ vai trò phân loại theo quốc gia và thể loại.',
+    ],
+    highlights: [
+      'Tối ưu cho phim hot 2026, phim mới 2026, phim hay 2026 và phim đang nổi.',
+      'Liên kết đến phim mới nhất, phim chiếu rạp, phim sắp chiếu và trailer để theo sát vòng đời tìm kiếm.',
+      'Nội dung server-side giúp Google đọc được chủ đề trend trước khi app tải dữ liệu động.',
+    ],
+    faq: [
+      ['Phim hot 2026 là gì?', 'Đây là nhóm phim trong năm 2026 đang có nhu cầu tìm kiếm cao, được người xem quan tâm hoặc vừa có thông tin mới.'],
+      ['Có nên tách phim hot 2026 khỏi trang chủ không?', 'Có, vì truy vấn theo năm có ý định riêng và cần landing page riêng để không làm loãng trang chủ.'],
+    ],
+  },
+  '/phim-le': {
+    intro: [
+      'Trang phim lẻ tập trung các truy vấn xem phim lẻ, phim điện ảnh, phim lẻ Vietsub HD, phim lẻ hay và phim lẻ mới cập nhật.',
+      'Nhóm phim lẻ cần tách khỏi phim bộ vì ý định xem khác nhau: người xem thường muốn chọn một phim hoàn chỉnh để xem ngay.',
+    ],
+    highlights: [
+      'Liên kết tới phim chiếu rạp, phim Âu Mỹ, phim Việt Nam và phim hot 2026.',
+      'Canonical riêng giúp nhóm phim lẻ không bị trộn với phim bộ.',
+      'Phù hợp cho các truy vấn phim lẻ hay, phim lẻ mới, phim lẻ Vietsub và phim điện ảnh HD.',
+    ],
+    faq: [
+      ['Xem phim lẻ hay ở đâu?', 'KhoPhim có trang /phim-le dành cho phim lẻ Vietsub HD, phim điện ảnh và phim mới cập nhật.'],
+      ['Phim lẻ khác phim chiếu rạp thế nào?', 'Phim chiếu rạp là nhóm theo hình thức phát hành, còn phim lẻ là nhóm theo định dạng xem một phim hoàn chỉnh. Hai nhóm có liên kết nhưng không trùng canonical.'],
+    ],
+  },
+  '/phim-bo': {
+    intro: [
+      'Trang phim bộ phục vụ nhu cầu xem series, drama Hàn Quốc, phim Trung Quốc, phim Thái Lan, phim bộ Việt Nam và các phim đang cập nhật tập mới.',
+      'Người tìm phim bộ thường quan tâm trạng thái đủ tập, tập mới, lịch ra tập và quốc gia sản xuất, nên trang này cần nội dung riêng rõ hơn trang phim lẻ.',
+    ],
+    highlights: [
+      'Tách rõ khỏi phim lẻ và phim chiếu rạp.',
+      'Liên kết với phim Hàn Quốc, phim Trung Quốc, phim Thái Lan, phim đang chiếu và phim hoàn tất.',
+      'Phù hợp truy vấn phim bộ Vietsub, phim bộ hay, phim trọn bộ và phim đang ra tập.',
+    ],
+    faq: [
+      ['Xem phim bộ Vietsub ở đâu?', 'KhoPhim có trang /phim-bo dành cho phim bộ Vietsub HD, phim full trọn bộ và phim đang cập nhật tập mới.'],
+      ['Phim bộ đủ tập nằm ở đâu?', 'Người xem có thể đi từ trang phim bộ sang trang phim hoàn tất để tìm các series đã đủ tập.'],
+    ],
+  },
+  '/phim-han-quoc': {
+    intro: [
+      'Trang phim Hàn Quốc tập trung vào drama Hàn, phim tình cảm, phim học đường, phim hành động, phim lãng mạn và series Hàn đang ra tập.',
+      'Đây là cụm quốc gia có nhu cầu tìm kiếm lớn, cần landing riêng để Google không trộn với phim bộ chung hoặc trang chủ.',
+    ],
+    highlights: [
+      'Tối ưu cho phim Hàn Quốc Vietsub, drama Hàn, phim Hàn mới và phim Hàn đang chiếu.',
+      'Liên kết sang phim bộ, phim tình cảm, phim đang chiếu và phim hot 2026.',
+      'Hỗ trợ cả biến thể có dấu và không dấu như phim Han Quoc, phim han vietsub.',
+    ],
+    faq: [
+      ['Xem phim Hàn Quốc Vietsub ở đâu?', 'KhoPhim có trang /phim-han-quoc dành cho drama Hàn, phim bộ Hàn, phim lẻ Hàn và phim Hàn mới cập nhật.'],
+      ['Trang phim Hàn có bị trùng phim bộ không?', 'Không, phim Hàn Quốc là cụm theo quốc gia, còn phim bộ là cụm theo định dạng. Hai trang liên kết nhau nhưng phục vụ truy vấn khác nhau.'],
+    ],
+  },
+  '/phim-trung-quoc': {
+    intro: [
+      'Trang phim Trung Quốc tập trung vào cổ trang, tiên hiệp, ngôn tình, kiếm hiệp, hiện đại và phim bộ Trung Quốc Vietsub HD.',
+      'Cụm này có nhiều truy vấn dài theo thể loại, diễn viên và tên phim, nên cần landing riêng để gom topical authority.',
+    ],
+    highlights: [
+      'Tối ưu cho phim Trung Quốc Vietsub, phim cổ trang, tiên hiệp, ngôn tình và phim Trung mới.',
+      'Liên kết sang phim bộ, phim cổ trang, phim đang chiếu và phim hot 2026.',
+      'Tách rõ khỏi phim Hàn Quốc, phim Thái Lan và trang xem phim online tổng quát.',
+    ],
+    faq: [
+      ['Xem phim Trung Quốc cổ trang ở đâu?', 'KhoPhim có trang /phim-trung-quoc và các trang thể loại liên quan để người xem tìm phim cổ trang, tiên hiệp, kiếm hiệp và ngôn tình.'],
+      ['Có tối ưu cho từ khóa không dấu không?', 'Có, hệ thống metadata hỗ trợ các biến thể như phim Trung Quoc, phim co trang và phim tien hiep.'],
+    ],
+  },
+  '/phim-au-my': {
+    intro: [
+      'Trang phim Âu Mỹ tập trung vào Hollywood, phim hành động, viễn tưởng, kinh dị, tội phạm, siêu anh hùng và phim chiếu rạp quốc tế.',
+      'Nhóm này thường gắn với truy vấn phim lẻ, bom tấn và phim chất lượng cao, nên được liên kết mạnh với phim chiếu rạp và phim Full HD.',
+    ],
+    highlights: [
+      'Tối ưu cho phim Âu Mỹ Vietsub, phim Hollywood, phim hành động Âu Mỹ và phim bom tấn.',
+      'Liên kết sang phim chiếu rạp, phim lẻ, phim Full HD và phim 4K.',
+      'Giữ canonical riêng để không cạnh tranh với trang phim chiếu rạp.',
+    ],
+    faq: [
+      ['Xem phim Âu Mỹ Vietsub ở đâu?', 'KhoPhim có trang /phim-au-my dành cho phim Hollywood, phim hành động, viễn tưởng, kinh dị và phim Âu Mỹ mới.'],
+      ['Phim Âu Mỹ có trùng phim chiếu rạp không?', 'Một số phim có liên quan, nhưng phim Âu Mỹ là cụm theo quốc gia/khu vực còn phim chiếu rạp là cụm theo hình thức phát hành.'],
+    ],
+  },
+  '/anime': {
+    intro: [
+      'Trang anime tập trung vào anime Vietsub, hoạt hình Nhật Bản, anime mùa mới, anime đang ra tập và các series được cộng đồng quan tâm.',
+      'Anime cần landing riêng vì người xem thường tìm theo mùa, tập mới, tên Nhật, tên Anh hoặc thể loại như hành động, học đường, fantasy.',
+    ],
+    highlights: [
+      'Tối ưu cho anime Vietsub, xem anime online, anime mới và anime đang chiếu.',
+      'Liên kết sang phim Nhật Bản, hoạt hình, phim đang chiếu và phim hot 2026.',
+      'Tách khỏi hoạt hình tổng quát để giữ chủ đề anime rõ hơn cho Google.',
+    ],
+    faq: [
+      ['Xem anime Vietsub ở đâu?', 'KhoPhim có trang /anime dành riêng cho anime Vietsub, anime mùa mới và các series đang cập nhật.'],
+      ['Anime có khác hoạt hình không?', 'Anime là cụm riêng tập trung vào hoạt hình Nhật Bản và văn hóa anime, còn hoạt hình có thể rộng hơn.'],
+    ],
+  },
+  '/phim-thai-lan': {
+    intro: [
+      'Trang phim Thái Lan tập trung vào lakorn, BL Thái, phim tình cảm, học đường, hài hước và series Thái đang được người xem Việt quan tâm.',
+      'Đây là cụm có nhiều truy vấn theo diễn viên, cặp đôi và mạng xã hội, nên cần liên kết riêng với Vũ Trụ Đam Mỹ và phim bộ.',
+    ],
+    highlights: [
+      'Tối ưu cho phim Thái Lan Vietsub, phim Thai Lan, lakorn và BL Thái.',
+      'Liên kết sang phim bộ, Vũ Trụ Đam Mỹ, phim tình cảm và phim đang chiếu.',
+      'Giữ vai trò quốc gia riêng để không trộn với phim Hàn hoặc phim Trung.'],
+    faq: [
+      ['Xem phim Thái Lan Vietsub ở đâu?', 'KhoPhim có trang /phim-thai-lan dành cho lakorn, BL Thái, phim tình cảm và series Thái mới.'],
+      ['Phim BL Thái nên nằm ở đâu?', 'Phim BL Thái có thể xuất hiện ở cả phim Thái Lan và Vũ Trụ Đam Mỹ, nhưng mỗi trang có canonical và mục đích tìm kiếm riêng.'],
+    ],
+  },
+  '/phim-vietsub': {
+    intro: [
+      'Trang phim Vietsub gom các truy vấn người xem quan tâm phụ đề tiếng Việt: phim Vietsub HD, xem phim phụ đề Việt, phim mới Vietsub và anime Vietsub.',
+      'Đây là cụm theo trải nghiệm xem, khác với cụm quốc gia hoặc thể loại, nên cần trang riêng để bắt nhu cầu rất phổ biến tại Việt Nam.',
+    ],
+    highlights: [
+      'Liên kết tới phim Hàn Quốc, Trung Quốc, Âu Mỹ, anime và Vũ Trụ Đam Mỹ.',
+      'Tối ưu cả phim Vietsub, phim vietsub, phụ đề Việt và phu de Viet.',
+      'Giữ nội dung tự nhiên để tránh nhồi từ khóa phụ đề quá mức.',
+    ],
+    faq: [
+      ['Phim Vietsub là gì?', 'Phim Vietsub là phim có phụ đề tiếng Việt, phù hợp với người xem muốn giữ âm thanh gốc và đọc phụ đề.'],
+      ['KhoPhim có trang riêng cho phim Vietsub không?', 'Có, trang /phim-vietsub gom các nhóm phim có phụ đề Việt và liên kết đến các danh mục liên quan.'],
+    ],
+  },
+  '/phim-hay': {
+    intro: [
+      'Trang phim hay phục vụ người xem chưa biết chọn phim gì, muốn khám phá các phim đáng xem theo xu hướng, thể loại, quốc gia hoặc cảm xúc.',
+      'Cụm này là lớp gợi ý trên domain chính, giúp kéo người xem từ nhu cầu rộng sang các danh mục cụ thể hơn.',
+    ],
+    highlights: [
+      'Tối ưu cho phim hay, xem phim hay, phim đáng xem, phim hot và phim mới.',
+      'Liên kết tới phim hot 2026, phim mới nhất, phim chiếu rạp và các quốc gia lớn.',
+      'Dùng ngôn ngữ tư vấn thay vì chỉ liệt kê từ khóa, giúp trang tự nhiên hơn với Google.'],
+    faq: [
+      ['Nên xem phim hay ở đâu?', 'KhoPhim có trang /phim-hay để gợi ý các nhóm phim đáng xem và điều hướng sang phim hot, phim mới, phim lẻ hoặc phim bộ.'],
+      ['Trang phim hay có trùng trang chủ không?', 'Không, trang chủ là cửa vào tổng hợp, còn phim hay là landing gợi ý cho người chưa có tên phim cụ thể.'],
+    ],
+  },
+  '/phim-dang-chieu': {
+    intro: [
+      'Trang phim đang chiếu tập trung các phim đang cập nhật tập mới, phim bộ đang phát sóng, anime mùa mới và các nội dung có lịch ra tập.',
+      'Người dùng nhóm này thường quay lại nhiều lần, nên đây là trang quan trọng cho cả SEO và giữ chân người xem.',
+    ],
+    highlights: [
+      'Tối ưu cho phim đang chiếu, phim đang cập nhật, phim tập mới và lịch ra tập.',
+      'Liên kết sang phim mới cập nhật, phim bộ, anime và Vũ Trụ Đam Mỹ.',
+      'Tách khỏi phim hoàn tất để người xem hiểu phim nào còn đang ra tập.',
+    ],
+    faq: [
+      ['Phim đang chiếu là gì?', 'Đây là nhóm phim chưa hoàn tất hoặc đang được cập nhật tập mới theo lịch phát hành.'],
+      ['Theo dõi tập mới ở đâu?', 'Người xem có thể dùng /phim-dang-chieu hoặc /phim-moi-cap-nhat để theo dõi các phim vừa có tập mới.'],
+    ],
+  },
+  '/phim-sap-chieu': {
+    intro: [
+      'Trang phim sắp chiếu tập trung trailer, lịch chiếu, thông tin phim chưa phát hành và các phim có nhu cầu tìm kiếm trước ngày ra mắt.',
+      'Cụm này giúp KhoPhim bắt trend sớm trước khi phim có tập hoặc bản xem chính thức.',
+    ],
+    highlights: [
+      'Tối ưu cho phim sắp chiếu, trailer phim, lịch chiếu phim và phim mới ra mắt.',
+      'Liên kết tới phim trailer, phim hot 2026, phim chiếu rạp và phim mới nhất.',
+      'Tách rõ phim chưa phát hành khỏi phim đã có tập để giảm nhầm lẫn cho người xem.',
+    ],
+    faq: [
+      ['Phim sắp chiếu có xem được ngay không?', 'Một số phim sắp chiếu chỉ có trailer hoặc thông tin lịch chiếu, khi có nguồn xem phù hợp hệ thống sẽ điều hướng sang trang phim tương ứng.'],
+      ['Tại sao cần trang phim sắp chiếu?', 'Vì nhiều phim có lượng tìm kiếm trước ngày phát hành, trang này giúp KhoPhim bắt xu hướng sớm và dẫn người xem đúng chỗ.'],
+    ],
+  },
+  '/vu-tru-dam-my': {
+    intro: [
+      'Vũ Trụ Đam Mỹ là cụm nội dung riêng cho BL, GL, bách hợp, phim đam mỹ Thái, Hàn, Trung, Nhật và các series đang được cộng đồng quan tâm.',
+      'Trang này cần tách riêng vì ý định tìm kiếm rất khác với phim bộ tổng quát: người xem thường tìm theo cặp đôi, quốc gia, tập mới và nguồn BL.',
+    ],
+    highlights: [
+      'Tối ưu cho phim đam mỹ, BL Vietsub, GL, bách hợp và phim BL Thái.',
+      'Liên kết sang phim Thái Lan, phim bộ, phim đang chiếu và tìm kiếm phim.',
+      'Giữ cụm ngách riêng để tăng topical authority mà không làm loãng trang chủ.',
+    ],
+    faq: [
+      ['Vũ Trụ Đam Mỹ trên KhoPhim là gì?', 'Đây là khu vực dành cho phim đam mỹ, BL, GL và bách hợp Vietsub HD, bao gồm phim mới và tập mới.'],
+      ['Trang này có ảnh hưởng SEO phim bộ không?', 'Không, đây là cụm ngách riêng. Nó liên kết với phim bộ nhưng có chủ đề và canonical riêng.'],
+    ],
+  },
+};
+
+function getTopicContent(cleanPath) {
+  if (STATIC_TOPIC_CONTENT[cleanPath]) return STATIC_TOPIC_CONTENT[cleanPath];
+  return {
+    intro: ['Trang này là một phần trong cụm nội dung xem phim online của KhoPhim, được tối ưu để người xem và Google hiểu rõ chủ đề, danh mục và liên kết nội bộ liên quan.'],
+    highlights: ['Có canonical riêng.', 'Liên kết về các danh mục phim chính.', 'Hỗ trợ truy vấn tiếng Việt có dấu và không dấu.'],
+    faq: [['Trang này dùng để làm gì?', 'Trang giúp người xem khám phá đúng nhóm phim cần tìm và giúp công cụ tìm kiếm hiểu cấu trúc nội dung của KhoPhim.']],
+  };
+}
+
+function renderTopicBody(cleanPath, meta, canonical) {
+  const topic = getTopicContent(cleanPath);
+  const relatedLinks = [
+    ['/xem-phim-online', 'Xem phim online'],
+    ['/phim-moi-nhat', 'Phim mới nhất'],
+    ['/phim-hot-2026', 'Phim hot 2026'],
+    ['/phim-le', 'Phim lẻ'],
+    ['/phim-bo', 'Phim bộ'],
+    ['/phim-chieu-rap', 'Phim chiếu rạp'],
+    ['/phim-viet-nam', 'Phim Việt Nam'],
+    ['/phim-han-quoc', 'Phim Hàn Quốc'],
+    ['/phim-trung-quoc', 'Phim Trung Quốc'],
+    ['/phim-au-my', 'Phim Âu Mỹ'],
+    ['/anime', 'Anime Vietsub'],
+    ['/search', 'Tìm kiếm phim'],
+  ].filter(([href]) => href !== cleanPath);
+  return `<p>${escapeHtml(meta.description)}</p>
+    <section>
+      <h2>${escapeHtml(meta.h1)} trên KhoPhim có gì?</h2>
+      ${topic.intro.map((text) => `<p>${escapeHtml(text)}</p>`).join('')}
+    </section>
+    <section>
+      <h2>Lý do trang này quan trọng cho người xem phim</h2>
+      <ul>
+        ${topic.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+      </ul>
+    </section>
+    <section>
+      <h2>Câu hỏi thường gặp</h2>
+      ${topic.faq.map(([question, answer]) => `<article><h3>${escapeHtml(question)}</h3><p>${escapeHtml(answer)}</p></article>`).join('')}
+    </section>
+    <nav aria-label="Danh mục phim liên quan">
+      ${relatedLinks.map(([href, label]) => `<a href="${SITE_URL}${href}">${escapeHtml(label)}</a>`).join('')}
+      <a href="${escapeHtml(canonical)}">${escapeHtml(meta.h1)}</a>
+    </nav>`;
+}
+
 function renderStaticPrerender(pathname) {
   const cleanPath = getCanonicalPath(pathname);
   const meta = CLEAN_STATIC_META[cleanPath] || dynamicStaticMeta(cleanPath);
@@ -698,14 +1015,19 @@ function renderStaticPrerender(pathname) {
   const canonical = `${SITE_URL}${cleanPath === '/' ? '/' : cleanPath}`;
   const keywords = keywordVariants([
     meta.h1,
-    `xem ${meta.h1}`,
-    `xem phim ${meta.h1}`,
+    meta.title.replace(/\s*\|\s*KhoPhim$/i, ''),
+    meta.description,
     'xem phim online',
+    'xem phim',
+    'xem phim HD',
     'xem phim Vietsub',
     'xem phim miễn phí',
+    'xem phim chiếu rạp',
+    'xem phim Việt Nam',
     'phim HD',
     'KhoPhim',
   ]).join(', ');
+  const topic = getTopicContent(cleanPath);
   const schema = [
     {
       '@context': 'https://schema.org',
@@ -731,15 +1053,17 @@ function renderStaticPrerender(pathname) {
         ...(cleanPath === '/' ? [] : [{ '@type': 'ListItem', position: 2, name: meta.h1, item: canonical }]),
       ],
     },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: topic.faq.map(([question, answer]) => ({
+        '@type': 'Question',
+        name: question,
+        acceptedAnswer: { '@type': 'Answer', text: answer },
+      })),
+    },
   ];
-  const body = `<p>${escapeHtml(meta.description)}</p>
-    <nav>
-      <a href="${SITE_URL}/phim-moi-nhat">Phim mới nhất</a>
-      <a href="${SITE_URL}/phim-hot-2026">Phim hot 2026</a>
-      <a href="${SITE_URL}/phim-le">Phim lẻ</a>
-      <a href="${SITE_URL}/phim-bo">Phim bộ</a>
-      <a href="${SITE_URL}/phim-chieu-rap">Phim chiếu rạp</a>
-    </nav>`;
+  const body = renderTopicBody(cleanPath, meta, canonical);
   return new Response(renderHtml({
     title: meta.title,
     description: meta.description,

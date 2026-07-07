@@ -60,22 +60,83 @@ function renderNav(currentPath) {
 
 function renderPage(page) {
   const canonical = `${MHOPHIM_URL}${page.path === '/' ? '/' : page.path}`;
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'WebPage',
-    '@id': `${canonical}#webpage`,
-    url: canonical,
-    name: page.title,
-    description: page.description,
-    isPartOf: {
+  const pagePosition = satellitePages.findIndex((item) => item.path === page.path);
+  const jsonLd = [
+    {
+      '@context': 'https://schema.org',
       '@type': 'WebSite',
       '@id': `${MHOPHIM_URL}/#website`,
       name: 'MHoPhim',
+      alternateName: ['MHo Phim', 'mhophim.com'],
       url: MHOPHIM_URL,
+      inLanguage: 'vi-VN',
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: `${MHOPHIM_URL}/huong-dan/tim-phim?q={search_term_string}`,
+        'query-input': 'required name=search_term_string',
+      },
     },
-    about: ['tin phim', 'review phim', 'lịch chiếu phim', 'gợi ý phim hay'],
-    dateModified: today,
-  };
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      '@id': `${MHOPHIM_URL}/#organization`,
+      name: 'MHoPhim',
+      url: MHOPHIM_URL,
+      logo: `${MHOPHIM_URL}/mhophim-assets/hero.png`,
+      sameAs: [KHOPHIM_URL],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': page.path === '/' ? 'CollectionPage' : 'Article',
+      '@id': `${canonical}#webpage`,
+      url: canonical,
+      name: page.title,
+      headline: page.heading,
+      description: page.description,
+      inLanguage: 'vi-VN',
+      isPartOf: {
+        '@id': `${MHOPHIM_URL}/#website`,
+      },
+      about: ['tin phim', 'review phim', 'lịch chiếu phim', 'gợi ý phim hay'],
+      dateModified: today,
+      mainEntityOfPage: canonical,
+      publisher: {
+        '@id': `${MHOPHIM_URL}/#organization`,
+      },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'MHoPhim', item: `${MHOPHIM_URL}/` },
+        ...(page.path === '/' ? [] : [{ '@type': 'ListItem', position: 2, name: page.heading, item: canonical }]),
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      '@id': `${canonical}#related`,
+      name: `Gợi ý liên quan - ${page.heading}`,
+      itemListElement: satellitePages
+        .filter((item) => item.path !== page.path)
+        .slice(0, 8)
+        .map((item, index) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          name: item.heading,
+          url: `${MHOPHIM_URL}${item.path === '/' ? '/' : item.path}`,
+        })),
+    },
+    ...(pagePosition >= 0 ? [{
+      '@context': 'https://schema.org',
+      '@type': 'CreativeWork',
+      '@id': `${canonical}#domain-role`,
+      name: 'Vai trò SEO của MHoPhim',
+      description: 'MHoPhim là lớp nội dung editorial, review, lịch chiếu và gợi ý phim. Trang xem phim chính thức nằm trên khophim.org để tránh trùng lặp SEO.',
+      isPartOf: { '@id': `${MHOPHIM_URL}/#website` },
+      mentions: { '@type': 'WebSite', name: 'KhoPhim', url: KHOPHIM_URL },
+    }] : []),
+  ];
 
   const sections = page.sections
     .map((section) => `
@@ -130,8 +191,14 @@ function renderPage(page) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(page.title)}</title>
   <meta name="description" content="${escapeHtml(page.description)}">
-  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <meta name="language" content="vi">
+  <meta name="content-language" content="vi-VN">
   <link rel="canonical" href="${canonical}">
+  <link rel="alternate" hreflang="vi" href="${canonical}">
+  <link rel="alternate" hreflang="vi-VN" href="${canonical}">
+  <link rel="alternate" hreflang="x-default" href="${canonical}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="MHoPhim">
   <meta property="og:title" content="${escapeHtml(page.title)}">
@@ -139,6 +206,9 @@ function renderPage(page) {
   <meta property="og:url" content="${canonical}">
   <meta property="og:image" content="${heroImageUrl}">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${escapeHtml(page.title)}">
+  <meta name="twitter:description" content="${escapeHtml(page.description)}">
+  <meta name="twitter:image" content="${heroImageUrl}">
   <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
   <style>
     :root { color-scheme: dark; --bg:#07080d; --panel:#11151f; --panel2:#151923; --text:#f7f7fb; --muted:#a8afbd; --line:rgba(255,255,255,.09); --accent:#ef233c; --accent2:#b91c1c; --gold:#f5c15c; }
