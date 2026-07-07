@@ -12,6 +12,50 @@ function hasPlayableUrl(ep) {
   return Boolean(ep.link_m3u8?.trim() || ep.link_embed?.trim());
 }
 
+function getSourceFailureClusterFromUrl(value = '') {
+  const raw = String(value || '').trim();
+  const lower = raw.toLowerCase();
+  let host = '';
+  try {
+    host = new URL(raw).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    host = lower;
+  }
+  if (!raw) return 'empty';
+  if (host.includes('ssplay') || host.includes('abyssplayer') || host.includes('short.icu') || lower.includes('ssplay')) {
+    return 'ssplay_abyss';
+  }
+  if (host.includes('dailymotion.com') || host === 'dai.ly') return 'dailymotion';
+  if (host.includes('video.khophim.org') || host.includes('supabase.co')) return 'khophim_direct';
+  if (/\.m3u8(?:[?#].*)?$/i.test(raw) || /\.(mp4|webm|mkv|mov)(?:[?#].*)?$/i.test(raw)) {
+    return `direct:${host || 'unknown'}`;
+  }
+  return host || lower.slice(0, 80);
+}
+
+function getEpisodeFailureCluster(ep) {
+  return getSourceFailureClusterFromUrl(ep?.link_m3u8 || ep?.link_embed || '');
+}
+
+function buildFallbackServersAvoidingCluster(servers, activeServer, activeEpisode) {
+  const activeHost = activeEpisode?.link_m3u8 || activeEpisode?.link_embed || '';
+  const activeCluster = getEpisodeFailureCluster(activeEpisode);
+  return servers
+    .map((server, index) => ({ server, index }))
+    .filter(({ index }) => index !== activeServer)
+    .map(({ server, index }) => ({
+      index,
+      server: {
+        ...server,
+        server_data: (server.server_data ?? []).filter((ep) => {
+          const url = ep.link_m3u8 || ep.link_embed || '';
+          return url !== activeHost && getEpisodeFailureCluster(ep) !== activeCluster;
+        }),
+      },
+    }))
+    .filter(({ server }) => (server.server_data ?? []).length > 0);
+}
+
 function getLatestPlayableEpisodeSlug(episodes) {
   const latest = episodes
     .flatMap((server) => server.server_data ?? [])
@@ -168,6 +212,30 @@ const multiSourceEpisode = [
 assert(
   pickBestEpisodeByPriority(multiSourceEpisode, 'tap-24')?.serverIndex === 1,
   'Dailymotion embed should be preferred over slower third-party embed sources for the same episode'
+);
+
+const ssplayActiveWithAbyssMirror = [
+  {
+    server_name: 'Server SS',
+    server_data: [{ name: 'Tap 24', slug: 'tap-24', link_embed: 'https://ssplay.net/v/demo.html' }],
+  },
+  {
+    server_name: 'Server ABYSS',
+    server_data: [{ name: 'Tap 24', slug: 'tap-24', link_embed: 'https://short.icu/mirror' }],
+  },
+  {
+    server_name: 'Server Dailymotion',
+    server_data: [{ name: 'Tap 24', slug: 'tap-24', link_embed: 'https://www.dailymotion.com/video/x123456' }],
+  },
+];
+const clusterSafeFallbacks = buildFallbackServersAvoidingCluster(
+  ssplayActiveWithAbyssMirror,
+  0,
+  ssplayActiveWithAbyssMirror[0].server_data[0]
+);
+assert(
+  clusterSafeFallbacks.length === 1 && clusterSafeFallbacks[0].index === 2,
+  'Fallback must skip Abyss when the failed source is ssplay because both share the same failure cluster'
 );
 
 const directUnknownVsDaily = [

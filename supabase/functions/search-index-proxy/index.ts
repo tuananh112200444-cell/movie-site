@@ -181,11 +181,11 @@ serve(async (req) => {
     }
   }
 
-  if (cacheValid) {
+  if (cacheValid && !forceRefresh) {
     const cached = await readCachedRows(supabase, limit);
     if (cached.items.length >= Math.min(limit, 100)) {
       return jsonResponse(
-        { status: true, source: forceRefresh ? 'cache-refresh-skipped' : 'cache', items: cached.items.slice(0, limit), updated_at: cacheRow!.updated_at },
+        { status: true, source: 'cache', items: cached.items.slice(0, limit), updated_at: cacheRow!.updated_at },
         200,
         cacheHeaders('HIT'),
       );

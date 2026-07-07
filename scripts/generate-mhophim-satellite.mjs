@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+﻿import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { KHOPHIM_URL, MHOPHIM_URL, satellitePages } from './mhophim-satellite-data.mjs';
 
@@ -19,15 +19,43 @@ function pageOutputPath(path) {
   return resolve(OUT_DIR, path.replace(/^\/+/, ''), 'index.html');
 }
 
+const editorialArt = [
+  '/mhophim-assets/hero.png',
+  '/mhophim-assets/thai.png',
+  '/mhophim-assets/bl.png',
+  '/mhophim-assets/kdrama.png',
+  '/mhophim-assets/cdrama.png',
+  '/mhophim-assets/anime.png',
+  '/mhophim-assets/action.png',
+  '/mhophim-assets/vietnam.png',
+];
+
+function artForIndex(index) {
+  return editorialArt[index % editorialArt.length];
+}
+
 function renderNav(currentPath) {
   const links = satellitePages
     .filter((page) => page.path !== '/')
+    .slice(0, 10)
     .map((page) => {
-      const active = page.path === currentPath ? ' aria-current="page"' : '';
+      const active = page.path === currentPath ? ' class="active" aria-current="page"' : '';
       return `<a${active} href="${page.path}">${escapeHtml(page.eyebrow)}</a>`;
     })
     .join('');
-  return `<nav aria-label="Chuyên mục MHoPhim"><a href="/">MHoPhim</a>${links}<a href="${KHOPHIM_URL}">Xem phim</a></nav>`;
+  return `<header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="MHoPhim">
+        <span class="brand-mark">M</span>
+        <span>MHo<span>Phim</span></span>
+      </a>
+      <nav aria-label="Chuyên mục MHoPhim">
+        <a${currentPath === '/' ? ' class="active" aria-current="page"' : ''} href="/">Trang chủ</a>
+        ${links}
+      </nav>
+      <a class="watch-now" href="${KHOPHIM_URL}">Sang KhoPhim</a>
+    </div>
+  </header>`;
 }
 
 function renderPage(page) {
@@ -45,7 +73,7 @@ function renderPage(page) {
       name: 'MHoPhim',
       url: MHOPHIM_URL,
     },
-      about: ['tin phim', 'review phim', 'lịch chiếu phim', 'gợi ý phim hay'],
+    about: ['tin phim', 'review phim', 'lịch chiếu phim', 'gợi ý phim hay'],
     dateModified: today,
   };
 
@@ -59,9 +87,41 @@ function renderPage(page) {
 
   const relatedLinks = satellitePages
     .filter((item) => item.path !== page.path)
-    .slice(0, 5)
-    .map((item) => `<li><a href="${item.path}">${escapeHtml(item.heading)}</a></li>`)
+    .slice(0, 12)
+    .map((item, index) => `<article class="poster-card">
+      <a href="${item.path}" aria-label="${escapeHtml(item.heading)}">
+        <div class="poster-media">
+          <img src="${artForIndex(index + 1)}" alt="${escapeHtml(item.heading)}" loading="lazy">
+          <span>${escapeHtml(item.eyebrow)}</span>
+        </div>
+        <h3>${escapeHtml(item.heading)}</h3>
+        <p>${escapeHtml(item.description)}</p>
+      </a>
+    </article>`)
     .join('');
+
+  const trendCards = satellitePages
+    .filter((item) => item.path !== '/')
+    .slice(0, 8)
+    .map((item, index) => `<li>
+      <a href="${item.path}">
+        <strong>${String(index + 1).padStart(2, '0')}</strong>
+        <span>${escapeHtml(item.heading)}</span>
+      </a>
+    </li>`)
+    .join('');
+
+  const sectionCards = page.sections
+    .map((section, index) => `
+      <section class="article-card">
+        <span class="article-icon">${index + 1}</span>
+        <h2>${escapeHtml(section.heading)}</h2>
+        <p>${escapeHtml(section.body)}</p>
+      </section>`)
+    .join('');
+
+  const heroImage = page.path === '/' ? editorialArt[0] : artForIndex(satellitePages.findIndex((item) => item.path === page.path) + 1);
+  const heroImageUrl = heroImage.startsWith('http') ? heroImage : `${MHOPHIM_URL}${heroImage}`;
 
   return `<!doctype html>
 <html lang="vi">
@@ -77,183 +137,170 @@ function renderPage(page) {
   <meta property="og:title" content="${escapeHtml(page.title)}">
   <meta property="og:description" content="${escapeHtml(page.description)}">
   <meta property="og:url" content="${canonical}">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="${heroImageUrl}">
+  <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
   <style>
-    :root {
-      color-scheme: dark;
-      --bg: #07080d;
-      --panel: #11151f;
-      --panel-strong: #171d2a;
-      --text: #f7f7fb;
-      --muted: #a8afbd;
-      --line: rgba(255,255,255,.12);
-      --accent: #ff3d46;
-      --gold: #f5c15c;
-    }
+    :root { color-scheme: dark; --bg:#07080d; --panel:#11151f; --panel2:#151923; --text:#f7f7fb; --muted:#a8afbd; --line:rgba(255,255,255,.09); --accent:#ef233c; --accent2:#b91c1c; --gold:#f5c15c; }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background:
-        radial-gradient(circle at 12% 0%, rgba(255,61,70,.18), transparent 28rem),
-        linear-gradient(180deg, #10131c 0%, var(--bg) 26rem);
-      color: var(--text);
-      line-height: 1.65;
-    }
-    a { color: inherit; text-decoration: none; }
-    nav {
-      position: sticky;
-      top: 0;
-      z-index: 3;
-      display: flex;
-      gap: .55rem;
-      overflow-x: auto;
-      padding: .8rem max(1rem, calc((100vw - 1120px) / 2));
-      background: rgba(7,8,13,.84);
-      border-bottom: 1px solid var(--line);
-      backdrop-filter: blur(14px);
-    }
-    nav a {
-      flex: 0 0 auto;
-      padding: .55rem .8rem;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      color: var(--muted);
-      font-size: .92rem;
-      font-weight: 700;
-    }
-    nav a[aria-current="page"], nav a:hover {
-      color: #fff;
-      border-color: rgba(255,61,70,.55);
-      background: rgba(255,61,70,.16);
-    }
-    main {
-      width: min(1120px, calc(100vw - 2rem));
-      margin: 0 auto;
-      padding: 3rem 0 4rem;
-    }
-    .hero {
-      display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
-      gap: 1.4rem;
-      align-items: stretch;
-    }
-    .hero-copy, .side-card, .content-block, .related {
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, rgba(23,29,42,.9), rgba(13,16,24,.9));
-      border-radius: 18px;
-      box-shadow: 0 18px 50px rgba(0,0,0,.24);
-    }
-    .hero-copy { padding: clamp(1.4rem, 3vw, 2.4rem); }
-    .eyebrow {
-      margin: 0 0 .75rem;
-      color: var(--gold);
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      font-size: .78rem;
-    }
-    h1 {
-      margin: 0;
-      max-width: 820px;
-      font-size: clamp(2.2rem, 5vw, 4.4rem);
-      line-height: 1.05;
-      letter-spacing: 0;
-    }
-    .intro {
-      margin: 1rem 0 0;
-      max-width: 760px;
-      color: var(--muted);
-      font-size: clamp(1rem, 1.4vw, 1.18rem);
-    }
-    .cta {
-      display: inline-flex;
-      margin-top: 1.4rem;
-      padding: .82rem 1rem;
-      border-radius: 999px;
-      background: var(--accent);
-      color: white;
-      font-weight: 900;
-    }
-    .side-card {
-      padding: 1.2rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      min-height: 280px;
-    }
-    .side-card strong { font-size: 1.15rem; }
-    .side-card p { color: var(--muted); margin: .6rem 0 0; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 1rem;
-      margin-top: 1rem;
-    }
-    .content-block { padding: 1.2rem; }
-    h2 { margin: 0 0 .5rem; font-size: 1.25rem; }
-    p { margin: 0; }
-    .related {
-      margin-top: 1rem;
-      padding: 1.2rem;
-    }
-    .related ul {
-      margin: .8rem 0 0;
-      padding: 0;
-      list-style: none;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: .6rem;
-    }
-    .related a {
-      display: block;
-      padding: .75rem;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      color: var(--muted);
-    }
-    footer {
-      border-top: 1px solid var(--line);
-      color: var(--muted);
-      padding: 1.2rem max(1rem, calc((100vw - 1120px) / 2));
-      background: #080910;
-    }
-    @media (max-width: 760px) {
-      main { width: min(100% - 1rem, 1120px); padding-top: 1rem; }
-      .hero, .grid, .related ul { grid-template-columns: 1fr; }
-      .hero-copy, .side-card, .content-block, .related { border-radius: 14px; }
-      nav { padding-inline: .5rem; }
-      h1 { font-size: 2.2rem; }
-    }
+    html { scroll-behavior:smooth; }
+    body { margin:0; font-family:Inter,Arial,Helvetica,sans-serif; background:radial-gradient(circle at 18% -4%, rgba(239,35,60,.22), transparent 28rem), radial-gradient(circle at 82% 8%, rgba(245,193,92,.08), transparent 24rem), linear-gradient(180deg,#10131d 0%,#090a10 34rem,var(--bg) 100%); color:var(--text); line-height:1.6; }
+    a { color:inherit; text-decoration:none; }
+    .site-header { position:sticky; top:0; z-index:20; border-bottom:1px solid var(--line); background:rgba(7,8,13,.94); box-shadow:0 8px 32px rgba(0,0,0,.52); backdrop-filter:blur(18px); }
+    .header-inner { width:min(1280px,calc(100vw - 2rem)); margin:0 auto; min-height:74px; display:flex; align-items:center; gap:1rem; }
+    .brand { display:flex; align-items:center; gap:.7rem; flex:0 0 auto; font-size:1.4rem; font-weight:950; letter-spacing:-.02em; }
+    .brand span span { color:#ef4444; }
+    .brand-mark { display:grid; place-items:center; width:42px; height:42px; border-radius:14px; background:linear-gradient(135deg,#ef4444,#991b1b); color:#fff; box-shadow:0 18px 38px rgba(239,68,68,.22); }
+    nav { display:flex; align-items:center; gap:.25rem; overflow-x:auto; scrollbar-width:none; padding:.45rem; border:1px solid rgba(255,255,255,.07); border-radius:18px; background:rgba(0,0,0,.24); }
+    nav::-webkit-scrollbar { display:none; }
+    nav a { flex:0 0 auto; padding:.62rem .78rem; border-radius:13px; color:rgba(255,255,255,.72); font-size:.9rem; font-weight:800; }
+    nav a.active, nav a:hover { color:#fff; background:rgba(239,35,60,.18); }
+    .watch-now { margin-left:auto; flex:0 0 auto; padding:.85rem 1.15rem; border-radius:16px; background:linear-gradient(135deg,#ef233c,#b91c1c); color:#fff; font-weight:950; box-shadow:0 14px 30px rgba(239,35,60,.22); text-transform:uppercase; letter-spacing:.02em; }
+    main { width:min(1280px, calc(100vw - 2rem)); margin:0 auto; padding:1.35rem 0 4rem; }
+    .hero { position:relative; display:grid; grid-template-columns:minmax(0,1.08fr) minmax(300px,.56fr); gap:1rem; min-height:clamp(440px,52vw,640px); overflow:hidden; border:1px solid rgba(255,255,255,.08); border-radius:24px; background:#0a0c14; box-shadow:0 26px 80px rgba(0,0,0,.45); }
+    .hero-bg { position:absolute; inset:0; }
+    .hero-bg img { width:100%; height:100%; object-fit:cover; opacity:.42; filter:saturate(1.08) contrast(1.05); }
+    .hero-bg::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,rgba(7,8,13,.98) 0%,rgba(7,8,13,.82) 39%,rgba(7,8,13,.36) 76%,rgba(7,8,13,.9) 100%), linear-gradient(180deg,rgba(7,8,13,.04),#07080d 100%); }
+    .hero-copy { position:relative; z-index:1; align-self:end; padding:clamp(1.25rem,4vw,3.4rem); }
+    .kicker-row { display:flex; flex-wrap:wrap; gap:.55rem; margin-bottom:1rem; }
+    .eyebrow, .badge { display:inline-flex; align-items:center; gap:.35rem; width:max-content; border:1px solid rgba(255,255,255,.12); border-radius:999px; background:rgba(0,0,0,.42); padding:.42rem .66rem; color:#fecaca; font-weight:900; text-transform:uppercase; letter-spacing:.06em; font-size:.72rem; }
+    .badge { color:#f5c15c; }
+    h1 { margin:0; max-width:820px; font-size:clamp(2.45rem,6.2vw,5.8rem); line-height:.98; letter-spacing:-.035em; text-shadow:0 14px 48px rgba(0,0,0,.62); }
+    .intro { margin:1rem 0 0; max-width:780px; color:rgba(255,255,255,.78); font-size:clamp(1rem,1.35vw,1.2rem); }
+    .hero-actions { display:flex; flex-wrap:wrap; gap:.8rem; margin-top:1.55rem; }
+    .cta, .ghost-cta { display:inline-flex; align-items:center; justify-content:center; min-height:46px; padding:.82rem 1.08rem; border-radius:14px; font-weight:950; }
+    .cta { background:linear-gradient(135deg,#ef233c,#b91c1c); color:white; box-shadow:0 16px 32px rgba(239,35,60,.26); }
+    .ghost-cta { border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.06); color:#fff; }
+    .mega-transfer { position:relative; z-index:2; margin-top:1.15rem; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; align-items:center; overflow:hidden; border:1px solid rgba(239,68,68,.32); border-radius:24px; background:radial-gradient(circle at 16% 0%,rgba(239,68,68,.36),transparent 38%),linear-gradient(135deg,rgba(127,29,29,.52),rgba(12,14,22,.98)); padding:clamp(1rem,2.4vw,1.55rem); box-shadow:0 24px 80px -46px rgba(239,68,68,.9), inset 0 1px 0 rgba(255,255,255,.08); }
+    .mega-transfer h2 { margin:0; font-size:clamp(1.55rem,3.1vw,3rem); line-height:1.04; letter-spacing:-.025em; }
+    .mega-transfer p { margin:.45rem 0 0; color:rgba(255,255,255,.74); font-weight:700; }
+    .mega-transfer .mega-link { display:inline-flex; align-items:center; justify-content:center; min-height:58px; padding:1rem 1.25rem; border-radius:18px; background:#fff; color:#991b1b; font-weight:1000; text-transform:uppercase; box-shadow:0 18px 42px rgba(0,0,0,.35); white-space:nowrap; }
+    .hero-side { position:relative; z-index:1; display:flex; flex-direction:column; justify-content:flex-end; padding:1rem; }
+    .feature-panel { border:1px solid rgba(255,255,255,.1); border-radius:22px; background:linear-gradient(180deg,rgba(20,23,32,.9),rgba(10,12,20,.96)); padding:1rem; box-shadow:0 22px 60px rgba(0,0,0,.32); }
+    .feature-panel img { width:100%; aspect-ratio:16/10; object-fit:cover; border-radius:16px; background:#151824; }
+    .feature-panel strong { display:block; margin:.9rem 0 .4rem; font-size:1.12rem; }
+    .feature-panel p { color:var(--muted); }
+    .strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; margin:1rem 0; }
+    .stat { border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.035); padding:1rem; }
+    .stat strong { display:block; color:#fff; font-size:1.35rem; }
+    .stat span { color:var(--muted); font-size:.88rem; }
+    .section-head { display:flex; align-items:end; justify-content:space-between; gap:1rem; margin:2rem 0 .9rem; }
+    .section-head h2 { margin:0; font-size:clamp(1.45rem,2.6vw,2.2rem); letter-spacing:-.02em; }
+    .section-head p { color:var(--muted); max-width:600px; }
+    .poster-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.85rem; }
+    .poster-card a { display:block; height:100%; }
+    .poster-card { border-radius:18px; padding:.35rem; background:transparent; transition:transform .2s ease, background .2s ease; }
+    .poster-card:hover { transform:translateY(-4px); background:rgba(255,255,255,.045); }
+    .poster-media { position:relative; overflow:hidden; aspect-ratio:2/3; border-radius:15px; background:#151824; border:1px solid rgba(255,255,255,.07); box-shadow:0 18px 44px -28px rgba(0,0,0,.95); }
+    .poster-media img { width:100%; height:100%; object-fit:cover; transition:transform .35s ease; }
+    .poster-card:hover img { transform:scale(1.05); }
+    .poster-media::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(0,0,0,.08) 0%,rgba(0,0,0,0) 42%,rgba(0,0,0,.86) 100%); }
+    .poster-media span { position:absolute; left:.55rem; bottom:.55rem; z-index:1; max-width:calc(100% - 1.1rem); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:8px; background:rgba(0,0,0,.62); padding:.24rem .45rem; color:#fff; font-size:.68rem; font-weight:900; }
+    .poster-card h3 { margin:.6rem .25rem .22rem; font-size:.95rem; line-height:1.28; }
+    .poster-card p { margin:0 .25rem; color:rgba(255,255,255,.56); font-size:.82rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .content-layout { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:1rem; margin-top:1.2rem; align-items:start; }
+    .article-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+    .article-card, .trend-box, .seo-box { border:1px solid var(--line); background:linear-gradient(180deg,rgba(20,23,32,.88),rgba(11,13,20,.94)); border-radius:20px; padding:1.1rem; box-shadow:inset 0 1px 0 rgba(255,255,255,.04); }
+    .article-icon { display:grid; place-items:center; width:38px; height:38px; border-radius:12px; background:linear-gradient(135deg,rgba(239,35,60,.28),rgba(185,28,28,.14)); color:#fecaca; font-weight:950; margin-bottom:.75rem; }
+    h2 { margin:0 0 .5rem; font-size:1.18rem; }
+    p { margin:0; }
+    .article-card p, .seo-box p { color:var(--muted); }
+    .trend-box h2, .seo-box h2 { margin-bottom:.8rem; }
+    .trend-box ol { margin:0; padding:0; list-style:none; display:grid; gap:.55rem; }
+    .trend-box a { display:grid; grid-template-columns:48px minmax(0,1fr); gap:.65rem; align-items:center; border-radius:13px; padding:.58rem; background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.045); }
+    .trend-box strong { color:#ef4444; font-size:1.15rem; font-weight:950; }
+    .trend-box span { color:rgba(255,255,255,.82); font-weight:800; font-size:.9rem; line-height:1.3; }
+    .seo-box { margin-top:1rem; }
+    .seo-tags { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.9rem; }
+    .seo-tags span { border:1px solid rgba(255,255,255,.08); border-radius:999px; background:rgba(255,255,255,.04); padding:.36rem .58rem; color:rgba(255,255,255,.72); font-size:.78rem; font-weight:800; }
+    .final-cta { margin-top:1.2rem; overflow:hidden; border:1px solid rgba(239,68,68,.2); border-radius:22px; background:radial-gradient(circle at 14% 0%,rgba(239,68,68,.22),transparent 35%),linear-gradient(135deg,rgba(127,29,29,.3),rgba(12,14,22,.96)); padding:1.35rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+    .final-cta h2 { font-size:1.45rem; }
+    .final-cta p { color:var(--muted); max-width:720px; }
+    footer { border-top:1px solid var(--line); color:var(--muted); padding:1.4rem max(1rem, calc((100vw - 1280px) / 2)); background:#08090e; }
+    @media (max-width:1050px) { .header-inner { min-height:66px; } nav { order:3; width:100%; } .header-inner { flex-wrap:wrap; padding:.75rem 0; } .watch-now { margin-left:auto; } .hero, .content-layout { grid-template-columns:1fr; } .hero-side { padding-top:0; } .poster-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } .strip { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:760px) { main { width:min(100% - 1rem,1280px); padding-top:.6rem; } .hero { min-height:auto; border-radius:18px; } .hero-copy { padding:1.25rem; } .feature-panel { display:none; } h1 { font-size:2.35rem; } .poster-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; } .article-grid, .strip { grid-template-columns:1fr; } .mega-transfer, .final-cta { align-items:flex-start; grid-template-columns:1fr; flex-direction:column; } .mega-transfer .mega-link { width:100%; white-space:normal; text-align:center; } .brand { font-size:1.15rem; } .brand-mark { width:36px; height:36px; } .watch-now { padding:.7rem .82rem; } }
   </style>
 </head>
 <body>
   ${renderNav(page.path)}
   <main>
     <section class="hero">
+      <div class="hero-bg"><img src="${heroImage}" alt="${escapeHtml(page.heading)}"></div>
       <div class="hero-copy">
-        <p class="eyebrow">${escapeHtml(page.eyebrow)}</p>
+        <div class="kicker-row">
+          <p class="eyebrow">${escapeHtml(page.eyebrow)}</p>
+          <span class="badge">Tạp chí phim riêng</span>
+        </div>
         <h1>${escapeHtml(page.heading)}</h1>
         <p class="intro">${escapeHtml(page.intro)}</p>
-        <a class="cta" href="${page.cta.href}">${escapeHtml(page.cta.label)}</a>
-      </div>
-      <aside class="side-card">
-        <div>
-      <strong>SEO sạch cho domain phụ</strong>
-      <p>MHoPhim có nội dung riêng và liên kết về KhoPhim, không tạo bản sao trang xem phim.</p>
+        <div class="hero-actions">
+          <a class="cta" href="${page.cta.href}">${escapeHtml(page.cta.label)}</a>
+          <a class="ghost-cta" href="#goi-y">Đọc gợi ý phim</a>
         </div>
-        <p>Domain chinh: <a href="${KHOPHIM_URL}">khophim.org</a></p>
+      </div>
+      <aside class="hero-side">
+        <div class="feature-panel">
+          <img src="${artForIndex(2)}" alt="MHoPhim review phim">
+          <strong>Nội dung riêng cho MHoPhim</strong>
+          <p>Tin phim, top phim, review và lịch cập nhật. Trang xem phim/player vẫn tập trung trên KhoPhim.</p>
+        </div>
       </aside>
     </section>
-    <div class="grid">${sections}</div>
-    <section class="related">
-    <h2>Đọc tiếp trên MHoPhim</h2>
-      <ul>${relatedLinks}</ul>
+
+    <section class="mega-transfer" aria-label="Chuyển sang KhoPhim">
+      <div>
+        <h2>Sang KhoPhim để xem phim ngay</h2>
+        <p>MHoPhim giúp bạn chọn phim nhanh hơn. Khi muốn xem tập phim, hãy mở KhoPhim để vào đúng trang xem phim chính thức.</p>
+      </div>
+      <a class="mega-link" href="${page.cta.href}">Mở KhoPhim</a>
+    </section>
+
+    <section class="strip" aria-label="Vai trò SEO của MHoPhim">
+      <div class="stat"><strong>Editorial</strong><span>Tin phim và gợi ý riêng</span></div>
+      <div class="stat"><strong>Canonical</strong><span>Tự trỏ về mhophim.com</span></div>
+      <div class="stat"><strong>No copy</strong><span>Không lặp trang xem phim</span></div>
+      <div class="stat"><strong>Traffic</strong><span>Dẫn người xem về KhoPhim</span></div>
+    </section>
+
+    <section id="goi-y" class="related">
+      <div class="section-head">
+        <h2>Gợi ý nổi bật trên MHoPhim</h2>
+        <p>Các cụm nội dung này được viết như tạp chí phim, khác vai trò với trang xem phim trên khophim.org.</p>
+      </div>
+      <div class="poster-grid">${relatedLinks}</div>
+    </section>
+
+    <div class="content-layout">
+      <div>
+        <div class="section-head">
+          <h2>Nội dung của trang này</h2>
+          <p>Bài viết giúp người xem chọn phim, hiểu lịch cập nhật và tìm đúng danh mục.</p>
+        </div>
+        <div class="article-grid">${sectionCards}</div>
+      </div>
+      <aside>
+        <section class="trend-box">
+          <h2>Đang được tìm</h2>
+          <ol>${trendCards}</ol>
+        </section>
+        <section class="seo-box">
+          <h2>Vì sao khác KhoPhim?</h2>
+          <p>MHoPhim không tạo player, không tạo bản sao trang phim và không dùng sitemap phim của KhoPhim. Đây là lớp nội dung review, lịch chiếu và hướng dẫn tìm phim.</p>
+          <div class="seo-tags"><span>review phim</span><span>lịch chiếu</span><span>top phim</span><span>gợi ý xem</span></div>
+        </section>
+      </aside>
+    </div>
+
+    <section class="final-cta">
+      <div>
+        <h2>Muốn xem phim ngay?</h2>
+        <p>Đọc gợi ý trên MHoPhim, sau đó mở KhoPhim để xem phim, tập mới và player ổn định trên domain chính.</p>
+      </div>
+      <a class="cta" href="${KHOPHIM_URL}">Mở KhoPhim</a>
     </section>
   </main>
   <footer>
-    MHoPhim là domain vệ tinh nội dung của KhoPhim. Trang xem phim chính thức nằm tại <a href="${KHOPHIM_URL}">khophim.org</a>.
+    MHoPhim là trang tin phim và gợi ý xem phim. Trang xem phim chính thức nằm tại <a href="${KHOPHIM_URL}">khophim.org</a>.
   </footer>
 </body>
 </html>
@@ -281,7 +328,9 @@ function renderRobots() {
   return `User-agent: *
 Allow: /
 Disallow: /phim/
+Disallow: /xem-phim/
 Disallow: /search
+Disallow: /filter
 Disallow: /api/
 
 Sitemap: ${MHOPHIM_URL}/sitemap.xml
@@ -289,19 +338,16 @@ Sitemap: ${MHOPHIM_URL}/sitemap.xml
 }
 
 function renderNotFound() {
-  const page = {
+  return renderPage({
     path: '/404',
-    title: 'Không tìm thấy trang - MHoPhim',
-    description: 'Trang MHoPhim này không tồn tại.',
-    heading: 'Không tìm thấy trang',
+    title: 'Khong tim thay trang - MHoPhim',
+    description: 'Trang MHoPhim nay khong ton tai.',
+    heading: 'Khong tim thay trang',
     eyebrow: '404',
-    intro: 'Nội dung này không tồn tại trên MHoPhim. Hãy quay lại trang chủ hoặc mở KhoPhim để tìm phim.',
-    sections: [
-      { heading: 'Gợi ý', body: 'Nếu bạn đang tìm phim để xem, hãy tìm trực tiếp trên khophim.org.' },
-    ],
-    cta: { label: 'Về trang chủ MHoPhim', href: '/' },
-  };
-  return renderPage(page);
+    intro: 'Noi dung nay khong ton tai tren MHoPhim. Hay quay lai trang chu hoac mo KhoPhim de tim phim.',
+    sections: [{ heading: 'Goi y', body: 'Neu ban dang tim phim de xem, hay tim truc tiep tren khophim.org.' }],
+    cta: { label: 'Ve trang chu MHoPhim', href: '/' },
+  });
 }
 
 await rm(OUT_DIR, { recursive: true, force: true });

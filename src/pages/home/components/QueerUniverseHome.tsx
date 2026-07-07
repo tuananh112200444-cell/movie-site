@@ -256,6 +256,7 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
   const [remoteSearchLoading, setRemoteSearchLoading] = useState(false);
   const [status, setStatus] = useState<StatusFilter>('all');
   const [page, setPage] = useState(1);
+  const [fallbackAttempted, setFallbackAttempted] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -276,13 +277,17 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
     }, 1200);
 
     fetchQueerUniverseSections({ signal: controller.signal, limit: 1000, timeoutMs: 9000 })
-      .then((data) => {
+      .then(async (data) => {
         resolved = true;
-        const newUpdates = sortNewestFirst(data.newUpdates);
+        const fallbackMovies = data.newUpdates.length === 0
+          ? await loadStaticQueerFallback(controller.signal)
+          : [];
+        if (controller.signal.aborted) return;
+        const newUpdates = sortNewestFirst(data.newUpdates.length ? data.newUpdates : fallbackMovies);
         setSections({
           featured: sortNewestFirst(data.featured.length ? data.featured : newUpdates),
           newUpdates,
-          byYear: data.byYear,
+          byYear: newUpdates.length ? data.byYear : {},
         });
       })
       .finally(() => {
@@ -294,6 +299,24 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
       controller.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (loading || sections.newUpdates.length > 0 || fallbackAttempted) return;
+
+    const controller = new AbortController();
+    setFallbackAttempted(true);
+    loadStaticQueerFallback(controller.signal).then((fallbackMovies) => {
+      if (controller.signal.aborted || fallbackMovies.length === 0) return;
+      const sortedFallback = sortNewestFirst(fallbackMovies);
+      setSections({
+        featured: sortedFallback,
+        newUpdates: sortedFallback,
+        byYear: {},
+      });
+    });
+
+    return () => controller.abort();
+  }, [fallbackAttempted, loading, sections.newUpdates.length]);
 
   const allMovies = useMemo(() => sortNewestFirst(sections.newUpdates), [sections.newUpdates]);
   const rankedMovies = useMemo(() => [...allMovies].sort((a, b) => rankScore(b) - rankScore(a)), [allMovies]);
