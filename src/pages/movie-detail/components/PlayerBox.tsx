@@ -1,17 +1,55 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { EpisodeData, EpisodeServer } from '@/types/movie';
-import { pickBestEpisodeByPriority } from '@/services/movieApi';
+import { getEpisodeFailureCluster, getSourceFailureClusterFromUrl, pickBestEpisodeByPriority } from '@/services/movieApi';
 import { getSourceHost, reportPlayerIssue, type PlayerIssuePayload } from '@/services/playerDiagnostics';
 import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
 import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
 /* ─── URL helpers ─── */
+const SSPLAY_VARIANTS = ['SU', 'SG', 'SD', 'HY'] as const;
+type SsplayVariant = typeof SSPLAY_VARIANTS[number];
+const SSPLAY_SU_FIRST_VIDEO_IDS = new Set(['360319631381167']);
+
 function normalizeDailymotionUrl(url: string): string {
   const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/video\/([a-zA-Z0-9]+)/i.exec(url);
   if (dm) return `https://www.dailymotion.com/embed/video/${dm[1]}?queue-enable=false&sharing-enable=false&ui-logo=false`;
   const short = /^https?:\/\/dai\.ly\/([a-zA-Z0-9]+)/i.exec(url);
   if (short) return `https://www.dailymotion.com/embed/video/${short[1]}?queue-enable=false&sharing-enable=false&ui-logo=false`;
   return url;
+}
+
+function isSsplayEmbedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return /(^|\.)ssplay\.net$/i.test(parsed.hostname) && /^\/v\/[^/]+\.html$/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function getPreferredSsplayVariant(url: string): SsplayVariant {
+  try {
+    const parsed = new URL(url);
+    const videoId = /^\/v\/([^/]+)\.html$/i.exec(parsed.pathname)?.[1] ?? '';
+    return SSPLAY_SU_FIRST_VIDEO_IDS.has(videoId) ? 'SU' : 'SD';
+  } catch {
+    return 'SD';
+  }
+}
+
+function normalizeSsplayUrl(url: string, variant: SsplayVariant = 'SD'): string {
+  try {
+    const parsed = new URL(url);
+    if (!/(^|\.)ssplay\.net$/i.test(parsed.hostname) || !/^\/v\/[^/]+\.html$/i.test(parsed.pathname)) {
+      return url;
+    }
+    // Prefer ssplay's own player first; HY can point to stale Abyss embeds.
+    parsed.searchParams.set('s', variant);
+    parsed.searchParams.set('auto', 'true');
+    return parsed.toString();
+  } catch {
+    return url;
+  }
 }
 
 function getOriginalDailymotionUrl(url: string): string {
@@ -29,8 +67,10 @@ function isIframeSource(url: string): boolean {
     u.includes('dailymotion.com/embed') ||
     u.includes('dailymotion.com/video') ||
     u.includes('dai.ly') ||
+    u.includes('ssplay.net/v/') ||
     u.includes('ok.ru/videoembed') ||
     u.includes('short.icu/') ||
+    u.includes('abyssplayer.com') ||
     u.includes('vimeo.com') ||
     u.includes('player.vimeo.com') ||
     u.includes('filemoon') ||
@@ -54,7 +94,7 @@ function isBlvietsubWatchPageUrl(url: string): boolean {
   }
 }
 
-function getSafeEmbedUrl(url: string): string {
+function getSafeEmbedUrl(url: string, ssplayVariant: SsplayVariant = 'SD'): string {
   if (isBlvietsubWatchPageUrl(url)) return '';
   const raw = String(url || '').trim();
   if (!raw || isDirectVideo(raw) || isHlsUrl(raw)) return '';
@@ -64,7 +104,20 @@ function getSafeEmbedUrl(url: string): string {
   } catch {
     return '';
   }
-  return normalizeDailymotionUrl(raw);
+  return normalizeSsplayUrl(normalizeDailymotionUrl(raw), ssplayVariant);
+}
+
+function requiresUnsandboxedEmbed(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return (
+      parsed.pathname === '/internal/ssplay-resolve' ||
+      /(^|\.)ssplay\.net$/i.test(parsed.hostname) ||
+      /(^|\.)abyssplayer\.com$/i.test(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isDirectVideo(url: string): boolean {
@@ -169,7 +222,9 @@ function rememberBadSourceHost(host: string): void {
   try {
     const raw = window.localStorage.getItem(BAD_SOURCE_HOSTS_KEY);
     const map = raw ? JSON.parse(raw) as Record<string, number> : {};
-    map[host] = Date.now();
+    const now = Date.now();
+    map[host] = now;
+    map[getSourceFailureClusterFromUrl(host)] = now;
     window.localStorage.setItem(BAD_SOURCE_HOSTS_KEY, JSON.stringify(map));
   } catch {
     // Best-effort hint only; playback fallback must still work if storage is blocked.
@@ -218,16 +273,22 @@ function buildFallbackServersAvoidingHost(
   servers: EpisodeServer[],
   activeServer: number,
   activeHost: string,
+  activeEpisode?: EpisodeData | null,
 ): { indices: number[]; servers: EpisodeServer[] } {
   const indices = servers.map((_, index) => index).filter((index) => index !== activeServer);
   if (!activeHost) return { indices, servers: indices.map((index) => servers[index]) };
+  const activeCluster = activeEpisode ? getEpisodeFailureCluster(activeEpisode) : getSourceFailureClusterFromUrl(activeHost);
 
   const filtered = indices
     .map((index) => ({
       index,
       server: {
         ...servers[index],
-        server_data: (servers[index].server_data ?? []).filter((ep) => getEpisodeHost(ep) !== activeHost),
+        server_data: (servers[index].server_data ?? []).filter((ep) => {
+          const episodeHost = getEpisodeHost(ep);
+          const episodeCluster = getEpisodeFailureCluster(ep);
+          return episodeHost !== activeHost && episodeCluster !== activeCluster;
+        }),
       },
     }))
     .filter(({ server }) => (server.server_data ?? []).length > 0);
@@ -277,6 +338,7 @@ export default function PlayerBox({
   const [iframeKey, setIframeKey] = useState(0);
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [iframeBlocked, setIframeBlocked] = useState(false);
+  const [ssplayVariant, setSsplayVariant] = useState<SsplayVariant>(() => getPreferredSsplayVariant(episode?.link_embed ?? ''));
   const [autoNextActive, setAutoNextActive] = useState(false);
   const [autoNextCountdown, setAutoNextCountdown] = useState(5);
   const prevEpSlug = useRef<string | null>(null);
@@ -319,7 +381,9 @@ export default function PlayerBox({
   }, []);
 
   const embedIsSourcePage = useMemo(() => isBlvietsubWatchPageUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
-  const embedSrc = useMemo(() => getSafeEmbedUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
+  const embedIsSsplay = useMemo(() => isSsplayEmbedUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
+  const embedSrc = useMemo(() => getSafeEmbedUrl(episode?.link_embed ?? '', ssplayVariant), [episode?.link_embed, ssplayVariant]);
+  const embedNeedsLooseSandbox = useMemo(() => requiresUnsandboxedEmbed(embedSrc), [embedSrc]);
   const dmOriginalUrl = useMemo(() => getOriginalDailymotionUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
   const directVideoSrc = useMemo(() => {
     const streamUrl = episode?.link_m3u8 ?? '';
@@ -373,6 +437,7 @@ export default function PlayerBox({
       setIframeLoaded(false);
       setIframeBlocked(false);
       setIframeKey((k) => k + 1);
+      setSsplayVariant(getPreferredSsplayVariant(episode?.link_embed ?? ''));
       setAutoNextActive(false);
       setAutoNextCountdown(5);
       setPlayerMode(getPlayerMode(episode));
@@ -386,9 +451,14 @@ export default function PlayerBox({
     setIframeBlocked(false);
     if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
     const hasFallbackServer = allServers.some((_, index) => index !== activeServer);
+    const slowThirdPartyEmbed = requiresUnsandboxedEmbed(embedSrc);
     iframeTimerRef.current = setTimeout(() => {
+      if (slowThirdPartyEmbed) {
+        setIframeLoaded(true);
+        return;
+      }
       setIframeBlocked(true);
-    }, hasFallbackServer ? EMBED_FALLBACK_TIMEOUT_MS : EMBED_LAST_SOURCE_TIMEOUT_MS);
+    }, slowThirdPartyEmbed ? EMBED_LAST_SOURCE_TIMEOUT_MS : (hasFallbackServer ? EMBED_FALLBACK_TIMEOUT_MS : EMBED_LAST_SOURCE_TIMEOUT_MS));
     return () => {
       if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
     };
@@ -428,6 +498,7 @@ export default function PlayerBox({
       allServers,
       activeServer,
       activeSourceHost,
+      episode,
     );
     const fallback = pickBestEpisodeByPriority(remainingServers, episode?.slug);
     if (fallback) {
@@ -655,8 +726,8 @@ export default function PlayerBox({
               height="100%"
               className="w-full h-full border-0"
               allowFullScreen
-              allow="autoplay; fullscreen; picture-in-picture"
-              sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-popups"
               referrerPolicy="no-referrer"
               loading="eager"
               onLoad={() => {
@@ -666,10 +737,39 @@ export default function PlayerBox({
               }}
               onError={() => {
                 if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
+                if (embedNeedsLooseSandbox) {
+                  setIframeLoaded(true);
+                  return;
+                }
                 setIframeBlocked(true);
               }}
             />
             {iframeLoaded && <PlayerWatermark />}
+            {iframeLoaded && embedIsSsplay && (
+              <div className="absolute left-3 top-3 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-black/70 p-1.5 text-[11px] font-black text-white/80 backdrop-blur-sm">
+                <span className="px-1 text-white/45">Nguồn</span>
+                {SSPLAY_VARIANTS.map((variant) => (
+                  <button
+                    key={variant}
+                    type="button"
+                    data-ssplay-variant={variant}
+                    onClick={() => {
+                      setSsplayVariant(variant);
+                      setIframeLoaded(false);
+                      setIframeBlocked(false);
+                      setIframeKey((k) => k + 1);
+                    }}
+                    className={`rounded-lg px-2 py-1 transition-colors ${
+                      ssplayVariant === variant
+                        ? 'bg-red-500 text-white'
+                        : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                    }`}
+                  >
+                    {variant}
+                  </button>
+                ))}
+              </div>
+            )}
             {/* Overlay fullscreen button on embed video */}
             {iframeLoaded && (
               <button
@@ -690,7 +790,7 @@ export default function PlayerBox({
             </div>
             <p className="text-white/60 text-sm font-medium">Video này không cho phép nhúng</p>
             <a
-              href={isDailymotion(dmOriginalUrl) ? dmOriginalUrl : (episode?.link_embed ?? '#')}
+              href={isDailymotion(dmOriginalUrl) ? dmOriginalUrl : (embedSrc || episode?.link_embed || '#')}
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors whitespace-nowrap"

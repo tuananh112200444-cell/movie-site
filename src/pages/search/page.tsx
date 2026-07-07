@@ -20,6 +20,9 @@ import { setSmartSessionCache } from '@/utils/smartCache';
 type ViewMode = 'grid' | 'list';
 type SortMode = SearchSortMode;
 
+const FALLBACK_SUPABASE_URL = 'https://dzpddbthdeqbkrcjlzap.supabase.co';
+const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
+
 const HOT_SEARCHES = [
   { label: 'Avengers', icon: 'ri-shield-star-line' },
   { label: 'Squid Game', icon: 'ri-gamepad-line' },
@@ -55,8 +58,14 @@ function escapeRestIlike(value: string): string {
 }
 
 async function fetchDirectAliasResults(keyword: string): Promise<MovieItem[]> {
-  const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined;
-  const anonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY as string | undefined;
+  const supabaseUrl =
+    (import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined) ||
+    (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
+    FALLBACK_SUPABASE_URL;
+  const anonKey =
+    (import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY as string | undefined) ||
+    (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
+    FALLBACK_SUPABASE_ANON_KEY;
   const kw = keyword.trim();
   if (!supabaseUrl || !anonKey || kw.length < 2) return [];
 
@@ -125,35 +134,73 @@ async function fetchDirectAliasResults(keyword: string): Promise<MovieItem[]> {
 
 function getKnownAliasFallbackResults(keyword: string): MovieItem[] {
   const normalized = normalizeSearchText(keyword);
-  if (!normalized.includes('my magic prophecy')) return [];
+  const items: MovieItem[] = [];
 
-  return [{
-    _id: 'c1c2adfd-8f7a-4107-90b6-626c27e28c58',
-    slug: 'blvietsub-6136-trai-bai-noi-do-la-anh',
-    name: 'Trải Bài Nói Đó Là Anh',
-    origin_name: 'My Magic Prophecy',
-    title_en: 'My Magic Prophecy',
-    title_original: 'My Magic Prophecy',
-    normalized_name: 'trai-bai-noi-do-la-anh-my-magic-prophecy',
-    thumb_url: 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgcK1nDLrCYoY7Y2dv9bmOkryNXuz2jWsi4fekO0KoUW3QF6YHr-qELTOLHcJ37VH8Z0rhzUYW9a6BRU7U2icZfXL4JKwuIGLmKbAhWJbVyB3ZceAoyvED8XCnkNN0mu5DVvZ6AB8gmwvtEtGoQq9n0ESDdXhoxJZC-VYS1kvsTfrN5auXTmglJDRAYYBw/s320/trai-bai-noi-do-la-anh-mymagic-prophecy-2025.jpeg',
-    poster_url: 'https://i.imgur.com/K76O8E8.jpeg',
-    type: 'phim-bo',
-    sub_docquyen: false,
-    chieurap: false,
-    time: '',
-    year: 2025,
-    quality: 'HD',
-    lang: 'Vietsub',
-    episode_current: 'Tập 10',
-    episode_total: '10 Tập',
-    current_episode: 10,
-    total_episodes: 10,
-    category: [],
-    country: [],
-    modified: { time: new Date().toISOString() },
-    source_site: 'blvietsub',
-    source_name: 'BLVietsub',
-  }];
+  if (normalized.includes('my magic prophecy')) {
+    items.push({
+      _id: 'c1c2adfd-8f7a-4107-90b6-626c27e28c58',
+      slug: 'blvietsub-6136-trai-bai-noi-do-la-anh',
+      name: 'Trải Bài Nói Đó Là Anh',
+      origin_name: 'My Magic Prophecy',
+      title_en: 'My Magic Prophecy',
+      title_original: 'My Magic Prophecy',
+      normalized_name: 'trai-bai-noi-do-la-anh-my-magic-prophecy',
+      thumb_url: 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgcK1nDLrCYoY7Y2dv9bmOkryNXuz2jWsi4fekO0KoUW3QF6YHr-qELTOLHcJ37VH8Z0rhzUYW9a6BRU7U2icZfXL4JKwuIGLmKbAhWJbVyB3ZceAoyvED8XCnkNN0mu5DVvZ6AB8gmwvtEtGoQq9n0ESDdXhoxJZC-VYS1kvsTfrN5auXTmglJDRAYYBw/s320/trai-bai-noi-do-la-anh-mymagic-prophecy-2025.jpeg',
+      poster_url: 'https://i.imgur.com/K76O8E8.jpeg',
+      type: 'phim-bo',
+      sub_docquyen: false,
+      chieurap: false,
+      time: '',
+      year: 2025,
+      quality: 'HD',
+      lang: 'Vietsub',
+      episode_current: 'Tập 10',
+      episode_total: '10 Tập',
+      current_episode: 10,
+      total_episodes: 10,
+      category: [],
+      country: [],
+      modified: { time: new Date().toISOString() },
+      source_site: 'blvietsub',
+      source_name: 'BLVietsub',
+    });
+  }
+
+  if (
+    normalized.includes('com ga anh trang') ||
+    normalized.includes('moonlight chicken')
+  ) {
+    items.push({
+      _id: '76e8d9d1-cc5b-4cc4-94be-279387542f7b',
+      slug: 'com-ga-anh-trang',
+      name: 'Cơm Gà Ánh Trăng',
+      origin_name: 'Moonlight Chicken',
+      title_vi: 'Cơm Gà Ánh Trăng',
+      title_en: 'Moonlight Chicken',
+      title_original: 'Moonlight Chicken',
+      normalized_name: 'com ga anh trang moonlight chicken',
+      thumb_url: 'https://1.bp.blogspot.com/-2qAkjV11AK0/Y-Si_tQ40PI/AAAAAAAAMNI/DAHj9FskuZcebqWT7ZrOxGLg6DcEop9GwCNcBGAsYHQ/s0/com-ga-anh-trang-moonlight-chicken-2023-cover.jpg',
+      poster_url: 'https://1.bp.blogspot.com/-2qAkjV11AK0/Y-Si_tQ40PI/AAAAAAAAMNI/DAHj9FskuZcebqWT7ZrOxGLg6DcEop9GwCNcBGAsYHQ/s0/com-ga-anh-trang-moonlight-chicken-2023-cover.jpg',
+      type: 'phim-bo',
+      sub_docquyen: false,
+      chieurap: false,
+      time: '',
+      year: 2023,
+      quality: 'HD',
+      lang: 'Vietsub',
+      episode_current: 'Hoàn Tất (8/8)',
+      episode_total: '8 Tập',
+      current_episode: 8,
+      total_episodes: 8,
+      category: [],
+      country: [],
+      modified: { time: new Date().toISOString() },
+      source_site: 'blvietsub',
+      source_name: 'BLVietsub',
+    });
+  }
+
+  return items;
 }
 
 const VIRTUAL_GENRE_TERMS: Record<string, string[]> = {
@@ -170,6 +217,8 @@ function getMovieSearchText(movie: MovieItem): string {
     movie.title_vi,
     movie.title_en,
     movie.title_zh,
+    movie.title_original,
+    movie.normalized_name,
     movie.slug,
     movie.episode_current,
     movie.episode_total,
@@ -333,13 +382,17 @@ export default function SearchPage() {
 
     // Check memory cache first (60s TTL for search)
     const normalizedKeyword = keyword.trim();
-    const cacheKey = `search_v10_${normalizedKeyword.toLowerCase()}_${pg}`;
+    const knownAliasItems = pg === 1 ? getKnownAliasFallbackResults(normalizedKeyword) : [];
+    const cacheKey = `search_v12_${normalizedKeyword.toLowerCase()}_${pg}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
         const entry = JSON.parse(cached) as { data: MovieItem[]; totalPages: number; ts: number };
         if (entry.data.length > 0 && Date.now() - entry.ts < 20_000) {
-          setResults((prev) => pg === 1 ? entry.data : mergeMoviesUnique([...prev, ...entry.data]));
+          const cachedItems = pg === 1
+            ? sortMoviesForSearch(mergeMoviesUnique([...knownAliasItems, ...entry.data]), normalizedKeyword, 'relevance')
+            : entry.data;
+          setResults((prev) => pg === 1 ? cachedItems : mergeMoviesUnique([...prev, ...cachedItems]));
           setTotalPages(entry.totalPages);
           setAllLoaded(pg >= entry.totalPages);
           setLoading(false);
@@ -364,8 +417,12 @@ export default function SearchPage() {
           .catch(() => {})
       : Promise.resolve();
 
-    if (instantItems.length > 0) {
-      setResults(instantItems);
+    const firstPaintItems = pg === 1
+      ? sortMoviesForSearch(mergeMoviesUnique([...knownAliasItems, ...instantItems]), normalizedKeyword, 'relevance')
+      : instantItems;
+
+    if (firstPaintItems.length > 0) {
+      setResults(firstPaintItems);
       setTotalPages((prev) => Math.max(prev, 1));
       setAllLoaded(false);
     }
@@ -379,9 +436,9 @@ export default function SearchPage() {
       const apiData = apiResult.status === 'fulfilled'
         ? apiResult.value
         : { items: [], pagination: { currentPage: pg, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
-      let items = apiData.items ?? [];
+      let items = pg === 1 ? mergeMoviesUnique([...knownAliasItems, ...(apiData.items ?? [])]) : (apiData.items ?? []);
 
-      if (pg === 1 && items.length === 0) {
+      if (pg === 1) {
         const directSupabaseItems = await searchMoviesInSupabase(normalizedKeyword, {
           limit: 24,
           timeoutMs: 6000,
@@ -392,15 +449,19 @@ export default function SearchPage() {
         }
       }
 
-      if (pg === 1 && items.length === 0) {
+      if (pg === 1) {
         const directAliasItems = await fetchDirectAliasResults(normalizedKeyword).catch(() => []);
         if (directAliasItems.length > 0) {
           items = mergeMoviesUnique([...items, ...directAliasItems]);
         }
       }
 
-      if (pg === 1 && items.length === 0) {
-        items = mergeMoviesUnique([...items, ...getKnownAliasFallbackResults(normalizedKeyword)]);
+      if (pg === 1 && items.length < 6) {
+        const indexedItems = await ensureSearchIndexLoaded().catch(() => []);
+        const indexedHits = getInstantLocalHits(indexedItems, normalizedKeyword, 16);
+        if (indexedHits.length > 0) {
+          items = mergeMoviesUnique([...items, ...indexedHits]);
+        }
       }
 
       // STEP 2: Merge local index results (searchMovies already includes API, Supabase, and special sources)

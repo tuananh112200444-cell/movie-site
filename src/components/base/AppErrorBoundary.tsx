@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { reportClientIssue } from '@/services/playerDiagnostics';
 
 const RECOVERY_KEY = 'kp_app_recovery_20260705_v1';
+const DOM_MUTATION_RECOVERY_KEY = 'kp_dom_mutation_recovery_20260705_v1';
 
 function safeSessionGet(key: string): string | null {
   try {
@@ -68,6 +69,10 @@ function recoverWithFreshUrl() {
   window.location.replace(url.toString());
 }
 
+function scheduleFreshRecovery(delayMs = 350) {
+  window.setTimeout(recoverWithFreshUrl, delayMs);
+}
+
 interface Props {
   children: ReactNode;
 }
@@ -93,19 +98,24 @@ export default class AppErrorBoundary extends Component<Props, State> {
       error instanceof Error ? error.message : String(error ?? 'unknown app error'),
     );
 
+    if (isExternalDomMutationError(error) && safeSessionGet(DOM_MUTATION_RECOVERY_KEY) !== '1') {
+      safeSessionSet(DOM_MUTATION_RECOVERY_KEY, '1');
+      scheduleFreshRecovery();
+      return;
+    }
+
     if (isChunkLoadError(error) && safeSessionGet(RECOVERY_KEY) !== '1') {
       safeSessionSet(RECOVERY_KEY, '1');
-      Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()]).finally(() => {
-        recoverWithFreshUrl();
-      });
+      scheduleFreshRecovery();
+      Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()]).catch(() => {});
     }
   }
 
   handleRetry = () => {
     safeSessionRemove(RECOVERY_KEY);
-    Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()]).finally(() => {
-      recoverWithFreshUrl();
-    });
+    safeSessionRemove(DOM_MUTATION_RECOVERY_KEY);
+    recoverWithFreshUrl();
+    Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()]).catch(() => {});
   };
 
   render() {

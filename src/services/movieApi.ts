@@ -1738,6 +1738,32 @@ export async function searchMoviesInSupabase(
     options.signal?.addEventListener('abort', abortFromParent, { once: true });
   }
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 2500);
+  const hasStrongSearchHit = (movies: MovieItem[]): boolean => {
+    const normalizedQuery = normalizeSearchText(kw);
+    const compactQuery = normalizedQuery.replace(/\s+/g, '');
+    const tokens = normalizedQuery
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2);
+    if (!normalizedQuery || tokens.length === 0) return movies.length > 0;
+
+    return movies.some((movie) => {
+      const haystack = normalizeSearchText([
+        movie.name,
+        movie.origin_name,
+        movie.title_vi,
+        movie.title_en,
+        movie.title_zh,
+        movie.title_original,
+        movie.normalized_name,
+        movie.slug?.replace(/-/g, ' '),
+      ].filter(Boolean).join(' '));
+      const compactHaystack = haystack.replace(/\s+/g, '');
+      if (haystack.includes(normalizedQuery)) return true;
+      if (compactQuery.length >= 6 && compactHaystack.includes(compactQuery)) return true;
+      return tokens.length >= 3 && tokens.every((token) => haystack.includes(token));
+    });
+  };
   try {
     if (ENABLE_SUPABASE_SEARCH_RPC && !supabaseSearchRpcUnavailable) {
       const { data: rpcData, error: rpcError } = await supabase
@@ -1753,7 +1779,7 @@ export async function searchMoviesInSupabase(
           kw,
           'relevance',
         ).slice(0, limit);
-        if (rpcMovies.length > 0) return rpcMovies;
+        if (rpcMovies.length > 0 && hasStrongSearchHit(rpcMovies)) return rpcMovies;
       }
 
       const message = (rpcError?.message ?? '').toLowerCase();
@@ -1872,7 +1898,7 @@ export async function searchMoviesInSupabase(
   }
 }
 
-const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v4';
+const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v5';
 const SUPABASE_SEARCH_INDEX_TTL = 30 * 60 * 1000;
 let supabaseSearchIndexInflight: Promise<MovieItem[]> | null = null;
 const supabaseSearchIndexMemory = new Map<string, { items: MovieItem[]; ts: number }>();
@@ -1924,6 +1950,7 @@ export async function fetchSupabaseSearchIndex(options: { limit?: number; signal
     if (!SUPABASE_URL) return [];
     const url = new URL(`${SUPABASE_URL}/functions/v1/search-index-proxy`);
     url.searchParams.set('limit', String(limit));
+    url.searchParams.set('v', SUPABASE_SEARCH_INDEX_KEY);
     const res = await fetch(url.toString(), {
       signal: options.signal,
       cache: 'force-cache',
@@ -3003,6 +3030,11 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
       return tb - ta;
     });
 
+    if (sorted.length === 0) {
+      const fallbackMovies = await loadStaticQueerFallback(options.signal);
+      return { featured: fallbackMovies.slice(0, limit), newUpdates: fallbackMovies.slice(0, limit), byYear: {} };
+    }
+
     const byYear: Record<string, MovieItem[]> = {};
     for (const movie of sorted) {
       if (!movie.year) continue;
@@ -3480,6 +3512,24 @@ const SERVER_RECENT_BAD_HOST_PENALTY = 900;
 const OPHIM_PREFERRED_SOURCE_BONUS = 380;
 const KKPHIM_PREFERRED_SOURCE_BONUS = 360;
 const DAILYMOTION_PREFERRED_SOURCE_BONUS = 240;
+const RESILIENT_DIRECT_SOURCE_BONUS = 620;
+const TRUSTED_PLATFORM_SOURCE_BONUS = 460;
+const THIRD_PARTY_EMBED_SOURCE_BONUS = 80;
+const SSPLAY_ABYSS_CLUSTER_PENALTY = 680;
+
+export type EpisodeSourceKind =
+  | 'empty'
+  | 'blvietsub_page'
+  | 'own_direct'
+  | 'direct_hls'
+  | 'direct_file'
+  | 'ophim'
+  | 'kkphim'
+  | 'dailymotion'
+  | 'stable_embed'
+  | 'ssplay_abyss'
+  | 'known_bad'
+  | 'third_party_embed';
 
 function normalizeServerPriorityText(value: string): string {
   return value
@@ -3657,6 +3707,96 @@ function getUrlHost(value = ''): string {
   }
 }
 
+function getPrimaryEpisodeUrl(ep?: EpisodeData | null): string {
+  return String(ep?.link_m3u8 || ep?.link_embed || '').trim();
+}
+
+function isDirectFileUrl(value = ''): boolean {
+  return /\.(mp4|webm|mkv|mov)(?:[?#].*)?$/i.test(value);
+}
+
+function isHlsStreamUrl(value = ''): boolean {
+  return /\.m3u8(?:[?#].*)?$/i.test(value);
+}
+
+export function getSourceFailureClusterFromUrl(value = ''): string {
+  const raw = String(value || '').trim();
+  const host = getUrlHost(raw);
+  const lower = raw.toLowerCase();
+  if (!raw) return 'empty';
+  if (host.includes('ssplay') || host.includes('abyssplayer') || host.includes('short.icu') || lower.includes('ssplay')) {
+    return 'ssplay_abyss';
+  }
+  if (host.includes('dailymotion.com') || host === 'dai.ly') return 'dailymotion';
+  if (host.includes('video.khophim.org') || host.includes('supabase.co')) return 'khophim_direct';
+  if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) return 'ophim';
+  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) {
+    return 'kkphim';
+  }
+  if (host.includes('versondd.top')) return 'known_bad';
+  if (isHlsStreamUrl(raw) || isDirectFileUrl(raw)) return `direct:${host || 'unknown'}`;
+  return host || lower.slice(0, 80);
+}
+
+export function getEpisodeFailureCluster(ep?: EpisodeData | null): string {
+  return getSourceFailureClusterFromUrl(getPrimaryEpisodeUrl(ep));
+}
+
+export function getEpisodeSourceKind(ep?: EpisodeData | null): EpisodeSourceKind {
+  const m3u8 = String(ep?.link_m3u8 || '').trim();
+  const embed = String(ep?.link_embed || '').trim();
+  const url = m3u8 || embed;
+  const host = getUrlHost(url);
+  const lower = url.toLowerCase();
+
+  if (!url) return 'empty';
+  if (!m3u8 && embed && isBlvietsubWatchPageUrl(embed)) return 'blvietsub_page';
+  if (host.includes('versondd.top')) return 'known_bad';
+  if (host.includes('video.khophim.org') || host.includes('supabase.co')) return 'own_direct';
+  if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) return 'ophim';
+  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) {
+    return 'kkphim';
+  }
+  if (host.includes('dailymotion.com') || host === 'dai.ly') return 'dailymotion';
+  if (host.includes('ssplay') || host.includes('abyssplayer') || host.includes('short.icu') || lower.includes('ssplay')) {
+    return 'ssplay_abyss';
+  }
+  if (m3u8) return isHlsStreamUrl(m3u8) ? 'direct_hls' : 'direct_file';
+  if (isDirectFileUrl(embed)) return 'direct_file';
+  if (host.includes('ok.ru') || host.includes('vimeo.com') || host.includes('player.vimeo.com')) return 'stable_embed';
+  return 'third_party_embed';
+}
+
+function getSourceResilienceScore(ep: EpisodeData): number {
+  switch (getEpisodeSourceKind(ep)) {
+    case 'own_direct':
+      return RESILIENT_DIRECT_SOURCE_BONUS + 170;
+    case 'direct_hls':
+      return RESILIENT_DIRECT_SOURCE_BONUS;
+    case 'direct_file':
+      return RESILIENT_DIRECT_SOURCE_BONUS - 60;
+    case 'ophim':
+      return TRUSTED_PLATFORM_SOURCE_BONUS + 80;
+    case 'kkphim':
+      return TRUSTED_PLATFORM_SOURCE_BONUS + 60;
+    case 'dailymotion':
+      return TRUSTED_PLATFORM_SOURCE_BONUS;
+    case 'stable_embed':
+      return TRUSTED_PLATFORM_SOURCE_BONUS - 220;
+    case 'third_party_embed':
+      return THIRD_PARTY_EMBED_SOURCE_BONUS;
+    case 'ssplay_abyss':
+      return -SSPLAY_ABYSS_CLUSTER_PENALTY;
+    case 'known_bad':
+      return -1200;
+    case 'blvietsub_page':
+    case 'empty':
+      return -10000;
+    default:
+      return 0;
+  }
+}
+
 function isDailymotionEpisode(ep?: EpisodeData): boolean {
   if (!ep) return false;
   const host = getUrlHost(ep.link_embed || ep.link_m3u8 || '');
@@ -3676,12 +3816,14 @@ function isDailymotionEpisode(ep?: EpisodeData): boolean {
 
 function getRecentBadHostPenalty(ep: EpisodeData): number {
   if (typeof window === 'undefined') return 0;
-  const host = getUrlHost(ep.link_m3u8 || ep.link_embed || '');
-  if (!host) return 0;
+  const url = ep.link_m3u8 || ep.link_embed || '';
+  const host = getUrlHost(url);
+  const cluster = getEpisodeFailureCluster(ep);
+  if (!host && !cluster) return 0;
   try {
     const raw = window.localStorage.getItem('khophim.bad-source-hosts.v1');
     const map = raw ? JSON.parse(raw) as Record<string, number> : {};
-    const lastBadAt = Number(map[host] || 0);
+    const lastBadAt = Math.max(Number(map[host] || 0), Number(map[cluster] || 0));
     if (!lastBadAt) return 0;
     const ageMs = Date.now() - lastBadAt;
     return ageMs >= 30 * 60 * 1000 ? 0 : SERVER_RECENT_BAD_HOST_PENALTY;
@@ -3716,6 +3858,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
 
   if (!url) return -10000;
   if (!m3u8 && embed && isBlvietsubWatchPageUrl(embed)) return -10000;
+  score += getSourceResilienceScore(ep);
   const healthStatus = String(ep.source_health_status || '').trim().toLowerCase();
   const failureCount = Number(ep.source_failure_count || 0);
   const responseMs = Number(ep.source_response_time_ms || 0);
@@ -3745,10 +3888,8 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) score += KKPHIM_PREFERRED_SOURCE_BONUS;
   if (host.includes('dailymotion.com') || host === 'dai.ly') score += DAILYMOTION_PREFERRED_SOURCE_BONUS;
   if (lower.includes('.m3u8')) score += 70;
-  if (host.includes('ssplay')) score += 45;
-  if (host.includes('abyssplayer') || host.includes('short.icu')) score += 20;
   if (host.includes('versondd.top')) score -= 1200;
-  if (host.includes('blvietsub.com')) score -= 250;
+  if (host.includes('blvietsub.com')) score -= 900;
   if (embed && !m3u8 && score < 20) score += 10;
 
   return score - getRecentBadHostPenalty(ep);
@@ -3934,7 +4075,14 @@ export function pickBestEpisodeByPriority(
   episodes: EpisodeServer[],
   targetEpSlug?: string,
 ): { serverIndex: number; episode: EpisodeData; priorityLabel: string | null } | null {
-  const candidates: { serverIndex: number; episode: EpisodeData; priorityRank: number; qualityScore: number }[] = [];
+  const candidates: {
+    serverIndex: number;
+    episode: EpisodeData;
+    priorityRank: number;
+    qualityScore: number;
+    sourceKind: EpisodeSourceKind;
+    failureCluster: string;
+  }[] = [];
   const targetText = targetEpSlug?.trim() ?? '';
   const targetNumber = getEpisodeNumberFromText(targetText);
 
@@ -3953,6 +4101,8 @@ export function pickBestEpisodeByPriority(
         serverIndex,
         episode,
         priorityRank: getServerPriorityRank(server, episode),
+        sourceKind: getEpisodeSourceKind(episode),
+        failureCluster: getEpisodeFailureCluster(episode),
         qualityScore:
           getServerQualityScore(server) +
           getEpisodeReliabilityScore(episode) +
@@ -3963,10 +4113,14 @@ export function pickBestEpisodeByPriority(
   });
 
   if (!candidates.length) return null;
+  const hasIndependentSource = candidates.some((candidate) => candidate.failureCluster !== 'ssplay_abyss');
 
   candidates.sort((a, b) => {
     const aDirect = a.episode.link_m3u8 || /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(a.episode.link_embed || '');
     const bDirect = b.episode.link_m3u8 || /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(b.episode.link_embed || '');
+    const aSsplayOnly = hasIndependentSource && a.failureCluster === 'ssplay_abyss';
+    const bSsplayOnly = hasIndependentSource && b.failureCluster === 'ssplay_abyss';
+    if (aSsplayOnly !== bSsplayOnly) return aSsplayOnly ? 1 : -1;
     if (b.qualityScore !== a.qualityScore) return b.qualityScore - a.qualityScore;
     if (Boolean(aDirect) !== Boolean(bDirect)) return bDirect ? 1 : -1;
     return a.priorityRank - b.priorityRank;

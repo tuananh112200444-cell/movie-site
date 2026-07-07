@@ -1,4 +1,5 @@
 ﻿const SITE_URL = 'https://khophim.org';
+const MHOPHIM_URL = 'https://mhophim.com';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1';
 const SEO_PRERENDER_VERSION = '20260702-clean-prerender-seo-v1';
@@ -26,6 +27,58 @@ function canonicalRedirect(url, pathname) {
   });
 }
 
+function hostRedirect(targetUrl, canonicalHost) {
+  return new Response(null, {
+    status: 301,
+    headers: {
+      Location: targetUrl,
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+      'X-Robots-Tag': 'noindex, follow',
+      'X-Canonical-Host': canonicalHost,
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
+async function serveAsset(context, pathname, status = 200) {
+  const assetUrl = new URL(context.request.url);
+  assetUrl.pathname = pathname;
+  assetUrl.search = '';
+  const assetRequest = new Request(assetUrl.toString(), context.request);
+  const response = context.env?.ASSETS?.fetch
+    ? await context.env.ASSETS.fetch(assetRequest)
+    : await context.next(assetRequest);
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', pathname.endsWith('.xml') ? 'public, max-age=3600' : 'public, max-age=300, s-maxage=600');
+  headers.set('X-Robots-Tag', status === 404 ? 'noindex, follow' : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1');
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) headers.set(key, value);
+  return new Response(response.body, {
+    status,
+    statusText: status === 404 ? 'Not Found' : response.statusText,
+    headers,
+  });
+}
+
+async function handleMhophimRequest(context, url, pathname) {
+  if (url.hostname === 'www.mhophim.com' || url.protocol === 'http:') {
+    return hostRedirect(`${MHOPHIM_URL}${pathname}${url.search}`, 'mhophim.com');
+  }
+
+  if (/^\/(?:phim|xem-phim)\//i.test(pathname) || /^\/(?:search|filter)(?:\/|$)/i.test(pathname)) {
+    return hostRedirect(`${SITE_URL}${pathname}${url.search}`, 'khophim.org');
+  }
+
+  if (pathname === '/robots.txt') return serveAsset(context, '/mhophim/robots.txt');
+  if (pathname === '/sitemap.xml') return serveAsset(context, '/mhophim/sitemap.xml');
+  if (pathname === '/' || pathname === '') return serveAsset(context, '/mhophim/index.html');
+
+  const editorialMatch = /^\/(top|lich-chieu|huong-dan|review)\/([^/?#]+)\/?$/i.exec(pathname);
+  if (editorialMatch) {
+    return serveAsset(context, `/mhophim/${editorialMatch[1]}/${editorialMatch[2]}/index.html`);
+  }
+
+  return serveAsset(context, '/mhophim/404.html', 404);
+}
 const BOT_PATTERNS = [
   'googlebot',
   'google-inspectiontool',
@@ -364,6 +417,23 @@ function isNoIndexPath(pathname) {
 
 function isStaticAsset(pathname) {
   return /\.(js|css|png|jpg|jpeg|gif|webp|ico|svg|woff|woff2|ttf|eot|map|json|txt|xml|m3u8|ts)$/i.test(pathname);
+}
+
+async function serveSpaIndex(context, request, pathname) {
+  const indexUrl = new URL(request.url);
+  indexUrl.pathname = '/';
+  indexUrl.search = '?__spa_fallback=1';
+
+  if (context.env && context.env.ASSETS && typeof context.env.ASSETS.fetch === 'function') {
+    const response = await context.env.ASSETS.fetch(new Request(indexUrl.toString(), {
+      method: request.method,
+      headers: request.headers,
+    }));
+    return withHeaders(response, pathname);
+  }
+
+  const response = await context.next();
+  return withHeaders(response, pathname);
 }
 
 function isAllowedBlvietsubProxyUrl(targetUrl) {
@@ -1110,6 +1180,73 @@ async function proxyBlvietsub(request, context) {
   }
 }
 
+function isAllowedSsplayResolveUrl(target) {
+  try {
+    const parsed = new URL(target);
+    return /(^|\.)ssplay\.net$/i.test(parsed.hostname) && /^\/v\/[^/]+\.html$/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+async function resolveSsplayEmbed(request) {
+  const url = new URL(request.url);
+  const target = url.searchParams.get('url') || '';
+  if (!isAllowedSsplayResolveUrl(target)) {
+    return new Response('Bad Request', {
+      status: 400,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+        ...SECURITY_HEADERS,
+      },
+    });
+  }
+
+  const targetUrl = new URL(target);
+  targetUrl.searchParams.set('s', 'HY');
+  try {
+    const upstream = await fetch(targetUrl.toString(), {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 KhoPhim-Player/1.0',
+        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+        'Referer': 'https://khophim.org/',
+      },
+      cf: { cacheTtl: 900, cacheEverything: true },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (upstream.ok) {
+      const html = await upstream.text();
+      const iframeSrc = /<iframe[^>]+src=["']([^"']+)["']/i.exec(html)?.[1]?.replace(/&amp;/g, '&').trim();
+      if (iframeSrc) {
+        const resolved = new URL(iframeSrc, targetUrl);
+        if (/^(https?:)$/i.test(resolved.protocol)) {
+          return new Response(null, {
+            status: 302,
+            headers: {
+              Location: resolved.toString(),
+              'Cache-Control': 'public, max-age=300, s-maxage=900',
+              'X-Ssplay-Resolve': 'HY-iframe',
+            },
+          });
+        }
+      }
+    }
+  } catch {
+    // Fall back to the HY page below.
+  }
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: targetUrl.toString(),
+      'Cache-Control': 'public, max-age=120, s-maxage=300',
+      'X-Ssplay-Resolve': 'HY-fallback',
+    },
+  });
+}
+
 function contextWaitUntil(context, promise) {
   try {
     if (context && typeof context.waitUntil === 'function') {
@@ -1205,7 +1342,11 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  if (url.hostname === 'www.khophim.org' || url.hostname === 'mhophim.com' || url.hostname === 'www.mhophim.com' || url.protocol === 'http:') {
+  if (url.hostname === 'mhophim.com' || url.hostname === 'www.mhophim.com') {
+    return handleMhophimRequest(context, url, pathname);
+  }
+
+  if (url.hostname === 'www.khophim.org' || url.protocol === 'http:') {
     return canonicalRedirect(url, pathname);
   }
 
@@ -1234,6 +1375,10 @@ export async function onRequest(context) {
     return proxyBlvietsub(request, context);
   }
 
+  if (pathname === '/internal/ssplay-resolve') {
+    return resolveSsplayEmbed(request);
+  }
+
   if (isStaticAsset(pathname)) {
     return context.next();
   }
@@ -1257,7 +1402,15 @@ export async function onRequest(context) {
     if (staticResponse) return staticResponse;
   }
 
-  const response = await context.next();
-  return withHeaders(response, pathname);
+  if (pathname === '/') {
+    const response = await context.next();
+    return withHeaders(response, pathname);
+  }
+
+  return serveSpaIndex(context, request, pathname);
 }
+
+
+
+
 

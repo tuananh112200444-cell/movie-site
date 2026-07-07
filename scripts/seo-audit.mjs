@@ -59,26 +59,28 @@ if (/Disallow:\s*\/\s*$/im.test(globalRobotsBlock)) {
 }
 
 const redirects = await read('public/_redirects');
-for (const host of ['www.khophim.org']) {
-  const expected = `https://${host}/* https://khophim.org/:splat 301!`;
-  if (!redirects.includes(expected)) {
-    addError(`public/_redirects is missing canonical redirect: ${expected}`);
-  }
-}
-for (const expected of [
-  'https://www.mhophim.com/* https://mhophim.com/:splat 301!',
-  'https://mhophim.com/phim/* https://khophim.org/phim/:splat 301!',
-  'https://mhophim.com/search* https://khophim.org/search:splat 301!',
-  'https://mhophim.com/robots.txt /mhophim/robots.txt 200!',
-  'https://mhophim.com/sitemap.xml /mhophim/sitemap.xml 200!',
-  'https://mhophim.com/ /mhophim/index.html 200!',
-]) {
-  if (!redirects.includes(expected)) {
-    addError(`public/_redirects is missing MHoPhim satellite rule: ${expected}`);
-  }
+if (/^\s*https?:\/\//im.test(redirects)) {
+  addError('public/_redirects must not use domain-level sources; Cloudflare Pages only supports path-based sources here.');
 }
 if (!redirects.includes('/* /index.html 200')) {
   addError('public/_redirects must keep the SPA fallback after canonical redirects.');
+}
+
+const cloudflareFunction = await read('functions/[[path]].js').catch(() => '');
+if (/url\.hostname === 'mhophim\.com'[\s\S]{0,120}canonicalRedirect\(url,\s*pathname\)/.test(cloudflareFunction)) {
+  addError('functions/[[path]].js must not send mhophim.com through the khophim.org canonical redirect.');
+}
+for (const requiredSnippet of [
+  'handleMhophimRequest',
+  "url.hostname === 'mhophim.com'",
+  "url.hostname === 'www.mhophim.com'",
+  "url.hostname === 'www.khophim.org'",
+  "return serveAsset(context, '/mhophim/index.html')",
+  "return hostRedirect(`${SITE_URL}${pathname}${url.search}`, 'khophim.org')",
+]) {
+  if (!cloudflareFunction.includes(requiredSnippet)) {
+    addError(`functions/[[path]].js is missing host SEO guard: ${requiredSnippet}`);
+  }
 }
 
 const llms = await read('public/llms.txt').catch(() => '');

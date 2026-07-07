@@ -674,12 +674,35 @@ export default function LightweightHlsPlayer({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const playVideo = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v) return;
+    setHasError(false);
+    setErrorMsg('');
+    try {
+      await v.play();
+      return;
+    } catch {
+      try {
+        v.muted = true;
+        setIsMuted(true);
+        await v.play();
+        setErrorMsg('Trình duyệt đã chặn âm thanh tự động, phim đang phát ở chế độ tắt tiếng.');
+      } catch {
+        setErrorMsg('Bấm lại nút phát hoặc đổi nguồn phim khác nếu trình duyệt đang chặn phát video.');
+      }
+    }
+  }, []);
+
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) v.play().catch(() => {});
-    else v.pause();
-  }, []);
+    if (v.paused) {
+      void playVideo();
+    } else {
+      v.pause();
+    }
+  }, [playVideo]);
 
   const toggleMute = useCallback(() => {
     const v = videoRef.current;
@@ -948,9 +971,18 @@ export default function LightweightHlsPlayer({
         {/* Pause button center */}
         {!isPlaying && loaded && !isBuffering && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center border border-white/15">
+            <button
+              type="button"
+              aria-label="Phát phim"
+              className="pointer-events-auto w-16 h-16 rounded-full bg-black/50 flex items-center justify-center border border-white/15 transition-transform hover:scale-105"
+              onClick={(e) => {
+                e.stopPropagation();
+                void playVideo();
+                resetControlsTimer();
+              }}
+            >
               <i className="ri-play-fill text-3xl text-white ml-1" />
-            </div>
+            </button>
           </div>
         )}
 
@@ -973,7 +1005,7 @@ export default function LightweightHlsPlayer({
 
           {/* Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-3">
-            <button onClick={togglePlay} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 transition-all cursor-pointer flex-shrink-0">
+            <button type="button" aria-label={isPlaying ? 'Tạm dừng phim' : 'Phát phim'} onClick={togglePlay} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 transition-all cursor-pointer flex-shrink-0">
               <i className={`${isPlaying ? 'ri-pause-fill' : 'ri-play-fill'} text-lg ${!isPlaying ? 'ml-0.5' : ''}`} />
             </button>
 

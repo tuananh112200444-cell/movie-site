@@ -31,6 +31,7 @@ interface OPhimResponse {
     name?: string;
     slug?: string;
     episode_current?: string;
+    episode_total?: string;
   };
   data?: {
     item?: {
@@ -39,6 +40,7 @@ interface OPhimResponse {
       origin_name?: string;
       slug?: string;
       episode_current?: string;
+      episode_total?: string;
       episodes?: OPhimServer[];
     };
     items?: Array<{
@@ -56,6 +58,7 @@ interface OPhimResponse {
     origin_name?: string;
     slug?: string;
     episode_current?: string;
+    episode_total?: string;
     episodes?: OPhimServer[];
   };
   episodes?: OPhimServer[];
@@ -88,6 +91,7 @@ interface ParsedOPhimDetail {
   name: string;
   originName: string;
   episodeCurrent: string;
+  episodeTotal: string;
   episodes: OPhimServer[];
 }
 
@@ -132,6 +136,14 @@ function getMovieCurrentEpisode(movie: MovieRow): number {
     Number(movie.current_episode || 0),
     parse(movie.episode_current || ''),
   );
+}
+
+function getTotalEpisodeNumber(value = ''): number {
+  const text = String(value || '').toLowerCase();
+  const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+  if (slash) return Number(slash[2] || 0) || 0;
+  const matches = [...text.matchAll(/(\d{1,4})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+  return matches.length ? Math.max(...matches) : 0;
 }
 
 async function upsertNormalizedEpisodeSafely(
@@ -258,6 +270,7 @@ function parseOPhimDetail(data: OPhimResponse, fallbackSlug: string): ParsedOPhi
     name: String(item.name || ''),
     originName: String('origin_name' in item ? item.origin_name || '' : ''),
     episodeCurrent: String(item.episode_current || ''),
+    episodeTotal: String(item.episode_total || ''),
     episodes,
   };
 }
@@ -583,6 +596,16 @@ serve(async (req) => {
           Number(movie.total_episodes || 0) > 0 &&
           previousCurrent > Math.max(Number(movie.total_episodes || 0), sourceCurrent);
         const currentEpisode = previousLooksAheadOfSource ? sourceCurrent : Math.max(previousCurrent, sourceCurrent);
+        const sourceTotal = Math.max(
+          getTotalEpisodeNumber(detail.episodeTotal),
+          getTotalEpisodeNumber(detail.episodeCurrent),
+          maxEpisode,
+        );
+        const mergedTotalEpisode = Math.max(
+          Number(movie.total_episodes || 0) || 0,
+          sourceTotal,
+          currentEpisode,
+        );
         const movieUpdate: Record<string, unknown> = {
           ophim_id: detail.id || movie.ophim_id || '',
           ophim_slug: detail.slug || movie.ophim_slug || '',
@@ -590,12 +613,13 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         };
 
+        if (sourceTotal > 0 && Number(movie.total_episodes || 0) !== mergedTotalEpisode) {
+          movieUpdate.total_episodes = mergedTotalEpisode;
+        }
+
         if (currentEpisode !== previousCurrent) {
           movieUpdate.episode_current = `Tập ${currentEpisode}`;
           movieUpdate.current_episode = currentEpisode;
-          if (!movie.total_episodes || Number(movie.total_episodes) < currentEpisode) {
-            movieUpdate.total_episodes = currentEpisode;
-          }
         }
 
         await supabase

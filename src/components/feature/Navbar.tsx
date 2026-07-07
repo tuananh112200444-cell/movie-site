@@ -1,26 +1,9 @@
-import { lazy, Suspense, useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { prefetchRoute } from '../../utils/prefetchRoute';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import StickyBanner from './StickyBanner';
-
-const SearchSuggestions = lazy(() => import('./SearchSuggestions'));
-
-function prewarmSearchSuggestions() {
-  void import('./SearchSuggestions').catch(() => {});
-}
-
-function runSearchPrewarmWhenIdle() {
-  const idle = (globalThis as typeof globalThis & {
-    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-  }).requestIdleCallback;
-
-  if (typeof idle === 'function') {
-    idle(prewarmSearchSuggestions, { timeout: 3000 });
-  } else {
-    window.setTimeout(prewarmSearchSuggestions, 1200);
-  }
-}
+import SearchSuggestions from './SearchSuggestions';
 
 const GENRES = [
   { name: 'Hành Động', slug: 'hanh-dong', icon: 'ri-sword-line' },
@@ -95,21 +78,6 @@ export default function Navbar() {
   const rafRef = useRef<number | null>(null);
   const lastScrolledRef = useRef(false);
   const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    runSearchPrewarmWhenIdle();
-
-    const handleVisible = () => {
-      if (document.visibilityState === 'visible') runSearchPrewarmWhenIdle();
-    };
-
-    document.addEventListener('visibilitychange', handleVisible);
-    window.addEventListener('focus', runSearchPrewarmWhenIdle);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisible);
-      window.removeEventListener('focus', runSearchPrewarmWhenIdle);
-    };
-  }, []);
 
   useLayoutEffect(() => {
     const header = headerRef.current;
@@ -493,9 +461,7 @@ export default function Navbar() {
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-white/35 hover:text-white transition-colors cursor-pointer">
                         <i className="ri-close-line text-sm" aria-hidden="true" />
                       </button>
-                      <Suspense fallback={null}>
-                        <SearchSuggestions query={searchQuery} onSelect={() => { setSearchOpen(false); setSearchQuery(''); }} className="w-80" />
-                      </Suspense>
+                      <SearchSuggestions query={searchQuery} onSelect={() => { setSearchOpen(false); setSearchQuery(''); }} className="w-80" />
                     </>
                   ) : (
                     <button
@@ -606,9 +572,7 @@ export default function Navbar() {
                         <i className="ri-close-line text-sm" />
                       </button>
                     )}
-                    <Suspense fallback={null}>
-                      <SearchSuggestions query={searchQuery} onSelect={() => { setSearchOpen(false); setSearchQuery(''); }} />
-                    </Suspense>
+                    <SearchSuggestions query={searchQuery} onSelect={() => { setSearchOpen(false); setSearchQuery(''); }} />
                   </div>
                   <button type="submit"
                     aria-label="Thực hiện tìm kiếm"
