@@ -24,6 +24,7 @@ const CORS_HEADERS = {
 };
 const INTERNAL_REFRESH_HEADER = 'x-home-proxy-refresh';
 const HOME_MIN_SECTION_ITEMS = 6;
+const STATIC_HOME_FALLBACK_URL = 'https://khophim.org/home-fallback.json';
 function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
@@ -65,6 +66,22 @@ function buildPayloadFromSections(sections: Record<string, unknown[]> | null | u
     payload[key] = filteredSectionItems(sections, key);
   }
   return payload;
+}
+
+async function readStaticHomeFallback(requestedSections: string[]): Promise<Record<string, unknown[]> | null> {
+  try {
+    const response = await fetch(STATIC_HOME_FALLBACK_URL, {
+      signal: timeoutSignal(1200),
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) return null;
+    const payload = await response.json() as { sections?: Record<string, unknown[]> };
+    if (!payload.sections) return null;
+    const sections = buildPayloadFromSections(payload.sections, requestedSections);
+    return cacheHasRequestedSections(sections, requestedSections) ? sections : null;
+  } catch {
+    return null;
+  }
 }
 
 function mergeFreshWithStableCache(
@@ -720,6 +737,16 @@ serve(async (req) => {
       'Cache-Control': 'public, max-age=60',
       'X-Cache': 'STALE',
     });
+  }
+
+  if (!forceRefresh) {
+    const staticFallback = await readStaticHomeFallback(requestedSections);
+    if (staticFallback) {
+      return jsonResponse({ status: true, source: 'static-fallback', sections: staticFallback }, 200, {
+        'Cache-Control': 'public, max-age=45',
+        'X-Cache': 'STATIC-FALLBACK',
+      });
+    }
   }
   /* 3. Build requested sections in parallel with 3s timeout each */
   const limit = 18;

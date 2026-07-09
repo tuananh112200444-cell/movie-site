@@ -160,6 +160,7 @@
     <link rel="dns-prefetch" href="https://storage.readdy-site.link">
     <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
     <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;900&display=swap">
 
@@ -182,32 +183,17 @@
           #13151f;
       }
       @keyframes kp-spin{to{transform:rotate(360deg)}}
+      @keyframes kp-boot-show{to{opacity:1;pointer-events:auto}}
       @keyframes kp-show-retry{to{opacity:1;pointer-events:auto}}
     </style>
     <meta name="google-site-verification" content="GM4SuQdGYgfPLXKhjCaiAyZOHaH-aSGFZLPNkXS-CI8" />
 
-    <!-- Google tag (gtag.js) -->
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      window.gtag = function(){dataLayer.push(arguments);};
-      gtag('js', new Date());
-      gtag('config', 'G-6B5GLB9W6H', { send_page_view: false });
-    </script>
-    <script defer src="https://www.googletagmanager.com/gtag/js?id=G-6B5GLB9W6H"></script>
   </head>
   <body class="notranslate" translate="no">
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-M7BRFKFQ" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
     <div id="root" class="notranslate" translate="no"></div>
-    <main id="kp-boot-fallback" style="position:fixed;inset:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center;z-index:9999">
-      <section style="max-width:460px">
-        <div style="width:34px;height:34px;margin:0 auto 18px;border:3px solid rgba(255,255,255,.18);border-top-color:#ef4444;border-radius:999px;animation:kp-spin .8s linear infinite"></div>
-        <h1 style="font-size:24px;margin:0 0 12px">KhoPhim đang mở</h1>
-        <p style="color:rgba(255,255,255,.72);line-height:1.6;margin:0 0 18px">Đang tải phiên bản mới nhất, vui lòng chờ một chút.</p>
-        <button id="kp-boot-retry" type="button" onclick="(function(){try{localStorage.clear();sessionStorage.clear()}catch(e){};if('caches'in window){caches.keys().then(function(names){return Promise.all(names.map(function(n){return caches.delete(n)}))}).finally(function(){location.replace(location.pathname+location.search+(location.search?'&':'?')+'recover='+Date.now())})}else{location.replace(location.pathname+location.search+(location.search?'&':'?')+'recover='+Date.now())}})()" style="opacity:0;pointer-events:none;animation:kp-show-retry .01s linear 18s forwards;background:#dc2626;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer">Tải lại phiên bản mới</button>
-      </section>
-    </main>
     <!-- noscript: readable fallback for crawlers and browsers without JavaScript -->
     <noscript>
       <div style="font-family:sans-serif;max-width:900px;margin:0 auto;padding:24px;color:#333">
@@ -351,9 +337,8 @@
           var root = document.getElementById('root');
           if (!root) return;
           var mounted = root.getAttribute('data-kp-mounted') === '1';
-          var fallbackVisible = !!document.getElementById('kp-boot-fallback');
           var empty = root.children.length === 0 && root.textContent.trim().length < 20;
-          if (!mounted && (assetScriptFailed || fallbackVisible || empty)) {
+          if (!mounted && (assetScriptFailed || empty)) {
             recover(assetScriptFailed ? 'script_load_error' : 'app_not_mounted');
           }
         }, 25000);

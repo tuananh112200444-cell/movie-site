@@ -2,7 +2,7 @@
 const MHOPHIM_URL = 'https://mhophim.com';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1';
-const SEO_PRERENDER_VERSION = '20260707-smart-domain-cluster-v3';
+const SEO_PRERENDER_VERSION = '20260710-movie-canonical-encoded-v1';
 
 const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
@@ -62,6 +62,10 @@ async function serveAsset(context, pathname, status = 200) {
 async function handleMhophimRequest(context, url, pathname) {
   if (url.hostname === 'www.mhophim.com' || url.protocol === 'http:') {
     return hostRedirect(`${MHOPHIM_URL}${pathname}${url.search}`, 'mhophim.com');
+  }
+
+  if (/^\/mhophim-assets\//i.test(pathname)) {
+    return serveAsset(context, pathname);
   }
 
   if (/^\/(?:phim|xem-phim)\//i.test(pathname) || /^\/(?:search|filter)(?:\/|$)/i.test(pathname)) {
@@ -127,6 +131,36 @@ const CLEAN_STATIC_META = {
     title: 'Xem Phim Online Vietsub HD Miễn Phí | KhoPhim',
     description: 'KhoPhim là trang xem phim online Vietsub HD miễn phí, cập nhật phim lẻ, phim bộ, phim chiếu rạp, phim Việt Nam, Hàn, Trung, Âu Mỹ và anime mỗi ngày.',
     h1: 'Xem phim online Vietsub HD miễn phí',
+  },
+  '/xem-phim': {
+    title: 'Xem Phim Online Hay Vietsub HD | KhoPhim',
+    description: 'Xem phim online trên KhoPhim với phim mới, phim hay, phim lẻ, phim bộ, phim chiếu rạp, phim Việt Nam, Hàn, Trung, Âu Mỹ và anime Vietsub HD.',
+    h1: 'Xem phim online hay Vietsub HD',
+  },
+  '/xem-phim-mien-phi': {
+    title: 'Xem Phim Miễn Phí Vietsub HD | KhoPhim',
+    description: 'Xem phim miễn phí Vietsub HD tại KhoPhim, cập nhật phim mới, phim lẻ, phim bộ, phim chiếu rạp, anime và phim theo quốc gia dễ tìm.',
+    h1: 'Xem phim miễn phí Vietsub HD',
+  },
+  '/xem-phim-hd': {
+    title: 'Xem Phim HD Online Vietsub Chất Lượng Cao | KhoPhim',
+    description: 'Xem phim HD online tại KhoPhim với phim Full HD, phim chiếu rạp, phim lẻ, phim bộ, anime và phim Vietsub chất lượng cao.',
+    h1: 'Xem phim HD online Vietsub',
+  },
+  '/xem-phim-vietsub': {
+    title: 'Xem Phim Vietsub Online HD | KhoPhim',
+    description: 'Xem phim Vietsub online HD trên KhoPhim: phim Hàn, Trung, Âu Mỹ, Thái Lan, anime, phim lẻ và phim bộ có phụ đề tiếng Việt.',
+    h1: 'Xem phim Vietsub online HD',
+  },
+  '/web-xem-phim': {
+    title: 'Web Xem Phim Online Vietsub HD | KhoPhim',
+    description: 'KhoPhim là web xem phim online Vietsub HD dành cho người Việt, dễ tìm phim mới, phim hot, phim chiếu rạp và phim theo thể loại.',
+    h1: 'Web xem phim online Vietsub HD',
+  },
+  '/kho-phim-online': {
+    title: 'Kho Phim Online Vietsub HD Mới Nhất | KhoPhim',
+    description: 'Kho phim online Vietsub HD với nhiều nhóm phim mới, phim hay, phim lẻ, phim bộ, phim chiếu rạp, anime và phim theo quốc gia.',
+    h1: 'Kho phim online Vietsub HD',
   },
   '/phim-moi-nhat': {
     title: 'Phim Mới Nhất Vietsub HD | KhoPhim',
@@ -307,6 +341,12 @@ const CLEAN_STATIC_META = {
 
 const PRERENDER_PATHS = [
   /^\/$/,
+  /^\/xem-phim(\/|$)/,
+  /^\/xem-phim-mien-phi(\/|$)/,
+  /^\/xem-phim-hd(\/|$)/,
+  /^\/xem-phim-vietsub(\/|$)/,
+  /^\/web-xem-phim(\/|$)/,
+  /^\/kho-phim-online(\/|$)/,
   /^\/phim\//,
   /^\/phim-moi-cap-nhat(\/|$)/,
   /^\/phim-moi-nhat(\/|$)/,
@@ -470,6 +510,14 @@ function getCanonicalPath(pathname) {
   return pathname.replace(/\/+$/, '') || '/';
 }
 
+function encodeCanonicalPath(pathname) {
+  const cleanPath = getCanonicalPath(String(pathname || '/'));
+  return cleanPath
+    .split('/')
+    .map((segment) => (segment ? encodeURIComponent(segment) : ''))
+    .join('/') || '/';
+}
+
 function getImageUrl(path = '') {
   if (!path) return `${SITE_URL}/og-image.jpg`;
   if (String(path).startsWith('http')) return String(path);
@@ -481,6 +529,58 @@ function taxonomyNames(value) {
   return value
     .map((item) => (item && typeof item === 'object' ? String(item.name || '') : ''))
     .filter(Boolean);
+}
+
+function taxonomyItems(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const name = String(item.name || '').trim();
+      const slug = String(item.slug || '').trim();
+      return name ? { name, slug } : null;
+    })
+    .filter(Boolean);
+}
+
+function personNames(value, limit = 12) {
+  if (!Array.isArray(value)) return [];
+  return keywordVariants(value.map((item) => String(item || '').trim())).slice(0, limit);
+}
+
+function normalizedText(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u0111/g, 'd')
+    .replace(/\u0110/g, 'd')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function shouldPreferOphimMovieName(primaryMovie, requestedSlug) {
+  const name = String(primaryMovie?.name || '').trim();
+  const origin = String(primaryMovie?.origin_name || primaryMovie?.title_en || '').trim();
+  if (!name) return true;
+  if (origin && normalizedText(name) === normalizedText(origin)) return true;
+  const requestedTitle = normalizedText(String(requestedSlug || '').replace(/-/g, ' '));
+  const nameText = normalizedText(name);
+  return requestedTitle.length >= 4 && nameText && !requestedTitle.includes(nameText) && !nameText.includes(requestedTitle);
+}
+
+function mergeMovieForPrerender(primaryMovie, ophimMovie) {
+  if (!primaryMovie) return ophimMovie || null;
+  if (!ophimMovie) return primaryMovie;
+  return {
+    ...primaryMovie,
+    ...Object.fromEntries(Object.entries(ophimMovie).filter(([, value]) => value !== undefined && value !== null && value !== '')),
+    slug: primaryMovie.slug || ophimMovie.slug,
+    tmdb_id: primaryMovie.tmdb_id || ophimMovie.tmdb_id,
+    imdb_id: primaryMovie.imdb_id || ophimMovie.imdb_id,
+    modified: primaryMovie.modified || ophimMovie.modified,
+  };
 }
 
 function normalizeLower(value) {
@@ -539,6 +639,44 @@ function formatVietnamDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+}
+
+function currentVietnamDate() {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const get = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+function formatVietnamDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function getMovieModifiedAt(movie) {
+  const value = movie.updated_at || movie.modified?.time || movie.modified_time || movie.date_modified || '';
+  const timestamp = value ? new Date(value).getTime() : 0;
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function isFreshMovieUpdate(movie) {
+  const timestamp = getMovieModifiedAt(movie);
+  if (!timestamp) return false;
+  const ageMs = Date.now() - timestamp;
+  return ageMs >= 0 && ageMs <= 7 * 24 * 60 * 60 * 1000;
 }
 
 function titleFromSlug(slug) {
@@ -704,6 +842,96 @@ const STATIC_TOPIC_CONTENT = {
     faq: [
       ['Xem phim online miễn phí ở đâu?', 'Bạn có thể xem phim online miễn phí tại KhoPhim với nhiều nhóm nội dung như phim lẻ, phim bộ, phim chiếu rạp, anime, phim Hàn Quốc, phim Trung Quốc và phim Việt Nam.'],
       ['KhoPhim phù hợp với từ khóa xem phim nào?', 'KhoPhim được tối ưu cho các truy vấn rộng như xem phim, xem phim online, xem phim Vietsub, xem phim HD, phim mới cập nhật và các truy vấn theo quốc gia hoặc thể loại.'],
+    ],
+  },
+  '/xem-phim': {
+    intro: [
+      'Trang xem phim là cửa vào rộng nhất cho người dùng chỉ gõ nhu cầu chung như xem phim, xem phim hay, xem phim mới hoặc xem phim online nhưng chưa xác định thể loại.',
+      'Landing này không thay thế trang chủ; nó đóng vai trò gom ý định tìm kiếm rộng rồi dẫn người xem sang phim mới nhất, phim lẻ, phim bộ, phim chiếu rạp và tìm kiếm phim.',
+    ],
+    highlights: [
+      'Tập trung vào cụm từ khóa rộng nhất: xem phim, xem phim online, xem phim hay và xem phim mới.',
+      'Liên kết mạnh sang các danh mục có ý định rõ hơn để giảm loãng chủ đề.',
+      'Canonical riêng tại /xem-phim để Google có URL đúng cho truy vấn ngắn, còn trang chủ vẫn là hub thương hiệu.',
+    ],
+    faq: [
+      ['Tìm từ khóa xem phim thì nên vào trang nào?', 'Trang /xem-phim là landing rộng cho nhu cầu xem phim chung, sau đó người xem có thể đi tiếp sang phim mới nhất, phim lẻ, phim bộ hoặc phim chiếu rạp.'],
+      ['Trang /xem-phim có cạnh tranh với trang chủ không?', 'Không, trang chủ là hub thương hiệu và cập nhật tổng hợp, còn /xem-phim là landing cho truy vấn ngắn có ý định xem phim rõ ràng.'],
+    ],
+  },
+  '/xem-phim-mien-phi': {
+    intro: [
+      'Trang xem phim miễn phí tập trung vào nhóm người dùng tìm phim dễ vào, không cần đăng ký phức tạp và có thể chuyển nhanh sang phim mới hoặc danh mục phù hợp.',
+      'Nội dung được viết theo ý định người xem Việt thường tìm: xem phim miễn phí, phim miễn phí Vietsub HD, xem phim online miễn phí và phim mới miễn phí.',
+    ],
+    highlights: [
+      'Tối ưu cụm xem phim miễn phí, xem phim mien phi, phim miễn phí và phim online miễn phí.',
+      'Dẫn người xem sang phim mới, phim lẻ, phim bộ, phim Vietsub và phim HD.',
+      'Không trùng với /xem-phim-online vì trang này nhấn vào yếu tố miễn phí, còn /xem-phim-online nhấn vào trải nghiệm online tổng quát.',
+    ],
+    faq: [
+      ['Xem phim miễn phí ở đâu?', 'KhoPhim có trang /xem-phim-mien-phi dành cho nhu cầu xem phim miễn phí Vietsub HD và điều hướng đến các danh mục phim chính.'],
+      ['Trang này khác /xem-phim-online thế nào?', '/xem-phim-mien-phi tập trung ý định miễn phí, còn /xem-phim-online là landing rộng cho trải nghiệm xem phim online.'],
+    ],
+  },
+  '/xem-phim-hd': {
+    intro: [
+      'Trang xem phim HD phục vụ người dùng ưu tiên chất lượng hình ảnh, poster rõ, thông tin phim đầy đủ và các danh mục phim có chất lượng xem tốt.',
+      'Đây là cụm theo chất lượng trải nghiệm, liên kết chặt với phim Full HD, phim chiếu rạp, phim lẻ và phim 4K.',
+    ],
+    highlights: [
+      'Tối ưu cho xem phim HD, phim HD online, phim Full HD và phim chất lượng cao.',
+      'Liên kết sang phim Full HD, phim chiếu rạp, phim lẻ và phim mới nhất.',
+      'Giữ lời mô tả vừa phải, tránh cam kết sai chất lượng khi nguồn phim phụ thuộc host bên ngoài.',
+    ],
+    faq: [
+      ['Xem phim HD online ở đâu?', 'KhoPhim có trang /xem-phim-hd dành cho người xem ưu tiên phim HD, Full HD, phim chiếu rạp và phim chất lượng cao.'],
+      ['Phim HD có giống phim Full HD không?', 'Phim HD là cụm rộng về chất lượng xem, còn phim Full HD là một nhóm cụ thể hơn và được liên kết riêng tại /phim-full-hd.'],
+    ],
+  },
+  '/xem-phim-vietsub': {
+    intro: [
+      'Trang xem phim Vietsub tập trung vào người xem muốn giữ âm thanh gốc và đọc phụ đề tiếng Việt, đặc biệt với phim Hàn, Trung, Thái, Âu Mỹ và anime.',
+      'Cụm này khác /phim-vietsub ở góc nhìn hành động tìm kiếm: người dùng muốn xem ngay phim có phụ đề Việt.',
+    ],
+    highlights: [
+      'Tối ưu xem phim Vietsub, xem phim phụ đề Việt, phim Vietsub online và phim Vietsub HD.',
+      'Liên kết sang phim Vietsub, anime, phim Hàn Quốc, phim Trung Quốc và phim Âu Mỹ.',
+      'Hỗ trợ cả truy vấn có dấu và không dấu để phù hợp cách người Việt tìm kiếm.',
+    ],
+    faq: [
+      ['Xem phim Vietsub là gì?', 'Xem phim Vietsub là xem phim có phụ đề tiếng Việt, thường giữ âm thanh gốc của phim.'],
+      ['KhoPhim có trang riêng cho xem phim Vietsub không?', 'Có, /xem-phim-vietsub tập trung vào ý định xem phim có phụ đề Việt, còn /phim-vietsub là danh mục nội dung liên quan rộng hơn.'],
+    ],
+  },
+  '/web-xem-phim': {
+    intro: [
+      'Trang web xem phim phục vụ nhóm truy vấn người dùng không nhớ tên thương hiệu nhưng đang tìm một website để xem phim online Vietsub HD.',
+      'Landing này giúp Google hiểu KhoPhim là một web xem phim có cấu trúc, có trang chủ, danh mục, tìm kiếm, sitemap và các cụm nội dung chuyên đề.',
+    ],
+    highlights: [
+      'Tối ưu cho web xem phim, website xem phim, trang xem phim online và web phim Vietsub.',
+      'Dẫn người xem sang trang chủ, xem phim online, tìm kiếm phim và các danh mục chính.',
+      'Tăng tín hiệu thương hiệu cho KhoPhim mà không tạo bản sao nội dung của trang chủ.',
+    ],
+    faq: [
+      ['Web xem phim nào dễ tìm phim?', 'KhoPhim có trang /web-xem-phim để giới thiệu cấu trúc web xem phim và dẫn người xem sang các danh mục phù hợp.'],
+      ['Trang này có phải trang chủ không?', 'Không, trang này giải thích vai trò web xem phim; trang chủ vẫn là nơi cập nhật và điều hướng chính của KhoPhim.'],
+    ],
+  },
+  '/kho-phim-online': {
+    intro: [
+      'Trang kho phim online nhấn vào quy mô thư viện nội dung: nhiều nhóm phim, nhiều quốc gia, nhiều thể loại và các trang lọc/tìm kiếm để người xem khám phá nhanh.',
+      'Đây là cụm phù hợp với người tìm “kho phim”, “kho phim online”, “kho phim Vietsub” hoặc “kho phim HD”.',
+    ],
+    highlights: [
+      'Tối ưu cho kho phim online, kho phim HD, kho phim Vietsub và kho phim mới.',
+      'Liên kết đến sitemap, phim mới nhất, phim lẻ, phim bộ, phim chiếu rạp và tìm kiếm phim.',
+      'Giúp Google hiểu KhoPhim là hệ thống nội dung rộng, không chỉ một landing đơn lẻ.',
+    ],
+    faq: [
+      ['Kho phim online là gì?', 'Đó là hệ thống gom nhiều nhóm phim, danh mục, quốc gia và thể loại để người xem tìm phim nhanh hơn.'],
+      ['KhoPhim có những nhóm nội dung nào?', 'KhoPhim có phim mới, phim lẻ, phim bộ, phim chiếu rạp, phim Vietsub, anime, phim theo quốc gia và thể loại.'],
     ],
   },
   '/xem-phim-online': {
@@ -970,11 +1198,64 @@ function getTopicContent(cleanPath) {
   };
 }
 
+function getKeywordCluster(cleanPath, meta) {
+  const base = [
+    'xem phim',
+    'xem phim online',
+    'xem phim miễn phí',
+    'xem phim HD',
+    'xem phim Vietsub',
+    'phim mới nhất',
+    'phim hay',
+    'phim hot 2026',
+    'phim lẻ',
+    'phim bộ',
+    'phim chiếu rạp',
+    'phim Việt Nam',
+    'phim Hàn Quốc',
+    'phim Trung Quốc',
+    'phim Âu Mỹ',
+    'anime Vietsub',
+    'web xem phim',
+    'kho phim online',
+  ];
+
+  const byPath = {
+    '/xem-phim': ['xem phim hay', 'xem phim mới', 'xem phim online hay', 'xem phim nhanh', 'trang xem phim', 'web phim hay'],
+    '/xem-phim-online': ['xem phim online miễn phí', 'xem phim online Vietsub', 'xem phim không cần tải app', 'xem phim trên điện thoại', 'xem phim trên máy tính'],
+    '/xem-phim-mien-phi': ['xem phim mien phi', 'phim miễn phí', 'phim online miễn phí', 'xem phim miễn phí HD', 'xem phim miễn phí Vietsub'],
+    '/xem-phim-hd': ['xem phim HD online', 'phim Full HD', 'phim chất lượng cao', 'xem phim nét', 'phim HD Vietsub', 'phim 4K'],
+    '/xem-phim-vietsub': ['xem phim vietsub', 'phim phụ đề Việt', 'phim phu de Viet', 'phim Vietsub online', 'phim Vietsub HD'],
+    '/web-xem-phim': ['web xem phim online', 'website xem phim', 'trang xem phim online', 'web phim Vietsub', 'web phim HD'],
+    '/kho-phim-online': ['kho phim', 'kho phim HD', 'kho phim Vietsub', 'kho phim mới', 'thư viện phim online', 'tổng hợp phim hay'],
+    '/phim-chieu-rap': ['xem phim chiếu rạp', 'phim chieu rap', 'phim rạp Vietsub', 'bom tấn chiếu rạp', 'phim điện ảnh mới', 'phim rạp Việt Nam'],
+    '/phim-viet-nam': ['xem phim Việt Nam', 'phim Viet Nam', 'phim Việt Nam mới', 'phim chiếu rạp Việt', 'phim bộ Việt Nam', 'web drama Việt'],
+    '/phim-han-quoc': ['xem phim Hàn Quốc', 'phim Han Quoc', 'drama Hàn', 'phim Hàn mới', 'phim Hàn Vietsub', 'phim bộ Hàn Quốc'],
+    '/phim-trung-quoc': ['xem phim Trung Quốc', 'phim Trung Quoc', 'phim cổ trang', 'phim tiên hiệp', 'phim ngôn tình', 'phim Trung Vietsub'],
+    '/phim-au-my': ['xem phim Âu Mỹ', 'phim Au My', 'phim Hollywood', 'phim hành động Mỹ', 'phim bom tấn', 'phim viễn tưởng'],
+    '/anime': ['xem anime', 'anime Vietsub', 'anime mới', 'anime mùa mới', 'hoạt hình Nhật Bản', 'xem anime online'],
+    '/phim-bo': ['xem phim bộ', 'phim bộ Vietsub', 'phim bộ hay', 'phim trọn bộ', 'phim full', 'series mới'],
+    '/phim-le': ['xem phim lẻ', 'phim lẻ Vietsub', 'phim lẻ hay', 'phim điện ảnh', 'phim lẻ mới', 'phim lẻ HD'],
+    '/phim-vietsub': ['phim Vietsub', 'xem phim Vietsub', 'phim phụ đề Việt', 'phim vietsub hd', 'anime Vietsub', 'drama Vietsub'],
+    '/phim-hay': ['phim hay nên xem', 'xem phim hay', 'phim đáng xem', 'phim hot', 'phim hay cuối tuần', 'gợi ý phim hay'],
+    '/phim-moi-nhat': ['phim mới', 'phim mới cập nhật', 'phim mới hôm nay', 'phim vừa ra tập', 'phim mới Vietsub', 'phim cập nhật nhanh'],
+    '/phim-dang-chieu': ['phim đang chiếu', 'phim đang cập nhật', 'phim tập mới', 'phim bộ đang chiếu', 'anime đang chiếu', 'lịch ra tập'],
+    '/vu-tru-dam-my': ['phim đam mỹ', 'phim dam my', 'BL Vietsub', 'phim BL Thái', 'GL bách hợp', 'phim bách hợp'],
+  };
+
+  const extra = byPath[cleanPath] || [];
+  return keywordVariants([meta.h1, meta.title, meta.description, ...base, ...extra]).slice(0, 42);
+}
+
 function renderTopicBody(cleanPath, meta, canonical) {
   const topic = getTopicContent(cleanPath);
+  const keywordCluster = getKeywordCluster(cleanPath, meta);
+  const isFreshHub = cleanPath === '/phim-moi-nhat' || cleanPath === '/phim-moi-cap-nhat';
   const relatedLinks = [
     ['/xem-phim-online', 'Xem phim online'],
+    ...(isFreshHub ? [['/sitemap-movies-recent.xml', 'Sitemap phim vừa cập nhật']] : []),
     ['/phim-moi-nhat', 'Phim mới nhất'],
+    ['/phim-moi-cap-nhat', 'Phim mới cập nhật'],
     ['/phim-hot-2026', 'Phim hot 2026'],
     ['/phim-le', 'Phim lẻ'],
     ['/phim-bo', 'Phim bộ'],
@@ -997,9 +1278,25 @@ function renderTopicBody(cleanPath, meta, canonical) {
         ${topic.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
       </ul>
     </section>
+    ${isFreshHub ? `<section>
+      <h2>Ưu tiên phim và tập mới cập nhật</h2>
+      <p>KhoPhim đặt các phim vừa ra tập, phim mới thêm nguồn xem và phim có cập nhật gần nhất vào luồng ưu tiên crawl. Googlebot có thể đi từ trang này sang sitemap phim mới để phát hiện URL phim vừa đổi tập nhanh hơn.</p>
+      <ul>
+        <li>Phim vừa cập nhật được ghi rõ trạng thái tập mới trong title, mô tả, H1 và schema.</li>
+        <li>Sitemap phim mới cập nhật được đặt trong sitemap index để Google đọc nhóm URL mới trước.</li>
+        <li>Các trang phim mới liên kết ngược về phim mới cập nhật, phim mới nhất và sitemap recent để tăng tín hiệu freshness.</li>
+      </ul>
+    </section>` : ''}
     <section>
       <h2>Câu hỏi thường gặp</h2>
       ${topic.faq.map(([question, answer]) => `<article><h3>${escapeHtml(question)}</h3><p>${escapeHtml(answer)}</p></article>`).join('')}
+    </section>
+    <section>
+      <h2>Cụm từ khóa liên quan</h2>
+      <p>KhoPhim tối ưu các biến thể tìm kiếm tự nhiên theo tiếng Việt có dấu và không dấu để người xem dễ tìm đúng phim cần xem.</p>
+      <ul>
+        ${keywordCluster.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+      </ul>
     </section>
     <nav aria-label="Danh mục phim liên quan">
       ${relatedLinks.map(([href, label]) => `<a href="${SITE_URL}${href}">${escapeHtml(label)}</a>`).join('')}
@@ -1028,6 +1325,7 @@ function renderStaticPrerender(pathname) {
     'KhoPhim',
   ]).join(', ');
   const topic = getTopicContent(cleanPath);
+  const isFreshHub = cleanPath === '/phim-moi-nhat' || cleanPath === '/phim-moi-cap-nhat';
   const schema = [
     {
       '@context': 'https://schema.org',
@@ -1044,6 +1342,12 @@ function renderStaticPrerender(pathname) {
         name: 'KhoPhim',
         url: SITE_URL,
       },
+      significantLink: isFreshHub ? [
+        `${SITE_URL}/sitemap-movies-recent.xml`,
+        `${SITE_URL}/phim-moi-nhat`,
+        `${SITE_URL}/phim-moi-cap-nhat`,
+        `${SITE_URL}/phim-dang-chieu`,
+      ] : undefined,
     },
     {
       '@context': 'https://schema.org',
@@ -1138,33 +1442,73 @@ async function fetchSupabaseMovie(slug) {
 function renderMoviePrerender(pathname, movie, slug) {
   const name = String(movie.name || slug);
   const origin = String(movie.origin_name || '');
+  const titleVariants = keywordVariants([
+    name,
+    origin,
+    movie.title_vi,
+    movie.title_en,
+    movie.title_zh,
+    movie.title_original,
+  ]).filter((item) => item && item.toLowerCase() !== name.toLowerCase()).slice(0, 5);
   const content = stripHtml(movie.content || '');
   const year = Number(movie.year || 0);
   const quality = String(movie.quality || 'HD');
   const lang = String(movie.lang || 'Vietsub');
   const poster = getImageUrl(movie.poster_url || movie.thumb_url || '');
-  const cleanPath = pathname.replace(/\/+$/, '') || `/phim/${slug}`;
-  const canonical = `${SITE_URL}${cleanPath}`;
-  const genres = taxonomyNames(movie.category);
-  const countries = taxonomyNames(movie.country);
+  const requestedSlug = String(slug || '').trim();
+  const pathSlug = /^\/phim\/([^/?#]+)/.exec(pathname)?.[1];
+  const canonicalSlug = decodeURIComponent(pathSlug || requestedSlug || String(movie.slug || '')).trim() || String(movie.slug || slug).trim() || slug;
+  const canonicalPath = `/phim/${canonicalSlug}`;
+  const canonical = `${SITE_URL}${encodeCanonicalPath(canonicalPath)}`;
+  const genreItems = taxonomyItems(movie.category);
+  const countryItems = taxonomyItems(movie.country);
+  const genres = genreItems.map((item) => item.name);
+  const countries = countryItems.map((item) => item.name);
+  const actors = personNames(movie.actor, 12);
+  const directors = personNames(movie.director, 8);
   const isTrailerOnly = isTrailerOnlyMovie(movie);
   const isUpcoming = isUpcomingMovie(movie);
   const releaseDateText = formatVietnamDate(movie.release_at);
+  const modifiedAt = getMovieModifiedAt(movie);
+  const modifiedIso = modifiedAt ? new Date(modifiedAt).toISOString() : undefined;
+  const modifiedText = modifiedAt ? formatVietnamDateTime(modifiedAt) : '';
+  const isFreshUpdate = isFreshMovieUpdate(movie);
   const episodeText = String(movie.episode_current || '').trim();
   const totalEpisodeCount = parseEpisodeCount(movie.episode_total);
   const episodeTitleText = episodeText ? ` ${episodeText}` : '';
-  const keywordParts = keywordVariants([
+  const updateIntentText = isFreshUpdate && episodeText && !isUpcoming && !isTrailerOnly
+    ? `Tập mới cập nhật: ${episodeText}.`
+    : '';
+  const baseMovieKeywords = [
     `xem phim ${name}`,
     `xem ${name}`,
     `${name} Vietsub`,
-    origin ? `xem phim ${origin}` : '',
-    origin ? `${origin} Vietsub` : '',
+    `${name} HD`,
+    isFreshUpdate ? `${name} tập mới` : '',
+    isFreshUpdate ? `xem ${name} tập mới` : '',
+    isFreshUpdate ? `phim ${name} mới cập nhật` : '',
+    year ? `${name} ${year}` : '',
     episodeText ? `${name} ${episodeText}` : '',
     episodeText ? `xem phim ${name} ${episodeText}` : '',
+    ...titleVariants.flatMap((title) => [
+      `xem phim ${title}`,
+      `${title} Vietsub`,
+      year ? `${title} ${year}` : '',
+    ]),
+  ];
+  const keywordParts = keywordVariants([
+    ...baseMovieKeywords,
+    origin ? `xem phim ${origin}` : '',
+    origin ? `${origin} Vietsub` : '',
     ...genres.map((genre) => `phim ${genre}`),
     ...genres.map((genre) => `xem phim ${genre}`),
     ...countries.map((country) => `phim ${country}`),
     ...countries.map((country) => `xem phim ${country}`),
+    ...actors.slice(0, 4).map((actor) => `${name} ${actor}`),
+    ...directors.slice(0, 2).map((director) => `${name} đạo diễn ${director}`),
+    isFreshUpdate ? 'phim mới cập nhật' : '',
+    isFreshUpdate ? 'phim vừa ra tập mới' : '',
+    isFreshUpdate ? 'xem phim tập mới' : '',
     'xem phim online',
     'xem phim miễn phí',
     'phim Vietsub HD',
@@ -1174,15 +1518,17 @@ function renderMoviePrerender(pathname, movie, slug) {
     ? `${name} - Trailer, Lịch Chiếu, Nội Dung | KhoPhim`
     : isTrailerOnly
       ? `${name} - Trailer Vietsub, Thông Tin Phim | KhoPhim`
-      : `Xem ${name}${episodeTitleText} ${lang} ${quality}${year ? ` ${year}` : ''} | KhoPhim`;
+      : `Xem ${name}${episodeTitleText} ${isFreshUpdate ? 'Mới Cập Nhật ' : ''}${lang} ${quality}${year ? ` ${year}` : ''} | KhoPhim`;
   const description = compactMeta([
     isUpcoming
       ? `${name}${origin ? ` (${origin})` : ''} là phim sắp chiếu, được cập nhật trailer, lịch chiếu, nội dung và thông tin diễn viên trên KhoPhim.`
       : isTrailerOnly
         ? `Xem trailer ${name}${origin ? ` (${origin})` : ''}, thông tin phim, nội dung, thể loại và lịch cập nhật tập mới trên KhoPhim.`
         : `Xem phim ${name}${origin ? ` (${origin})` : ''} online ${lang} ${quality} miễn phí tại KhoPhim.`,
+    updateIntentText,
     releaseDateText ? `Dự kiến phát hành: ${releaseDateText}.` : '',
     episodeText ? `Trạng thái: ${episodeText}.` : '',
+    modifiedText ? `Cập nhật lúc ${modifiedText}.` : '',
     sentenceSnippet(content, 150),
     genres.length ? `Thể loại: ${genres.join(', ')}.` : '',
     year ? `Năm phát hành: ${year}.` : '',
@@ -1191,9 +1537,16 @@ function renderMoviePrerender(pathname, movie, slug) {
     {
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'KhoPhim', item: SITE_URL },
-        { '@type': 'ListItem', position: 2, name, item: canonical },
+        ...(genreItems[0]?.slug ? [{
+          '@type': 'ListItem',
+          position: 2,
+          name: genreItems[0].name,
+          item: `${SITE_URL}/the-loai/${genreItems[0].slug}`,
+        }] : []),
+        { '@type': 'ListItem', position: genreItems[0]?.slug ? 3 : 2, name, item: canonical },
       ],
     },
     {
@@ -1208,13 +1561,17 @@ function renderMoviePrerender(pathname, movie, slug) {
       description,
       keywords: keywordParts,
       datePublished: year ? `${year}-01-01` : undefined,
-      dateModified: movie.updated_at || movie.modified?.time || undefined,
+      dateModified: modifiedIso,
       numberOfEpisodes: totalEpisodeCount,
       episode: episodeText ? {
         '@type': 'Episode',
         name: episodeText,
         url: canonical,
+        datePublished: modifiedIso,
+        dateModified: modifiedIso,
       } : undefined,
+      actor: actors.map((actor) => ({ '@type': 'Person', name: actor })),
+      director: directors.map((director) => ({ '@type': 'Person', name: director })),
       releasedEvent: movie.release_at ? {
         '@type': 'PublicationEvent',
         startDate: movie.release_at,
@@ -1232,30 +1589,75 @@ function renderMoviePrerender(pathname, movie, slug) {
       name: `Xem phim ${name} ${lang} ${quality}`,
       description,
       thumbnailUrl: poster,
-      uploadDate: year ? `${year}-01-01T00:00:00+07:00` : new Date().toISOString(),
+      uploadDate: modifiedIso || (year ? `${year}-01-01T00:00:00+07:00` : new Date().toISOString()),
+      dateModified: modifiedIso,
       embedUrl: canonical,
       url: canonical,
       inLanguage: lang,
       isFamilyFriendly: true,
     },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      '@id': `${canonical}#webpage`,
+      url: canonical,
+      name: title,
+      description,
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+      primaryImageOfPage: poster ? { '@type': 'ImageObject', url: poster } : undefined,
+      breadcrumb: { '@id': `${canonical}#breadcrumb` },
+      inLanguage: 'vi-VN',
+      dateModified: modifiedIso,
+      significantLink: [
+        `${SITE_URL}/phim-moi-cap-nhat`,
+        `${SITE_URL}/phim-moi-nhat`,
+        `${SITE_URL}/sitemap-movies-recent.xml`,
+      ],
+    },
   ];
+  const relatedKeywords = keywordVariants([
+    ...baseMovieKeywords,
+    ...genres.slice(0, 3).map((genre) => `xem ${name} thể loại ${genre}`),
+    ...countries.slice(0, 2).map((country) => `phim ${name} ${country}`),
+    ...actors.slice(0, 4).map((actor) => `${actor} ${name}`),
+  ]).slice(0, 24);
+  const genreLinks = genreItems.slice(0, 4)
+    .map((genre) => genre.slug
+      ? `<a href="${SITE_URL}/the-loai/${escapeHtml(genre.slug)}">${escapeHtml(genre.name)}</a>`
+      : `<span>${escapeHtml(genre.name)}</span>`)
+    .join('');
+  const countryLinks = countryItems.slice(0, 3)
+    .map((country) => country.slug
+      ? `<a href="${SITE_URL}/filter?country=${escapeHtml(country.slug)}">${escapeHtml(country.name)}</a>`
+      : `<span>${escapeHtml(country.name)}</span>`)
+    .join('');
   const body = `${origin ? `<p>${escapeHtml(origin)}</p>` : ''}
+    ${titleVariants.length ? `<p>Tên khác: ${titleVariants.map(escapeHtml).join(', ')}</p>` : ''}
     <img src="${escapeHtml(poster)}" alt="${escapeHtml(name)}">
-    <p>${escapeHtml(isUpcoming ? 'Phim sắp chiếu' : isTrailerOnly ? 'Trailer và thông tin phim' : 'Xem phim online')}</p>
+    <p>${escapeHtml(isUpcoming ? 'Phim sắp chiếu' : isTrailerOnly ? 'Trailer và thông tin phim' : isFreshUpdate ? 'Phim mới cập nhật tập mới' : 'Xem phim online')}</p>
     ${releaseDateText ? `<p>Lịch chiếu dự kiến: ${escapeHtml(releaseDateText)}</p>` : ''}
     ${episodeText ? `<p>Trạng thái hiện tại: ${escapeHtml(episodeText)}</p>` : ''}
+    ${isFreshUpdate && modifiedText ? `<p>Ưu tiên cập nhật mới: ${escapeHtml(name)} ${episodeText ? `${escapeHtml(episodeText)} ` : ''}được làm mới lúc ${escapeHtml(modifiedText)}.</p>` : ''}
+    ${actors.length ? `<p>Diễn viên: ${actors.slice(0, 8).map(escapeHtml).join(', ')}</p>` : ''}
+    ${directors.length ? `<p>Đạo diễn: ${directors.map(escapeHtml).join(', ')}</p>` : ''}
     <p>${escapeHtml(description)}</p>
     <nav>
       <a href="${escapeHtml(canonical)}">${escapeHtml(isUpcoming || isTrailerOnly ? `Xem trailer va thong tin ${name}` : `Xem phim ${name}`)}</a>
+      <a href="${SITE_URL}/phim-moi-cap-nhat">Phim mới cập nhật</a>
       <a href="${SITE_URL}/phim-moi-nhat">Phim mới nhất</a>
       <a href="${SITE_URL}/phim-sap-chieu">Phim sắp chiếu</a>
-      ${genres.slice(0, 2).map((genre) => `<span>${escapeHtml(genre)}</span>`).join('')}
-    </nav>`;
+      ${genreLinks}
+      ${countryLinks}
+    </nav>
+    <section>
+      <h2>Từ khóa liên quan đến ${escapeHtml(name)}</h2>
+      <ul>${relatedKeywords.map((keyword) => `<li>${escapeHtml(keyword)}</li>`).join('')}</ul>
+    </section>`;
   return new Response(renderHtml({
     title,
     description,
     canonical,
-    h1: name,
+    h1: isUpcoming || isTrailerOnly ? `${name} - trailer và thông tin phim` : `Xem phim ${name}`,
     body,
     schema,
     ogType: 'video.movie',
@@ -1314,7 +1716,7 @@ function renderMovieNotFound(pathname, slug) {
 
 async function proxySitemap(pathname, request, context) {
   if (pathname === '/sitemap.xml' || isLegacySitemapAlias(pathname)) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = currentVietnamDate();
     const movieChunks = Array.from({ length: 8 }, (_, index) => {
       const page = index + 1;
       return `  <sitemap>
@@ -1354,7 +1756,7 @@ ${movieChunks}
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  const sitemapVersion = '20260630-supabase-only-v1';
+  const sitemapVersion = '20260708-recent-freshness-v2';
   let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?v=${sitemapVersion}`;
@@ -1670,6 +2072,10 @@ export async function onRequest(context) {
     return handleMhophimRequest(context, url, pathname);
   }
 
+  if (/^\/mhophim(?:\/|$)/i.test(pathname) || /^\/mhophim-assets\//i.test(pathname)) {
+    return canonicalRedirect(url, '/');
+  }
+
   if (url.hostname === 'www.khophim.org' || url.protocol === 'http:') {
     return canonicalRedirect(url, pathname);
   }
@@ -1715,7 +2121,12 @@ export async function onRequest(context) {
       const cacheKey = new Request(`${SITE_URL}/__seo-prerender/${SEO_PRERENDER_VERSION}/phim/${encodeURIComponent(slug)}`, { method: 'GET' });
       const cachedMovieResponse = await getCachedPrerender(cacheKey, request);
       if (cachedMovieResponse) return cachedMovieResponse;
-      const movie = await fetchSupabaseMovie(slug) || await fetchOphimMovie(slug);
+      let movie = await fetchSupabaseMovie(slug);
+      if (shouldPreferOphimMovieName(movie, slug)) {
+        const ophimMovie = await fetchOphimMovie(slug);
+        movie = mergeMovieForPrerender(movie, ophimMovie);
+      }
+      if (!movie) movie = await fetchOphimMovie(slug);
       const movieResponse = movie
         ? renderMoviePrerender(pathname, movie, slug)
         : renderMovieNotFound(pathname, slug);

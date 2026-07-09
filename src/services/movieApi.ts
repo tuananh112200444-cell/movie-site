@@ -2266,16 +2266,97 @@ function mergePlayableMovieDetails(
   };
 }
 
+function isWeakDetailTitle(detail: MovieDetailResponse | null, requestedSlug: string): boolean {
+  const movie = detail?.movie;
+  const name = normalizeMatchText(movie?.name || '');
+  const origin = normalizeMatchText(movie?.origin_name || '');
+  if (!name) return true;
+  if (origin && name === origin) return true;
+  const requested = normalizeMatchText(requestedSlug.replace(/-/g, ' '));
+  return requested.length >= 4 && !requested.includes(name) && !name.includes(requested);
+}
+
+function isSafeMetadataAlias(
+  primary: MovieDetailResponse | null,
+  secondary: MovieDetailResponse | null,
+  requestedSlug: string
+): boolean {
+  if (!primary?.movie || !secondary?.movie) return false;
+  const requested = requestedSlug.trim().toLowerCase().normalize('NFC');
+  const primarySlug = String(primary.movie.slug || '').trim().toLowerCase().normalize('NFC');
+  const secondarySlug = String(secondary.movie.slug || '').trim().toLowerCase().normalize('NFC');
+  if (secondarySlug && secondarySlug !== requested) return false;
+
+  const primaryYear = Number(primary.movie.year || 0);
+  const secondaryYear = Number(secondary.movie.year || 0);
+  if (primaryYear > 0 && secondaryYear > 0 && primaryYear !== secondaryYear) return false;
+
+  const primaryNames = [
+    primary.movie.name,
+    primary.movie.origin_name,
+    primary.movie.slug?.replace(/-/g, ' '),
+  ].map((value) => normalizeMatchText(value || '')).filter((value) => value.length >= 3);
+  const secondaryNames = [
+    secondary.movie.name,
+    secondary.movie.origin_name,
+    secondary.movie.slug?.replace(/-/g, ' '),
+  ].map((value) => normalizeMatchText(value || '')).filter((value) => value.length >= 3);
+  const sharedName = primaryNames.some((left) =>
+    secondaryNames.some((right) =>
+      left === right ||
+      (left.length >= 8 && right.includes(left)) ||
+      (right.length >= 8 && left.includes(right))
+    )
+  );
+
+  return sharedName && (primarySlug !== requested || isWeakDetailTitle(primary, requestedSlug));
+}
+
+function mergeDetailMetadataForRequestedSlug(
+  primary: MovieDetailResponse,
+  secondary: MovieDetailResponse | null,
+  requestedSlug: string
+): MovieDetailResponse {
+  if (!isSafeMetadataAlias(primary, secondary, requestedSlug) || !secondary?.movie) return primary;
+  return {
+    ...primary,
+    movie: {
+      ...primary.movie,
+      name: secondary.movie.name || primary.movie.name,
+      slug: requestedSlug || secondary.movie.slug || primary.movie.slug,
+      origin_name: secondary.movie.origin_name || primary.movie.origin_name,
+      content: secondary.movie.content || primary.movie.content,
+      type: secondary.movie.type || primary.movie.type,
+      status: secondary.movie.status || primary.movie.status,
+      thumb_url: secondary.movie.thumb_url || primary.movie.thumb_url,
+      poster_url: secondary.movie.poster_url || primary.movie.poster_url,
+      trailer_url: secondary.movie.trailer_url || primary.movie.trailer_url,
+      time: secondary.movie.time || primary.movie.time,
+      episode_current: secondary.movie.episode_current || primary.movie.episode_current,
+      episode_total: secondary.movie.episode_total || primary.movie.episode_total,
+      quality: secondary.movie.quality || primary.movie.quality,
+      lang: secondary.movie.lang || primary.movie.lang,
+      year: secondary.movie.year || primary.movie.year,
+      actor: secondary.movie.actor?.length ? secondary.movie.actor : primary.movie.actor,
+      director: secondary.movie.director?.length ? secondary.movie.director : primary.movie.director,
+      category: secondary.movie.category?.length ? secondary.movie.category : primary.movie.category,
+      country: secondary.movie.country?.length ? secondary.movie.country : primary.movie.country,
+    },
+  };
+}
+
 async function mergeExternalDetailIfFast(
   primary: MovieDetailResponse,
   externalPromise: Promise<MovieDetailResponse | null>,
-  timeoutMs: number
+  timeoutMs: number,
+  requestedSlug?: string
 ): Promise<MovieDetailResponse> {
   const external = await Promise.race([
     externalPromise.catch(() => null),
     new Promise<MovieDetailResponse | null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
   ]);
-  return mergePlayableMovieDetails(primary, external);
+  const merged = mergePlayableMovieDetails(primary, external);
+  return requestedSlug ? mergeDetailMetadataForRequestedSlug(merged, external, requestedSlug) : merged;
 }
 
 function mergeQueerDetailWithSources(
@@ -3231,7 +3312,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
           refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, ophimPromise);
         }
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using quick playable source for "${slug}" (source=ophim/CJK)`);
-        const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900);
+        const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900, slug);
         setCached(cacheKey, mergedQuick);
         return mergedQuick;
       }
@@ -3268,7 +3349,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
         }
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using first quick playable source for "${slug}"`);
         externalPromise = fetchMovieDetailFromExternal(slug);
-        const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900);
+        const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900, slug);
         setCached(cacheKey, mergedQuick);
         return mergedQuick;
       }
@@ -3508,7 +3589,7 @@ interface ServerQualityInfo {
 }
 export const STREAM_SERVER_PRIORITY = ['OPHIM', 'KKPHIM', 'KHOPHIM', 'DM', 'SUPABASE', 'SS', 'OK', 'ABYSS', 'VK'] as const;
 const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
-const SERVER_RECENT_BAD_HOST_PENALTY = 900;
+const SERVER_RECENT_BAD_HOST_PENALTY = 1800;
 const OPHIM_PREFERRED_SOURCE_BONUS = 380;
 const KKPHIM_PREFERRED_SOURCE_BONUS = 360;
 const DAILYMOTION_PREFERRED_SOURCE_BONUS = 240;
@@ -3826,7 +3907,10 @@ function getRecentBadHostPenalty(ep: EpisodeData): number {
     const lastBadAt = Math.max(Number(map[host] || 0), Number(map[cluster] || 0));
     if (!lastBadAt) return 0;
     const ageMs = Date.now() - lastBadAt;
-    return ageMs >= 30 * 60 * 1000 ? 0 : SERVER_RECENT_BAD_HOST_PENALTY;
+    if (ageMs >= 30 * 60 * 1000) return 0;
+    const sourceKind = getEpisodeSourceKind(ep);
+    const multiplier = sourceKind === 'ophim' || sourceKind === 'kkphim' ? 1.35 : 1;
+    return Math.round(SERVER_RECENT_BAD_HOST_PENALTY * multiplier);
   } catch {
     return 0;
   }

@@ -10,7 +10,7 @@ function RedirectToPhim() {
 }
 
 /* ─── Eager load: Home ─── */
-import Home from '../pages/home/page';
+const Home              = lazy(() => import('../pages/home/page'));
 
 /* ─── Core pages ─── */
 const FilterPage        = lazy(() => import('../pages/filter/page'));
@@ -60,11 +60,11 @@ function LazyAdminBanner() { return <Suspense fallback={<PageLoader />}><AdminGu
 /* ─── Top Progress Bar ─── */
 function PageLoader() {
   return (
-    <div className="fixed inset-0 z-[190] bg-[#080a10] pointer-events-none">
-      <div className="absolute top-0 left-0 right-0 h-[2px] overflow-hidden">
+    <div className="fixed left-0 right-0 top-0 z-[190] h-[3px] pointer-events-none" aria-hidden="true">
+      <div className="absolute inset-0 overflow-hidden bg-red-950/20">
         <div className="top-loading-bar h-full w-full bg-gradient-to-r from-red-600 via-red-400 to-red-500" />
       </div>
-      <div className="absolute top-0 left-0 w-24 h-[2px] top-loading-bar">
+      <div className="absolute left-0 top-0 h-full w-24 top-loading-bar">
         <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-red-400 blur-sm" />
       </div>
     </div>
@@ -72,6 +72,7 @@ function PageLoader() {
 }
 
 /* ─── Wrapper helpers ─── */
+function LazyHome()          { return <Suspense fallback={<PageLoader />}><Home /></Suspense>; }
 function LazyFilter()        { return <Suspense fallback={<PageLoader />}><FilterPage /></Suspense>; }
 function LazyMovieDetail()   { return <Suspense fallback={<PageLoader />}><MovieDetailPage /></Suspense>; }
 function LazyFavorites()     { return <Suspense fallback={<PageLoader />}><FavoritesPage /></Suspense>; }
@@ -124,8 +125,8 @@ const routes: RouteObject[] = [
   // ═══════════════════════════════════════════
   // TRANG CHỦ
   // ═══════════════════════════════════════════
-  { path: '/', element: <Home /> },
-  { path: '/vu-tru-dam-my', element: <Home /> },
+  { path: '/', element: <LazyHome /> },
+  { path: '/vu-tru-dam-my', element: <LazyHome /> },
 
   // ═══════════════════════════════════════════
   // PHIM (chi tiết + tìm kiếm + lọc)
@@ -180,6 +181,12 @@ const routes: RouteObject[] = [
   { path: '/blog/:slug', element: <LazyBlogDetail /> },
 
   // SEO LANDING PAGES
+  { path: '/xem-phim', element: <LazySeoLanding landingKey="xem-phim" /> },
+  { path: '/xem-phim-mien-phi', element: <LazySeoLanding landingKey="xem-phim-mien-phi" /> },
+  { path: '/xem-phim-hd', element: <LazySeoLanding landingKey="xem-phim-hd" /> },
+  { path: '/xem-phim-vietsub', element: <LazySeoLanding landingKey="xem-phim-vietsub" /> },
+  { path: '/web-xem-phim', element: <LazySeoLanding landingKey="web-xem-phim" /> },
+  { path: '/kho-phim-online', element: <LazySeoLanding landingKey="kho-phim-online" /> },
   { path: '/xem-phim-online', element: <LazySeoLanding landingKey="xem-phim-online" /> },
   { path: '/phim-vietsub', element: <LazySeoLanding landingKey="phim-vietsub" /> },
   { path: '/phim-thuyet-minh', element: <LazySeoLanding landingKey="phim-thuyet-minh" /> },

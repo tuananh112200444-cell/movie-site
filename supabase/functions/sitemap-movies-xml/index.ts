@@ -55,6 +55,32 @@ function escapeXml(value: string): string {
     .replace(/'/g, '&apos;');
 }
 
+function repairMojibake(value = ''): string {
+  if (!/(?:Ã|Â|Ä|Æ|áº|á»)/.test(value)) return value;
+  try {
+    const bytes = Uint8Array.from(Array.from(value), (char) => char.charCodeAt(0) & 255);
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return decoded.replace(/\s+/g, ' ').trim() || value;
+  } catch {
+    return value;
+  }
+}
+
+function titleFromSlug(slug = ''): string {
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+    .trim();
+}
+
+function cleanImageTitle(name = '', slug = ''): string {
+  const repaired = repairMojibake(name);
+  if (/(?:Ã|Â|Ä|Æ|áº|á»)/.test(repaired)) return titleFromSlug(slug) || repaired;
+  return repaired || titleFromSlug(slug) || slug;
+}
+
 function toImageUrl(path = ''): string {
   if (!path) return '';
   if (path.startsWith('http')) return path;
@@ -110,6 +136,15 @@ function getFreshnessScore(movie: MovieItem): number {
   const upcomingBoost = isUpcoming(movie) ? 5000 : 0;
   const trailerBoost = isTrailer(movie) || movie.trailer_url ? 2500 : 0;
   return freshness + popularity + upcomingBoost + trailerBoost;
+}
+
+function getRecentUpdateScore(movie: MovieItem): number {
+  const updatedTime = timestampValue(movie.updated_at || movie.modified?.time);
+  const releaseTime = timestampValue(movie.release_at);
+  const freshness = updatedTime || Math.floor(releaseTime * 0.5);
+  const popularity = Math.min(1000, Number(movie.tmdb_popularity || 0));
+  const episodeBoost = isTrailer(movie) ? 0 : 5000;
+  return freshness + popularity + episodeBoost;
 }
 
 function timestampValue(value?: string): number {
@@ -175,7 +210,7 @@ async function fetchMoviePage(type: string, page: number): Promise<MovieItem[]> 
   }
 }
 
-async function fetchSupabaseMovies(offset = 0, limit = 50000): Promise<MovieItem[]> {
+async function fetchSupabaseMovies(offset = 0, limit = 50000, mode: 'all' | 'recent' | 'upcoming' = 'all'): Promise<MovieItem[]> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -193,15 +228,30 @@ async function fetchSupabaseMovies(offset = 0, limit = 50000): Promise<MovieItem
         const from = base + index * pageSize;
         const to = from + pageSize - 1;
         if (from >= endExclusive) return [] as MovieItem[];
-        const { data, error } = await supabase
+        let query = supabase
           .from('movies')
           .select('slug,name,thumb_url,poster_url,updated_at,episode_current,is_published,seo_catalog_status,catalog_source,release_at,tmdb_popularity,trailer_url,status,year')
           .eq('is_published', true)
-          .not('slug', 'is', null)
-          .order('year', { ascending: false, nullsFirst: false })
-          .order('release_at', { ascending: false, nullsFirst: false })
-          .order('updated_at', { ascending: false, nullsFirst: false })
-          .range(from, Math.min(to, endExclusive - 1));
+          .not('slug', 'is', null);
+
+        if (mode === 'recent') {
+          query = query
+            .order('updated_at', { ascending: false, nullsFirst: false })
+            .order('release_at', { ascending: false, nullsFirst: false })
+            .order('year', { ascending: false, nullsFirst: false });
+        } else if (mode === 'upcoming') {
+          query = query
+            .order('release_at', { ascending: false, nullsFirst: false })
+            .order('updated_at', { ascending: false, nullsFirst: false })
+            .order('year', { ascending: false, nullsFirst: false });
+        } else {
+          query = query
+            .order('year', { ascending: false, nullsFirst: false })
+            .order('release_at', { ascending: false, nullsFirst: false })
+            .order('updated_at', { ascending: false, nullsFirst: false });
+        }
+
+        const { data, error } = await query.range(from, Math.min(to, endExclusive - 1));
         if (error || !data?.length) return [] as MovieItem[];
         return data as MovieItem[];
       }),
@@ -240,7 +290,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
   const options = getSitemapOptions(req);
   const pages = [1, 2, 3, 4, 5, 6];
   const [supabaseMovies, ...lists] = await Promise.all([
-    fetchSupabaseMovies(options.offset, options.limit),
+    fetchSupabaseMovies(options.offset, options.limit, options.mode),
     ...(options.includeOphim ? LIST_TYPES.flatMap((type) => pages.map((page) => fetchMoviePage(type, page))) : []),
   ]);
 
@@ -259,7 +309,9 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       .filter((movie) => isUpcoming(movie) || isTrailer(movie) || Boolean(movie.trailer_url))
       .sort((a, b) => getFreshnessScore(b) - getFreshnessScore(a));
   } else if (options.mode === 'recent') {
-    movies = movies.sort((a, b) => getFreshnessScore(b) - getFreshnessScore(a));
+    movies = movies
+      .filter((movie) => !isUpcoming(movie))
+      .sort((a, b) => getRecentUpdateScore(b) - getRecentUpdateScore(a));
   } else {
     movies = movies.sort(compareMovieSeoOrder);
   }
@@ -270,7 +322,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     const slug = movie.slug ?? '';
     const loc = `${SITE_URL}/phim/${encodeURIComponent(slug)}`;
     const image = toImageUrl(movie.thumb_url || movie.poster_url || '');
-    const title = movie.name || slug;
+    const title = cleanImageTitle(movie.name || slug, slug);
     const modifiedTime = movie.updated_at || movie.release_at || movie.modified?.time;
 
     return `  <url>

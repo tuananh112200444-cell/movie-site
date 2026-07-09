@@ -214,8 +214,6 @@ export default function CWVMonitor() {
       return false;
     }
   });
-  const [minimized, setMinimized] = useState(false);
-  const data = useCWVMonitor();
 
   const toggleStorage = useCallback(() => {
     const next = !enabled;
@@ -247,6 +245,13 @@ export default function CWVMonitor() {
 
   if (!enabled) return null;
 
+  return <CWVPanel onClose={toggleStorage} />;
+}
+
+function CWVPanel({ onClose }: { onClose: () => void }) {
+  const [minimized, setMinimized] = useState(false);
+  const data = useCWVMonitor();
+
   const rows = [
     { label: 'LCP', value: formatMs(data.lcp), status: data.lcpStatus, sub: data.lcpElementTag ? `<${data.lcpElementTag.toLowerCase()}>` : '' },
     { label: 'CLS', value: data.cls !== null ? data.cls.toFixed(4) : '---', status: data.clsStatus, sub: 'layout shift' },
@@ -276,7 +281,7 @@ export default function CWVMonitor() {
               <i className={`ri-${minimized ? 'add' : 'subtract'}-line`} style={{ fontSize: '12px' }} />
             </button>
             <button
-              onClick={toggleStorage}
+              onClick={onClose}
               className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
               aria-label="Close"
             >

@@ -15,6 +15,120 @@ type LandingConfig = {
 };
 
 const LANDINGS: Record<string, LandingConfig> = {
+  'xem-phim': {
+    title: 'Xem Phim Online Hay Vietsub HD | KhoPhim',
+    h1: 'Xem phim online hay Vietsub HD',
+    description: 'Xem phim online trên KhoPhim với phim mới, phim hay, phim lẻ, phim bộ, phim chiếu rạp, phim Việt Nam, Hàn, Trung, Âu Mỹ và anime Vietsub HD.',
+    keywords: 'xem phim, xem phim online, xem phim hay, xem phim mới, xem phim Vietsub, xem phim HD, KhoPhim',
+    primaryHref: '/phim-moi-nhat',
+    primaryLabel: 'Xem phim mới nhất',
+    sections: [
+      { title: 'Cửa vào rộng cho nhu cầu xem phim', body: 'Trang này dành cho người dùng tìm kiếm rất ngắn như xem phim, xem phim hay hoặc xem phim online nhưng chưa chọn thể loại cụ thể.' },
+      { title: 'Dẫn nhanh về đúng danh mục', body: 'Từ đây người xem có thể chuyển sang phim mới nhất, phim lẻ, phim bộ, phim chiếu rạp, phim Vietsub hoặc tìm kiếm tên phim cụ thể.' },
+      { title: 'Không làm loãng trang chủ', body: 'Trang chủ giữ vai trò hub thương hiệu, còn trang này là landing cho truy vấn xem phim rộng với canonical riêng.' },
+    ],
+    related: [
+      { label: 'Xem phim online', href: '/xem-phim-online' },
+      { label: 'Phim mới nhất', href: '/phim-moi-nhat' },
+      { label: 'Phim lẻ', href: '/phim-le' },
+      { label: 'Phim bộ', href: '/phim-bo' },
+    ],
+  },
+  'xem-phim-mien-phi': {
+    title: 'Xem Phim Miễn Phí Vietsub HD | KhoPhim',
+    h1: 'Xem phim miễn phí Vietsub HD',
+    description: 'Xem phim miễn phí Vietsub HD tại KhoPhim, cập nhật phim mới, phim lẻ, phim bộ, phim chiếu rạp, anime và phim theo quốc gia dễ tìm.',
+    keywords: 'xem phim miễn phí, xem phim mien phi, phim miễn phí, phim online miễn phí, xem phim Vietsub miễn phí, KhoPhim',
+    primaryHref: '/xem-phim-online',
+    primaryLabel: 'Xem phim online',
+    sections: [
+      { title: 'Tập trung nhu cầu miễn phí', body: 'Người dùng thường tìm phim miễn phí, phim online miễn phí hoặc xem phim miễn phí Vietsub HD. Trang này gom đúng ý định đó.' },
+      { title: 'Đi tiếp sang phim phù hợp', body: 'Các liên kết nội bộ dẫn sang phim mới, phim lẻ, phim bộ, phim Vietsub và phim HD để người xem chọn nhanh.' },
+      { title: 'Tách khỏi xem phim online', body: 'Trang này nhấn vào yếu tố miễn phí, còn trang xem phim online là landing rộng hơn về trải nghiệm xem trên web.' },
+    ],
+    related: [
+      { label: 'Xem phim online', href: '/xem-phim-online' },
+      { label: 'Phim Vietsub', href: '/phim-vietsub' },
+      { label: 'Phim Full HD', href: '/phim-full-hd' },
+      { label: 'Phim mới nhất', href: '/phim-moi-nhat' },
+    ],
+  },
+  'xem-phim-hd': {
+    title: 'Xem Phim HD Online Vietsub Chất Lượng Cao | KhoPhim',
+    h1: 'Xem phim HD online Vietsub',
+    description: 'Xem phim HD online tại KhoPhim với phim Full HD, phim chiếu rạp, phim lẻ, phim bộ, anime và phim Vietsub chất lượng cao.',
+    keywords: 'xem phim HD, phim HD online, phim Full HD, phim chất lượng cao, xem phim nét, KhoPhim',
+    primaryHref: '/phim-full-hd',
+    primaryLabel: 'Xem phim Full HD',
+    sections: [
+      { title: 'Ưu tiên chất lượng xem', body: 'Trang này dành cho người xem quan tâm đến độ nét, poster rõ, thông tin phim đầy đủ và trải nghiệm xem ổn định.' },
+      { title: 'Liên kết tới nhóm phim chất lượng', body: 'Các danh mục liên quan gồm phim Full HD, phim chiếu rạp, phim lẻ, phim mới nhất và phim 4K.' },
+      { title: 'Mô tả đúng khả năng nguồn', body: 'KhoPhim ưu tiên chất lượng cao nhưng vẫn mô tả cẩn trọng vì nguồn phát có thể phụ thuộc host bên ngoài.' },
+    ],
+    related: [
+      { label: 'Phim Full HD', href: '/phim-full-hd' },
+      { label: 'Phim chiếu rạp', href: '/phim-chieu-rap' },
+      { label: 'Phim lẻ', href: '/phim-le' },
+      { label: 'Phim 4K', href: '/phim-4k' },
+    ],
+  },
+  'xem-phim-vietsub': {
+    title: 'Xem Phim Vietsub Online HD | KhoPhim',
+    h1: 'Xem phim Vietsub online HD',
+    description: 'Xem phim Vietsub online HD trên KhoPhim: phim Hàn, Trung, Âu Mỹ, Thái Lan, anime, phim lẻ và phim bộ có phụ đề tiếng Việt.',
+    keywords: 'xem phim Vietsub, xem phim vietsub, phim phụ đề Việt, phim phu de Viet, phim Vietsub online, KhoPhim',
+    primaryHref: '/phim-vietsub',
+    primaryLabel: 'Xem phim Vietsub',
+    sections: [
+      { title: 'Dành cho người thích phụ đề Việt', body: 'Trang này tập trung vào nhu cầu xem phim có phụ đề tiếng Việt, giữ âm thanh gốc và dễ theo dõi nội dung.' },
+      { title: 'Phủ nhiều quốc gia', body: 'Người xem có thể đi tiếp sang phim Hàn Quốc, Trung Quốc, Âu Mỹ, Thái Lan, anime hoặc phim bộ Vietsub.' },
+      { title: 'Khác với danh mục phim Vietsub', body: 'Trang này là landing theo hành động tìm kiếm xem phim Vietsub, còn /phim-vietsub là danh mục nội dung rộng hơn.' },
+    ],
+    related: [
+      { label: 'Phim Vietsub', href: '/phim-vietsub' },
+      { label: 'Phim Hàn Quốc', href: '/phim-han-quoc' },
+      { label: 'Phim Trung Quốc', href: '/phim-trung-quoc' },
+      { label: 'Anime Vietsub', href: '/anime' },
+    ],
+  },
+  'web-xem-phim': {
+    title: 'Web Xem Phim Online Vietsub HD | KhoPhim',
+    h1: 'Web xem phim online Vietsub HD',
+    description: 'KhoPhim là web xem phim online Vietsub HD dành cho người Việt, dễ tìm phim mới, phim hot, phim chiếu rạp và phim theo thể loại.',
+    keywords: 'web xem phim, website xem phim, trang xem phim, web phim online, web xem phim Vietsub, KhoPhim',
+    primaryHref: '/',
+    primaryLabel: 'Vào trang chủ KhoPhim',
+    sections: [
+      { title: 'Một web xem phim có cấu trúc rõ', body: 'KhoPhim có trang chủ, danh mục, tìm kiếm, sitemap, trang phim và các landing SEO để người xem đi đúng nội dung cần tìm.' },
+      { title: 'Phù hợp người chưa nhớ thương hiệu', body: 'Nhiều người chỉ tìm web xem phim hoặc trang xem phim online. Trang này giúp Google hiểu KhoPhim phù hợp với ý định đó.' },
+      { title: 'Không sao chép trang chủ', body: 'Trang này giải thích vai trò website, còn trang chủ vẫn là nơi cập nhật nội dung và điều hướng chính.' },
+    ],
+    related: [
+      { label: 'Xem phim', href: '/xem-phim' },
+      { label: 'Xem phim online', href: '/xem-phim-online' },
+      { label: 'Sơ đồ trang', href: '/sitemap' },
+      { label: 'Tìm phim', href: '/search' },
+    ],
+  },
+  'kho-phim-online': {
+    title: 'Kho Phim Online Vietsub HD Mới Nhất | KhoPhim',
+    h1: 'Kho phim online Vietsub HD',
+    description: 'Kho phim online Vietsub HD với nhiều nhóm phim mới, phim hay, phim lẻ, phim bộ, phim chiếu rạp, anime và phim theo quốc gia.',
+    keywords: 'kho phim online, kho phim, kho phim HD, kho phim Vietsub, phim online mới nhất, KhoPhim',
+    primaryHref: '/sitemap',
+    primaryLabel: 'Xem sơ đồ KhoPhim',
+    sections: [
+      { title: 'Nhấn vào quy mô thư viện phim', body: 'Trang này dành cho người tìm kho phim online, kho phim HD hoặc kho phim Vietsub với nhiều nhóm nội dung để khám phá.' },
+      { title: 'Đi từ tổng quan sang chi tiết', body: 'Người xem có thể chuyển sang phim mới, phim lẻ, phim bộ, phim chiếu rạp, anime hoặc tìm kiếm phim theo tên.' },
+      { title: 'Tăng topical authority cho domain chính', body: 'Trang này giúp Google hiểu KhoPhim là một hệ thống nội dung rộng, không phải chỉ một trang đơn lẻ.' },
+    ],
+    related: [
+      { label: 'Phim mới nhất', href: '/phim-moi-nhat' },
+      { label: 'Phim lẻ', href: '/phim-le' },
+      { label: 'Phim bộ', href: '/phim-bo' },
+      { label: 'Sơ đồ trang', href: '/sitemap' },
+    ],
+  },
   'xem-phim-online': {
     title: 'Xem Phim Online Vietsub HD Miễn Phí | KhoPhim',
     h1: 'Xem phim online Vietsub HD miễn phí',
@@ -272,6 +386,24 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
   const data = LANDINGS[landingKey] ?? LANDINGS['xem-phim-online'];
   const path = `/${landingKey}`;
   const canonical = `${SITE_URL}${path}`;
+  const keywordChips = Array.from(new Set(
+    data.keywords
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .concat([
+        'xem phim',
+        'xem phim online',
+        'xem phim Vietsub',
+        'xem phim HD',
+        'phim mới nhất',
+        'phim chiếu rạp',
+        'phim Việt Nam',
+        'phim Hàn Quốc',
+        'anime Vietsub',
+        'KhoPhim',
+      ]),
+  )).slice(0, 22);
   const schema = [
     {
       '@context': 'https://schema.org',
@@ -360,6 +492,23 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
               >
                 {item.label}
               </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-5">
+          <h2 className="mb-3 text-lg font-bold">Từ khóa liên quan</h2>
+          <p className="mb-4 text-sm leading-6 text-white/55">
+            Các cụm tìm kiếm này giúp người xem đi đúng nhóm phim cần tìm và giúp Google hiểu chủ đề của trang rõ hơn.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {keywordChips.map((keyword) => (
+              <span
+                key={keyword}
+                className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-100/80"
+              >
+                {keyword}
+              </span>
             ))}
           </div>
         </section>

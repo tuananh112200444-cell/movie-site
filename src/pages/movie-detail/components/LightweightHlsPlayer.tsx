@@ -29,8 +29,8 @@ interface HlsQualityLevel {
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 const MAX_STREAM_RECOVERY_ATTEMPTS = 5;
-const MAX_NON_FATAL_NETWORK_RETRIES = 4;
-const STALL_RECOVERY_DELAY_MS = 5000;
+const MAX_NON_FATAL_NETWORK_RETRIES = 2;
+const STALL_RECOVERY_DELAY_MS = 3500;
 const STALL_PROGRESS_CHECK_MS = 2500;
 const STALL_MIN_PROGRESS_SECONDS = 0.05;
 const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
@@ -313,12 +313,12 @@ export default function LightweightHlsPlayer({
         capLevelToPlayerSize: true,
         startLevel: -1,
         testBandwidth: true,
-        fragLoadingTimeOut: 20000,
-        manifestLoadingTimeOut: 10000,
-        levelLoadingTimeOut: 10000,
-        fragLoadingMaxRetry: 6,
-        manifestLoadingMaxRetry: 4,
-        levelLoadingMaxRetry: 4,
+        fragLoadingTimeOut: 12000,
+        manifestLoadingTimeOut: 6000,
+        levelLoadingTimeOut: 6000,
+        fragLoadingMaxRetry: 3,
+        manifestLoadingMaxRetry: 2,
+        levelLoadingMaxRetry: 2,
         fragLoadingRetryDelay: 1000,
         levelLoadingRetryDelay: 1000,
         manifestLoadingRetryDelay: 1000,

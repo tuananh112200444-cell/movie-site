@@ -10,6 +10,7 @@ type PlayerErrorEvent = {
 
 type HostHealth = {
   host: string;
+  cluster: string;
   score: number;
   critical: number;
   recovery: number;
@@ -33,10 +34,22 @@ const SOURCE_RECOVERY_EVENTS = new Set([
   'hls_media_retry',
 ]);
 
+const DB_HEALTH_TIMEOUT_MS = 2800;
+
+const FALLBACK_DEGRADED_HOSTS: HostHealth[] = [
+  { host: 'vip.opstream90.com', cluster: 'ophim', score: 120, critical: 24, recovery: 0, total: 24, server_names: ['Vietsub #1'], player_modes: ['hls'] },
+  { host: 'v7.kkphimplayer7.com', cluster: 'kkphim', score: 110, critical: 22, recovery: 0, total: 22, server_names: ['Vietsub'], player_modes: ['hls'] },
+  { host: 's6.kkphimplayer6.com', cluster: 'kkphim', score: 80, critical: 16, recovery: 0, total: 16, server_names: ['Vietsub'], player_modes: ['hls'] },
+  { host: 'vip.opstream11.com', cluster: 'ophim', score: 55, critical: 11, recovery: 0, total: 11, server_names: ['Vietsub #1'], player_modes: ['hls'] },
+  { host: 'vip.opstream15.com', cluster: 'ophim', score: 50, critical: 10, recovery: 0, total: 10, server_names: ['Vietsub #1'], player_modes: ['hls'] },
+];
+
 function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowed = [
     'https://khophim.org',
     'https://www.khophim.org',
+    'https://mhophim.com',
+    'https://www.mhophim.com',
     'http://localhost:3000',
     'http://localhost:4173',
     'http://localhost:5173',
@@ -74,6 +87,38 @@ function normalizeHost(host: string | null | undefined): string {
   return trimmed;
 }
 
+function getSourceCluster(host: string): string {
+  if (!host) return '';
+  if (host.includes('ssplay') || host.includes('abyssplayer') || host.includes('short.icu')) return 'ssplay_abyss';
+  if (host.includes('dailymotion.com') || host === 'dai.ly') return 'dailymotion';
+  if (host.includes('video.khophim.org') || host.includes('supabase.co')) return 'khophim_direct';
+  if (host.includes('opstream') || host.includes('ophim')) return 'ophim';
+  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim')) return 'kkphim';
+  if (host.includes('versondd.top')) return 'known_bad';
+  return host;
+}
+
+function serializeError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    return String(record.message || record.details || record.hint || JSON.stringify(record));
+  }
+  return String(error);
+}
+
+function fallbackHealth(reason: string, corsHeaders: Record<string, string>): Response {
+  return json({
+    ok: true,
+    source: 'fallback',
+    reason,
+    generated_at: new Date().toISOString(),
+    window_hours: 6,
+    penalty_minutes: 30,
+    bad_hosts: FALLBACK_DEGRADED_HOSTS,
+  }, 200, corsHeaders, 'public, max-age=120');
+}
+
 function addUnique(list: string[], value: string | null | undefined, limit = 4): void {
   const trimmed = String(value || '').trim();
   if (!trimmed || list.includes(trimmed) || list.length >= limit) return;
@@ -86,9 +131,11 @@ function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
   for (const event of events) {
     const host = normalizeHost(event.source_host);
     if (!host) continue;
+    const cluster = getSourceCluster(host);
     const eventType = String(event.event_type || '');
     const current = map.get(host) ?? {
       host,
+      cluster,
       score: 0,
       critical: 0,
       recovery: 0,
@@ -126,7 +173,7 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const hours = clampNumber(url.searchParams.get('hours'), 6, 1, 24);
-    const limit = clampNumber(url.searchParams.get('limit'), 1000, 100, 5000);
+    const limit = clampNumber(url.searchParams.get('limit'), 600, 100, 2000);
     const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
     const supabase = createClient(
@@ -141,9 +188,10 @@ Deno.serve(async (req) => {
       .gte('created_at', since)
       .in('event_type', [...SOURCE_CRITICAL_EVENTS, ...SOURCE_RECOVERY_EVENTS])
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .limit(limit)
+      .abortSignal(AbortSignal.timeout(DB_HEALTH_TIMEOUT_MS));
 
-    if (error) throw error;
+    if (error) return fallbackHealth(serializeError(error), corsHeaders);
 
     const badHosts = summarizeHostHealth((data ?? []) as PlayerErrorEvent[]);
 
@@ -156,6 +204,6 @@ Deno.serve(async (req) => {
       bad_hosts: badHosts,
     }, 200, corsHeaders);
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : String(error) }, 500, corsHeaders, 'no-store');
+    return fallbackHealth(serializeError(error), corsHeaders);
   }
 });

@@ -586,7 +586,7 @@ function playableEpisodeCount(episodes: ParsedEpisode[]): number {
 }
 
 function maxPlayableEpisodeNumber(episodes: ParsedEpisode[]): number {
-  return episodes.reduce((max, episode) => Math.max(max, Number(episode.episode_number || 0)), 0);
+  return episodes.reduce((max, episode) => Math.max(max, getEpisodeEndNumber(episode)), 0);
 }
 
 function isTransientExternalFetchError(error: unknown): boolean {
@@ -880,6 +880,7 @@ function addParsedEpisode(
   serverNumber: number,
   rawLink: string,
   type = 'embed',
+  rawLabel = '',
 ): void {
   if (!episodeNumber) return;
   const link = decodeHtml(rawLink.replace(/&amp;/g, '&')).trim();
@@ -898,10 +899,11 @@ function addParsedEpisode(
   const key = `${serverName}|${episodeNumber}`;
   if (episodes.has(key)) return;
   const isHls = type.toLowerCase() === 'm3u8' || /\.m3u8(?:[?#].*)?$/i.test(link);
+  const info = parseEpisodeInfo(rawLabel || String(episodeNumber));
   episodes.set(key, {
     episode_number: episodeNumber,
-    episode_name: `${TAP_LABEL} ${episodeNumber}`,
-    slug: `tap-${episodeNumber}`,
+    episode_name: info.label,
+    slug: info.slug,
     link_embed: isHls ? '' : link,
     link_m3u8: isHls ? link : '',
     server_name: serverName,
@@ -914,6 +916,26 @@ function parseEpisodeToken(value: string): number {
   return Number(numbers[numbers.length - 1] || 1) || 1;
 }
 
+function parseEpisodeInfo(value: string): { number: number; label: string; slug: string; end: number } {
+  const raw = decodeHtml(String(value || '')).trim();
+  const numbers = raw.match(/\d+/g);
+  if (!numbers?.length) return { number: 1, label: `${TAP_LABEL} 1`, slug: 'tap-1', end: 1 };
+  const start = Number(numbers[0] || 1) || 1;
+  const end = Number(numbers[numbers.length - 1] || start) || start;
+  const isRange = numbers.length >= 2 && /[-~–—]/.test(raw) && end > start;
+  const labelToken = isRange ? `${numbers[0]}-${numbers[numbers.length - 1]}` : String(end);
+  return {
+    number: isRange ? start : end,
+    label: `${TAP_LABEL} ${labelToken}`,
+    slug: `tap-${labelToken}`,
+    end,
+  };
+}
+
+function getEpisodeEndNumber(episode: ParsedEpisode): number {
+  return parseEpisodeInfo(`${episode.episode_name || ''} ${episode.slug || ''} ${episode.episode_number || ''}`).end;
+}
+
 function parseStreamingServerEpisodes(html: string): Map<string, ParsedEpisode> {
   const episodes = new Map<string, ParsedEpisode>();
   const perEpisodeCount = new Map<number, number>();
@@ -922,11 +944,22 @@ function parseStreamingServerEpisodes(html: string): Map<string, ParsedEpisode> 
     const link = extractAttr(tag, 'data-link');
     const type = extractAttr(tag, 'data-type') || 'embed';
     const episodeId = extractAttr(tag, 'data-id');
-    const episodeNumber = parseEpisodeToken(episodeId);
+    const info = parseEpisodeInfo(episodeId);
+    const episodeNumber = info.number;
     if (!episodeNumber || !link) continue;
     const serverNumber = (perEpisodeCount.get(episodeNumber) || 0) + 1;
     perEpisodeCount.set(episodeNumber, serverNumber);
-    addParsedEpisode(episodes, episodeNumber, serverNumber, link, type);
+    addParsedEpisode(episodes, episodeNumber, serverNumber, link, type, episodeId);
+  }
+  let anonymousServer = 0;
+  for (const match of html.matchAll(/<button\b[^>]*class=["'][^"']*\bblv-episode-btn\b[^"']*["'][^>]*>[\s\S]*?<\/button>/gi)) {
+    const tag = match[0];
+    const link = extractAttr(tag, 'data-url');
+    const label = stripTags(tag);
+    const info = parseEpisodeInfo(label);
+    if (!info.number || !link) continue;
+    anonymousServer += 1;
+    addParsedEpisode(episodes, info.number, anonymousServer, link, 'embed', label);
   }
   return episodes;
 }
@@ -1257,13 +1290,40 @@ async function insertMissingEpisodes(
 ): Promise<number> {
   const { data: existingRows, error } = await supabase
     .from('movie_episodes')
-    .select('id, episode_number, server_name, link_embed, link_m3u8')
+    .select('id, episode_number, episode_name, slug, server_name, link_embed, link_m3u8')
     .eq('movie_id', movie.id)
     .eq('source', SOURCE_SITE);
 
   if (error) throw new Error(`movie_episodes select ${movie.slug}: ${error.message}`);
 
   const existing = new Map((existingRows || []).map((row) => [`${String(row.server_name || '').trim()}|${Number(row.episode_number || 0)}`, row]));
+  const linkMatchedRows = new Map<string, NonNullable<typeof existingRows>[number]>();
+  for (const row of existingRows || []) {
+    const link = String(row.link_embed || row.link_m3u8 || '').replace(/\/+$/, '');
+    const serverName = String(row.server_name || '').trim();
+    if (link && serverName) linkMatchedRows.set(`${serverName}|${link}`, row);
+  }
+  let relabeled = 0;
+  for (const episode of entry.episodes) {
+    if (existing.has(`${episode.server_name}|${episode.episode_number}`)) continue;
+    const link = String(episode.link_embed || episode.link_m3u8 || '').replace(/\/+$/, '');
+    const row = linkMatchedRows.get(`${episode.server_name}|${link}`);
+    if (!row) continue;
+    const { error: relabelError } = await supabase
+      .from('movie_episodes')
+      .update({
+        episode_number: episode.episode_number,
+        episode_name: episode.episode_name,
+        slug: episode.slug,
+        link_embed: episode.link_embed || '',
+        link_m3u8: episode.link_m3u8 || '',
+      })
+      .eq('id', row.id);
+    if (relabelError) throw new Error(`movie_episodes relabel ${movie.slug}: ${relabelError.message}`);
+    existing.delete(`${String(row.server_name || '').trim()}|${Number(row.episode_number || 0)}`);
+    existing.set(`${episode.server_name}|${episode.episode_number}`, { ...row, ...episode });
+    relabeled += 1;
+  }
   const rows = entry.episodes
     .filter((episode) => !existing.has(`${episode.server_name}|${episode.episode_number}`))
     .map((episode) => ({
@@ -1281,7 +1341,7 @@ async function insertMissingEpisodes(
       is_backup: false,
     }));
 
-  let repaired = 0;
+  let repaired = relabeled;
   for (const episode of entry.episodes) {
     const row = existing.get(`${episode.server_name}|${episode.episode_number}`);
     if (!row) continue;

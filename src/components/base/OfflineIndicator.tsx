@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
-import { reportClientIssue } from '@/services/playerDiagnostics';
 
 type OfflineStatus = 'online' | 'offline';
+
+function reportClientIssue(eventType: 'offline' | 'online_recovered', errorMessage: string): void {
+  void import('@/services/playerDiagnostics')
+    .then(({ reportClientIssue: report }) => report(eventType, errorMessage))
+    .catch(() => {});
+}
 
 export default function OfflineIndicator() {
   const [status, setStatus] = useState<OfflineStatus>('online');
