@@ -1,12 +1,18 @@
 // No StrictMode in production: saves one full re-render cycle.
 import './i18n'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { pruneSmartClientCaches } from './utils/smartCache'
 
 const CLIENT_RELEASE_MARKER = '2026-07-05-cache-routes-v2';
 const rootElement = document.getElementById('root');
+
+declare global {
+  interface Window {
+    __KP_REACT_ROOT__?: Root;
+  }
+}
 
 pruneSmartClientCaches({ force: true });
 
@@ -22,7 +28,11 @@ if (!rootElement) {
   try {
     rootElement.dataset.kpMounted = '1';
     rootElement.dataset.kpRelease = CLIENT_RELEASE_MARKER;
-    createRoot(rootElement).render(<App />);
+    if (!window.__KP_REACT_ROOT__ && rootElement.querySelectorAll('.page-root').length > 0) {
+      rootElement.innerHTML = '';
+    }
+    window.__KP_REACT_ROOT__ ??= createRoot(rootElement);
+    window.__KP_REACT_ROOT__.render(<App />);
     document.getElementById('kp-boot-fallback')?.remove();
   } catch (error) {
     delete rootElement.dataset.kpMounted;
