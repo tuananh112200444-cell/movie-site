@@ -35,8 +35,6 @@ if (!rootElement) {
 void import('./utils/performance').then(({ reportWebVitals }) => reportWebVitals()).catch(() => {});
 
 const STALE_TAB_RELOAD_MS = 30 * 60 * 1000;
-const STALE_TAB_RELOAD_KEY = 'kp_stale_tab_reload_v2';
-const STALE_TAB_RELOAD_COOLDOWN_MS = 2 * 60 * 1000;
 const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|dynamically imported module/i;
 
 function safeSessionGet(key: string): string | null {
@@ -53,28 +51,6 @@ function safeSessionSet(key: string, value: string): void {
   } catch {
     // Some embedded browsers block sessionStorage. Recovery should remain best-effort.
   }
-}
-
-function hasActiveMediaPlayback(): boolean {
-  return Array.from(document.querySelectorAll('video, audio')).some((media) => {
-    const element = media as HTMLMediaElement;
-    return !element.paused && !element.ended && element.readyState > 1;
-  });
-}
-
-function reloadOnceForFreshShell(reason: string): void {
-  const key = `${STALE_TAB_RELOAD_KEY}_${reason}`;
-  const previous = Number(safeSessionGet(key) || 0);
-  if (Number.isFinite(previous) && Date.now() - previous < STALE_TAB_RELOAD_COOLDOWN_MS) return;
-  if (hasActiveMediaPlayback()) return;
-  safeSessionSet(key, String(Date.now()));
-  const eventType = reason === 'bfcache_restore'
-    ? 'bfcache_restore_reload'
-    : reason.includes('chunk')
-      ? 'chunk_load_error'
-      : 'stale_tab_reload';
-  reportClientIssue(eventType, reason);
-  window.location.reload();
 }
 
 function isChunkLikeError(message: string): boolean {
@@ -116,7 +92,6 @@ async function removeLegacyServiceWorkers(): Promise<void> {
 
     if (navigator.serviceWorker.controller) {
       reportClientIssue('service_worker_removed', 'legacy service worker unregistered');
-      reloadOnceForFreshShell('sw_removed');
     }
   } catch {
     // Do not block app startup if a browser blocks service worker APIs.
@@ -135,7 +110,6 @@ if (typeof document !== 'undefined') {
     }
     if (hiddenAt > 0 && Date.now() - hiddenAt > STALE_TAB_RELOAD_MS) {
       pruneSmartClientCaches({ force: true });
-      reloadOnceForFreshShell('visible_after_stale');
     } else {
       pruneSmartClientCaches();
     }
@@ -143,14 +117,14 @@ if (typeof document !== 'undefined') {
   });
 
   window.addEventListener('pageshow', (event) => {
-    if (event.persisted) reloadOnceForFreshShell('bfcache_restore');
+    if (event.persisted) pruneSmartClientCaches();
   });
 
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'unknown rejection');
     reportClientIssue('unhandled_rejection', reason);
     if (isChunkLikeError(reason)) {
-      void clearLegacyKhophimCaches().finally(() => reloadOnceForFreshShell('chunk_unhandled_rejection'));
+      void clearLegacyKhophimCaches();
     }
   });
 
@@ -158,7 +132,7 @@ if (typeof document !== 'undefined') {
     const message = event.error instanceof Error ? event.error.message : event.message || 'unknown window error';
     reportClientIssue(isChunkLikeError(message) ? 'chunk_load_error' : 'app_error', message);
     if (isChunkLikeError(message)) {
-      void clearLegacyKhophimCaches().finally(() => reloadOnceForFreshShell('chunk_window_error'));
+      void clearLegacyKhophimCaches();
     }
   });
 }
@@ -175,8 +149,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type !== 'KHOPHIM_SW_REMOVED') return;
     if (safeSessionGet('kp_sw_removed_reload_v1') === '1') return;
-    safeSessionSet('kp_sw_removed_reload_v1', '1');
-    window.location.reload();
+    reportClientIssue('service_worker_removed', 'legacy service worker removed');
   });
 }
 

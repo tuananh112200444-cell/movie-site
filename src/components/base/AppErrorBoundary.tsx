@@ -1,7 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 const RECOVERY_KEY = 'kp_app_recovery_20260705_v1';
-const DOM_MUTATION_RECOVERY_KEY = 'kp_dom_mutation_recovery_20260705_v1';
 
 function safeSessionGet(key: string): string | null {
   try {
@@ -74,10 +73,6 @@ function recoverWithFreshUrl() {
   window.location.replace(url.toString());
 }
 
-function scheduleFreshRecovery(delayMs = 350) {
-  window.setTimeout(recoverWithFreshUrl, delayMs);
-}
-
 interface Props {
   children: ReactNode;
 }
@@ -103,28 +98,29 @@ export default class AppErrorBoundary extends Component<Props, State> {
       error instanceof Error ? error.message : String(error ?? 'unknown app error'),
     );
 
-    if (isExternalDomMutationError(error) && safeSessionGet(DOM_MUTATION_RECOVERY_KEY) !== '1') {
-      safeSessionSet(DOM_MUTATION_RECOVERY_KEY, '1');
-      scheduleFreshRecovery();
+    if (isExternalDomMutationError(error)) {
+      window.setTimeout(() => this.setState({ error: null }), 0);
       return;
     }
 
     if (isChunkLoadError(error) && safeSessionGet(RECOVERY_KEY) !== '1') {
       safeSessionSet(RECOVERY_KEY, '1');
-      scheduleFreshRecovery();
       Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()]).catch(() => {});
     }
   }
 
   handleRetry = () => {
     safeSessionRemove(RECOVERY_KEY);
-    safeSessionRemove(DOM_MUTATION_RECOVERY_KEY);
     recoverWithFreshUrl();
     Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()]).catch(() => {});
   };
 
   render() {
     if (!this.state.error) return this.props.children;
+
+    if (isExternalDomMutationError(this.state.error)) {
+      return null;
+    }
 
     return (
       <main className="min-h-screen kp-cinema-page text-white flex items-center justify-center px-6">
@@ -133,12 +129,10 @@ export default class AppErrorBoundary extends Component<Props, State> {
             <i className="ri-refresh-line text-2xl" aria-hidden="true" />
           </div>
           <h1 className="text-2xl font-semibold mb-3">
-            {isExternalDomMutationError(this.state.error) ? 'KhoPhim can tai lai trang' : 'KhoPhim dang tai lai'}
+            KhoPhim dang tai lai
           </h1>
           <p className="text-white/70 text-sm leading-6 mb-6">
-            {isExternalDomMutationError(this.state.error)
-              ? 'Trinh duyet co the vua dich hoac can thiep noi dung trang. Bam mo lai de nap lai giao dien sach.'
-              : 'Trinh duyet dang nap lai phien ban moi. Neu man hinh nay hien qua lau, bam nut ben duoi de mo lai trang.'}
+            He thong dang nap lai phien ban moi. Neu man hinh nay hien qua lau, bam nut ben duoi de tai lai.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
@@ -146,7 +140,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
               onClick={this.handleRetry}
               className="inline-flex w-full sm:w-auto items-center justify-center rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-300"
             >
-              Mo lai trang
+              Tai lai
             </button>
             <a
               href="/"
