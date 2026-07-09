@@ -827,6 +827,71 @@ function sameMovieYearOrUnknown(a: Record<string, unknown>, b: Record<string, un
   return ay <= 0 || by <= 0 || ay === by;
 }
 
+function normalizedSlug(value: unknown): string {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isWeakCatalogTitle(movie: Record<string, unknown> | null | undefined, requestedSlug: string): boolean {
+  const name = String(movie?.name || '').trim();
+  const origin = String(movie?.origin_name || movie?.title_en || '').trim();
+  if (!name) return true;
+  if (origin && normalizeTitle(name) === normalizeTitle(origin)) return true;
+  const requestedTitle = normalizeTitle(String(requestedSlug || '').replace(/-/g, ' '));
+  const nameTitle = normalizeTitle(name);
+  return requestedTitle.length >= 4 && !!nameTitle && !requestedTitle.includes(nameTitle) && !nameTitle.includes(requestedTitle);
+}
+
+function shouldPreferExternalMovieData(
+  primary: Record<string, unknown> | null | undefined,
+  external: Record<string, unknown> | null | undefined,
+  requestedSlug: string,
+): boolean {
+  if (!primary || !external) return false;
+  const requested = normalizedSlug(requestedSlug);
+  const primarySlug = normalizedSlug(primary.slug);
+  const externalSlug = normalizedSlug(external.slug || external.ophim_slug);
+  if (externalSlug && requested && externalSlug !== requested) return false;
+  if (!sameMovieYearOrUnknown(primary, external) || !hasSharedTitle(primary, external)) return false;
+  return primarySlug !== requested || isWeakCatalogTitle(primary, requestedSlug);
+}
+
+function mergeMovieDataForRequestedSlug(
+  primary: Record<string, unknown>,
+  external: Record<string, unknown>,
+  requestedSlug: string,
+): Record<string, unknown> {
+  const requested = String(requestedSlug || '').trim();
+  return {
+    ...primary,
+    name: external.name || primary.name,
+    title_vi: external.name || primary.title_vi || primary.name,
+    origin_name: external.origin_name || primary.origin_name,
+    title_en: primary.title_en || external.origin_name || primary.origin_name,
+    title_original: primary.title_original || external.origin_name || primary.origin_name || external.name,
+    slug: requested || external.slug || primary.slug,
+    ophim_slug: external.slug || primary.ophim_slug,
+    ophim_id: external._id || external.id || primary.ophim_id,
+    content: external.content || external.description || primary.content,
+    type: external.type || primary.type,
+    status: external.status || primary.status,
+    thumb_url: external.thumb_url || external.thumbUrl || external.thumb || primary.thumb_url,
+    poster_url: external.poster_url || external.posterUrl || external.poster || primary.poster_url,
+    trailer_url: external.trailer_url || external.trailerUrl || primary.trailer_url,
+    time: external.time || primary.time,
+    episode_current: external.episode_current || external.episodeCurrent || primary.episode_current,
+    episode_total: external.episode_total || external.episodeTotal || primary.episode_total,
+    current_episode: external.current_episode || primary.current_episode,
+    total_episodes: external.total_episodes || primary.total_episodes,
+    quality: external.quality || primary.quality,
+    lang: external.lang || external.language || primary.lang,
+    year: external.year || primary.year,
+    actor: Array.isArray(external.actor) && external.actor.length > 0 ? external.actor : primary.actor,
+    director: Array.isArray(external.director) && external.director.length > 0 ? external.director : primary.director,
+    category: Array.isArray(external.category) && external.category.length > 0 ? external.category : primary.category,
+    country: Array.isArray(external.country) && external.country.length > 0 ? external.country : primary.country,
+  };
+}
+
 function escapePostgrestIlike(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/[(),]/g, ' ');
 }
@@ -1417,6 +1482,11 @@ serve(async (req) => {
       isOphimLikeMovieRecord((movieData || movie) as Record<string, unknown>) &&
       expectedEpisode > 0 &&
       advertisedTotalEpisode > expectedEpisode;
+    const shouldCheckRequestedSlugAlias =
+      useSupabase &&
+      !!movieData &&
+      normalizedSlug((movieData as Record<string, unknown>).slug) !== normalizedSlug(slug) &&
+      isOphimLikeMovieRecord((movieData || movie) as Record<string, unknown>);
     const shouldRepairOnDemand = expectedEpisode > 1 && (dbMaxEpisode === 0 || dbMaxEpisode < expectedEpisode);
     let repairTriggered = false;
     if (shouldRepairOnDemand) {
@@ -1431,7 +1501,8 @@ serve(async (req) => {
       serverMap.size === 0 ||
       !useSupabase ||
       shouldRepairOnDemand ||
-      shouldCheckFreshOngoingExternal;
+      shouldCheckFreshOngoingExternal ||
+      shouldCheckRequestedSlugAlias;
 
     if (shouldFetchExternal) {
       let detailSlug = slug;
@@ -1449,6 +1520,9 @@ serve(async (req) => {
 
       if (external) {
         externalMovieData = external.movie;
+        if (movieData && shouldPreferExternalMovieData(movieData, external.movie, slug)) {
+          movieData = mergeMovieDataForRequestedSlug(movieData, external.movie, slug);
+        }
         if (!movieData) {
           movieData = external.movie;
         }

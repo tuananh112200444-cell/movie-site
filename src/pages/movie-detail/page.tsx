@@ -91,7 +91,10 @@ function getTrailerEmbedUrl(url: string): string | null {
 }
 
 function getEpisodeNumber(ep: EpisodeData): number {
-  return ep.episode_number ?? Number((ep.slug || ep.name || '').match(/\d+/)?.[0] ?? 0);
+  const label = `${ep.name || ''} ${ep.slug || ''}`;
+  const range = label.match(/\b\d+\s*[-~–—]\s*(\d+)\b/);
+  if (range) return Number(range[1] || 0) || 0;
+  return ep.episode_number ?? Number(label.match(/\d+/)?.[0] ?? 0);
 }
 
 function getHighestEpisodeFromServers(episodes: EpisodeServer[]): number {

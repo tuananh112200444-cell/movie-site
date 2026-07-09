@@ -62,6 +62,9 @@ function isIframeSource(url: string): boolean {
   const u = url.toLowerCase();
   if (isBlvietsubWatchPageUrl(u)) return false;
   return (
+    u.includes('streamvsmov.com/video/') ||
+    u.includes('player.phimapi.com/player') ||
+    (u.includes('opstream') && u.includes('/share/')) ||
     u.includes('youtube.com/embed') ||
     u.includes('youtu.be') ||
     u.includes('dailymotion.com/embed') ||
@@ -81,6 +84,15 @@ function isIframeSource(url: string): boolean {
     u.includes('voe.sx') ||
     u.includes('uqload')
   );
+}
+
+function isStreamVsmovEmbedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return /(^|\.)streamvsmov\.com$/i.test(parsed.hostname) && /^\/video\/[^/]+/i.test(parsed.pathname);
+  } catch {
+    return /(^|\/\/|[./])streamvsmov\.com\/video\//i.test(String(url || ''));
+  }
 }
 
 function isBlvietsubWatchPageUrl(url: string): boolean {
@@ -148,6 +160,28 @@ function isKnownCorsBlockedHls(url: string): boolean {
   );
 }
 
+function isSingleVariantProviderHls(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return (
+      host.includes('opstream') ||
+      host.includes('kkphimplayer') ||
+      host.includes('phim1280') ||
+      host.includes('vipcdn') ||
+      host.includes('phimapi')
+    );
+  } catch {
+    const u = String(url || '').toLowerCase();
+    return /opstream|kkphimplayer|phim1280|vipcdn|phimapi/.test(u);
+  }
+}
+
+function shouldPreferEmbedOverDirectHls(ep: EpisodeData): boolean {
+  if (!ep.link_m3u8 || !ep.link_embed || !isIframeSource(ep.link_embed)) return false;
+  if (!isHlsUrl(ep.link_m3u8)) return false;
+  return isSingleVariantProviderHls(ep.link_m3u8);
+}
+
 function shouldProxyHls(url: string): boolean {
   try {
     const host = new URL(url).hostname.toLowerCase();
@@ -168,7 +202,9 @@ function getHlsProxyUrl(url: string): string {
 
 function getPlayerMode(ep: EpisodeData | null): 'hls' | 'embed' | 'video' {
   if (ep?.link_m3u8) {
+    if (ep.link_embed && isStreamVsmovEmbedUrl(ep.link_embed)) return 'embed';
     if (!isHlsUrl(ep.link_m3u8)) return 'video';
+    if (shouldPreferEmbedOverDirectHls(ep)) return 'embed';
     if (shouldProxyHls(ep.link_m3u8)) return 'hls';
     if (ep.link_embed && isKnownCorsBlockedHls(ep.link_m3u8)) {
       return isIframeSource(ep.link_embed) ? 'embed' : 'video';
@@ -935,7 +971,7 @@ export default function PlayerBox({
                 onClick={() => setPlayerMode(isIframeSource(episode.link_embed) ? 'embed' : 'video')}
                 disabled={!isIframeSource(episode.link_embed) && !isDirectVideo(episode.link_embed)}
                 className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                  playerMode === 'video' ? 'bg-white/15 text-white' : 'text-white/35 hover:text-white/70'
+                  playerMode !== 'hls' ? 'bg-white/15 text-white' : 'text-white/35 hover:text-white/70'
                 }`}>
                 {isIframeSource(episode.link_embed) ? 'Nhúng' : 'MP4'}
               </button>

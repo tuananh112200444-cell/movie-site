@@ -1,5 +1,4 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { reportClientIssue } from '@/services/playerDiagnostics';
 
 const RECOVERY_KEY = 'kp_app_recovery_20260705_v1';
 const DOM_MUTATION_RECOVERY_KEY = 'kp_dom_mutation_recovery_20260705_v1';
@@ -36,6 +35,12 @@ function isChunkLoadError(error: unknown): boolean {
 function isExternalDomMutationError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '');
   return /Failed to execute '(insertBefore|removeChild)' on 'Node'|node before which the new node is to be inserted is not a child|node to be removed is not a child/i.test(message);
+}
+
+function reportClientIssue(eventType: 'chunk_load_error' | 'app_error', errorMessage: string): void {
+  void import('@/services/playerDiagnostics')
+    .then(({ reportClientIssue: report }) => report(eventType, errorMessage))
+    .catch(() => {});
 }
 
 async function clearBrowserCaches() {

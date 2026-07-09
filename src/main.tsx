@@ -3,14 +3,18 @@ import './i18n'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import { reportWebVitals } from './utils/performance'
-import { reportClientIssue } from './services/playerDiagnostics'
 import { pruneSmartClientCaches } from './utils/smartCache'
 
 const CLIENT_RELEASE_MARKER = '2026-07-05-cache-routes-v2';
 const rootElement = document.getElementById('root');
 
 pruneSmartClientCaches({ force: true });
+
+function reportClientIssue(eventType: string, errorMessage?: string): void {
+  void import('./services/playerDiagnostics')
+    .then(({ reportClientIssue: report }) => report(eventType as Parameters<typeof report>[0], errorMessage))
+    .catch(() => {});
+}
 
 if (!rootElement) {
   document.body.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><div><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang cap nhat</h1><p style="color:rgba(255,255,255,.72);margin:0 0 20px">Vui long tai lai trang de nhan phien ban moi nhat.</p><button onclick="location.reload()" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer">Tai lai</button></div></main>';
@@ -27,8 +31,8 @@ if (!rootElement) {
   }
 }
 
-// Report Core Web Vitals after render.
-reportWebVitals()
+// Report Core Web Vitals after render without making it part of the critical boot chunk.
+void import('./utils/performance').then(({ reportWebVitals }) => reportWebVitals()).catch(() => {});
 
 const STALE_TAB_RELOAD_MS = 30 * 60 * 1000;
 const STALE_TAB_RELOAD_KEY = 'kp_stale_tab_reload_v2';

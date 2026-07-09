@@ -46,8 +46,12 @@ function getServerDisplayName(srv: EpisodeServer, idx: number): string {
 
 function getAvailableEpisodeLabel(episodesCount: number, activeEp?: EpisodeData | null): string {
   const activeNumber = activeEp ? epSortKey(activeEp) : 0;
+  const activeName = activeEp?.name || '';
+  if (episodesCount === 1 && /\b\d+\s*[-~–—]\s*\d+\b/.test(activeName)) {
+    return `1 link phát gộp ${activeName}`;
+  }
   if (episodesCount === 1 && Number.isFinite(activeNumber) && activeNumber > 1) {
-    return '1 tập có sẵn';
+    return `1 link phát tới ${activeName || `Tập ${activeNumber}`}`;
   }
   return `${episodesCount} tập`;
 }
@@ -161,6 +165,16 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       () => getAvailableEpisodeLabel(mergedEpisodes.length || episodes.length, activeEp),
       [activeEp, episodes.length, mergedEpisodes.length],
     );
+    const singleLateEpisodeNumber = useMemo(() => {
+      if (mergedEpisodes.length !== 1) return 0;
+      const episodeNumber = epSortKey(mergedEpisodes[0].ep);
+      return Number.isFinite(episodeNumber) && episodeNumber > 1 ? episodeNumber : 0;
+    }, [mergedEpisodes]);
+    const singleRangeEpisodeLabel = useMemo(() => {
+      if (mergedEpisodes.length !== 1) return '';
+      const name = mergedEpisodes[0].ep.name || '';
+      return /\b\d+\s*[-~–—]\s*\d+\b/.test(name) ? name : '';
+    }, [mergedEpisodes]);
 
     const groups = useMemo(() => {
       const g: MergedEpisode[][] = [];
@@ -401,6 +415,24 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
               <span className="hidden sm:inline">{cinemaMode ? 'Thoát Cinema' : 'Cinema'}</span>
             </button>
           </div>
+
+          {(singleLateEpisodeNumber > 1 || singleRangeEpisodeLabel) && (
+            <div className="mb-3 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2.5 text-left sm:mb-4 sm:px-4">
+              <i className="ri-information-line mt-0.5 shrink-0 text-lg text-amber-300" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-amber-200 sm:text-sm">
+                  {singleRangeEpisodeLabel
+                    ? `Nguồn hiện trả 1 link phát gộp ${singleRangeEpisodeLabel}`
+                    : `Nguồn hiện chỉ trả 1 link phát tới Tập ${singleLateEpisodeNumber}`}
+                </p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-amber-100/65 sm:text-xs">
+                  {singleRangeEpisodeLabel
+                    ? 'BLVietsub đang gom nhiều tập trong một player, nên KhoPhim giữ đúng link thật thay vì tách nút tập giả. Khi nguồn trả link từng tập riêng, danh sách tập sẽ tự mở rộng.'
+                    : 'BLVietsub chưa trả danh sách link từng tập cho phim này, nên KhoPhim không tạo nút tập giả dễ gây lỗi phát. Khi nguồn trả đủ link thật, danh sách tập sẽ tự mở rộng.'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Trailer only */}
           {isTrailerOnly && (

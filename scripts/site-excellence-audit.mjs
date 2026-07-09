@@ -31,7 +31,7 @@ const CHECKS = [
     url: `${SITE_URL}/xem-phim-online`,
     maxMs: 1500,
     userAgent: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-    required: ['Xem Phim Online Vietsub HD', 'meta name="description"', 'rel="canonical"', 'SearchAction', 'Organization'],
+    required: ['Xem Phim Online Miễn Phí Vietsub HD', 'Xem phim online Vietsub HD miễn phí', 'meta name="description"', 'rel="canonical"', 'SearchAction', 'Organization', 'CollectionPage'],
   },
   {
     name: 'sitemap-index',

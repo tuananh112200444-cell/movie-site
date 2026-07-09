@@ -1,17 +1,59 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AppRoutes } from "./router";
 import { I18nextProvider } from "react-i18next";
 import i18n from "./i18n";
-import BackToTop from "./components/base/BackToTop";
 import OfflineIndicator from "./components/base/OfflineIndicator";
 import { ToastProvider } from "./components/base/Toast";
 import AnalyticsProvider from "./components/feature/AnalyticsProvider";
-import CatPawCursor from "./components/feature/CatPawCursor";
 import { ThemeProvider } from "./context/ThemeContext";
-import CWVMonitor from "./components/base/CWVMonitor";
 import AppErrorBoundary from "./components/base/AppErrorBoundary";
 import { warmPlayerSourceHealth } from "./services/playerSourceHealth";
+
+const BackToTop = lazy(() => import("./components/base/BackToTop"));
+const CatPawCursor = lazy(() => import("./components/feature/CatPawCursor"));
+const CWVMonitor = lazy(() => import("./components/base/CWVMonitor"));
+
+function useIdleReady(delayMs = 1800) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const win = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    let timer: number | null = null;
+    let idleId: number | null = null;
+
+    const markReady = () => setReady(true);
+    if (win.requestIdleCallback) {
+      idleId = win.requestIdleCallback(markReady, { timeout: delayMs });
+    } else {
+      timer = window.setTimeout(markReady, delayMs);
+    }
+
+    return () => {
+      if (idleId !== null) win.cancelIdleCallback?.(idleId);
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [delayMs]);
+
+  return ready;
+}
+
+function NonCriticalEnhancements() {
+  const ready = useIdleReady();
+  if (!ready) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <CatPawCursor />
+      <BackToTop />
+      <CWVMonitor />
+    </Suspense>
+  );
+}
 
 // ScrollProgressBar updates the DOM directly to avoid a React re-render on every scroll.
 function ScrollProgressBar() {
@@ -173,11 +215,9 @@ function App() {
             <ToastProvider>
               <AnalyticsProvider>
                 <OfflineIndicator />
-                <CatPawCursor />
                 <ScrollProgressBar />
                 <AnimatedContent />
-                <BackToTop />
-                <CWVMonitor />
+                <NonCriticalEnhancements />
               </AnalyticsProvider>
             </ToastProvider>
           </BrowserRouter>
