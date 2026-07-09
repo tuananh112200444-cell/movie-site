@@ -172,7 +172,10 @@ async function assertAppShellRecoveryClean() {
   const main = await readFile('src/main.tsx', 'utf8').catch(() => '');
   const offline = await readFile('src/components/base/OfflineIndicator.tsx', 'utf8').catch(() => '');
   if (!main.includes('removeLegacyServiceWorkers')) failures.push('src/main.tsx no longer removes legacy service workers.');
-  if (!main.includes('visible_after_stale')) failures.push('src/main.tsx no longer refreshes stale restored tabs.');
+  if (!main.includes('pruneSmartClientCaches({ force: true })')) failures.push('src/main.tsx no longer cleans stale restored tab caches.');
+  if (main.includes('reloadOnceForFreshShell') || main.includes('visible_after_stale')) {
+    failures.push('src/main.tsx should not auto-reload stale restored tabs; it must clean caches silently.');
+  }
   if (offline.includes('kp_probe') || offline.includes("fetch('/") || offline.includes('fetch(`${path}')) {
     failures.push('OfflineIndicator should not create same-origin network probes on focus/visibility.');
   }

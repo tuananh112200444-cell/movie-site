@@ -430,6 +430,12 @@ export default function PlayerBox({
   }, [episode?.link_m3u8, episode?.link_embed]);
   const hlsSrc = useMemo(() => getHlsProxyUrl(episode?.link_m3u8 ?? ''), [episode?.link_m3u8]);
   const streamIsHls = Boolean(episode?.link_m3u8 && isHlsUrl(episode.link_m3u8));
+  const effectivePlayerMode = useMemo<'hls' | 'embed' | 'video'>(() => {
+    if (playerMode === 'embed' && !embedSrc && episode?.link_m3u8) {
+      return isHlsUrl(episode.link_m3u8) ? 'hls' : 'video';
+    }
+    return playerMode;
+  }, [embedSrc, episode?.link_m3u8, playerMode]);
   const scheduledLeft = episode?.scheduled_target_at ? getTimeLeft(episode.scheduled_target_at, serverNow) : null;
   const activeServerName = allServers[activeServer]?.server_name ?? '';
   const activeSourceHost = useMemo(
@@ -452,11 +458,11 @@ export default function PlayerBox({
       episode_slug: episode?.slug,
       episode_name: episode?.name,
       server_name: activeServerName,
-      player_mode: playerMode,
+      player_mode: effectivePlayerMode,
       source_host: activeSourceHost,
       ...issue,
     });
-  }, [activeServerName, activeSourceHost, episode?.name, episode?.slug, movieSlug, movieTitle, playerMode]);
+  }, [activeServerName, activeSourceHost, effectivePlayerMode, episode?.name, episode?.slug, movieSlug, movieTitle]);
   useEffect(() => {
     if (directVideoRef.current) directVideoRef.current.playbackRate = directVideoSpeed;
   }, [directVideoSpeed, directVideoSrc]);
@@ -482,7 +488,7 @@ export default function PlayerBox({
 
   /* Iframe load timeout fallback */
   useEffect(() => {
-    if (playerMode !== 'embed' || !embedSrc) return;
+    if (effectivePlayerMode !== 'embed' || !embedSrc) return;
     setIframeLoaded(false);
     setIframeBlocked(false);
     if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
@@ -498,7 +504,7 @@ export default function PlayerBox({
     return () => {
       if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
     };
-  }, [activeServer, allServers, playerMode, embedSrc, iframeKey]);
+  }, [activeServer, allServers, effectivePlayerMode, embedSrc, iframeKey]);
 
   /* Auto-next on ended */
   const handleEnded = useCallback(() => {
@@ -546,7 +552,7 @@ export default function PlayerBox({
   }, [activeServer, activeSourceHost, allServers, episode?.slug, onSelectEp, onSwitchServer]);
 
   useEffect(() => {
-    if (!embedIsSourcePage || playerMode !== 'embed') return;
+    if (!embedIsSourcePage || effectivePlayerMode !== 'embed') return;
     const recoveryKey = `${movieSlug || movieTitle}:${episode?.slug || episode?.name || activeServer}`;
     if (sourcePageRecoveryKeyRef.current === recoveryKey) return;
     sourcePageRecoveryKeyRef.current = recoveryKey;
@@ -565,7 +571,7 @@ export default function PlayerBox({
     movieSlug,
     movieTitle,
     onRefetchMovie,
-    playerMode,
+    effectivePlayerMode,
     reportIssue,
     switchToFallbackServer,
   ]);
@@ -576,12 +582,12 @@ export default function PlayerBox({
       error_message: 'HLS fatal callback reached PlayerBox',
     });
     const embedUrl = episode?.link_embed;
-    if (embedUrl && !isBlvietsubWatchPageUrl(embedUrl) && playerMode === 'hls') {
+    if (embedUrl && !isBlvietsubWatchPageUrl(embedUrl) && effectivePlayerMode === 'hls') {
       setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
       return;
     }
     switchToFallbackServer();
-  }, [episode?.link_embed, playerMode, reportIssue, switchToFallbackServer]);
+  }, [effectivePlayerMode, episode?.link_embed, reportIssue, switchToFallbackServer]);
 
   const handleDirectVideoError = useCallback(() => {
     const video = directVideoRef.current;
@@ -592,12 +598,12 @@ export default function PlayerBox({
       error_message: 'direct video element error',
     });
     const embedUrl = episode?.link_embed ?? '';
-    if (embedUrl && !isBlvietsubWatchPageUrl(embedUrl) && isIframeSource(embedUrl) && playerMode !== 'embed') {
+    if (embedUrl && !isBlvietsubWatchPageUrl(embedUrl) && isIframeSource(embedUrl) && effectivePlayerMode !== 'embed') {
       setPlayerMode('embed');
       return;
     }
     switchToFallbackServer();
-  }, [episode?.link_embed, playerMode, reportIssue, switchToFallbackServer]);
+  }, [effectivePlayerMode, episode?.link_embed, reportIssue, switchToFallbackServer]);
 
   const handleDirectVideoStallFatal = useCallback((reason: string) => {
     const video = directVideoRef.current;
@@ -612,7 +618,7 @@ export default function PlayerBox({
   }, [reportIssue, switchToFallbackServer]);
 
   useEffect(() => {
-    if (playerMode !== 'video' || !directVideoSrc) return;
+    if (effectivePlayerMode !== 'video' || !directVideoSrc) return;
     const video = directVideoRef.current;
     if (!video) return;
 
@@ -705,16 +711,16 @@ export default function PlayerBox({
       clearStallTimer();
       stopMonitor();
     };
-  }, [directVideoSrc, handleDirectVideoStallFatal, playerMode, reportIssue]);
+  }, [directVideoSrc, effectivePlayerMode, handleDirectVideoStallFatal, reportIssue]);
 
   useEffect(() => {
-    if (!iframeBlocked || playerMode !== 'embed') return;
+    if (!iframeBlocked || effectivePlayerMode !== 'embed') return;
     reportIssue({
       event_type: 'iframe_blocked',
       error_message: 'embed iframe load timed out or failed',
     });
     switchToFallbackServer();
-  }, [iframeBlocked, playerMode, reportIssue, switchToFallbackServer]);
+  }, [effectivePlayerMode, iframeBlocked, reportIssue, switchToFallbackServer]);
 
   return (
     <div className="movie-player-box mb-2 relative">
@@ -746,7 +752,7 @@ export default function PlayerBox({
 
         {!episode?.is_scheduled && (
           <>
-        {playerMode === 'embed' && embedSrc && !iframeBlocked && (
+        {effectivePlayerMode === 'embed' && embedSrc && !iframeBlocked && (
           <div ref={embedContainerRef} className="aspect-video w-full relative group bg-black">
             {!iframeLoaded && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0c14]">
@@ -819,7 +825,7 @@ export default function PlayerBox({
           </div>
         )}
 
-        {playerMode === 'embed' && iframeBlocked && (
+        {effectivePlayerMode === 'embed' && iframeBlocked && (
           <div className="aspect-video w-full bg-[#0d0f1a] flex flex-col items-center justify-center gap-3">
             <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
               <i className="ri-shield-cross-line text-2xl text-red-400" />
@@ -844,7 +850,7 @@ export default function PlayerBox({
           </div>
         )}
 
-        {playerMode === 'embed' && !embedSrc && !iframeBlocked && (
+        {effectivePlayerMode === 'embed' && !embedSrc && !iframeBlocked && (
           <div className="aspect-video w-full bg-[#0d0f1a] flex items-center justify-center px-4">
             <div className="max-w-sm text-center">
               <i className={`${embedIsSourcePage ? 'ri-links-line' : 'ri-play-circle-line'} text-5xl text-white/10 mb-2 block`} />
@@ -868,7 +874,7 @@ export default function PlayerBox({
           </div>
         )}
 
-        {playerMode === 'hls' && (
+        {effectivePlayerMode === 'hls' && (
           <Suspense
             fallback={
               <div className="aspect-video w-full bg-[#0a0c14] flex flex-col items-center justify-center">
@@ -892,7 +898,7 @@ export default function PlayerBox({
           </Suspense>
         )}
 
-        {playerMode === 'video' && (
+        {effectivePlayerMode === 'video' && (
           <div ref={embedContainerRef} className="aspect-video w-full bg-black relative">
             <video
               key={`${directVideoSrc}-${iframeKey}`}
@@ -943,7 +949,7 @@ export default function PlayerBox({
       </div>
 
       {/* Control bar */}
-      {playerMode !== 'embed' && (
+      {effectivePlayerMode !== 'embed' && (
       <div className="movie-watch-topbar mt-2 flex items-center justify-between gap-2 px-2 py-2 flex-wrap lg:mt-3 lg:px-3">
         <div className="flex items-center gap-1.5 flex-wrap">
           <button onClick={onPrev} disabled={!hasPrev} title="Tập trước"
@@ -963,7 +969,7 @@ export default function PlayerBox({
             <div className="flex items-center gap-0.5 bg-black/25 border border-white/[0.08] rounded-xl p-0.5 ml-1">
               <button onClick={() => setPlayerMode('hls')}
                 className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                  playerMode === 'hls' ? 'bg-red-500 text-white' : 'text-white/35 hover:text-white/70'
+                  effectivePlayerMode === 'hls' ? 'bg-red-500 text-white' : 'text-white/35 hover:text-white/70'
                 }`}>
                 HLS
               </button>
@@ -971,13 +977,13 @@ export default function PlayerBox({
                 onClick={() => setPlayerMode(isIframeSource(episode.link_embed) ? 'embed' : 'video')}
                 disabled={!isIframeSource(episode.link_embed) && !isDirectVideo(episode.link_embed)}
                 className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                  playerMode !== 'hls' ? 'bg-white/15 text-white' : 'text-white/35 hover:text-white/70'
+                  effectivePlayerMode !== 'hls' ? 'bg-white/15 text-white' : 'text-white/35 hover:text-white/70'
                 }`}>
                 {isIframeSource(episode.link_embed) ? 'Nhúng' : 'MP4'}
               </button>
             </div>
           )}
-          {playerMode === 'video' && (
+          {effectivePlayerMode === 'video' && (
             <div className="flex items-center gap-0.5 bg-black/25 border border-white/[0.08] rounded-xl p-0.5 ml-1">
               {DIRECT_VIDEO_SPEEDS.map((speed) => (
                 <button
@@ -995,7 +1001,7 @@ export default function PlayerBox({
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          {playerMode === 'hls' && episode?.link_m3u8 && (
+          {effectivePlayerMode === 'hls' && episode?.link_m3u8 && (
             <span className="text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-md whitespace-nowrap">
               Chất lượng cao
             </span>
@@ -1006,7 +1012,7 @@ export default function PlayerBox({
           {episode && episode.name !== 'Full' && (
             <span className="text-[11px] bg-white/5 text-white/40 border border-white/8 px-2 py-0.5 rounded-md whitespace-nowrap">{episode.name}</span>
           )}
-          {playerMode === 'video' && (
+          {effectivePlayerMode === 'video' && (
             <button
               onClick={toggleEmbedFullscreen}
               title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}

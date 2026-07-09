@@ -158,7 +158,6 @@ function AnimatedContent() {
 
   return (
     <div
-      key={location.pathname}
       className="page-root"
       style={{ paddingTop: 'var(--kp-header-height, 140px)' }}
     >
