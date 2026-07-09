@@ -6,7 +6,6 @@ import {
   detectServerType,
   getServerTypeStyle,
   epSortKey,
-  getThumbUrl,
   hasPlayableUrl,
 } from '@/services/movieApi';
 import { useServerNow } from '@/hooks/useServerNow';
@@ -487,20 +486,14 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   </div>
                 ) : (
                   <div
-                    className="movie-player-frame relative aspect-video w-full rounded-2xl overflow-hidden cursor-pointer group"
+                    className="movie-player-frame aspect-video w-full rounded-2xl border border-white/[0.08] bg-[#080a12] px-4 text-center flex flex-col items-center justify-center gap-3 cursor-pointer group"
                     onClick={handleWatchNow}
                   >
-                    <img
-                      src={getThumbUrl(movie.thumb_url || movie.poster_url)}
-                      alt={movie.name}
-                      className="w-full h-full object-cover object-top scale-105 group-hover:scale-100 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                      <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-red-500/90 group-hover:bg-red-500 group-hover:scale-110 transition-all flex items-center justify-center">
-                        <i className="ri-play-fill text-2xl sm:text-4xl text-white ml-1" />
-                      </div>
-                      <p className="text-white font-bold text-sm sm:text-lg">{movie.name}</p>
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-red-500/90 group-hover:bg-red-500 group-hover:scale-105 transition-all flex items-center justify-center shadow-[0_0_35px_rgba(239,68,68,0.28)]">
+                      <i className="ri-play-fill text-3xl sm:text-4xl text-white ml-1" />
+                    </div>
+                    <div className="max-w-md">
+                      <p className="text-white font-bold text-sm sm:text-lg">Sẵn sàng phát phim</p>
                       <p className="text-white/60 text-xs">Nhấn để bắt đầu xem</p>
                     </div>
                   </div>
