@@ -21,6 +21,7 @@ import { injectPreloadLink, preloadBatch } from '../../utils/imagePreloader';
 import { movieDetailUrl } from '../../utils/slugEncoder';
 import { removeSmartSessionCache, setSmartSessionCache } from '../../utils/smartCache';
 import type { MovieItem } from '../../types/movie';
+import { useImageFallback } from '../../hooks/useImageFallback';
 
 // Lazy load bottom sections
 const FAQSection       = lazy(() => import('./components/FAQSection'));
@@ -305,47 +306,71 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
   if (movies.length === 0) return null;
 
   return (
-    <section className="mb-5 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-2.5 sm:hidden" aria-label="Phim đề xuất nhanh">
+    <section className="mb-5 rounded-[1.15rem] border border-white/[0.08] bg-[radial-gradient(circle_at_0%_0%,rgba(248,113,113,0.10),transparent_15rem),linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.055),0_16px_48px_-38px_rgba(0,0,0,0.9)] sm:hidden" aria-label="Phim đề xuất nhanh">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-red-500/25 bg-red-500/15 text-red-300">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/15 text-red-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
             <i className="ri-flashlight-line text-sm" />
           </span>
-          <h2 className="truncate text-base font-bold text-white">Xem ngay hôm nay</h2>
+          <h2 className="truncate text-base font-black tracking-tight text-white">Xem ngay hôm nay</h2>
         </div>
-        <Link to="/search" className="shrink-0 text-xs font-semibold text-white/45 active:text-white">
+        <Link to="/search" className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-white/52 active:text-white">
           Tìm thêm
         </Link>
       </div>
       <div className="grid grid-cols-3 gap-x-2.5 gap-y-3">
         {movies.slice(0, 6).map((movie, index) => {
-          const poster = getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 260, 82);
           return (
-            <Link key={`${movie.slug || movie._id}-${index}`} to={movieDetailUrl(movie.slug)} className="group block min-w-0 active:scale-[0.97]">
-              <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-[#16192a]">
-                <img
-                  src={poster}
-                  alt={movie.name}
-                  loading={index < 3 ? 'eager' : 'lazy'}
-                  fetchPriority={index < 3 ? 'high' : 'low'}
-                  decoding="async"
-                  className="h-full w-full object-cover object-top"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/10" />
-                {movie.episode_current && (
-                  <span className="absolute bottom-1.5 left-1.5 max-w-[calc(100%-12px)] truncate rounded bg-red-500/95 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                    {movie.episode_current}
-                  </span>
-                )}
-              </div>
-              <h3 className="mt-1.5 line-clamp-2 min-h-[32px] text-[11px] font-semibold leading-4 text-white/90">
-                {movie.name}
-              </h3>
-            </Link>
+            <MobileQuickMovieCard key={`${movie.slug || movie._id}-${index}`} movie={movie} index={index} />
           );
         })}
       </div>
     </section>
+  );
+}
+
+function MobileQuickMovieCard({ movie, index }: { movie: MovieItem; index: number }) {
+  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
+    getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 260, 82),
+    getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 260, 82),
+    false,
+    260,
+    82,
+    { preferredAspect: 'portrait' },
+  );
+
+  return (
+    <Link to={movieDetailUrl(movie.slug)} className="group block min-w-0 active:scale-[0.97]">
+      <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-[#16192a] ring-1 ring-white/[0.07]">
+        {!loaded && !hasError && <div className="absolute inset-0 animate-pulse bg-white/[0.06]" />}
+        {hasError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27]">
+            <i className="ri-image-line text-2xl text-white/20" />
+          </div>
+        )}
+        {!hasError && (
+          <img
+            src={currentSrc}
+            alt={movie.name}
+            loading={index < 3 ? 'eager' : 'lazy'}
+            fetchPriority={index < 3 ? 'high' : 'low'}
+            decoding="async"
+            className={`h-full w-full object-cover object-center transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+            onLoad={onLoad}
+            onError={onError}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-transparent to-black/8" />
+        {movie.episode_current && (
+          <span className="absolute bottom-1.5 left-1.5 max-w-[calc(100%-12px)] truncate rounded bg-red-500/95 px-1.5 py-0.5 text-[9px] font-bold text-white">
+            {movie.episode_current}
+          </span>
+        )}
+      </div>
+      <h3 className="mt-1.5 line-clamp-2 min-h-[32px] text-[11px] font-bold leading-4 text-white/92">
+        {movie.name}
+      </h3>
+    </Link>
   );
 }
 

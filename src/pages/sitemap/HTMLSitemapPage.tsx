@@ -51,7 +51,17 @@ const GENRE_NAMES: Record<string, string> = {
 };
 
 const SEO_PAGES = [
+  { name: 'Xem phim', path: '/xem-phim' },
   { name: 'Xem phim online', path: '/xem-phim-online' },
+  { name: 'Xem phim mới', path: '/xem-phim-moi' },
+  { name: 'Xem phim lẻ', path: '/xem-phim-le' },
+  { name: 'Xem phim bộ', path: '/xem-phim-bo' },
+  { name: 'Xem phim chiếu rạp', path: '/xem-phim-chieu-rap' },
+  { name: 'Xem phim Việt Nam', path: '/xem-phim-viet-nam' },
+  { name: 'Xem phim Hàn Quốc', path: '/xem-phim-han-quoc' },
+  { name: 'Xem phim Trung Quốc', path: '/xem-phim-trung-quoc' },
+  { name: 'Xem phim Âu Mỹ', path: '/xem-phim-au-my' },
+  { name: 'Xem anime Vietsub', path: '/xem-anime-vietsub' },
   { name: 'Phim Vietsub', path: '/phim-vietsub' },
   { name: 'Phim thuyết minh', path: '/phim-thuyet-minh' },
   { name: 'Phim lồng tiếng', path: '/phim-long-tieng' },

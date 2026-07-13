@@ -105,9 +105,9 @@ export default function Year2026Banner() {
         {/* Right - 3 poster cards with dramatic hover */}
         <div className="hidden md:flex items-center gap-3 flex-shrink-0 perspective-[800px]">
           {[
-            'https://readdy.ai/api/search-image?query=Cinematic%20movie%20poster%20for%20an%20epic%202026%20sci-fi%20action%20film%20dark%20moody%20background%20with%20neon%20orange%20and%20crimson%20red%20highlights%20mysterious%20hero%20silhouette%20dramatic%20lighting%20premium%20theatrical%20poster%20style%20clean%20minimalist%20design&width=200&height=280&seq=2026a&orientation=portrait',
-            'https://readdy.ai/api/search-image?query=romantic%20Thai%20GL%20drama%20series%20poster%202026%20two%20elegant%20Asian%20women%20standing%20close%20together%20soft%20warm%20lighting%20emotional%20intimate%20atmosphere%20pastel%20pink%20and%20cream%20tones%20dreamy%20bokeh%20background%20modern%20minimalist%20design%20love%20story%20aesthetic%20beautiful%20cinematic%20portrait%20composition&width=200&height=280&seq=fulfillBanner&orientation=portrait',
-            'https://readdy.ai/api/search-image?query=Cinematic%20movie%20poster%20for%20a%202026%20thriller%20mystery%20film%20dark%20noir%20style%20with%20deep%20shadows%20and%20red%20accent%20lighting%20suspenseful%20atmosphere%20premium%20movie%20marketing%20artwork%20clean%20modern%20typography%20dramatic%20contrast&width=200&height=280&seq=2026c&orientation=portrait',
+            '/images/movie-poster-fallback.svg',
+            '/images/movie-poster-fallback.svg',
+            '/images/movie-poster-fallback.svg',
           ].map((src, i) => (
             <div
               key={i}

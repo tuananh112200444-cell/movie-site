@@ -562,6 +562,83 @@ async function fetchSupabaseSection(
   }
 }
 
+function mergeSectionWithPriority(
+  priorityItems: Record<string, unknown>[],
+  sectionItems: Record<string, unknown>[],
+  limit: number,
+): Record<string, unknown>[] {
+  const seen = new Set<string>();
+  const merged: Record<string, unknown>[] = [];
+
+  for (const item of [...priorityItems, ...sectionItems]) {
+    const slug = String(item.slug || '').trim();
+    const id = String(item._id || '').trim();
+    const key = slug || id;
+    if (!key || seen.has(key)) continue;
+    if (isTrailerOnly(item.episode_current as string)) continue;
+    seen.add(key);
+    merged.push(item);
+    if (merged.length >= limit) break;
+  }
+
+  return merged;
+}
+
+function movieLooksAnimated(item: Record<string, unknown>): boolean {
+  const haystack = [
+    item.type,
+    item.name,
+    item.origin_name,
+    ...((item.category as unknown[]) ?? []),
+  ]
+    .map((value) => {
+      if (value && typeof value === 'object') {
+        const row = value as Record<string, unknown>;
+        return `${row.slug || ''} ${row.name || ''}`;
+      }
+      return String(value || '');
+    })
+    .join(' ')
+    .toLowerCase();
+
+  return /hoat[-\s]?hinh|animation|anime|cartoon|phim-hoat-hinh/.test(haystack);
+}
+
+async function fetchPlayableCobephimMovies(
+  supabase: ReturnType<typeof createClient>,
+  limit = 12,
+): Promise<Record<string, unknown>[]> {
+  try {
+    const normalizeRows = (movies: Record<string, unknown>[]): Record<string, unknown>[] => (
+      movies
+        .map((row) => cleanMovieItem({
+          ...row,
+          _id: row.id,
+          modified: { time: row.updated_at || new Date().toISOString() },
+          source_site: row.source_site || 'cobephim',
+          source_name: row.source_name || 'CobePhim StreamVSMov',
+        }, 'cobephim'))
+        .filter(Boolean)
+        .filter((movie) => !isTrailerOnly((movie as Record<string, unknown>).episode_current as string))
+    ) as Record<string, unknown>[];
+
+    const { data: taggedMovies, error: taggedError } = await supabase
+      .from('movies')
+      .select(HOME_SUPABASE_SELECT)
+      .eq('is_published', true)
+      .or('source_site.eq.cobephim,source_name.ilike.*CobePhim*,source_url.ilike.*cobephim*,showtimes.ilike.*cobephim*,source_url.ilike.*streamvsmov*,showtimes.ilike.*streamvsmov*')
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(limit * 2)
+      .abortSignal(timeoutSignal(1500));
+
+    if (taggedError || !taggedMovies?.length) return [];
+
+    return mergeSectionWithPriority(normalizeRows(taggedMovies as Record<string, unknown>[]), [], limit);
+  } catch {
+    return [];
+  }
+}
+
 async function fetchSection(
   supabase: ReturnType<typeof createClient>,
   typeOrCategory: string,
@@ -739,15 +816,6 @@ serve(async (req) => {
     });
   }
 
-  if (!forceRefresh) {
-    const staticFallback = await readStaticHomeFallback(requestedSections);
-    if (staticFallback) {
-      return jsonResponse({ status: true, source: 'static-fallback', sections: staticFallback }, 200, {
-        'Cache-Control': 'public, max-age=45',
-        'X-Cache': 'STATIC-FALLBACK',
-      });
-    }
-  }
   /* 3. Build requested sections in parallel with 3s timeout each */
   const limit = 18;
 
@@ -821,6 +889,41 @@ serve(async (req) => {
     );
   }
 
+  const playableCobephimMovies = await fetchPlayableCobephimMovies(supabase, 12);
+  if (playableCobephimMovies.length > 0) {
+    if (requestedSections.includes('trending')) {
+      freshSections.trending = mergeSectionWithPriority(
+        playableCobephimMovies,
+        freshSections.trending ?? [],
+        limit,
+      );
+    }
+
+    if (requestedSections.includes('phim-le')) {
+      freshSections['phim-le'] = mergeSectionWithPriority(
+        playableCobephimMovies.filter((movie) => ['single', 'phim-le'].includes(String(movie.type || '').toLowerCase())),
+        freshSections['phim-le'] ?? [],
+        limit,
+      );
+    }
+
+    if (requestedSections.includes('phim-bo')) {
+      freshSections['phim-bo'] = mergeSectionWithPriority(
+        playableCobephimMovies.filter((movie) => ['series', 'phim-bo'].includes(String(movie.type || '').toLowerCase())),
+        freshSections['phim-bo'] ?? [],
+        limit,
+      );
+    }
+
+    if (requestedSections.includes('hoat-hinh')) {
+      freshSections['hoat-hinh'] = mergeSectionWithPriority(
+        playableCobephimMovies.filter(movieLooksAnimated),
+        freshSections['hoat-hinh'] ?? [],
+        limit,
+      );
+    }
+  }
+
   const safeFreshSections = await enrichWithPlayableEpisodeCounts(supabase, freshSections);
 
   /* 5. Stale-while-revalidate: if OPhim returned nothing but cache exists, return stale */
@@ -832,6 +935,16 @@ serve(async (req) => {
       'Cache-Control': 'public, max-age=30',
       'X-Cache': 'STALE',
     });
+  }
+
+  if (!hasAnyFresh && !forceRefresh) {
+    const staticFallback = await readStaticHomeFallback(requestedSections);
+    if (staticFallback) {
+      return jsonResponse({ status: true, source: 'static-fallback', sections: staticFallback }, 200, {
+        'Cache-Control': 'public, max-age=45',
+        'X-Cache': 'STATIC-FALLBACK',
+      });
+    }
   }
 
   /* 6. Persist to cache.

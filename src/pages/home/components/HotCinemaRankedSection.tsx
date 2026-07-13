@@ -142,7 +142,7 @@ function RankedCard({ movie, rank, priority = false }: RankedCardProps) {
     crown: false,
   };
 
-  const posterUrl = getImageUrl(movie.poster_url || movie.thumb_url);
+  const posterUrl = getImageUrl(movie.thumb_url || movie.poster_url);
   const rating = (9.8 - (rank - 1) * 0.15 + Math.random() * 0.05).toFixed(1);
   const viewK = [12.5, 9.8, 8.2, 6.5, 5.1, 4.3, 3.6, 2.9, 2.3, 1.8, 1.4, 1.0][rank - 1] ?? 0.8;
   const eps = movie.episode_current || 'Full';
@@ -178,7 +178,7 @@ function RankedCard({ movie, rank, priority = false }: RankedCardProps) {
               alt={movie.name}
               loading={priority ? 'eager' : 'lazy'}
               className={`
-                w-full h-full object-cover object-top
+                w-full h-full object-cover object-center
                 transition-transform duration-200 ease-out
                 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}
                 group-hover:scale-105

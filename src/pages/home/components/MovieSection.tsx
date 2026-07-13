@@ -360,9 +360,9 @@ export default function MovieSection({
   return (
     <section ref={sectionRef} className="home-section-surface group/section mb-6 md:mb-10">
       {/* Header */}
-      <div className="reveal mb-3 flex items-center gap-2.5 px-0.5 md:mb-4 md:px-1">
+      <div className="reveal mb-3.5 flex items-center gap-2.5 px-0.5 md:mb-5 md:px-1">
         {/* Icon box â€” shape varies by theme */}
-        <div className={`relative hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder} md:flex`}>
+        <div className={`relative hidden h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder} shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_14px_32px_-22px_rgba(255,255,255,0.75)] md:flex`}>
           <i className={`${t.icon} ${t.iconText} text-sm`} />
           {/* Subtle pulse dot for trending */}
           {theme === 'trending' && (
@@ -371,16 +371,21 @@ export default function MovieSection({
         </div>
 
         <div className="flex-1 min-w-0">
-          <h3 className="truncate text-[1.05rem] font-black tracking-tight text-white md:text-2xl lg:text-[1.65rem]">
-            {title}
-          </h3>
-          <p className="home-section-eyebrow mt-1 hidden md:block">Lựa chọn phim mới, nổi bật và dễ xem nhất trong mục này</p>
+          <div className="flex min-w-0 items-center gap-2">
+            <h3 className={`truncate text-[1.08rem] font-black tracking-tight text-white md:text-2xl lg:text-[1.68rem] ${t.titleGradient}`}>
+              {title}
+            </h3>
+            <span className="hidden shrink-0 rounded-full border border-white/[0.08] bg-white/[0.045] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white/40 lg:inline-flex">
+              Mới cập nhật
+            </span>
+          </div>
+          <p className="home-section-eyebrow mt-1 hidden md:block">Chọn lọc phim mới, rõ ảnh, dễ xem và đang được quan tâm</p>
         </div>
 
         {/* View All â€” ghost pill with theme hover */}
         <Link
           to={viewAllLink}
-          className={`group/btn flex min-h-9 flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.09] bg-white/[0.04] px-3.5 py-2 text-xs font-bold text-white/68 transition-all duration-300 hover:bg-white/[0.08] active:scale-95 active:text-white ${t.btnHoverText}`}
+          className={`group/btn flex min-h-9 flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.10] bg-white/[0.045] px-3.5 py-2 text-xs font-bold text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 hover:bg-white/[0.09] hover:shadow-[0_12px_30px_-22px_rgba(255,255,255,0.8)] active:scale-95 active:text-white ${t.btnHoverText}`}
         >
           Xem tất cả
           <i className="ri-arrow-right-line text-xs transition-transform duration-300 group-hover/btn:translate-x-1" />
@@ -389,7 +394,7 @@ export default function MovieSection({
 
       {/* Grid â€” stagger delays tá»« CSS nth-child, khÃ´ng cáº§n inline style */}
       {!isDesktop ? (
-        <div className="grid grid-cols-3 gap-x-2.5 gap-y-4 pb-2 md:hidden">
+        <div className="grid grid-cols-3 gap-x-2.5 gap-y-[1.125rem] pb-2 md:hidden">
           {displayMovies.slice(0, 6).map((movie, index) => (
             <div
               key={`${movie._id}-mobile-${index}`}
@@ -405,7 +410,7 @@ export default function MovieSection({
         </div>
       ) : (
         <div className="home-rail-frame hidden md:block">
-          <div className="home-rail-scroll reveal flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-7 pt-2 scrollbar-hide md:gap-4 md:pb-8 lg:gap-4 xl:gap-5">
+          <div className="home-rail-scroll reveal flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-7 pt-2.5 scrollbar-hide md:gap-4 md:pb-8 lg:gap-4 xl:gap-5">
             {displayMovies.map((movie, index) => (
               <div
                 key={`${movie._id}-${index}`}

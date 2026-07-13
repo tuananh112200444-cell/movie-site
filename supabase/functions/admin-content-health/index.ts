@@ -17,6 +17,9 @@ type MovieRow = {
 type EpisodeRow = {
   movie_id: string;
   episode_number: number | null;
+  episode_name?: string | null;
+  episode_slug?: string | null;
+  slug?: string | null;
 };
 
 type StreamRow = {
@@ -85,9 +88,23 @@ function json(body: unknown, status: number, corsHeaders: Record<string, string>
 
 function getEpisodeNumberFromText(value: string | null | undefined): number {
   const text = String(value || '').toLowerCase();
-  if (/\b(full|hoan tat|complete|completed)\b/.test(text)) return 1;
+  const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
+  if (/\b(full|hoan tat|complete|completed)\b/.test(text)) {
+    const completed = [...text.matchAll(/(\d{1,5})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+    return completed.length ? Math.max(...completed) : 1;
+  }
   const nums = [...text.matchAll(/(\d{1,5})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
   return nums.length ? Math.max(...nums) : 0;
+}
+
+function playableEpisodeNumber(row: EpisodeRow): number {
+  return Math.max(
+    Number(row.episode_number || 0),
+    getEpisodeNumberFromText(row.episode_name),
+    getEpisodeNumberFromText(row.episode_slug),
+    getEpisodeNumberFromText(row.slug),
+  );
 }
 
 function advertisedEpisode(movie: MovieRow): number {
@@ -104,7 +121,7 @@ function movieName(movie: MovieRow): string {
 
 async function fetchPagedRows<T>(
   makeQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
-  maxRows = 20000,
+  maxRows = 50000,
   pageSize = 1000,
 ): Promise<T[]> {
   const rows: T[] = [];
@@ -115,6 +132,19 @@ async function fetchPagedRows<T>(
     const page = data ?? [];
     rows.push(...page);
     if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
+async function fetchRowsForMovieIds<T>(
+  movieIds: string[],
+  makeQuery: (ids: string[], from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+  batchSize = 10,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let index = 0; index < movieIds.length; index += batchSize) {
+    const ids = movieIds.slice(index, index + batchSize);
+    rows.push(...await fetchPagedRows<T>((from, to) => makeQuery(ids, from, to)));
   }
   return rows;
 }
@@ -283,27 +313,27 @@ Deno.serve(async (req) => {
     const movieIds = movieRows.map((movie) => movie.id);
 
     const [episodeRows, adminEpisodeRows, streamRows] = movieIds.length > 0 ? await Promise.all([
-      fetchPagedRows<EpisodeRow>((from, to) =>
+      fetchRowsForMovieIds<EpisodeRow>(movieIds, (ids, from, to) =>
         supabase
           .from('episodes')
-          .select('movie_id,episode_number')
-          .in('movie_id', movieIds)
+          .select('movie_id,episode_number,episode_name,episode_slug')
+          .in('movie_id', ids)
           .gt('episode_number', 0)
           .range(from, to)
       ),
-      fetchPagedRows<EpisodeRow>((from, to) =>
+      fetchRowsForMovieIds<EpisodeRow>(movieIds, (ids, from, to) =>
         supabase
           .from('movie_episodes')
-          .select('movie_id,episode_number')
-          .in('movie_id', movieIds)
+          .select('movie_id,episode_number,episode_name,slug')
+          .in('movie_id', ids)
           .gt('episode_number', 0)
           .range(from, to)
       ),
-      fetchPagedRows<StreamRow>((from, to) =>
+      fetchRowsForMovieIds<StreamRow>(movieIds, (ids, from, to) =>
         supabase
           .from('streams')
           .select('movie_id,episode_slug,stream_url,embed_url,is_active')
-          .in('movie_id', movieIds)
+          .in('movie_id', ids)
           .eq('is_active', true)
           .range(from, to)
       ),
@@ -311,7 +341,7 @@ Deno.serve(async (req) => {
 
     const playableByMovie = new Map<string, number>();
     for (const row of [...episodeRows, ...adminEpisodeRows]) {
-      playableByMovie.set(row.movie_id, Math.max(playableByMovie.get(row.movie_id) || 0, Number(row.episode_number || 0)));
+      playableByMovie.set(row.movie_id, Math.max(playableByMovie.get(row.movie_id) || 0, playableEpisodeNumber(row)));
     }
     for (const row of streamRows) {
       if (!String(row.stream_url || row.embed_url || '').trim()) continue;
@@ -376,6 +406,12 @@ Deno.serve(async (req) => {
       action_items: buildActionItems({ missingImages, noPlayable, episodeMismatches, homeAudit, searchAudit }),
     }, 200, corsHeaders);
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : String(error) }, 500, corsHeaders);
+    let message = '';
+    try {
+      message = error instanceof Error ? error.message : JSON.stringify(error);
+    } catch {
+      message = String(error);
+    }
+    return json({ error: message || String(error) }, 500, corsHeaders);
   }
 });

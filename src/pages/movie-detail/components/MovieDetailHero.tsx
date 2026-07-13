@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import type { MovieDetail } from '@/types/movie';
-import { getPosterUrl, getThumbUrl, getMovieDisplayName } from '@/services/movieApi';
+import { getPosterUrl, getThumbUrl, getMovieDisplayName, getOptimizedImageSrcSet } from '@/services/movieApi';
 import MovieCountdown from '@/components/base/MovieCountdown';
 
 interface Props {
@@ -302,13 +302,16 @@ function buildMovieSchema({
 export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, hasEpisodes, onFavToggle, onWatchNow }: Props) {
   const [showDesc, setShowDesc] = useState(false);
 
-  const poster = useMemo(() => getPosterUrl(movie.poster_url || movie.thumb_url), [movie.poster_url, movie.thumb_url]);
-  const thumb = useMemo(() => getThumbUrl(movie.thumb_url), [movie.thumb_url]);
+  const posterPath = movie.thumb_url || movie.poster_url;
+  const backdropPath = movie.poster_url || movie.thumb_url;
+  const poster = useMemo(() => getPosterUrl(posterPath), [posterPath]);
+  const thumb = useMemo(() => getThumbUrl(backdropPath), [backdropPath]);
 
   const displayTitle = getMovieDisplayName(movie);
   const displayOrigin = movie.title_en?.trim() || movie.origin_name;
   const displayChinese = movie.title_zh?.trim();
   const displayEpisodeTotal = getDisplayEpisodeTotal(movie);
+  const cleanContent = useMemo(() => stripHtml(movie.content || ''), [movie.content]);
 
   const seoTitle = useMemo(() => buildCtrMovieTitle(movie, displayTitle), [movie, displayTitle]);
   const seoDesc = useMemo(() => {
@@ -349,7 +352,18 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
 
       <div className="relative pt-16">
         <div className="absolute inset-0 overflow-hidden h-[200px] sm:h-[280px] md:h-[320px]">
-          <img src={thumb} alt={displayTitle} width="1920" height="320" className="w-full h-full object-cover object-top opacity-15" loading="eager" />
+          <img
+            src={thumb}
+            srcSet={backdropPath ? getOptimizedImageSrcSet(backdropPath, [760, 1120, 1440], 84) : undefined}
+            sizes="100vw"
+            alt={displayTitle}
+            width="1920"
+            height="320"
+            className="w-full h-full object-cover object-center opacity-15"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+          />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0f1117]/50 to-[#0f1117]" />
         </div>
 
@@ -371,7 +385,18 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
             {/* Poster */}
             <div className="flex-shrink-0">
               <div className="relative w-24 sm:w-40 md:w-52 rounded-xl overflow-hidden bg-[#1a1d27]" style={{ aspectRatio: '2/3' }}>
-                <img src={poster} alt={displayTitle} width="400" height="600" className="w-full h-full object-cover object-top" loading="eager" />
+                <img
+                  src={poster}
+                  srcSet={posterPath ? getOptimizedImageSrcSet(posterPath, [220, 360, 520], 86) : undefined}
+                  sizes="(min-width: 768px) 208px, (min-width: 640px) 160px, 96px"
+                  alt={displayTitle}
+                  width="400"
+                  height="600"
+                  className="w-full h-full object-cover object-center"
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                />
                 {isTrailerOnly && (
                   <div className="absolute inset-0 flex items-end">
                     <div className="w-full bg-gradient-to-t from-orange-900/90 to-transparent pt-8 pb-2 px-2 text-center">
@@ -482,10 +507,10 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
                 )}
               </div>
 
-              {movie.content && (
+              {cleanContent && (
                 <div className="mt-1 sm:mt-2">
-                  <p className={`text-white/55 text-xs sm:text-sm leading-[1.7] sm:leading-relaxed ${showDesc ? '' : 'line-clamp-3'}`}>{movie.content}</p>
-                  {movie.content.length > 150 && (
+                  <p className={`text-white/55 text-xs sm:text-sm leading-[1.7] sm:leading-relaxed ${showDesc ? '' : 'line-clamp-3'}`}>{cleanContent}</p>
+                  {cleanContent.length > 150 && (
                     <button onClick={() => setShowDesc((v) => !v)}
                       className="text-red-400 text-xs mt-1 hover:text-red-300 cursor-pointer whitespace-nowrap flex items-center gap-1 transition-colors">
                       <i className={showDesc ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} />

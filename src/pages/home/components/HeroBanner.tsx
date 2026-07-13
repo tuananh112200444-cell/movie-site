@@ -69,7 +69,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
   if (featured.length === 0) return null;
 
   const active = featured[activeIndex];
-  const activePosterUrl = getOptimizedImageUrl(active?.poster_url || active?.thumb_url, 1000, 86);
+  const activePosterUrl = getOptimizedImageUrl(active?.thumb_url || active?.poster_url, 620, 86);
   const rating = getStableRating(active.name ?? '');
   const viewCount = getViewCount(active.name ?? '');
   const activeDetailHref = getMovieDetailHref(active);
@@ -84,14 +84,14 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       {/* Only render active + next slides to reduce initial DOM & image count */}
       <MemoSlideBackground
         key={active._id}
-        src={getOptimizedImageUrl(active.poster_url || active.thumb_url, 1400, 86)}
+        src={getOptimizedImageUrl(active.poster_url || active.thumb_url, 1360, 84)}
         alt={active.name}
         active={true}
         priority={true}
       />
       <MemoSlideBackground
         key={featured[nextIndex]._id}
-        src={getOptimizedImageUrl(featured[nextIndex].poster_url || featured[nextIndex].thumb_url, 1400, 86)}
+        src={getOptimizedImageUrl(featured[nextIndex].poster_url || featured[nextIndex].thumb_url, 1120, 82)}
         alt={featured[nextIndex].name}
         active={false}
         priority={false}
@@ -317,8 +317,8 @@ const MemoHeroPosterCard = memo(function HeroPosterCard({ src, alt, href, qualit
   const [loaded, setLoaded] = useState(isImagePreloaded(src));
   const [imgError, setImgError] = useState(false);
   return (
-    <Link to={href} className="group relative block w-[170px] xl:w-[205px] 2xl:w-[230px]" style={{ aspectRatio: '2/3' }}>
-      <div className="relative w-full h-full rounded-2xl overflow-hidden bg-[#16192a]" style={{ boxShadow: '0 16px 40px rgba(0,0,0,0.6), 0 6px 16px rgba(0,0,0,0.4)' }}>
+    <Link to={href} className="group relative block w-[188px] xl:w-[224px] 2xl:w-[252px]" style={{ aspectRatio: '2/3' }}>
+      <div className="relative h-full w-full overflow-hidden rounded-[1.35rem] bg-[#16192a] ring-1 ring-white/12 transition-[transform,box-shadow,ring-color] duration-500 group-hover:-translate-y-1 group-hover:ring-white/25" style={{ boxShadow: '0 26px 72px rgba(0,0,0,0.62), 0 10px 28px rgba(0,0,0,0.45)' }}>
         {/* BLUR PLACEHOLDER — hiển thị NGAY LẬP TỨC */}
         <div className={`absolute inset-0 blur-placeholder z-[1] transition-opacity duration-700 ${loaded ? 'opacity-0' : 'opacity-100'}`} />
         {imgError && (
@@ -333,26 +333,26 @@ const MemoHeroPosterCard = memo(function HeroPosterCard({ src, alt, href, qualit
           height={240}
           loading="lazy"
           decoding="async"
-          className={`w-full h-full object-cover object-center transition-all duration-700 group-hover:scale-105 ${loaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-          style={{ filter: imgError ? undefined : 'contrast(1.05) saturate(1.1)' }}
+          className={`w-full h-full object-cover object-center transition-all duration-700 group-hover:scale-[1.035] ${loaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
+          style={{ filter: imgError ? undefined : 'contrast(1.04) saturate(1.08)' }}
           onLoad={() => { setLoaded(true); markImagePreloaded(src); }}
           onError={() => { setImgError(true); setLoaded(true); }}
         />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pt-10 pb-3 px-3 z-[2]">
-          <p className="text-white text-xs font-bold leading-tight line-clamp-2 drop-shadow">{alt}</p>
+        <div className="absolute inset-x-0 bottom-0 z-[2] bg-gradient-to-t from-black/92 via-black/45 to-transparent px-3.5 pb-3.5 pt-12">
+          <p className="text-sm font-extrabold leading-snug text-white line-clamp-2 drop-shadow">{alt}</p>
         </div>
         {quality && (
           <div className="absolute top-2.5 right-2.5 z-[3]">
             <span className="text-[9px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded tracking-wider uppercase">{quality}</span>
           </div>
         )}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/30 z-[3]">
-          <div className="w-14 h-14 flex items-center justify-center bg-red-500/90 rounded-full">
-            <i className="ri-play-fill text-white text-2xl ml-1" />
+        <div className="absolute inset-0 z-[3] flex items-center justify-center bg-black/24 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-black shadow-[0_16px_40px_-18px_rgba(255,255,255,0.95)]">
+            <i className="ri-play-fill ml-1 text-2xl" />
           </div>
         </div>
       </div>
-      <div className="absolute -bottom-2 left-3 right-3 h-5 bg-black/20 blur-xl rounded-full" />
+      <div className="absolute -bottom-3 left-5 right-5 h-6 rounded-full bg-black/30 blur-2xl" />
     </Link>
   );
 });

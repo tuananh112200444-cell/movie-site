@@ -565,7 +565,7 @@ async function fetchJSON<T>(url: string, timeoutMs = 10000, signal?: AbortSignal
    IMAGE URL helpers  (giữ nguyên)
    ════════════════════════════════════════════ */
 const imgUrlCache = new Map<string, string>();
-const FALLBACK_IMG = 'https://readdy.ai/api/search-image?query=professional%20movie%20poster%20dark%20cinematic%20background%20dramatic%20lighting%20film%20noir%20style%20minimal%20elegant%20vertical%20composition&width=300&height=450&seq=fallback99&orientation=portrait';
+const FALLBACK_IMG = '/images/movie-poster-fallback.svg';
 
 export function getMovieDisplayName(item: {
   name?: string;
@@ -596,6 +596,7 @@ export function getImageUrl(path: string): string {
   } else {
     url = `${IMG_BASE}${path}`;
   }
+  url = url.replace(/^https?:\/\/rophimk\.online\/upload\//i, 'https://phimimg.com/upload/');
   imgUrlCache.set(path, url);
   return url;
 }
@@ -609,6 +610,8 @@ export function getOptimizedImageUrl(path: string, width = 360, quality = 82): s
   const original = getImageUrl(path);
   if (!OPTIMIZE_ENABLED || !original || original === FALLBACK_IMG) return original;
   if (original.includes('wsrv.nl/?url=')) return original;
+  if (/^https?:\/\/icdn\.darkbytes\.xyz\//i.test(original)) return original;
+  if (shouldBypassImageProxy(original)) return original;
   // wsrv.nl free image proxy — resize + compress + WebP auto
   const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth || 1440;
   const dpr = typeof window === 'undefined' ? 1.5 : Math.min(window.devicePixelRatio || 1, 2);
@@ -623,6 +626,14 @@ export function getOptimizedImageUrl(path: string, width = 360, quality = 82): s
   return `https://wsrv.nl/?url=${encoded}&w=${safeWidth}&q=${safeQuality}&output=webp&fit=cover&we`;
 }
 
+export function getOptimizedImageSrcSet(path: string, widths: number[], quality = 82): string {
+  const uniqueWidths = Array.from(new Set(widths.filter((w) => Number.isFinite(w) && w > 0)))
+    .sort((a, b) => a - b);
+  return uniqueWidths
+    .map((width) => `${getOptimizedImageUrl(path, width, quality)} ${width}w`)
+    .join(', ');
+}
+
 function getOriginalImageFromProxy(url: string): string | null {
   if (!url.includes('wsrv.nl/?url=')) return null;
   try {
@@ -635,6 +646,10 @@ function getOriginalImageFromProxy(url: string): string | null {
 
 function isVolatileOphimVodImage(url: string): boolean {
   return /img\.ophim\.live\/uploads\/movies\/upload\/vod\//i.test(url);
+}
+
+function shouldBypassImageProxy(url: string): boolean {
+  return /^https?:\/\/(image\.tmdb\.org|blogger\.googleusercontent\.com|[^/]+\.bp\.blogspot\.com|i\.ibb\.co|pic1\.iqiyipic\.com|vcover-hz-pic\.wetvinfo\.com)\//i.test(url);
 }
 
 export function getImageFallbacks(primaryPath?: string, altPath?: string): string[] {
@@ -666,9 +681,24 @@ export function getOptimizedImageFallbacks(
   width = 620,
   quality = 88,
 ): string[] {
-  return getImageFallbacks(primaryPath, altPath).map((url) =>
-    url === FALLBACK_IMG ? url : getOptimizedImageUrl(url, width, quality)
-  );
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const pushUrl = (url?: string | null) => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    urls.push(url);
+  };
+
+  for (const url of getImageFallbacks(primaryPath, altPath)) {
+    if (url === FALLBACK_IMG) {
+      pushUrl(url);
+      continue;
+    }
+    pushUrl(getOptimizedImageUrl(url, width, quality));
+    pushUrl(url);
+  }
+
+  return urls.length ? urls : [FALLBACK_IMG];
 }
 
 export function getPosterUrl(path: string): string {
@@ -2864,8 +2894,10 @@ async function enrichMoviesWithSupabaseEpisodeCounts(items: MovieItem[], signal?
     if (maxByMovieId.size === 0) return items;
     return items.map((item) => {
       const liveMax = maxByMovieId.get(item._id) || 0;
-      const currentMax = Math.max(Number(item.current_episode || 0), getEpisodeNumberFromText(item.episode_current));
-      if (!liveMax || !currentMax || liveMax === currentMax) return item;
+      const labelMax = getEpisodeNumberFromText(item.episode_current);
+      const currentMax = Math.max(Number(item.current_episode || 0), labelMax);
+      if (!liveMax || (!currentMax && liveMax === labelMax)) return item;
+      if (liveMax === currentMax && labelMax >= liveMax) return item;
       return normalizeMovieEpisodeCounts({
         ...item,
         episode_current: `Tập ${liveMax}`,
@@ -3246,20 +3278,23 @@ async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailRe
 }
 
 export async function fetchMovieDetail(slug: string, forceRefresh = false, source?: string): Promise<MovieDetailResponse | null> {
-  const cacheKey = `detail_v6_${slug}`;
+  const detailSourceKey = source || 'default';
+  const cacheKey = `detail_v7_${detailSourceKey}_${slug}`;
+  const inflightKey = `${detailSourceKey}:${slug}`;
   // Xóa cache key cũ nếu còn sót
   apiCache.delete(`detail_${slug}`);
   apiCache.delete(`detail_v2_${slug}`);
   apiCache.delete(`detail_v3_${slug}`);
   apiCache.delete(`detail_v4_${slug}`);
   apiCache.delete(`detail_v5_${slug}`);
+  apiCache.delete(`detail_v6_${slug}`);
 
   const ttl = TTL_CONFIG.detail;
   const cached = getCached<MovieDetailResponse>(cacheKey, ttl);
 
   if (cached && !cached.stale && !forceRefresh && cached.data && detailHasPlayableEpisodes(cached.data)) return cached.data;
 
-  const inflight = detailInflight.get(slug);
+  const inflight = detailInflight.get(inflightKey);
   if (inflight && !forceRefresh) return inflight;
 
   if (forceRefresh) {
@@ -3269,7 +3304,8 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     apiCache.delete(`detail_v3_${slug}`);
     apiCache.delete(`detail_v4_${slug}`);
     apiCache.delete(`detail_v5_${slug}`);
-    detailInflight.delete(slug);
+    apiCache.delete(`detail_v6_${slug}`);
+    detailInflight.delete(inflightKey);
   }
 
   const promise = (async (): Promise<MovieDetailResponse | null> => {
@@ -3295,9 +3331,9 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
       const quickPlayable = await raceFirstValidWithTimeout(
         [
-          ophimPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
-          sbPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
           proxyPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
+          sbPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
+          ...(looksLikeCjk ? [ophimPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null)] : []),
         ],
         3500
       );
@@ -3311,7 +3347,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
           }
           refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, ophimPromise);
         }
-        if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using quick playable source for "${slug}" (source=ophim/CJK)`);
+        if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using fresh stored/proxy source for "${slug}" (source=ophim/CJK)`);
         const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900, slug);
         setCached(cacheKey, mergedQuick);
         return mergedQuick;
@@ -3408,8 +3444,9 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
   
     ];
 
-    // For OPhim source: prioritize OPhim data
-    if (preferOphim && ophim && detailHasPlayableEpisodes(ophim)) {
+    // Only CJK/non-ASCII slugs need direct OPhim priority. A source=ophim query
+    // can point at stale upstream data, so stored/proxy data must win when newer.
+    if (looksLikeCjk && ophim && detailHasPlayableEpisodes(ophim)) {
       if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using OPhim as priority source for "${slug}" (source=ophim/CJK)`);
       void fetchMovieDetailFromProxy(slug, true).catch(() => null);
       setCached(cacheKey, ophim);
@@ -3470,9 +3507,9 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     // ── STEP 6: Truly not found on any source ──
     console.warn(`[fetchMovieDetail] ALL sources failed for slug: "${slug}"`);
     return null;
-  })().finally(() => detailInflight.delete(slug));
+  })().finally(() => detailInflight.delete(inflightKey));
 
-  detailInflight.set(slug, promise);
+  detailInflight.set(inflightKey, promise);
   return promise;
 }
 

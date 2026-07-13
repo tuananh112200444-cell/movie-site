@@ -49,7 +49,12 @@ const GENRE_LINKS = [
 ];
 
 const SEO_LANDING_LINKS = [
+  { label: 'Xem Phim', to: '/xem-phim', icon: 'ri-movie-line' },
   { label: 'Xem Phim Online', to: '/xem-phim-online', icon: 'ri-play-circle-line' },
+  { label: 'Xem Phim Mới', to: '/xem-phim-moi', icon: 'ri-flashlight-line' },
+  { label: 'Xem Phim Chiếu Rạp', to: '/xem-phim-chieu-rap', icon: 'ri-movie-2-line' },
+  { label: 'Xem Phim Việt Nam', to: '/xem-phim-viet-nam', icon: 'ri-flag-line' },
+  { label: 'Xem Anime Vietsub', to: '/xem-anime-vietsub', icon: 'ri-gamepad-line' },
   { label: 'Phim Hay', to: '/phim-hay', icon: 'ri-star-line' },
   { label: 'Phim 2026', to: '/phim-2026', icon: 'ri-calendar-line' },
   { label: 'Phim 2025', to: '/phim-2025', icon: 'ri-calendar-line' },

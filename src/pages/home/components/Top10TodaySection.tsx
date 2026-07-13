@@ -95,7 +95,7 @@ function Top10Card({ movie, rank }: CardProps) {
           fetchPriority="low"
           className={`w-full h-full object-cover object-top transition-all duration-300 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-          onLoad={() => { onLoad(); }}
+          onLoad={onLoad}
           onError={onError}
         />
 
@@ -195,8 +195,8 @@ function SkeletonCard() {
 
 function MobileTop10Card({ movie, rank }: CardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 420, 88),
     getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 420, 88),
+    getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 420, 88),
   );
   const epBadge = getEpBadge(movie.episode_current);
   const rc = RANK_CFG[rank] ?? DEFAULT_RANK;
@@ -218,7 +218,7 @@ function MobileTop10Card({ movie, rank }: CardProps) {
           alt={movie.name}
           loading="lazy"
           fetchPriority="low"
-          className={`h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
+          className={`h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.04) saturate(1.1)' }}
           onLoad={onLoad}
           onError={onError}
@@ -245,7 +245,7 @@ function MobileTop10Card({ movie, rank }: CardProps) {
           </span>
         )}
       </div>
-      <p className="mt-1.5 h-[30px] text-[11px] font-semibold leading-snug text-white/85 line-clamp-2 group-hover:text-red-400">
+      <p className="mt-1.5 min-h-[34px] text-[11px] font-semibold leading-[17px] text-white/85 line-clamp-2 group-hover:text-red-400">
         {movie.name}
       </p>
     </Link>

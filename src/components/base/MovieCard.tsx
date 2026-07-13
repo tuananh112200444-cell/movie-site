@@ -71,15 +71,24 @@ function getDisplayTime(movie: MovieItem): string | null {
 /* ─────────────────────────────────────────
    DEFAULT CARD
 ───────────────────────────────────────── */
+function getVerticalPosterPaths(movie: MovieItem): { primary?: string; fallback?: string } {
+  // Most sources store portrait covers in thumb_url and wide backdrops in poster_url.
+  const primary = movie.thumb_url || movie.poster_url;
+  const fallback = movie.poster_url && movie.poster_url !== primary ? movie.poster_url : undefined;
+  return { primary, fallback };
+}
+
 function DefaultCard({ movie, priority }: MovieCardProps) {
   // Use optimized image for homepage cards to reduce bandwidth
-  const posterPath = movie.poster_url || movie.thumb_url;
-  const fallbackPath = movie.thumb_url || movie.poster_url;
+  const { primary: posterPath, fallback: fallbackPath } = getVerticalPosterPaths(movie);
   
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
     posterPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
+    420,
+    84,
+    { preferredAspect: 'portrait' },
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -142,9 +151,9 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'low'}
             decoding="async"
-            className={`h-full w-full object-cover object-top transition-[opacity,transform,filter] duration-500 group-hover:scale-[1.035] ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-            style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-            onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
+            className={`h-full w-full object-cover object-center transition-[opacity,transform,filter] duration-500 group-hover:scale-[1.025] ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
+            style={{ filter: 'contrast(1.03) saturate(1.08)' }}
+            onLoad={(event) => { onLoad(event); markImagePreloaded(currentSrc); }}
             onError={onError}
           />
 
@@ -240,13 +249,15 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
    RANK CARD
 ───────────────────────────────────────── */
 function DefaultCardV2({ movie, priority }: MovieCardProps) {
-  const posterPath = movie.poster_url || movie.thumb_url;
-  const fallbackPath = movie.thumb_url || movie.poster_url;
+  const { primary: posterPath, fallback: fallbackPath } = getVerticalPosterPaths(movie);
 
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
     posterPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
+    480,
+    84,
+    { preferredAspect: 'portrait' },
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rating = useMemo(() => (7 + Math.abs(movie.name.charCodeAt(0) % 3) * 0.5).toFixed(1), [movie.name]);
@@ -287,8 +298,8 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="relative flex h-full flex-col rounded-2xl p-1 transition-[transform,box-shadow,background-color] duration-300 ease-out md:hover:z-30 md:hover:-translate-y-1 md:hover:bg-white/[0.05] md:hover:shadow-[0_22px_54px_-28px_rgba(0,0,0,0.95)]">
-        <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-xl bg-[#151824] ring-1 ring-white/[0.06] transition-[ring-color,box-shadow] duration-300 group-hover:ring-white/[0.18] group-hover:shadow-[0_18px_44px_-32px_rgba(255,255,255,0.75)]">
+      <div className="relative flex h-full flex-col rounded-xl p-0.5 transition-[transform,box-shadow,background-color] duration-300 ease-out md:hover:z-30 md:hover:-translate-y-1 md:hover:bg-white/[0.035] md:hover:shadow-[0_18px_44px_-28px_rgba(0,0,0,0.88)]">
+        <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg bg-[#151824] ring-1 ring-white/[0.06] transition-[ring-color,box-shadow] duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_16px_36px_-30px_rgba(255,255,255,0.62)]">
           <div className={`absolute inset-0 z-[1] blur-placeholder transition-opacity duration-500 ${imgLoaded ? 'opacity-0' : 'opacity-100'}`} />
           {imgError && (
             <div className="absolute inset-0 z-[1] flex items-center justify-center bg-[#1a1d27]">
@@ -304,35 +315,35 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'low'}
             decoding="async"
-            className={`h-full w-full object-cover object-top transition-[opacity,transform,filter] duration-500 group-hover:scale-[1.035] ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-            style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-            onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
+            className={`h-full w-full object-cover object-center transition-[opacity,transform,filter] duration-500 group-hover:scale-[1.025] ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
+            style={{ filter: 'contrast(1.03) saturate(1.08)' }}
+            onLoad={(event) => { onLoad(event); markImagePreloaded(currentSrc); }}
             onError={onError}
           />
 
-          <div className="pointer-events-none absolute inset-0 z-[2] bg-[linear-gradient(180deg,rgba(0,0,0,0.18)_0%,rgba(0,0,0,0)_28%,rgba(0,0,0,0.18)_63%,rgba(0,0,0,0.82)_100%)]" />
+          <div className="pointer-events-none absolute inset-0 z-[2] bg-[linear-gradient(180deg,rgba(0,0,0,0.12)_0%,rgba(0,0,0,0)_34%,rgba(0,0,0,0.12)_68%,rgba(0,0,0,0.72)_100%)]" />
 
           <div className="absolute left-1.5 right-1.5 top-1.5 z-[3] flex items-start justify-between gap-1 sm:left-2 sm:right-2 sm:top-2">
             <div className="flex min-w-0 flex-col gap-1">
-              {isNew && <span className="w-fit rounded-md bg-gradient-to-r from-red-500 to-red-600 px-1.5 py-0.5 text-[9px] font-black leading-none tracking-wide text-white shadow-sm ring-1 ring-white/10">MOI</span>}
+              {isNew && <span className="w-fit rounded-md bg-gradient-to-r from-red-500 to-red-600 px-1.5 py-0.5 text-[9px] font-black leading-none tracking-wide text-white shadow-sm ring-1 ring-white/10">Mới</span>}
               <MovieCountdown movie={movie} />
               {getEpisodeBadge(movie.episode_current)}
             </div>
             {movie.quality && (
-              <span className="rounded-md border border-white/10 bg-black/60 px-1.5 py-0.5 text-[8px] font-black leading-none tracking-wider text-white/90 backdrop-blur-sm sm:text-[9px]">
+              <span className="rounded-md border border-white/10 bg-black/55 px-1.5 py-0.5 text-[8px] font-black leading-none tracking-wider text-white/90 backdrop-blur-sm sm:text-[9px]">
                 {movie.quality}
               </span>
             )}
           </div>
 
           <div className="absolute inset-0 z-[3] flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-            <div className="absolute inset-0 bg-black/28" />
+            <div className="absolute inset-0 bg-black/22" />
             <div className="relative flex h-9 w-9 scale-90 items-center justify-center rounded-full bg-white text-black shadow-[0_12px_32px_-16px_rgba(255,255,255,0.85)] transition-transform duration-200 group-hover:scale-100 sm:h-10 sm:w-10">
               <i className="ri-play-fill ml-0.5 text-base sm:text-lg" />
             </div>
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 z-[3] hidden translate-y-1 p-3 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 sm:block">
+          <div className="absolute bottom-0 left-0 right-0 z-[3] hidden translate-y-1 p-2.5 opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 sm:block">
             <div className="flex flex-wrap items-center gap-1.5">
               {displayTime && (
                 <span className="flex items-center gap-1 rounded bg-black/42 px-2 py-1 text-[11px] font-semibold text-white/76 backdrop-blur-sm">
@@ -341,29 +352,29 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
                 </span>
               )}
               {movie.category?.[0]?.name && (
-                <span className="max-w-[8.5rem] truncate rounded bg-black/42 px-2 py-1 text-[11px] font-semibold text-white/68 backdrop-blur-sm">
+                <span className="max-w-[8.5rem] truncate rounded bg-black/38 px-2 py-1 text-[10.5px] font-semibold text-white/68 backdrop-blur-sm">
                   {movie.category[0].name}
                 </span>
               )}
             </div>
           </div>
 
-          <div className="pointer-events-none absolute inset-0 z-[3] rounded-lg ring-1 ring-white/[0.035] transition-colors duration-200 group-hover:ring-white/18" />
+          <div className="pointer-events-none absolute inset-0 z-[3] rounded-lg ring-1 ring-white/[0.035] transition-colors duration-200 group-hover:ring-white/16" />
         </div>
 
-        <div className="mt-2 flex min-h-[74px] flex-col px-1 pb-1 sm:mt-2.5 md:min-h-[86px]">
-          <p className="min-h-[34px] text-[12px] font-extrabold leading-snug text-white/92 line-clamp-2 transition-colors duration-200 group-hover:text-white sm:min-h-[38px] sm:text-[13px] md:min-h-[42px] md:text-[15px] xl:text-[15.5px]">
+        <div className="mt-2 flex min-h-[68px] flex-col px-0.5 pb-1 sm:mt-2 md:min-h-[78px]">
+          <p className="min-h-[32px] text-[12px] font-bold leading-snug text-white/92 line-clamp-2 transition-colors duration-200 group-hover:text-white sm:min-h-[36px] sm:text-[13px] md:min-h-[39px] md:text-[14px] xl:text-[14.5px]">
             {title}
           </p>
-          <p className="mt-1 hidden min-h-[15px] truncate text-[10.5px] font-medium text-white/38 sm:block md:min-h-[20px] md:text-[12.5px]">
+          <p className="mt-0.5 hidden min-h-[15px] truncate text-[10.5px] font-medium text-white/36 sm:block md:min-h-[18px] md:text-[12px]">
             {origin && origin !== title ? origin : '\u00a0'}
           </p>
-          <div className="mt-auto flex min-h-[22px] items-center gap-1.5 pt-1 md:min-h-[24px] md:gap-2">
-            {movie.year && <span className="rounded-md bg-white/[0.06] px-1.5 py-1 text-[10px] font-bold leading-none text-white/55 md:text-[11.5px]">{movie.year}</span>}
-            {epText && <span className={`min-w-0 truncate text-[10px] font-bold md:text-[11.5px] ${epText.cls}`}>{epText.label}</span>}
+          <div className="mt-auto flex min-h-[21px] items-center gap-1.5 pt-1 md:min-h-[22px] md:gap-2">
+            {movie.year && <span className="rounded-md bg-white/[0.055] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white/55 md:text-[11px]">{movie.year}</span>}
+            {epText && <span className={`min-w-0 truncate text-[10px] font-bold md:text-[11px] ${epText.cls}`}>{epText.label}</span>}
             <span className="ml-auto flex shrink-0 items-center gap-1">
               <i className="ri-star-fill text-[9px] text-amber-400/75 md:text-[10px]" />
-              <span className="text-[10px] font-bold text-white/52 md:text-[11.5px]">{rating}</span>
+              <span className="text-[10px] font-bold text-white/50 md:text-[11px]">{rating}</span>
             </span>
           </div>
         </div>
@@ -373,13 +384,15 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
 }
 
 function RankCard({ movie, rank, priority }: MovieCardProps) {
-  const posterPath = movie.poster_url || movie.thumb_url;
-  const fallbackPath = movie.thumb_url || movie.poster_url;
+  const { primary: posterPath, fallback: fallbackPath } = getVerticalPosterPaths(movie);
   
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
     posterPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
+    420,
+    84,
+    { preferredAspect: 'portrait' },
   );
   const altText = buildAlt(movie);
 
@@ -408,9 +421,9 @@ function RankCard({ movie, rank, priority }: MovieCardProps) {
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'low'}
             decoding="async"
-            className={`w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-            style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-            onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
+            className={`w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-[1.025] ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
+            style={{ filter: 'contrast(1.03) saturate(1.08)' }}
+            onLoad={(event) => { onLoad(event); markImagePreloaded(currentSrc); }}
             onError={onError}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none z-[2]" />
@@ -465,6 +478,7 @@ function WideCard({ movie, priority }: MovieCardProps) {
     isImagePreloaded(getImageUrl(thumbPath)),
     760,
     88,
+    { preferredAspect: 'landscape' },
   );
   const altText = buildAlt(movie);
 
@@ -495,7 +509,7 @@ function WideCard({ movie, priority }: MovieCardProps) {
             decoding="async"
             className={`w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
             style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-            onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
+            onLoad={(event) => { onLoad(event); markImagePreloaded(currentSrc); }}
             onError={onError}
           />
 

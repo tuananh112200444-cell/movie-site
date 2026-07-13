@@ -7,6 +7,10 @@ interface Props {
   slug: string;
 }
 
+function stripHtml(text = ''): string {
+  return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 export default function MovieDetailSEOBlock({ movie, slug }: Props) {
   const genres = movie.category?.map((c) => c.name) ?? [];
   const countries = movie.country?.map((c) => c.name) ?? [];
@@ -14,6 +18,7 @@ export default function MovieDetailSEOBlock({ movie, slug }: Props) {
   const directors = movie.director?.filter(Boolean) ?? [];
   const genreStr = genres.join(', ');
   const countryStr = countries.join(', ');
+  const cleanContent = stripHtml(movie.content || '');
 
   return (
     <article className="mt-6 rounded-2xl border border-white/[0.06] bg-[#0d0f18] p-5 md:p-7" aria-label={`Thông tin chi tiết phim ${movie.name}`}>
@@ -78,12 +83,12 @@ export default function MovieDetailSEOBlock({ movie, slug }: Props) {
         </div>
       )}
 
-      {movie.content && (
+      {cleanContent && (
         <div className="border-t border-white/[0.06] pt-5">
           <p className="text-white/35 text-[11px] uppercase tracking-wider font-medium mb-3 flex items-center gap-1.5">
             <i className="ri-file-text-line text-red-400" /> Nội Dung Phim
           </p>
-          <p className="text-white/55 text-sm leading-relaxed">{movie.content}</p>
+          <p className="text-white/55 text-sm leading-relaxed">{cleanContent}</p>
         </div>
       )}
 

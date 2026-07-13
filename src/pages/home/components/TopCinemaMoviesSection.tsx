@@ -210,9 +210,9 @@ interface CinemaCardProps {
 
 function CinemaCard({ movie, rank }: CinemaCardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.poster_url || movie.thumb_url,
     movie.thumb_url || movie.poster_url,
-    isImagePreloaded(getImageUrl(movie.poster_url || movie.thumb_url)),
+    movie.poster_url || movie.thumb_url,
+    isImagePreloaded(getImageUrl(movie.thumb_url || movie.poster_url)),
     520,
     88,
   );
@@ -281,7 +281,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
               loading="lazy"
               fetchPriority="low"
               className={`
-                w-full h-full object-cover object-top
+                w-full h-full object-cover object-center
                 transition-transform duration-200 ease-out
                 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}
                 md:group-hover:scale-105
@@ -370,10 +370,10 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
 
         {/* ── Info below poster ── */}
         <div className="mt-1.5 flex min-h-[48px] flex-col px-0.5 md:mt-2 md:min-h-[54px]">
-          <p className="h-[28px] text-[11px] font-semibold leading-snug text-white/90 line-clamp-2 transition-colors duration-300 group-hover:text-red-400 md:h-[18px] md:text-sm md:line-clamp-1">
+          <p className="min-h-[34px] text-[11px] font-semibold leading-[17px] text-white/90 line-clamp-2 transition-colors duration-300 group-hover:text-red-400 md:min-h-[20px] md:text-sm md:leading-5 md:line-clamp-1">
             {movie.name}
           </p>
-          <p className="mt-0.5 h-[13px] text-[9px] text-white/40 line-clamp-1 md:h-[16px] md:text-[11px]">
+          <p className="mt-0.5 min-h-[15px] text-[9px] leading-[15px] text-white/40 line-clamp-1 md:min-h-[17px] md:text-[11px] md:leading-[17px]">
             {originName || '\u00a0'}
           </p>
         </div>

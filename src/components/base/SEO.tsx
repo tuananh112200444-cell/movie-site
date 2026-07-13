@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 
 const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined) ?? 'https://khophim.org';
 const SITE_NAME = 'KhoPhim';
@@ -13,15 +13,15 @@ interface SEOProps {
   ogType?: 'website' | 'video.movie' | 'video.tv_show' | 'article';
   noIndex?: boolean;
   schema?: object | object[];
-  /** Dành cho trang phim: năm phát hành */
+  /** For movie pages: release year. */
   publishedYear?: number;
-  /** Dành cho trang phim: thể loại */
+  /** For movie pages: genre. */
   genre?: string;
-  /** Ngày cập nhật nội dung (ISO string) */
+  /** Content update date, ISO string. */
   updatedAt?: string;
-  /** Pagination: URL trang trước */
+  /** Pagination: previous page URL. */
   prev?: string;
-  /** Pagination: URL trang sau */
+  /** Pagination: next page URL. */
   next?: string;
 }
 
@@ -40,7 +40,6 @@ const SEO = memo(function SEO({
   prev,
   next,
 }: SEOProps) {
-  // Build full title — NEVER exceed 55 chars (safe for ~561px)
   const rawFullTitle = title.includes('KhoPhim')
     ? title
     : `${title} | ${SITE_NAME_SHORT}`;
@@ -52,7 +51,6 @@ const SEO = memo(function SEO({
     return (last > 42 ? cut.slice(0, last) : cut) + '...';
   })();
 
-  // Truncate description — max 150 chars (~985px safe)
   const truncatedDescription = (() => {
     if (description.length <= 150) return description;
     const cut = description.slice(0, 147);
@@ -60,12 +58,9 @@ const SEO = memo(function SEO({
     return (lastSpace > 100 ? cut.slice(0, lastSpace) : cut) + '...';
   })();
 
-  // Build canonical URL — ALWAYS use the canonical prop when provided.
-  // Render canonical EVEN for noindex pages to avoid "Canonicalised" warnings
   const canonicalUrl = (() => {
     if (!canonical) return undefined;
     if (canonical.startsWith('http')) {
-      // Normalize: remove www, ensure https, strip trailing slash
       return canonical
         .replace(/^http:\/\//, 'https://')
         .replace(/^https:\/\/www\./, 'https://')
@@ -76,8 +71,8 @@ const SEO = memo(function SEO({
   })();
 
   const finalOgImage = ogImage ?? `${SITE_URL}/og-image.jpg`;
-  const schemas = schema ? (Array.isArray(schema) ? schema : [schema]) : [];
-  const siteSchemas = [
+  const schemas = useMemo(() => (schema ? (Array.isArray(schema) ? schema : [schema]) : []), [schema]);
+  const siteSchemas = useMemo(() => [
     {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
@@ -101,88 +96,126 @@ const SEO = memo(function SEO({
       logo: `${SITE_URL}/logo.png`,
       sameAs: ['https://www.tiktok.com/@khophim.org'],
     },
-  ];
+  ], []);
+
   const today = new Date().toISOString().split('T')[0];
   const updatedDate = (updatedAt ?? today).split('T')[0];
   const robotsContent = noIndex
     ? 'noindex, follow'
     : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
 
-  return (
-    <>
-      <title>{fullTitle}</title>
-      <meta name="description" content={truncatedDescription} />
-      {keywords && <meta name="keywords" content={keywords} />}
-      {/* Always output canonical when explicitly provided — avoids "Canonicalised" warnings */}
-      {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
 
-      {/* Pagination links */}
-      {prev && <link rel="prev" href={prev} />}
-      {next && <link rel="next" href={next} />}
+    const ensureMeta = (attr: 'name' | 'property', key: string, content?: string) => {
+      const selector = `meta[${attr}="${key}"]`;
+      let tag = document.head.querySelector<HTMLMetaElement>(selector);
+      if (!content) {
+        tag?.remove();
+        return;
+      }
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.setAttribute(attr, key);
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute('content', content);
+    };
 
-      {/* hreflang — only for pages with explicit canonical */}
-      {canonicalUrl && (
-        <>
-          <link rel="alternate" hrefLang="vi" href={canonicalUrl} />
-          <link rel="alternate" hrefLang="vi-VN" href={canonicalUrl} />
-          <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
-        </>
-      )}
+    const ensureLink = (rel: string, href?: string) => {
+      let tag = document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]:not([data-kp-seo-managed])`);
+      if (!href) {
+        tag?.remove();
+        return;
+      }
+      if (!tag) {
+        tag = document.createElement('link');
+        tag.setAttribute('rel', rel);
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute('href', href);
+    };
 
-      <meta name="robots" content={robotsContent} />
-      <meta name="googlebot" content={robotsContent} />
-      <meta name="last-modified" content={updatedDate} />
-      <meta name="author" content={SITE_NAME_SHORT} />
-      <meta name="copyright" content={`© ${new Date().getFullYear()} ${SITE_NAME_SHORT} (khophim.org)`} />
-      <meta name="language" content="vi" />
-      <meta name="content-language" content="vi-VN" />
-      <meta name="rating" content="general" />
+    document.title = fullTitle;
+    document.head.querySelectorAll('[data-kp-seo-managed="true"]').forEach((node) => node.remove());
 
-      {/* Geo tags — Việt Nam */}
-      <meta name="geo.region" content="VN" />
-      <meta name="geo.placename" content="Việt Nam" />
+    ensureMeta('name', 'description', truncatedDescription);
+    ensureMeta('name', 'keywords', keywords);
+    ensureMeta('name', 'robots', robotsContent);
+    ensureMeta('name', 'googlebot', robotsContent);
+    ensureMeta('name', 'last-modified', updatedDate);
+    ensureMeta('name', 'author', SITE_NAME_SHORT);
+    ensureMeta('name', 'copyright', `© ${new Date().getFullYear()} ${SITE_NAME_SHORT} (khophim.org)`);
+    ensureMeta('name', 'language', 'vi');
+    ensureMeta('name', 'content-language', 'vi-VN');
+    ensureMeta('name', 'rating', 'general');
+    ensureMeta('name', 'geo.region', 'VN');
+    ensureMeta('name', 'geo.placename', 'Việt Nam');
 
-      {/* Article tags — E-E-A-T signals */}
-      {publishedYear && (
-        <meta property="article:published_time" content={`${publishedYear}-01-01T00:00:00+07:00`} />
-      )}
-      <meta property="article:modified_time" content={`${updatedDate}T00:00:00+07:00`} />
-      {genre && <meta property="article:section" content={genre} />}
-      {genre && (
-        <meta property="article:tag" content={genre} />
-      )}
+    ensureLink('canonical', canonicalUrl);
+    ensureLink('prev', prev);
+    ensureLink('next', next);
 
-      {/* Open Graph */}
-      <meta property="og:title" content={fullTitle} />
-      <meta property="og:description" content={truncatedDescription} />
-      <meta property="og:type" content={ogType} />
-      <meta property="og:image" content={finalOgImage} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content={fullTitle} />
-      <meta property="og:site_name" content={SITE_NAME_SHORT} />
-      <meta property="og:locale" content="vi_VN" />
-      {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    if (canonicalUrl) {
+      for (const hrefLang of ['vi', 'vi-VN', 'x-default']) {
+        const link = document.createElement('link');
+        link.setAttribute('rel', 'alternate');
+        link.setAttribute('hrefLang', hrefLang);
+        link.setAttribute('href', canonicalUrl);
+        link.dataset.kpSeoManaged = 'true';
+        document.head.appendChild(link);
+      }
+    }
 
-      {/* Twitter / X */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:site" content="@KhoPhimVN" />
-      <meta name="twitter:creator" content="@KhoPhimVN" />
-      <meta name="twitter:title" content={fullTitle} />
-      <meta name="twitter:description" content={truncatedDescription} />
-      <meta name="twitter:image" content={finalOgImage} />
-      {canonicalUrl && <meta name="twitter:url" content={canonicalUrl} />}
+    ensureMeta('property', 'article:published_time', publishedYear ? `${publishedYear}-01-01T00:00:00+07:00` : undefined);
+    ensureMeta('property', 'article:modified_time', `${updatedDate}T00:00:00+07:00`);
+    ensureMeta('property', 'article:section', genre);
+    ensureMeta('property', 'article:tag', genre);
 
-      {/* Schema.org JSON-LD */}
-      {[...siteSchemas, ...schemas].map((s, i) => (
-        <script
-          key={i}
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(s) }}
-        />
-      ))}
-    </>
-  );
+    ensureMeta('property', 'og:title', fullTitle);
+    ensureMeta('property', 'og:description', truncatedDescription);
+    ensureMeta('property', 'og:type', ogType);
+    ensureMeta('property', 'og:image', finalOgImage);
+    ensureMeta('property', 'og:image:width', '1200');
+    ensureMeta('property', 'og:image:height', '630');
+    ensureMeta('property', 'og:image:alt', fullTitle);
+    ensureMeta('property', 'og:site_name', SITE_NAME_SHORT);
+    ensureMeta('property', 'og:locale', 'vi_VN');
+    ensureMeta('property', 'og:url', canonicalUrl);
+
+    ensureMeta('name', 'twitter:card', 'summary_large_image');
+    ensureMeta('name', 'twitter:site', '@KhoPhimVN');
+    ensureMeta('name', 'twitter:creator', '@KhoPhimVN');
+    ensureMeta('name', 'twitter:title', fullTitle);
+    ensureMeta('name', 'twitter:description', truncatedDescription);
+    ensureMeta('name', 'twitter:image', finalOgImage);
+    ensureMeta('name', 'twitter:url', canonicalUrl);
+
+    for (const item of [...siteSchemas, ...schemas]) {
+      const script = document.createElement('script');
+      script.type = 'application/ld+json';
+      script.text = JSON.stringify(item);
+      script.dataset.kpSeoManaged = 'true';
+      document.head.appendChild(script);
+    }
+  }, [
+    canonicalUrl,
+    finalOgImage,
+    fullTitle,
+    genre,
+    keywords,
+    next,
+    ogType,
+    prev,
+    publishedYear,
+    robotsContent,
+    schemas,
+    siteSchemas,
+    truncatedDescription,
+    updatedDate,
+  ]);
+
+  return null;
 });
 
 export default SEO;

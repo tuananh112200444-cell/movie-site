@@ -165,6 +165,12 @@ function shouldRefreshEpisodeDetail(detail) {
   return playableCurrent < displayedCurrent;
 }
 
+function shouldRaceOphimAsQuickSource(slug, source) {
+  const isOphimSource = source === 'ophim';
+  const looksLikeCjk = Array.from(slug).some((char) => char.charCodeAt(0) > 127);
+  return isOphimSource && looksLikeCjk;
+}
+
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -286,5 +292,7 @@ const freshTheAirLikeDetail = {
 };
 assert(shouldRefreshEpisodeDetail(staleTheAirLikeDetail), 'Detail page must refresh when badge says episode 6 but only episode 1 is loaded');
 assert(!shouldRefreshEpisodeDetail(freshTheAirLikeDetail), 'Detail page must not refresh when playable episodes already match the badge');
+assert(!shouldRaceOphimAsQuickSource('chasing-love', 'ophim'), 'ASCII source=ophim pages must not let stale OPhim detail beat stored/proxy data');
+assert(shouldRaceOphimAsQuickSource('长安的荔枝', 'ophim'), 'CJK/non-ASCII OPhim slugs may still use direct OPhim as a quick source');
 
 console.log('watch-page regression passed');

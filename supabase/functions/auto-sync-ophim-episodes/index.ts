@@ -589,6 +589,7 @@ serve(async (req) => {
         totalSkipped += movieSkipped;
 
         const previousCurrent = getMovieCurrentEpisode(movie as MovieRow);
+        const previousLabelEpisode = getTotalEpisodeNumber(movie.episode_current || '');
         const sourceCurrent = Math.max(getMovieCurrentEpisode({ ...movie, current_episode: 0, episode_current: detail.episodeCurrent } as MovieRow), maxEpisode);
         const previousLooksAheadOfSource =
           sourceCurrent > 0 &&
@@ -617,7 +618,7 @@ serve(async (req) => {
           movieUpdate.total_episodes = mergedTotalEpisode;
         }
 
-        if (currentEpisode !== previousCurrent) {
+        if (currentEpisode !== previousCurrent || (currentEpisode > 0 && previousLabelEpisode !== currentEpisode)) {
           movieUpdate.episode_current = `Tập ${currentEpisode}`;
           movieUpdate.current_episode = currentEpisode;
         }

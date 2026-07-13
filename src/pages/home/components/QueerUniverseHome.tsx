@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import QueerUniverseHero from './QueerUniverseHero';
 import PortalGateway from './PortalGateway';
 import type { MovieItem } from '../../../types/movie';
-import { fetchQueerUniverseSections, getOptimizedImageUrl, searchQueerUniverseMovies } from '../../../services/movieApi';
+import { fetchQueerUniverseSections, searchQueerUniverseMovies } from '../../../services/movieApi';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
 import MovieCountdown from '../../../components/base/MovieCountdown';
+import { useImageFallback } from '../../../hooks/useImageFallback';
 
 interface QueerUniverseHomeProps {
   onBack: () => void;
@@ -124,8 +125,53 @@ function getMetaText(movie: MovieItem): string {
   ].filter(Boolean).join('  ');
 }
 
+function QueerMovieImage({
+  movie,
+  width,
+  quality,
+  className,
+  priority,
+}: {
+  movie: MovieItem;
+  width: number;
+  quality: number;
+  className: string;
+  priority?: boolean;
+}) {
+  const primary = movie.thumb_url || movie.poster_url;
+  const fallback = movie.poster_url && movie.poster_url !== primary ? movie.poster_url : undefined;
+  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
+    primary,
+    fallback,
+    false,
+    width,
+    quality,
+    { preferredAspect: 'portrait' },
+  );
+
+  return (
+    <>
+      {!loaded && <div className="absolute inset-0 z-[1] blur-placeholder" />}
+      {hasError && (
+        <div className="absolute inset-0 z-[1] flex items-center justify-center bg-[#111923]">
+          <i className="ri-image-line text-2xl text-white/20" />
+        </div>
+      )}
+      <img
+        src={currentSrc}
+        alt={movie.name}
+        loading={priority ? 'eager' : 'lazy'}
+        fetchPriority={priority ? 'high' : 'low'}
+        decoding="async"
+        className={`${className} ${loaded && !hasError ? 'opacity-100' : 'opacity-0'}`}
+        onLoad={onLoad}
+        onError={onError}
+      />
+    </>
+  );
+}
+
 function MoviePosterCard({ movie, priority }: { movie: MovieItem; priority?: boolean }) {
-  const image = getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 420, 84);
   const href = getMovieHref(movie);
   const episodeLabel = getEpisodeLabel(movie);
 
@@ -133,12 +179,12 @@ function MoviePosterCard({ movie, priority }: { movie: MovieItem; priority?: boo
     <Link to={href} className="group block">
       <article className="overflow-hidden rounded-lg border border-white/[0.08] bg-[#0e1219] transition-colors hover:border-cyan-300/35 hover:bg-[#111923]">
         <div className="relative aspect-[2/3] overflow-hidden bg-white/[0.04]">
-          <img
-            src={image}
-            alt={movie.name}
-            loading={priority ? 'eager' : 'lazy'}
-            decoding="async"
-            className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+          <QueerMovieImage
+            movie={movie}
+            width={420}
+            quality={84}
+            priority={priority}
+            className="h-full w-full object-cover object-center transition-[opacity,transform] duration-500 group-hover:scale-105"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
           <div className="absolute left-2 top-2 z-[2] flex flex-col items-start gap-1">
@@ -230,13 +276,14 @@ function RankingList({ movies }: { movies: MovieItem[] }) {
             }`}>
               {index + 1}
             </span>
-            <img
-              src={getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 120, 78)}
-              alt={movie.name}
-              loading="lazy"
-              decoding="async"
-              className="h-16 w-11 flex-shrink-0 rounded object-cover object-top"
-            />
+            <div className="relative h-16 w-11 flex-shrink-0 overflow-hidden rounded bg-white/[0.04]">
+              <QueerMovieImage
+                movie={movie}
+                width={120}
+                quality={78}
+                className="h-full w-full object-cover object-center transition-opacity duration-300"
+              />
+            </div>
             <div className="min-w-0 flex-1">
               <p className="line-clamp-2 text-sm font-bold leading-snug text-white group-hover:text-cyan-200">{movie.name}</p>
               <p className="mt-1 line-clamp-1 text-[11px] leading-relaxed text-white/42">{getMetaText(movie)}</p>

@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://blvietsub.com/ophim-sitemap.xml';
+const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://blvietsub.com/sitemap_index.xml';
 const BLVIETSUB_PROXY_URL = Deno.env.get('BLVIETSUB_PROXY_URL') || 'https://khophim.org/internal/blvietsub-proxy';
 const DISCOVERY_URLS = [
   'https://blvietsub.com/',
@@ -150,8 +150,8 @@ function looksLikeBlvietsubResponse(rawUrl: string, text: string): boolean {
   if (!body) return false;
   const target = rawUrl.toLowerCase();
   const lower = body.slice(0, 250000).toLowerCase();
-  if (target.includes('ophim-sitemap.xml')) {
-    return lower.includes('<urlset') && lower.includes('blvietsub.com/phim/');
+  if (target.includes('sitemap')) {
+    return lower.includes('<urlset') || lower.includes('<sitemapindex');
   }
   if (target.includes('/xem-phim/')) {
     return lower.includes('blvietsub') && (
@@ -161,7 +161,7 @@ function looksLikeBlvietsubResponse(rawUrl: string, text: string): boolean {
       lower.includes('dailymotion')
     );
   }
-  return lower.includes('blvietsub') && (lower.includes('/phim/') || lower.includes('public-list') || lower.includes('og:site_name'));
+  return lower.includes('blvietsub') && (lower.includes('/phim/') || lower.includes('/xem-phim/') || lower.includes('public-list') || lower.includes('og:site_name'));
 }
 
 async function fetchBlvietsubText(rawUrl: string, timeoutMs: number): Promise<string> {
@@ -742,10 +742,37 @@ function parseWordPressSitemap(xml = ''): WordPressMovieUrl[] {
   const urls: WordPressMovieUrl[] = [];
   for (const match of xml.matchAll(/<url>\s*<loc>([\s\S]*?)<\/loc>(?:[\s\S]*?<lastmod>([\s\S]*?)<\/lastmod>)?[\s\S]*?<\/url>/gi)) {
     const url = decodeHtml(match[1]);
-    if (!/^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(url)) continue;
+    if (!isWordPressMovieUrl(url)) continue;
     urls.push({ url: url.replace(/^http:\/\//i, 'https://'), updatedAt: decodeHtml(match[2] || '') });
   }
   return urls;
+}
+
+function parseWordPressSitemapIndex(xml = ''): WordPressMovieUrl[] {
+  const urls: WordPressMovieUrl[] = [];
+  for (const match of xml.matchAll(/<sitemap>\s*<loc>([\s\S]*?)<\/loc>(?:[\s\S]*?<lastmod>([\s\S]*?)<\/lastmod>)?[\s\S]*?<\/sitemap>/gi)) {
+    const url = decodeHtml(match[1]).replace(/^http:\/\//i, 'https://');
+    if (!/^https?:\/\/blvietsub\.com\/[^?#]+sitemap[^?#]*\.xml$/i.test(url)) continue;
+    if (!/\/post-sitemap/i.test(url)) continue;
+    urls.push({ url, updatedAt: decodeHtml(match[2] || '') });
+  }
+  return urls;
+}
+
+function isWordPressMovieUrl(rawUrl = ''): boolean {
+  try {
+    const url = new URL(rawUrl.replace(/^http:\/\//i, 'https://'));
+    if (url.hostname !== 'blvietsub.com') return false;
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length === 2 && parts[0].toLowerCase() === 'phim') return Boolean(parts[1]);
+    if (parts.length !== 1) return false;
+    const slug = parts[0].toLowerCase();
+    if (!slug) return false;
+    if (/\.(?:php|xml|json|txt|ico|css|js)$/i.test(slug)) return false;
+    return !/^(sample-page|actors|actor|categories|category|tags|tag|blog|my-profile|submit-a-video|wp-json|wp-content|feed|page|author)$/i.test(slug);
+  } catch {
+    return false;
+  }
 }
 
 function uniqWordPressMovieUrls(items: Array<WordPressMovieUrl | string>): WordPressMovieUrl[] {
@@ -754,7 +781,7 @@ function uniqWordPressMovieUrls(items: Array<WordPressMovieUrl | string>): WordP
   for (const item of items) {
     const rawUrl = typeof item === 'string' ? item : item.url;
     const url = String(rawUrl || '').replace(/^http:\/\//i, 'https://').replace(/\/+$/, '/');
-    if (!/^https:\/\/blvietsub\.com\/phim\/[^/]+\/$/i.test(url) || seen.has(url)) continue;
+    if (!isWordPressMovieUrl(url) || seen.has(url)) continue;
     if (/\/phim\/(?:feed|page)\/$/i.test(url)) continue;
     seen.add(url);
     urls.push({
@@ -769,12 +796,12 @@ function uniqWordPressMovieUrls(items: Array<WordPressMovieUrl | string>): WordP
 
 function parseWordPressMovieUrlsFromHtml(html = ''): WordPressMovieUrl[] {
   const urls: WordPressMovieUrl[] = [];
-  for (const match of html.matchAll(/href=["']([^"']*\/phim\/[^"']+)["']/gi)) {
+  for (const match of html.matchAll(/href=["']([^"']+)["']/gi)) {
     const raw = decodeHtml(match[1]).trim();
     let url = raw;
     if (url.startsWith('//')) url = `https:${url}`;
     if (url.startsWith('/')) url = `https://blvietsub.com${url}`;
-    if (!/^https?:\/\/blvietsub\.com\/phim\/[^/?#]+\/?(?:[?#].*)?$/i.test(url)) continue;
+    if (!isWordPressMovieUrl(url.split(/[?#]/)[0])) continue;
     url = url.split(/[?#]/)[0].replace(/^http:\/\//i, 'https://').replace(/\/?$/, '/');
     urls.push({ url, updatedAt: '' });
   }
@@ -813,7 +840,7 @@ async function searchBlvietsubMovieUrls(keywords = DISCOVERY_QUERIES): Promise<W
       const data = await response.json().catch(() => []);
       for (const item of Array.isArray(data) ? data : []) {
         const url = String(item?.slug || '').replace(/^http:\/\//i, 'https://');
-        if (/^https:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(url)) {
+        if (isWordPressMovieUrl(url)) {
           urls.push({
             url: url.replace(/\/?$/, '/'),
             updatedAt: '',
@@ -1075,7 +1102,22 @@ async function fetchWordPressEntriesWithMeta(limit: number, offset: number): Pro
   let sitemapUrls: WordPressMovieUrl[] = [];
   const issues: WordPressFetchIssue[] = [];
   try {
-    sitemapUrls = parseWordPressSitemap(await fetchBlvietsubText(FEED_URL, 25000));
+    const sitemap = await fetchBlvietsubText(FEED_URL, 25000);
+    sitemapUrls = parseWordPressSitemap(sitemap);
+    if (sitemapUrls.length === 0) {
+      const sitemapIndexUrls = parseWordPressSitemapIndex(sitemap);
+      for (const sitemapItem of sitemapIndexUrls.slice(0, 8)) {
+        try {
+          sitemapUrls.push(...parseWordPressSitemap(await fetchBlvietsubText(sitemapItem.url, 25000)));
+        } catch (error) {
+          issues.push({
+            url: sitemapItem.url,
+            type: 'fetch_error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
   } catch (error) {
     issues.push({
       url: FEED_URL,
@@ -1090,7 +1132,7 @@ async function fetchWordPressEntriesWithMeta(limit: number, offset: number): Pro
     ...sitemapUrls.slice(0, PRIORITY_SITEMAP_LIMIT),
   ]);
   const cursorUrls = sitemapUrls.slice(offset, offset + limit);
-  const urls = uniqWordPressMovieUrls([...discoveryUrls, ...cursorUrls]).slice(0, limit);
+  const urls = uniqWordPressMovieUrls(offset > 0 ? [...cursorUrls, ...discoveryUrls] : [...discoveryUrls, ...cursorUrls]).slice(0, limit);
   const allUrls = uniqWordPressMovieUrls([...discoveryUrls, ...sitemapUrls]);
   const entries: ParsedEntry[] = [];
   const concurrency = 6;
@@ -1438,7 +1480,7 @@ function normalizeSourceUrl(value = ''): string {
 function getBlvietsubMovieUrl(movie: MovieRow): string {
   for (const raw of [movie.source_url, movie.showtimes]) {
     const value = normalizeSourceUrl(String(raw || ''));
-    if (/^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(value)) return value;
+    if (isWordPressMovieUrl(value)) return value;
   }
   return '';
 }
@@ -1504,7 +1546,7 @@ async function repairExistingBlvietsubMovies(
     .from('movies')
     .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, status, year, last_synced_at, updated_at')
     .eq('is_published', true)
-    .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub.com/phim/%,source_url.ilike.%blvietsub.com/phim/%')
+    .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub.com%,source_url.ilike.%blvietsub.com%')
     .order('last_synced_at', { ascending: true, nullsFirst: true })
     .limit(queryLimit);
 
@@ -1869,7 +1911,7 @@ serve(async (req) => {
     const debugUrl = url.searchParams.get('debug_fetch') === '1'
       ? url.searchParams.get('movie_url')?.trim()
       : '';
-    if (debugUrl && /^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(debugUrl)) {
+    if (debugUrl && isWordPressMovieUrl(debugUrl)) {
       const diagnostics = await diagnoseBlvietsubFetch(normalizeSourceUrl(debugUrl), 25000);
       return json({
         success: diagnostics.some((item) => item.ok && item.has_movie_marker),
@@ -1936,7 +1978,7 @@ serve(async (req) => {
     }
 
     const directUrl = url.searchParams.get('movie_url')?.trim();
-    if (directUrl && /^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(directUrl)) {
+    if (directUrl && isWordPressMovieUrl(directUrl)) {
       const entry = await fetchWordPressEntryByUrl(normalizeSourceUrl(directUrl));
       if (!entry) {
         return json({

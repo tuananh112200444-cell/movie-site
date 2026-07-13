@@ -222,7 +222,7 @@ function TrailerCard({ movie, rank }: TrailerCardProps) {
       {/* Info */}
       <div className="mt-1.5 flex min-h-[48px] flex-col px-0.5 md:mt-2.5 md:min-h-[54px]">
         <p className="
-          h-[30px] text-[11px] md:h-[16px] md:text-xs font-semibold line-clamp-2 md:line-clamp-1
+          min-h-[34px] text-[11px] leading-[17px] md:min-h-[18px] md:text-xs md:leading-[18px] font-semibold line-clamp-2 md:line-clamp-1
           transition-all duration-300 ease-out
           text-white group-hover:text-orange-400
         ">
