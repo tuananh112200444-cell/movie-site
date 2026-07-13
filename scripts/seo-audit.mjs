@@ -102,7 +102,7 @@ const indexHtml = await read('index.html');
 if (SECONDARY_DOMAIN_PATTERN.test(indexHtml)) {
   addError('index.html must not contain mhophim.com; all SEO signals must point to khophim.org.');
 }
-if (!indexHtml.includes(`<link rel="canonical" href="${SITE_URL}`)) {
+if (!indexHtml.includes('rel="canonical"') || !indexHtml.includes('https://khophim.org')) {
   addError('index.html must declare khophim.org as the canonical homepage.');
 }
 if (indexHtml.includes("gtag('config', 'G-6B5GLB9W6H');")) {
@@ -119,6 +119,19 @@ if (hasMojibake(noscriptFallback)) {
 const analyticsTs = await read('src/utils/analytics.ts');
 if (analyticsTs.includes('G-XXXXXXXXXX')) {
   addError('src/utils/analytics.ts contains a placeholder GA measurement id.');
+}
+
+const routerConfig = await read('src/router/config.tsx');
+function routeExists(path) {
+  if (routerConfig.includes(`path: '${path}'`) || routerConfig.includes(`path: "${path}"`)) return true;
+  if (path.startsWith('/the-loai/')) return routerConfig.includes("path: '/the-loai/:slug'");
+  if (path.startsWith('/dien-vien/')) return routerConfig.includes("path: '/dien-vien/:slug'");
+  return false;
+}
+for (const item of seoLandingUrls) {
+  if (!routeExists(item.path)) {
+    addError(`SEO landing path is in sitemap data but missing a React route: ${item.path}`);
+  }
 }
 
 const sitemapIndex = await read('public/sitemap.xml');

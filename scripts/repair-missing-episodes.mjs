@@ -30,7 +30,7 @@ const CRON_SECRET = env.CRON_SECRET || env.SUPABASE_CRON_SECRET || '';
 const APPLY = process.argv.includes('--apply');
 const SQL_FILE = arg('sql-file', '');
 const LIMIT = Math.max(1, Math.min(Number(arg('limit', '12')) || 12, 50));
-const SCAN_LIMIT = Math.max(LIMIT, Math.min(Number(arg('scan-limit', '400')) || 400, 1000));
+const SCAN_LIMIT = Math.max(LIMIT, Math.min(Number(arg('scan-limit', '400')) || 400, 20000));
 const MIN_ADVERTISED = Math.max(2, Number(arg('min-advertised', '2')) || 2);
 const MAX_ADVERTISED = Math.max(MIN_ADVERTISED, Number(arg('max-advertised', '120')) || 120);
 
@@ -348,7 +348,7 @@ where id = ${sqlString(target.id)};`);
 update public.movies
 set
   current_episode = ${maxEpisode},
-  episode_current = ${sqlString(`Tap ${maxEpisode}`)},
+  episode_current = ${sqlString(`Tập ${maxEpisode}`)},
   last_synced_at = now(),
   updated_at = now()
 where id = ${sqlString(target.id)};`);

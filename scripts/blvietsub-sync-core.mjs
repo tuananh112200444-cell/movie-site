@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-const DEFAULT_FEED_URL = 'https://blvietsub.com/ophim-sitemap.xml';
+const DEFAULT_FEED_URL = 'https://blvietsub.com/sitemap_index.xml';
 const DEFAULT_DISCOVERY_URLS = [
   'https://blvietsub.com/',
   'https://blvietsub.com/phim/',
@@ -128,10 +128,39 @@ function parseSitemap(xml = '') {
   const urls = [];
   for (const match of xml.matchAll(/<url>\s*<loc>([\s\S]*?)<\/loc>(?:[\s\S]*?<lastmod>([\s\S]*?)<\/lastmod>)?[\s\S]*?<\/url>/gi)) {
     const url = decodeHtml(match[1]).replace(/^http:\/\//i, 'https://');
-    if (!/^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(url)) continue;
+    if (!isBlvietsubMoviePageUrl(url)) continue;
     urls.push({ url, updatedAt: decodeHtml(match[2] || '') });
   }
   return urls;
+}
+
+function parseSitemapIndex(xml = '') {
+  const urls = [];
+  for (const match of xml.matchAll(/<sitemap>\s*<loc>([\s\S]*?)<\/loc>(?:[\s\S]*?<lastmod>([\s\S]*?)<\/lastmod>)?[\s\S]*?<\/sitemap>/gi)) {
+    const url = decodeHtml(match[1]).replace(/^http:\/\//i, 'https://');
+    if (!/^https?:\/\/blvietsub\.com\/[^?#]+sitemap[^?#]*\.xml$/i.test(url)) continue;
+    if (/\/(?:category|post_tag|actors?|author|page)-sitemap/i.test(url)) {
+      if (!/\/post-sitemap/i.test(url)) continue;
+    }
+    urls.push({ url, updatedAt: decodeHtml(match[2] || '') });
+  }
+  return urls;
+}
+
+function isBlvietsubMoviePageUrl(rawUrl = '') {
+  try {
+    const url = new URL(String(rawUrl || '').replace(/^http:\/\//i, 'https://'));
+    if (url.hostname !== 'blvietsub.com') return false;
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length === 2 && parts[0].toLowerCase() === 'phim') return Boolean(parts[1]);
+    if (parts.length !== 1) return false;
+    const slug = parts[0].toLowerCase();
+    if (!slug) return false;
+    if (/\.(?:php|xml|json|txt|ico|css|js)$/i.test(slug)) return false;
+    return !/^(sample-page|actors|actor|categories|category|tags|tag|blog|my-profile|submit-a-video|wp-json|wp-content|feed|page|author)$/i.test(slug);
+  } catch {
+    return false;
+  }
 }
 
 function uniqMovieUrls(items = []) {
@@ -139,7 +168,7 @@ function uniqMovieUrls(items = []) {
   const urls = [];
   for (const item of items) {
     const url = String(item?.url || item || '').replace(/^http:\/\//i, 'https://').replace(/\/+$/, '/');
-    if (!/^https:\/\/blvietsub\.com\/phim\/[^/]+\/$/i.test(url) || seen.has(url)) continue;
+    if (!isBlvietsubMoviePageUrl(url) || seen.has(url)) continue;
     if (/\/phim\/(?:feed|page)\/$/i.test(url)) continue;
     seen.add(url);
     urls.push({ url, updatedAt: item?.updatedAt || '', title: item?.title || '', originName: item?.originName || '' });
@@ -149,12 +178,12 @@ function uniqMovieUrls(items = []) {
 
 function parseMovieUrlsFromHtml(html = '') {
   const urls = [];
-  for (const match of String(html).matchAll(/href=["']([^"']*\/phim\/[^"']+)["']/gi)) {
+  for (const match of String(html).matchAll(/href=["']([^"']+)["']/gi)) {
     const raw = decodeHtml(match[1]).trim();
     let url = raw;
     if (url.startsWith('//')) url = `https:${url}`;
     if (url.startsWith('/')) url = `https://blvietsub.com${url}`;
-    if (!/^https?:\/\/blvietsub\.com\/phim\/[^/?#]+\/?(?:[?#].*)?$/i.test(url)) continue;
+    if (!isBlvietsubMoviePageUrl(url.split(/[?#]/)[0])) continue;
     url = url.split(/[?#]/)[0].replace(/^http:\/\//i, 'https://').replace(/\/?$/, '/');
     urls.push({ url });
   }
@@ -418,6 +447,17 @@ export async function fetchEntries({ feedUrl = DEFAULT_FEED_URL, limit = 10, off
   try {
     const sitemap = await fetchText(feedUrl, 30000);
     sitemapUrls = parseSitemap(sitemap);
+    if (sitemapUrls.length === 0) {
+      const sitemapIndexUrls = parseSitemapIndex(sitemap);
+      for (const sitemapItem of sitemapIndexUrls.slice(0, 8)) {
+        try {
+          const childSitemap = await fetchText(sitemapItem.url, 30000);
+          sitemapUrls.push(...parseSitemap(childSitemap));
+        } catch (error) {
+          errors.push(`sitemap child ${sitemapItem.url}: ${error.message}`);
+        }
+      }
+    }
   } catch (error) {
     errors.push(`sitemap: ${error.message}`);
   }
@@ -427,7 +467,7 @@ export async function fetchEntries({ feedUrl = DEFAULT_FEED_URL, limit = 10, off
     ...sitemapUrls.slice(0, PRIORITY_SITEMAP_LIMIT),
   ]);
   const cursorUrls = sitemapUrls.slice(offset, offset + limit);
-  const urls = uniqMovieUrls([...discoveryUrls, ...cursorUrls]).slice(0, limit);
+  const urls = uniqMovieUrls(offset > 0 ? [...cursorUrls, ...discoveryUrls] : [...discoveryUrls, ...cursorUrls]).slice(0, limit);
   const allUrls = uniqMovieUrls([...discoveryUrls, ...sitemapUrls]);
   const entries = [];
   for (let index = 0; index < urls.length; index += concurrency) {

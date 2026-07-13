@@ -24,7 +24,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error('Missing VITE_PUBLIC_SUPABASE_URL or VITE_PUBLIC_SUPABASE_ANON_KEY in .env');
 }
 
-const MOVIE_LIMIT = Number(env.MOVIE_DATA_QUALITY_LIMIT || 400);
+const MOVIE_LIMIT = Number(env.MOVIE_DATA_QUALITY_LIMIT || 10_000);
 const STRICT = env.MOVIE_DATA_QUALITY_STRICT === '1';
 const FAIL_LIMIT = Number(env.MOVIE_DATA_QUALITY_MAX_SEVERE || (STRICT ? 0 : Number.POSITIVE_INFINITY));
 const HOME_MIN_SECTION_ITEMS = Number(env.MOVIE_DATA_HOME_MIN_SECTION_ITEMS || 6);
@@ -185,7 +185,7 @@ async function auditCountryCoverage() {
 
 async function queryByMovieIds(table, select, movieIds, orderColumns = []) {
   const rows = [];
-  for (const ids of chunk(movieIds, 10)) {
+  for (const ids of chunk(movieIds, 200)) {
     for (let from = 0; ; from += 1000) {
       let query = supabase
         .from(table)
@@ -199,7 +199,7 @@ async function queryByMovieIds(table, select, movieIds, orderColumns = []) {
 
       const { data, error } = await query
         .range(from, from + 999)
-        .abortSignal(AbortSignal.timeout(20_000));
+        .abortSignal(AbortSignal.timeout(60_000));
       if (error) {
         return { rows, error: `${table}: ${error.message}` };
       }
@@ -208,6 +208,34 @@ async function queryByMovieIds(table, select, movieIds, orderColumns = []) {
     }
   }
   return { rows, error: null };
+}
+
+async function fetchPublishedMovies(limit) {
+  const rows = [];
+  const pageSize = 1000;
+  for (let from = 0; rows.length < limit; from += pageSize) {
+    const to = Math.min(from + pageSize - 1, limit - 1);
+    let data = null;
+    let error = null;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const result = await supabase
+        .from('movies')
+        .select('id, slug, name, origin_name, source_site, source_name, episode_current, current_episode, total_episodes, updated_at')
+        .eq('is_published', true)
+        .order('updated_at', { ascending: false })
+        .range(from, to)
+        .abortSignal(AbortSignal.timeout(40_000));
+      data = result.data;
+      error = result.error;
+      if (!error) break;
+      await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
+    }
+
+    if (error) throw new Error(`movies query failed: ${error.message}`);
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
 }
 
 const failures = [];
@@ -229,17 +257,7 @@ const [homeProxyAudit, countryCoverageAudit] = await Promise.all([
 
 failures.push(...homeProxyAudit.failures, ...countryCoverageAudit.failures);
 
-const { data: movies, error: movieError } = await supabase
-  .from('movies')
-  .select('id, slug, name, origin_name, source_site, source_name, episode_current, current_episode, total_episodes, updated_at')
-  .eq('is_published', true)
-  .order('updated_at', { ascending: false })
-  .limit(MOVIE_LIMIT)
-  .abortSignal(AbortSignal.timeout(20_000));
-
-if (movieError) {
-  throw new Error(`movies query failed: ${movieError.message}`);
-}
+const movies = await fetchPublishedMovies(MOVIE_LIMIT);
 
 const movieIds = (movies || []).map((movie) => movie.id).filter(Boolean);
 
@@ -271,12 +289,15 @@ for (const row of [
 
 const severe = [];
 const severeBlvietsub = [];
+const staleLabels = [];
 const noPlayable = [];
 const catalogNoPlayable = [];
 const checked = [];
 
 for (const movie of movies || []) {
   const advertised = advertisedEpisode(movie);
+  const labelEpisode = episodeNumberFromText(movie.episode_current);
+  const currentEpisode = Number(movie.current_episode || 0) || 0;
   const playable = playableByMovie.get(movie.id) || 0;
   if (advertised <= 1) continue;
   const record = {
@@ -291,6 +312,15 @@ for (const movie of movies || []) {
     servers: [...(sourcesByMovie.get(movie.id) || [])].slice(0, 5),
   };
   checked.push(record);
+
+  if (
+    playable > 1 &&
+    currentEpisode === playable &&
+    labelEpisode > 0 &&
+    labelEpisode !== playable
+  ) {
+    staleLabels.push({ ...record, label_episode: labelEpisode });
+  }
 
   if (playable === 0) {
     noPlayable.push(record);
@@ -322,6 +352,10 @@ if (severeBlvietsub.length > 0) {
   warnings.push(`Found ${severeBlvietsub.length} BLVietsub/admin-queer movies where stored episode labels are ahead of playable local rows; run sync:blvietsub or repair the affected source rows.`);
 }
 
+if (staleLabels.length > 0) {
+  failures.push(`Found ${staleLabels.length} movies where current_episode matches playable data but episode_current label is stale.`);
+}
+
 console.log(JSON.stringify({
   checkedMovies: movies?.length || 0,
   checkedEpisodeMovies: checked.length,
@@ -333,10 +367,12 @@ console.log(JSON.stringify({
   countryCoverage: countryCoverageAudit.results,
   severeCount: severe.length,
   severeBlvietsubCount: severeBlvietsub.length,
+  staleLabelCount: staleLabels.length,
   noPlayableCount: noPlayable.length,
   catalogNoPlayableCount: catalogNoPlayable.length,
   samples: severe.slice(0, 12),
   blvietsubSamples: severeBlvietsub.slice(0, 8),
+  staleLabelSamples: staleLabels.slice(0, 8),
   noPlayableSamples: noPlayable.slice(0, 8),
   catalogNoPlayableSamples: catalogNoPlayable.slice(0, 8),
   warnings,

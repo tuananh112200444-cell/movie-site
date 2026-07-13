@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import type { MovieItem } from '@/types/movie';
-import { getPosterUrl } from '@/services/movieApi';
+import { useImageFallback } from '@/hooks/useImageFallback';
 
 interface MovieListItemProps {
   movie: MovieItem;
@@ -9,14 +9,23 @@ interface MovieListItemProps {
 }
 
 function MovieListItem({ movie, rank }: MovieListItemProps) {
-  const poster = getPosterUrl(movie.poster_url || movie.thumb_url);
+  const posterPath = movie.thumb_url || movie.poster_url;
+  const fallbackPath = movie.poster_url || movie.thumb_url;
+  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
+    posterPath,
+    fallbackPath,
+    false,
+    180,
+    80,
+    { preferredAspect: 'portrait' },
+  );
   const isFull = (movie.episode_current ?? '').toLowerCase().includes('full') || (movie.episode_current ?? '').toLowerCase().includes('hoàn tất');
   const isNew = movie.year === 2026 || movie.year === 2025;
 
   return (
     <Link
       to={`/phim/${encodeURIComponent(movie.slug)}`}
-      className="group flex gap-3 bg-[#0f1219] hover:bg-[#141820] border border-white/[0.05] hover:border-white/[0.10] rounded-2xl p-3 transition-all duration-200 cursor-pointer"
+      className="group flex gap-3 rounded-2xl border border-white/[0.075] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-3 shadow-[0_12px_34px_rgba(0,0,0,0.16)] transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-white/[0.045] cursor-pointer"
     >
       {/* Rank badge */}
       {rank !== undefined && (
@@ -36,16 +45,24 @@ function MovieListItem({ movie, rank }: MovieListItemProps) {
       )}
 
       {/* Poster */}
-      <div className="w-[52px] h-[74px] flex-shrink-0 rounded-xl overflow-hidden bg-white/[0.05] relative">
+      <div className="w-[52px] h-[74px] flex-shrink-0 rounded-xl overflow-hidden bg-[#141823] ring-1 ring-white/[0.07] relative">
         <img
-          src={poster}
+          src={currentSrc}
           alt={movie.name}
+          width="104"
+          height="148"
           loading="lazy"
-          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = getPosterUrl(movie.thumb_url);
-          }}
+          decoding="async"
+          className={`w-full h-full object-cover object-center group-hover:scale-105 transition-[opacity,transform] duration-300 ${loaded && !hasError ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={onLoad}
+          onError={onError}
         />
+        {!loaded && !hasError && <div className="absolute inset-0 skeleton" />}
+        {hasError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_50%_0%,rgba(239,68,68,0.12),transparent_70%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))] text-white/30">
+            <i className="ri-film-line text-lg" />
+          </div>
+        )}
         {/* Episode overlay */}
         {movie.episode_current && !isFull && (
           <div className="absolute bottom-0 left-0 right-0 bg-black/75 text-white text-[8px] text-center py-0.5 font-bold leading-tight">
@@ -115,8 +132,8 @@ function MovieListItem({ movie, rank }: MovieListItemProps) {
             </span>
           )}
         </div>
-        <div className="w-8 h-8 flex items-center justify-center bg-white/[0.05] group-hover:bg-red-500 rounded-full transition-all duration-200 flex-shrink-0">
-          <i className="ri-play-fill text-white/40 group-hover:text-white text-sm ml-0.5" />
+        <div className="w-8 h-8 flex items-center justify-center bg-white/[0.07] text-white/45 group-hover:bg-white group-hover:text-black rounded-full transition-all duration-200 flex-shrink-0 shadow-[0_8px_22px_rgba(0,0,0,0.18)]">
+          <i className="ri-play-fill text-sm ml-0.5" />
         </div>
       </div>
     </Link>

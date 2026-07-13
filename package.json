@@ -55,6 +55,8 @@
     "sync:cobephim:dry": "node scripts/sync-cobephim-external.mjs --dry-run",
     "sync:cobephim:bulk": "node scripts/sync-cobephim-bulk.mjs",
     "sync:cobephim:bulk:dry": "node scripts/sync-cobephim-bulk.mjs --dry-run",
+    "sync:motchill": "node scripts/sync-motchill-external.mjs",
+    "sync:motchill:dry": "node scripts/sync-motchill-external.mjs --dry-run",
     "prebuild": "npm run seo:generate && npm run seo:audit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",

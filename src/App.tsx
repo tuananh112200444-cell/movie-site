@@ -11,7 +11,6 @@ import AppErrorBoundary from "./components/base/AppErrorBoundary";
 import { warmPlayerSourceHealth } from "./services/playerSourceHealth";
 
 const BackToTop = lazy(() => import("./components/base/BackToTop"));
-const CatPawCursor = lazy(() => import("./components/feature/CatPawCursor"));
 const CWVMonitor = lazy(() => import("./components/base/CWVMonitor"));
 
 function useIdleReady(delayMs = 1800) {
@@ -48,7 +47,6 @@ function NonCriticalEnhancements() {
 
   return (
     <Suspense fallback={null}>
-      <CatPawCursor />
       <BackToTop />
       <CWVMonitor />
     </Suspense>

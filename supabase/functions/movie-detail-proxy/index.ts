@@ -1641,20 +1641,21 @@ serve(async (req) => {
     };
 
     const liveMaxEpisode = getMaxEpisodeNumberFromServers(episodeServers);
+    const labelAdvertisedEpisode = extractEpNumber(String(response.movie.episode_current || ''));
     const currentAdvertisedEpisode = Math.max(
       Number(response.movie.current_episode || 0) || 0,
-      extractEpNumber(String(response.movie.episode_current || '')),
+      labelAdvertisedEpisode,
     );
-    if (liveMaxEpisode > currentAdvertisedEpisode) {
-      response.movie.episode_current = liveMaxEpisode > 0 ? `Tập ${liveMaxEpisode}` : response.movie.episode_current;
+    if (
+      liveMaxEpisode > 0 &&
+      (liveMaxEpisode !== currentAdvertisedEpisode || labelAdvertisedEpisode !== liveMaxEpisode)
+    ) {
+      response.movie.episode_current = `Tập ${liveMaxEpisode}`;
       response.movie.current_episode = liveMaxEpisode;
       if (!response.movie.total_episodes || Number(response.movie.total_episodes) < liveMaxEpisode) {
         response.movie.total_episodes = undefined;
         response.movie.episode_total = '';
       }
-    } else if (liveMaxEpisode > 0 && currentAdvertisedEpisode > liveMaxEpisode) {
-      response.movie.episode_current = `Tập ${liveMaxEpisode}`;
-      response.movie.current_episode = liveMaxEpisode;
     }
 
     // Cache successful responses for repeat opens; episode metadata rarely changes minute by minute.

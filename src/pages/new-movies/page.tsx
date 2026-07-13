@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useHeroLazyLoad } from '@/hooks/useHeroLazyLoad';
+import { useImageFallback } from '@/hooks/useImageFallback';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
@@ -620,9 +621,15 @@ export default function NewMoviesPage() {
 
 /* ── Featured Main Card ── */
 function FeaturedCard({ movie }: { movie: Movie }) {
-  const [imgError, setImgError] = useState(false);
-  const imgUrl = getFeaturedUrl(movie.thumb_url || movie.poster_url);
-  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(imgUrl));
+  const imagePath = movie.thumb_url || movie.poster_url;
+  const fallbackPath = movie.poster_url || movie.thumb_url;
+  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
+    imagePath,
+    fallbackPath,
+    isImagePreloaded(getFeaturedUrl(imagePath)),
+    1180,
+    88,
+  );
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
   const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
   const isTrailer = ep === 'trailer';
@@ -637,14 +644,14 @@ function FeaturedCard({ movie }: { movie: Movie }) {
           </div>
         )}
         <img
-          src={imgUrl}
+          src={currentSrc}
           alt={movie.name}
           loading="eager"
           decoding="sync"
           className={`w-full h-full object-cover object-center transition-all duration-700 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.05) saturate(1.1) brightness(0.92)' }}
-          onLoad={() => { setImgLoaded(true); markImagePreloaded(imgUrl); }}
-          onError={() => { setImgError(true); setImgLoaded(true); }}
+          onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
+          onError={onError}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
@@ -699,9 +706,15 @@ function FeaturedCard({ movie }: { movie: Movie }) {
 
 /* ── Side Featured Card (smaller) ── */
 function SideFeaturedCard({ movie }: { movie: Movie }) {
-  const [imgError, setImgError] = useState(false);
-  const imgUrl = getSmallThumbUrl(movie.thumb_url || movie.poster_url);
-  const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(imgUrl));
+  const imagePath = movie.thumb_url || movie.poster_url;
+  const fallbackPath = movie.poster_url || movie.thumb_url;
+  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
+    imagePath,
+    fallbackPath,
+    isImagePreloaded(getSmallThumbUrl(imagePath)),
+    420,
+    84,
+  );
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
   const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
 
@@ -715,13 +728,13 @@ function SideFeaturedCard({ movie }: { movie: Movie }) {
           </div>
         )}
         <img
-          src={imgUrl}
+          src={currentSrc}
           alt={movie.name}
           loading="lazy"
           className={`w-full h-full object-cover object-center transition-all duration-500 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.05) saturate(1.08)' }}
-          onLoad={() => { setImgLoaded(true); markImagePreloaded(imgUrl); }}
-          onError={() => { setImgError(true); setImgLoaded(true); }}
+          onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
+          onError={onError}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
 

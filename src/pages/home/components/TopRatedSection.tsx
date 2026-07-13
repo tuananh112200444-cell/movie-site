@@ -145,8 +145,8 @@ const RANK_STYLES = [
 
 function RankedSpotlight({ movie, idx }: RankedCardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.poster_url || movie.thumb_url,
     movie.thumb_url || movie.poster_url,
+    movie.poster_url || movie.thumb_url,
     false,
     520,
     88,
@@ -172,7 +172,7 @@ function RankedSpotlight({ movie, idx }: RankedCardProps) {
           src={currentSrc}
           alt={movie.name}
           loading="lazy"
-          className={`h-full w-full object-cover object-top transition-opacity duration-500 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
+          className={`h-full w-full object-cover object-center transition-opacity duration-500 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.04) saturate(1.1)' }}
           onLoad={onLoad}
           onError={onError}
@@ -215,8 +215,8 @@ function RankedSpotlight({ movie, idx }: RankedCardProps) {
 
 function RankedMiniCard({ movie, idx }: RankedCardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.poster_url || movie.thumb_url,
     movie.thumb_url || movie.poster_url,
+    movie.poster_url || movie.thumb_url,
     false,
     360,
     86,
@@ -246,7 +246,7 @@ function RankedMiniCard({ movie, idx }: RankedCardProps) {
           src={currentSrc}
           alt={movie.name}
           loading="lazy"
-          className={`h-full w-full object-cover object-top transition-opacity duration-500 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
+          className={`h-full w-full object-cover object-center transition-opacity duration-500 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: 'contrast(1.04) saturate(1.1)' }}
           onLoad={onLoad}
           onError={onError}

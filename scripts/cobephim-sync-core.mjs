@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const BASE_URL = 'https://cobephim.top';
+const BASE_URL = 'https://cobephim.sbs';
+const ALLOWED_COBEPHIM_HOSTS = new Set(['cobephim.sbs', 'cobephim.top']);
 const SOURCE_SITE = 'cobephim';
 const SOURCE_NAME = 'CobePhim / StreamVSMov';
 const SERVER_NAME = 'CobePhim StreamVSMov';
@@ -58,6 +59,8 @@ function normalizeCobeUrl(rawUrl = '') {
   const value = String(rawUrl || '').trim();
   if (!value) return '';
   const parsed = new URL(value, BASE_URL);
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  if (!ALLOWED_COBEPHIM_HOSTS.has(host)) return '';
   parsed.protocol = 'https:';
   parsed.hash = '';
   parsed.search = '';
@@ -71,7 +74,7 @@ function parseXmlUrls(xml = '') {
   const urls = [];
   for (const match of String(xml).matchAll(/<loc>([\s\S]*?)<\/loc>/gi)) {
     const url = decodeHtml(match[1]).trim();
-    if (/^https:\/\/cobephim\.top\/(?:phim|xem-phim)\/[^/?#]+\/?$/i.test(url)) {
+    if (/^https:\/\/(?:www\.)?cobephim\.(?:sbs|top)\/(?:phim|xem-phim)\/[^/?#]+\/?$/i.test(url)) {
       urls.push(normalizeCobeUrl(url));
     }
   }
@@ -137,6 +140,10 @@ function parseEpisodeNumber(label = '') {
 function deriveHlsFromEmbed(embedUrl = '') {
   const id = String(embedUrl || '').match(/streamvsmov\.com\/video\/([a-z0-9-]+)/i)?.[1];
   return id ? `https://v1.streamvsmov.com/stream/${id}/master.m3u8` : '';
+}
+
+function isExpectedUnplayableError(message = '') {
+  return /No playable CobePhim data parsed|HTTP\s+404|HTTP\s+410/i.test(String(message || ''));
 }
 
 async function fetchText(url, timeoutMs = 25000) {
@@ -206,6 +213,7 @@ export async function fetchCobephimEntry(movieUrl) {
   const directors = uniqueList((movie.directors || []).map((item) => item.name));
   const content = stripTags(movie.description || getMetaContent(html, 'description'));
   const year = Number(movie.publish_year || firstMatch(html, /"publish_year":(\d{4})/i) || 0) || new Date().getFullYear();
+  const playableEpisodeMax = Math.max(...episodes.map((episode) => episode.episode_number), 1);
   const episodeCount = Math.max(1, Number(movie.episode_total || episodes.length || 1) || episodes.length || 1);
 
   const entry = {
@@ -225,7 +233,7 @@ export async function fetchCobephimEntry(movieUrl) {
     time: movie.episode_time || '',
     episodeCurrent: movie.episode_current || (episodeCount === 1 ? 'Full' : `Tập ${episodeCount}`),
     episodeTotal: String(movie.episode_total || episodeCount || ''),
-    currentEpisode: Math.max(...episodes.map((episode) => episode.episode_number), episodeCount),
+    currentEpisode: playableEpisodeMax,
     totalEpisodes: episodeCount,
     year,
     actor: actors,
@@ -254,7 +262,7 @@ async function fetchCobeUrls({ sitemapUrl = '', sitemapPage = 1, limit = 10, off
 }
 
 async function fetchExistingMovie(supabase, entry) {
-  const selectFields = 'id,slug,name,origin_name,title_vi,title_en,source_site,source_name,source_url,showtimes,tmdb_id,imdb_id,current_episode,total_episodes';
+  const selectFields = 'id,slug,name,origin_name,title_vi,title_en,source_site,source_name,source_url,showtimes,tmdb_id,imdb_id,episode_current,episode_total,current_episode,total_episodes,quality,lang,status,is_published';
   const checks = [];
   if (entry.imdbId) checks.push(['imdb_id', entry.imdbId]);
   if (entry.tmdbId) checks.push(['tmdb_id', entry.tmdbId]);
@@ -335,10 +343,33 @@ async function updateMovieLightly(supabase, movie, entry) {
   const payload = {
     last_synced_at: new Date().toISOString(),
   };
+  const hasPlayableUpgrade = entry.episodes.length > 0;
+  const currentEpisode = Number(movie.current_episode || 0) || 0;
+  const totalEpisodes = Number(movie.total_episodes || 0) || 0;
+  const looksLikeTrailerOnly = /trailer|sắp|sap|updating|đang cập nhật|dang cap nhat/i.test(
+    String(movie.episode_current || ''),
+  );
+
   if (!movie.source_url) payload.source_url = entry.sourceUrl;
   if (!movie.showtimes) payload.showtimes = entry.sourceUrl;
   if (!movie.tmdb_id && entry.tmdbId) payload.tmdb_id = entry.tmdbId;
   if (!movie.imdb_id && entry.imdbId) payload.imdb_id = entry.imdbId;
+  if (hasPlayableUpgrade && movie.is_published === false) payload.is_published = true;
+  if ((!movie.title_vi || movie.title_vi === movie.origin_name || movie.title_vi === movie.name) && entry.title) {
+    payload.title_vi = entry.title;
+  }
+  if (movie.name === movie.origin_name && entry.title && entry.title !== entry.originName) payload.name = entry.title;
+  if (!movie.title_en && entry.originName) payload.title_en = entry.originName;
+  if (hasPlayableUpgrade && (!currentEpisode || !totalEpisodes || looksLikeTrailerOnly)) {
+    payload.episode_current = entry.episodeCurrent;
+    payload.episode_total = entry.episodeTotal;
+    payload.current_episode = entry.currentEpisode;
+    payload.total_episodes = entry.totalEpisodes;
+    payload.quality = entry.quality;
+    payload.lang = entry.lang;
+    payload.status = entry.status;
+    payload.is_published = true;
+  }
   if (movie.source_site === SOURCE_SITE || movie.source_name === SOURCE_NAME) {
     payload.episode_current = entry.episodeCurrent;
     payload.current_episode = entry.currentEpisode;
@@ -390,7 +421,20 @@ async function upsertPlayableRows(supabase, movie, entry) {
       continue;
     }
     const { error } = await supabase.from('movie_episodes').insert(payload);
-    if (error) throw new Error(`movie_episodes insert ${movie.slug}: ${error.message}`);
+    if (error) {
+      if (/duplicate key value/i.test(error.message || '')) {
+        const { error: duplicateUpdateError } = await supabase
+          .from('movie_episodes')
+          .update(payload)
+          .eq('movie_id', movie.id)
+          .eq('server_name', episode.server_name)
+          .eq('episode_number', episode.episode_number);
+        if (duplicateUpdateError) throw new Error(`movie_episodes duplicate update ${movie.slug}: ${duplicateUpdateError.message}`);
+        episodesUpdated += 1;
+        continue;
+      }
+      throw new Error(`movie_episodes insert ${movie.slug}: ${error.message}`);
+    }
     episodesInserted += 1;
   }
 
@@ -490,7 +534,7 @@ export async function runCobephimSync({
       entries.push(await fetchCobephimEntry(url));
     } catch (error) {
       const message = `${url}: ${error.message}`;
-      if (/No playable CobePhim data parsed/i.test(error.message)) skipped.push(message);
+      if (isExpectedUnplayableError(error.message)) skipped.push(message);
       else errors.push(message);
     }
   }

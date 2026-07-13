@@ -315,6 +315,33 @@ async function assertSitemapsClean() {
   return failures;
 }
 
+async function assertMovieDetailSourcePriorityClean() {
+  const movieApi = await readFile('src/services/movieApi.ts', 'utf8').catch(() => '');
+  const failures = [];
+  if (!movieApi) return ['src/services/movieApi.ts is missing from detail source priority audit.'];
+
+  if (!movieApi.includes('const cacheKey = `detail_v7_${detailSourceKey}_${slug}`')) {
+    failures.push('Movie detail cache key must include source, so source=ophim cannot reuse stale default detail cache.');
+  }
+  if (!movieApi.includes('const inflightKey = `${detailSourceKey}:${slug}`')) {
+    failures.push('Movie detail inflight key must include source, so concurrent source requests cannot share stale promises.');
+  }
+  if (!movieApi.includes('...(looksLikeCjk ? [ophimPromise.then')) {
+    failures.push('source=ophim quick race must only include direct OPhim for CJK/non-ASCII slugs.');
+  }
+  if (movieApi.includes('...(preferOphim ? [ophimPromise.then')) {
+    failures.push('source=ophim quick race is allowed to prefer direct OPhim again; this can regress ASCII movies like chasing-love.');
+  }
+  if (!movieApi.includes('if (looksLikeCjk && ophim && detailHasPlayableEpisodes(ophim))')) {
+    failures.push('Direct OPhim priority must stay limited to CJK/non-ASCII slug fallback.');
+  }
+  if (movieApi.includes('if (preferOphim && ophim && detailHasPlayableEpisodes(ophim))')) {
+    failures.push('Direct OPhim priority must not run for every source=ophim request.');
+  }
+
+  return failures;
+}
+
 const failures = [];
 const warnings = [];
 const results = [];
@@ -347,6 +374,7 @@ failures.push(...await assertAppShellRecoveryClean());
 failures.push(...await assertProductionBuildClean());
 failures.push(...await assertHeadersClean());
 failures.push(...await assertSitemapsClean());
+failures.push(...await assertMovieDetailSourcePriorityClean());
 
 console.log(JSON.stringify({ site: SITE_URL, strictLive: STRICT_LIVE, results, warnings, failures }, null, 2));
 

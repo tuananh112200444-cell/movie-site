@@ -160,15 +160,15 @@ body {
 .cinema-hero-panel {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: 1.65rem;
   background:
-    radial-gradient(circle at 8% 0%, rgba(210, 82, 58, 0.16), transparent 20rem),
-    radial-gradient(circle at 90% 10%, rgba(236, 180, 102, 0.10), transparent 24rem),
-    linear-gradient(135deg, rgba(22, 29, 42, 0.86), rgba(9, 13, 20, 0.72));
+    radial-gradient(circle at 8% 0%, rgba(239, 68, 68, 0.20), transparent 21rem),
+    radial-gradient(circle at 92% 6%, rgba(236, 180, 102, 0.15), transparent 25rem),
+    linear-gradient(135deg, rgba(24, 30, 44, 0.92), rgba(9, 13, 20, 0.76));
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.045),
-    0 22px 70px rgba(0,0,0,0.22);
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 26px 80px rgba(0,0,0,0.26);
 }
 
 .cinema-hero-panel::after {
@@ -181,11 +181,14 @@ body {
 }
 
 .cinema-toolbar-panel {
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 1.25rem;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.024));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    radial-gradient(circle at 0% 0%, rgba(239, 68, 68, 0.10), transparent 16rem),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.026));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 14px 45px rgba(0,0,0,0.16);
 }
 
 .cinema-section-title {
@@ -194,8 +197,8 @@ body {
   align-items: center;
   gap: 0.65rem;
   color: #fff;
-  font-weight: 800;
-  letter-spacing: 0;
+  font-weight: 900;
+  letter-spacing: -0.015em;
 }
 
 .cinema-section-title::before {
@@ -208,14 +211,18 @@ body {
 }
 
 .cinema-chip {
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.045);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.095);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.028));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.045),
+    0 10px 28px rgba(0,0,0,0.14);
 }
 
 .cinema-search-shell {
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.12);
   background:
+    radial-gradient(circle at 7% 0%, rgba(239, 68, 68, 0.12), transparent 18rem),
     linear-gradient(180deg, rgba(22, 29, 42, 0.98), rgba(13, 18, 28, 0.98));
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
@@ -584,47 +591,63 @@ input::placeholder, textarea::placeholder {
 
 .home-section-surface {
   position: relative;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 1.15rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 1.25rem;
   margin-inline: 0;
   padding-inline: 0;
+  isolation: isolate;
 }
 
 .home-section-surface::before {
   content: "";
   position: absolute;
   inset: 0 auto auto 0;
-  width: min(18rem, 46vw);
+  width: min(22rem, 54vw);
   height: 1px;
-  background: linear-gradient(90deg, rgba(236, 180, 102, 0.46), rgba(255, 255, 255, 0.12), transparent);
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.56), rgba(251, 191, 36, 0.26), rgba(255, 255, 255, 0.12), transparent);
+  pointer-events: none;
+}
+
+.home-section-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  height: 10rem;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(239, 68, 68, 0.10), transparent 18rem),
+    radial-gradient(circle at 96% 8%, rgba(245, 158, 11, 0.07), transparent 22rem);
+  opacity: 0.68;
   pointer-events: none;
 }
 
 @media (max-width: 767px) {
   .home-section-surface {
-    margin-inline: -0.1rem;
-    padding: 0.9rem 0.15rem 0;
+    margin-inline: -0.05rem;
+    padding: 1rem 0.15rem 0;
     border-top-color: rgba(255, 255, 255, 0.075);
   }
 
   .home-section-surface::before {
-    width: min(13rem, 58vw);
-    background: linear-gradient(90deg, rgba(236, 180, 102, 0.52), rgba(255,255,255,0.10), transparent);
+    width: min(14rem, 62vw);
+    background: linear-gradient(90deg, rgba(248, 113, 113, 0.58), rgba(251,191,36,0.22), rgba(255,255,255,0.10), transparent);
   }
 }
 
 @media (min-width: 1024px) {
   .home-section-surface {
     margin-inline: 0;
-    padding: 1.35rem 1.15rem 0.35rem;
-    border-radius: 1.35rem;
-    border: 1px solid rgba(255, 255, 255, 0.065);
+    padding: 1.45rem 1.25rem 0.5rem;
+    border-radius: 1.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     background:
-      radial-gradient(circle at 0% 0%, rgba(236, 180, 102, 0.055), transparent 22rem),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.030), rgba(255, 255, 255, 0.010));
+      radial-gradient(circle at 0% 0%, rgba(248, 113, 113, 0.085), transparent 25rem),
+      radial-gradient(circle at 100% 0%, rgba(245, 158, 11, 0.052), transparent 28rem),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.012));
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.035),
-      0 18px 58px rgba(0,0,0,0.12);
+      inset 0 1px 0 rgba(255,255,255,0.050),
+      0 22px 70px rgba(0,0,0,0.16);
   }
 }
 
@@ -638,7 +661,8 @@ input::placeholder, textarea::placeholder {
 .home-rail-scroll {
   position: relative;
   scroll-padding-inline: 0.75rem;
-  padding-inline: 0.15rem;
+  padding-inline: 0.2rem;
+  overscroll-behavior-x: contain;
 }
 
 .home-rail-frame {
@@ -659,12 +683,12 @@ input::placeholder, textarea::placeholder {
 
 .home-rail-frame::before {
   left: 0;
-  background: linear-gradient(90deg, rgba(10, 14, 22, 0.82), transparent);
+  background: linear-gradient(90deg, rgba(9, 12, 19, 0.86), transparent);
 }
 
 .home-rail-frame::after {
   right: 0;
-  background: linear-gradient(270deg, rgba(10, 14, 22, 0.82), transparent);
+  background: linear-gradient(270deg, rgba(9, 12, 19, 0.86), transparent);
 }
 
 .continue-watching-panel {
@@ -720,49 +744,49 @@ input::placeholder, textarea::placeholder {
 
 .movie-grid-desktop {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.15rem 0.85rem;
+  gap: 1.25rem 0.92rem;
   align-items: start;
 }
 
 @media (min-width: 640px) {
   .movie-grid-desktop {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 1.3rem 1rem;
+    gap: 1.45rem 1.08rem;
   }
 }
 
 @media (min-width: 768px) {
   .movie-grid-desktop {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 1.45rem 1.15rem;
+    gap: 1.65rem 1.24rem;
   }
 }
 
 @media (min-width: 1024px) {
   .movie-grid-desktop {
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 1.7rem 1.25rem;
+    gap: 1.9rem 1.34rem;
   }
 }
 
 @media (min-width: 1280px) {
   .movie-grid-desktop {
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 1.85rem 1.45rem;
+    gap: 2.05rem 1.52rem;
   }
 }
 
 @media (min-width: 1536px) {
   .movie-grid-desktop {
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 2rem 1.55rem;
+    gap: 2.2rem 1.62rem;
   }
 }
 
 @media (min-width: 1900px) {
   .movie-grid-desktop {
     grid-template-columns: repeat(8, minmax(0, 1fr));
-    gap: 2.1rem 1.65rem;
+    gap: 2.3rem 1.72rem;
   }
 }
 
