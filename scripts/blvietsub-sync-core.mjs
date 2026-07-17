@@ -104,6 +104,46 @@ function canonicalDuplicateTitle(value = '') {
   return slugify(value).replace(/^(phim|movie|series)-/, '');
 }
 
+function compactTitleKey(value = '') {
+  return canonicalDuplicateTitle(value).replace(/-/g, '');
+}
+
+function hasCompatibleYear(left, right) {
+  const a = Number(left || 0);
+  const b = Number(right || 0);
+  return !a || !b || a === b;
+}
+
+function canonicalMoviePriority(movie) {
+  const source = `${movie?.source_site || ''} ${movie?.source_name || ''}`.toLowerCase();
+  if (source.includes('merged')) return -100;
+  if (source.includes('admin-queer')) return 100;
+  if (source.includes('admin')) return 90;
+  if (!String(movie?.slug || '').startsWith('blvietsub-')) return 70;
+  if (source.includes('blvietsub')) return 40;
+  return 20;
+}
+
+function selectPreferredMovie(movies = []) {
+  return [...movies].sort((a, b) => (
+    canonicalMoviePriority(b) - canonicalMoviePriority(a) ||
+    getMovieCurrentEpisode(b) - getMovieCurrentEpisode(a) ||
+    Date.parse(String(b?.updated_at || '')) - Date.parse(String(a?.updated_at || ''))
+  ))[0] || null;
+}
+
+function getMovieCompactTitleKeys(movie) {
+  return [...new Set([movie?.name, movie?.origin_name, movie?.title_vi, movie?.title_en]
+    .map((value) => compactTitleKey(value))
+    .filter((value) => value.length >= 5))];
+}
+
+function getEntryCompactTitleKeys(entry) {
+  return [...new Set([entry?.title, entry?.originName, ...(entry?.aliasNames || [])]
+    .map((value) => compactTitleKey(value))
+    .filter((value) => value.length >= 5))];
+}
+
 function getMovieCurrentEpisode(movie) {
   const numeric = Number(movie?.current_episode || movie?.total_episodes || 0);
   if (numeric > 0) return numeric;
@@ -507,6 +547,7 @@ function buildMovieIndexes(movies) {
   const bySourceUrl = new Map();
   const bySlug = new Map();
   const byTitle = new Map();
+  const byCompactTitle = new Map();
   for (const movie of movies) {
     const source = String(movie.showtimes || movie.source_url || '');
     const postId = source.match(/(?:p=|post-|blvietsub-)([^/?#&]+)/)?.[1] || '';
@@ -519,11 +560,25 @@ function buildMovieIndexes(movies) {
       const key = canonicalDuplicateTitle(title);
       if (key && !byTitle.has(key)) byTitle.set(key, movie);
     }
+    for (const key of getMovieCompactTitleKeys(movie)) {
+      const candidates = byCompactTitle.get(key) || [];
+      candidates.push(movie);
+      byCompactTitle.set(key, candidates);
+    }
   }
-  return { byPostId, bySourceUrl, bySlug, byTitle };
+  return { byPostId, bySourceUrl, bySlug, byTitle, byCompactTitle };
 }
 
 function findMovie(entry, indexes) {
+  const canonicalCandidates = new Map();
+  for (const key of getEntryCompactTitleKeys(entry)) {
+    for (const movie of indexes.byCompactTitle.get(key) || []) {
+      if (hasCompatibleYear(entry.year, movie.year)) canonicalCandidates.set(movie.id, movie);
+    }
+  }
+  const canonicalMatch = selectPreferredMovie([...canonicalCandidates.values()]);
+  if (canonicalMatch) return canonicalMatch;
+
   const generatedSlug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
   const sourceUrlKey = String(entry.sourceUrl || '').replace(/\/+$/, '');
   if (indexes.byPostId.has(entry.postId)) return indexes.byPostId.get(entry.postId);
@@ -638,7 +693,7 @@ async function updateMovie(supabase, movie, entry) {
   const current = getMovieCurrentEpisode(movie);
   const existingTotal = Number(movie.total_episodes || 0) || 0;
   const syncedEpisodeCount = Math.max(1, maxPlayableEpisodeNumber(entry.episodes), playableEpisodeCount(entry.episodes));
-  const episodeCount = Math.max(current, existingTotal, syncedEpisodeCount);
+  const episodeCount = syncedEpisodeCount || Math.max(current, existingTotal);
   const payload = {
     showtimes: entry.sourceUrl,
     source_url: entry.sourceUrl,

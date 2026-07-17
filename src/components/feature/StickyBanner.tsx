@@ -100,7 +100,7 @@ export default function StickyBanner() {
             className="block active:scale-[0.99] transition-transform cursor-pointer"
           >
             <img
-              src="/banners/winaz-728x90.gif"
+              src="/banners/winaz-728x90-20260715.gif"
               alt="WinAZ banner"
               className="aspect-[728/90] h-auto max-h-[46px] w-full object-contain object-center sm:max-h-[62px] lg:max-h-[48px]"
               loading="eager"
