@@ -2342,6 +2342,42 @@ function isSafeMetadataAlias(
   return sharedName && (primarySlug !== requested || isWeakDetailTitle(primary, requestedSlug));
 }
 
+function isSafePlayableDetailAlias(
+  primary: MovieDetailResponse | null,
+  secondary: MovieDetailResponse | null,
+  requestedSlug: string
+): boolean {
+  if (!primary?.movie || !secondary?.movie) return false;
+  if (isQueerMovieDetail(primary.movie) && !isQueerMovieDetail(secondary.movie)) return false;
+
+  const requested = requestedSlug.trim().toLowerCase().normalize('NFC');
+  const secondarySlug = String(secondary.movie.slug || '').trim().toLowerCase().normalize('NFC');
+  if (secondarySlug && requested && secondarySlug !== requested) return false;
+
+  const primaryYear = Number(primary.movie.year || 0);
+  const secondaryYear = Number(secondary.movie.year || 0);
+  if (primaryYear > 0 && secondaryYear > 0 && primaryYear !== secondaryYear) return false;
+
+  const primaryNames = [
+    primary.movie.name,
+    primary.movie.origin_name,
+    primary.movie.slug?.replace(/-/g, ' '),
+  ].map((value) => normalizeMatchText(value || '')).filter((value) => value.length >= 3);
+  const secondaryNames = [
+    secondary.movie.name,
+    secondary.movie.origin_name,
+    secondary.movie.slug?.replace(/-/g, ' '),
+  ].map((value) => normalizeMatchText(value || '')).filter((value) => value.length >= 3);
+
+  return primaryNames.some((left) =>
+    secondaryNames.some((right) =>
+      left === right ||
+      (left.length >= 12 && right.includes(left)) ||
+      (right.length >= 12 && left.includes(right))
+    )
+  );
+}
+
 function mergeDetailMetadataForRequestedSlug(
   primary: MovieDetailResponse,
   secondary: MovieDetailResponse | null,
@@ -2385,6 +2421,9 @@ async function mergeExternalDetailIfFast(
     externalPromise.catch(() => null),
     new Promise<MovieDetailResponse | null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
   ]);
+  if (requestedSlug && !isSafePlayableDetailAlias(primary, external, requestedSlug)) {
+    return primary;
+  }
   const merged = mergePlayableMovieDetails(primary, external);
   return requestedSlug ? mergeDetailMetadataForRequestedSlug(merged, external, requestedSlug) : merged;
 }

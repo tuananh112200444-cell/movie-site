@@ -268,6 +268,20 @@ function canonicalDuplicateTitle(value = ''): string {
     .trim();
 }
 
+// Source sites disagree on word boundaries (for example, "ChermChey" vs
+// "Cherm Chey"). Keep a compact key solely for an exact identity comparison;
+// it is always paired with a compatible release year before it can select a
+// different movie record.
+function compactTitleKey(value = ''): string {
+  return canonicalDuplicateTitle(value).replace(/\s+/g, '');
+}
+
+function hasCompatibleYear(left?: number | null, right?: number | null): boolean {
+  const a = Number(left || 0);
+  const b = Number(right || 0);
+  return !a || !b || a === b;
+}
+
 function uniqueTextValues(values: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -612,6 +626,68 @@ function getMovieTitleKeys(movie: MovieRow): string[] {
     .filter(Boolean);
 }
 
+function getMovieCompactTitleKeys(movie: MovieRow): string[] {
+  return Array.from(new Set([
+    movie.name,
+    movie.origin_name,
+    movie.title_vi,
+    movie.title_en,
+  ]
+    .map((value) => compactTitleKey(value || ''))
+    .filter((value) => value.length >= 5)));
+}
+
+function getEntryCompactTitleKeys(entry: ParsedEntry): string[] {
+  return Array.from(new Set(uniqueTextValues([
+    entry.title,
+    entry.originName,
+    ...(entry.aliasNames || []),
+  ])
+    .map((value) => compactTitleKey(value))
+    .filter((value) => value.length >= 5)));
+}
+
+function canonicalMoviePriority(movie: MovieRow): number {
+  const source = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
+  if (source.includes('merged')) return -100;
+  if (source.includes('admin-queer')) return 100;
+  if (source.includes('admin')) return 90;
+  if (!String(movie.slug || '').startsWith('blvietsub-')) return 70;
+  if (source.includes('blvietsub')) return 40;
+  return 20;
+}
+
+function selectPreferredMovie(movies: MovieRow[]): MovieRow | null {
+  return [...movies].sort((a, b) => (
+    canonicalMoviePriority(b) - canonicalMoviePriority(a) ||
+    getMovieCurrentEpisode(b) - getMovieCurrentEpisode(a) ||
+    toTime(b.updated_at) - toTime(a.updated_at)
+  ))[0] || null;
+}
+
+function findCanonicalMovieForEntry(
+  entry: ParsedEntry,
+  indexes: ReturnType<typeof buildMovieIndexes>,
+): MovieRow | null {
+  const candidates = new Map<string, MovieRow>();
+  for (const key of getEntryCompactTitleKeys(entry)) {
+    for (const movie of indexes.byCompactTitle.get(key) || []) {
+      if (hasCompatibleYear(entry.year, movie.year)) candidates.set(movie.id, movie);
+    }
+  }
+  return selectPreferredMovie([...candidates.values()]);
+}
+
+function findCanonicalMovieForMovie(movie: MovieRow, indexes: ReturnType<typeof buildMovieIndexes>): MovieRow | null {
+  const candidates = new Map<string, MovieRow>();
+  for (const key of getMovieCompactTitleKeys(movie)) {
+    for (const candidate of indexes.byCompactTitle.get(key) || []) {
+      if (hasCompatibleYear(movie.year, candidate.year)) candidates.set(candidate.id, candidate);
+    }
+  }
+  return selectPreferredMovie([...candidates.values()]);
+}
+
 function findEntryForMovie(
   movie: MovieRow,
   indexes: ReturnType<typeof buildEntryIndexes>,
@@ -629,6 +705,7 @@ function findEntryForMovie(
 function buildMovieIndexes(movies: MovieRow[]) {
   const byPostId = new Map<string, MovieRow>();
   const byTitle = new Map<string, MovieRow>();
+  const byCompactTitle = new Map<string, MovieRow[]>();
   const bySlug = new Map<string, MovieRow>();
   const bySourceUrl = new Map<string, MovieRow>();
 
@@ -646,9 +723,14 @@ function buildMovieIndexes(movies: MovieRow[]) {
     for (const key of getMovieTitleKeys(movie)) {
       if (!byTitle.has(key)) byTitle.set(key, movie);
     }
+    for (const key of getMovieCompactTitleKeys(movie)) {
+      const candidates = byCompactTitle.get(key) || [];
+      candidates.push(movie);
+      byCompactTitle.set(key, candidates);
+    }
   }
 
-  return { byPostId, byTitle, bySlug, bySourceUrl };
+  return { byPostId, byTitle, byCompactTitle, bySlug, bySourceUrl };
 }
 
 async function findGlobalMovieForEntry(
@@ -670,8 +752,7 @@ async function findGlobalMovieForEntry(
       if (entry.year) query = query.eq('year', entry.year);
       const { data, error } = await query;
       if (error) continue;
-      const match = ((data || []) as MovieRow[])
-        .sort((a, b) => getMovieCurrentEpisode(b) - getMovieCurrentEpisode(a))[0];
+      const match = selectPreferredMovie((data || []) as MovieRow[]);
       if (match?.id) return match;
     }
   }
@@ -688,9 +769,15 @@ async function findGlobalMovieForEntry(
     .limit(20);
   if (entry.year) query = query.eq('year', entry.year);
   const { data } = await query;
-  return ((data || []) as MovieRow[])
-    .filter((movie) => getMovieTitleKeys(movie).some((key) => keys.includes(key)))
-    .sort((a, b) => getMovieCurrentEpisode(b) - getMovieCurrentEpisode(a))[0] || null;
+  const entryCompactKeys = getEntryCompactTitleKeys(entry);
+  const matches = ((data || []) as MovieRow[])
+    .filter((movie) => {
+      if (!hasCompatibleYear(entry.year, movie.year)) return false;
+      const exactMatch = getMovieTitleKeys(movie).some((key) => keys.includes(key));
+      const compactMatch = getMovieCompactTitleKeys(movie).some((key) => entryCompactKeys.includes(key));
+      return exactMatch || compactMatch;
+    });
+  return selectPreferredMovie(matches);
 }
 
 async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<MovieRow[]> {
@@ -1206,6 +1293,11 @@ function findMovieForEntry(
   entry: ParsedEntry,
   indexes: ReturnType<typeof buildMovieIndexes>,
 ): MovieRow | null {
+  // Update the public/canonical record before a source-specific duplicate.
+  // This is intentionally an exact compact-title + compatible-year match.
+  const canonicalMatch = findCanonicalMovieForEntry(entry, indexes);
+  if (canonicalMatch) return canonicalMatch;
+
   const generatedSlug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
   if (indexes.byPostId.has(entry.postId)) return indexes.byPostId.get(entry.postId) || null;
   const entrySourceUrl = String(entry.sourceUrl || '').replace(/\/+$/, '');
@@ -1562,23 +1654,37 @@ async function repairExistingBlvietsubMovies(
   const errors: string[] = [];
   const pool = (data || []) as MovieRow[];
   const episodeStats = await fetchLocalEpisodeStats(supabase, pool);
+  const movieIndexes = buildMovieIndexes(pool);
   const now = Date.now();
-  const rows = pool
+  // Several old imports may represent one title with different spacing or
+  // source slugs. Repair the preferred public record once, using the known
+  // BLVietsub URL from any exact compact-title sibling.
+  const repairSources = new Map<string, { movie: MovieRow; sourceUrl: string }>();
+  for (const sourceMovie of pool) {
+    const sourceUrl = getBlvietsubMovieUrl(sourceMovie);
+    if (!sourceUrl) continue;
+    const target = findCanonicalMovieForMovie(sourceMovie, movieIndexes) || sourceMovie;
+    const existing = repairSources.get(target.id);
+    if (!existing || toTime(sourceMovie.last_synced_at) < toTime(existing.movie.last_synced_at)) {
+      repairSources.set(target.id, { movie: target, sourceUrl });
+    }
+  }
+  const repairTargets = [...repairSources.values()];
+  const rows = repairTargets
     .map((movie) => ({
-      movie,
-      score: scoreRoutineRepairMovie(movie, episodeStats.get(movie.id), includeCompleted, now),
+      movie: movie.movie,
+      sourceUrl: movie.sourceUrl,
+      score: scoreRoutineRepairMovie(movie.movie, episodeStats.get(movie.movie.id), includeCompleted, now),
     }))
     .filter((item) => item.score >= 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, cappedLimit)
     .map((item) => item.movie);
 
-  for (const movie of rows) {
-    const movieUrl = getBlvietsubMovieUrl(movie);
-    if (!movieUrl) continue;
+  for (const { movie, sourceUrl } of rows) {
     checked += 1;
     try {
-      const entry = await fetchWordPressEntryByUrl(movieUrl);
+      const entry = await fetchWordPressEntryByUrl(sourceUrl);
       if (!entry) continue;
       const result = await syncEntryToMovie(supabase, movie, entry);
       inserted += result.inserted;
@@ -1606,8 +1712,8 @@ async function repairExistingBlvietsubMovies(
 
   return {
     scanned: rows.length,
-    scanned_pool: pool.length,
-    completed_skipped: pool.length - rows.length,
+    scanned_pool: repairTargets.length,
+    completed_skipped: repairTargets.length - rows.length,
     checked,
     repaired,
     inserted,
@@ -1889,13 +1995,14 @@ serve(async (req) => {
   const secret = url.searchParams.get('secret') || req.headers.get('x-cron-secret') || '';
   const cronSecret = Deno.env.get('CRON_SECRET') || '';
   const syncSecret = Deno.env.get('BLVIETSUB_SYNC_SECRET') || '';
-  if ((cronSecret || syncSecret) && secret !== cronSecret && secret !== syncSecret) {
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  const isInternalServiceCall = Boolean(serviceKey) && req.headers.get('authorization') === `Bearer ${serviceKey}`;
+  if (!isInternalServiceCall && (cronSecret || syncSecret) && secret !== cronSecret && secret !== syncSecret) {
     return json({ success: false, error: 'Unauthorized' }, 401);
   }
 
   const started = Date.now();
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!supabaseUrl || !serviceKey) return json({ success: false, error: 'Missing Supabase env' }, 500);
 
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 2000), 5000));

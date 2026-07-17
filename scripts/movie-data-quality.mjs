@@ -79,6 +79,28 @@ function isBlvietsubMovie(movie) {
   return source.includes('blvietsub') || source.includes('admin-queer');
 }
 
+function isExternalQueerEpisodeRow(row) {
+  const haystack = [
+    row.source,
+    row.server_name,
+    row.link_embed,
+    row.link_m3u8,
+    row.embed_url,
+    row.stream_url,
+    row.server_data && JSON.stringify(row.server_data),
+  ].map((value) => String(value || '').toLowerCase()).join(' ');
+  if (
+    haystack.includes('verified') &&
+    (haystack.includes('ophim') || haystack.includes('kkphim') || haystack.includes('phimapi'))
+  ) {
+    return false;
+  }
+  return /\b(ophim|kkphim|phimapi)\b/.test(haystack)
+    || haystack.includes('kkphimplayer')
+    || haystack.includes('#ha noi')
+    || haystack.includes('ha noi');
+}
+
 function isCatalogOnlyMovie(movie) {
   return sourceLabel(movie).includes('tmdb-catalog');
 }
@@ -264,7 +286,7 @@ const movieIds = (movies || []).map((movie) => movie.id).filter(Boolean);
 const [movieEpisodes, episodes, streams] = await Promise.all([
   queryByMovieIds('movie_episodes', 'movie_id, episode_number, slug, episode_name, server_name, link_m3u8, link_embed, source', movieIds, ['episode_number', 'server_name']),
   queryByMovieIds('episodes', 'movie_id, episode_number, episode_slug, episode_name, server_name, link_m3u8, link_embed, server_data', movieIds, ['episode_number', 'server_name']),
-  queryByMovieIds('streams', 'movie_id, episode_slug, server_name, stream_url, embed_url, is_active', movieIds, ['episode_slug', 'server_name']),
+  queryByMovieIds('streams', 'movie_id, episode_slug, server_name, source, stream_url, embed_url, is_active', movieIds, ['episode_slug', 'server_name']),
 ]);
 
 for (const result of [movieEpisodes, episodes, streams]) {
@@ -273,6 +295,19 @@ for (const result of [movieEpisodes, episodes, streams]) {
 
 const playableByMovie = new Map();
 const sourcesByMovie = new Map();
+const detailRowsByMovie = new Map();
+
+function addDetailRow(row) {
+  if (!row?.movie_id) return;
+  const rows = detailRowsByMovie.get(row.movie_id) || [];
+  rows.push(row);
+  detailRowsByMovie.set(row.movie_id, rows);
+}
+
+for (const row of movieEpisodes.rows) addDetailRow({ ...row, __table: 'movie_episodes' });
+for (const row of episodes.rows) addDetailRow({ ...row, __table: 'episodes' });
+for (const row of streams.rows.filter((row) => row.is_active !== false)) addDetailRow({ ...row, __table: 'streams' });
+
 for (const row of [
   ...movieEpisodes.rows,
   ...episodes.rows,
@@ -292,6 +327,7 @@ const severeBlvietsub = [];
 const staleLabels = [];
 const noPlayable = [];
 const catalogNoPlayable = [];
+const queerExternalRows = [];
 const checked = [];
 
 for (const movie of movies || []) {
@@ -299,6 +335,21 @@ for (const movie of movies || []) {
   const labelEpisode = episodeNumberFromText(movie.episode_current);
   const currentEpisode = Number(movie.current_episode || 0) || 0;
   const playable = playableByMovie.get(movie.id) || 0;
+  if (isBlvietsubMovie(movie)) {
+    for (const row of detailRowsByMovie.get(movie.id) || []) {
+      if (!isExternalQueerEpisodeRow(row)) continue;
+      const hasPlayableUrl = Boolean(String(row.link_m3u8 || row.stream_url || '').trim() || String(row.link_embed || row.embed_url || '').trim());
+      if (!hasPlayableUrl && row.source === 'hidden') continue;
+      queerExternalRows.push({
+        slug: movie.slug,
+        name: movie.name,
+        table_hint: row.__table,
+        episode_number: row.episode_number || row.episode_slug || row.slug,
+        server_name: row.server_name,
+        source: row.source,
+      });
+    }
+  }
   if (advertised <= 1) continue;
   const record = {
     slug: movie.slug,
@@ -356,6 +407,10 @@ if (staleLabels.length > 0) {
   failures.push(`Found ${staleLabels.length} movies where current_episode matches playable data but episode_current label is stale.`);
 }
 
+if (queerExternalRows.length > 0) {
+  failures.push(`Found ${queerExternalRows.length} BLVietsub/admin-queer playable rows polluted by external OPhim/KKPhim/PhimAPI sources.`);
+}
+
 console.log(JSON.stringify({
   checkedMovies: movies?.length || 0,
   checkedEpisodeMovies: checked.length,
@@ -370,11 +425,13 @@ console.log(JSON.stringify({
   staleLabelCount: staleLabels.length,
   noPlayableCount: noPlayable.length,
   catalogNoPlayableCount: catalogNoPlayable.length,
+  queerExternalRowCount: queerExternalRows.length,
   samples: severe.slice(0, 12),
   blvietsubSamples: severeBlvietsub.slice(0, 8),
   staleLabelSamples: staleLabels.slice(0, 8),
   noPlayableSamples: noPlayable.slice(0, 8),
   catalogNoPlayableSamples: catalogNoPlayable.slice(0, 8),
+  queerExternalRowSamples: queerExternalRows.slice(0, 8),
   warnings,
   failures,
 }, null, 2));

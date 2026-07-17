@@ -418,6 +418,53 @@ function isOphimLikeMovieRecord(movie: Record<string, unknown> | null | undefine
   return text.includes('ophim') || text.includes('kkphim') || !!movie?.ophim_slug;
 }
 
+function isTrustedQueerEpisodeSource(source: unknown, serverName: unknown): boolean {
+  const text = `${source || ''} ${serverName || ''}`.toLowerCase();
+  if (!text.trim()) return true;
+  const verifiedAuxiliary =
+    text.includes('verified') &&
+    (text.includes('ophim') || text.includes('kkphim') || text.includes('phimapi'));
+  if (verifiedAuxiliary) return true;
+  if (
+    text.includes('ophim') ||
+    text.includes('kkphim') ||
+    text.includes('phimapi') ||
+    text.includes('#hà nội') ||
+    text.includes('#ha noi') ||
+    text.includes('hà nội') ||
+    text.includes('ha noi')
+  ) {
+    return false;
+  }
+  return (
+    text.includes('blvietsub') ||
+    text.includes('admin-queer') ||
+    text.includes('verified') ||
+    text.includes('manual') ||
+    text.includes('stream') ||
+    text.includes('ss') ||
+    /\bsv\s*\d+\b/.test(text)
+  );
+}
+
+function hasUntrustedQueerEpisodeServer(payload: Record<string, unknown> | null | undefined): boolean {
+  const movie = payload?.movie as Record<string, unknown> | undefined;
+  if (!isBlvietsubMovieRecord(movie)) return false;
+  const servers = Array.isArray(payload?.episodes)
+    ? payload.episodes as Array<{ server_name?: unknown }>
+    : [];
+  return servers.some((server) => !isTrustedQueerEpisodeSource('', server.server_name));
+}
+
+function detailHasPlayableEpisodes(detail: { episodes?: Array<{ server_data?: unknown[] }> } | null | undefined): boolean {
+  return Boolean(detail?.episodes?.some((server) =>
+    (server.server_data ?? []).some((raw) => {
+      const ep = raw as Record<string, unknown>;
+      return Boolean(String(ep.link_m3u8 || '').trim() || String(ep.link_embed || '').trim());
+    })
+  ));
+}
+
 function getOphimProvider(movie: Record<string, unknown> | null | undefined): string {
   const text = `${movie?.source_site || ''} ${movie?.source_name || ''}`.toLowerCase();
   return text.includes('kkphim') || text.includes('phimapi') ? 'kkphim' : 'ophim';
@@ -651,10 +698,18 @@ function triggerOnDemandEpisodeRepair(
 }
 
 async function searchOphimForSlug(keyword: string): Promise<string | null> {
+  const candidates = await searchOphimCandidateSlugs(keyword, 1);
+  return candidates[0] ?? null;
+}
+
+async function searchOphimCandidateSlugs(keyword: string, limit = 6): Promise<string[]> {
+  const cleanKeyword = String(keyword || '').trim();
+  if (!cleanKeyword) return [];
   const urls = [
-    `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=1`,
-    `https://ophim.tv/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=1`,
+    `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
+    `https://ophim.tv/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
   ];
+  const slugs: string[] = [];
   for (const url of urls) {
     try {
       const ctrl = new AbortController();
@@ -666,15 +721,201 @@ async function searchOphimForSlug(keyword: string): Promise<string | null> {
       const d = data as Record<string, unknown>;
       const items = (d?.data as Record<string, unknown>)?.items ?? d?.items ?? [];
       if (Array.isArray(items) && items.length > 0) {
-        const first = items[0] as Record<string, unknown>;
-        if (first.slug) return String(first.slug);
+        for (const item of items) {
+          const slug = String((item as Record<string, unknown>).slug || '').trim();
+          if (slug && !slugs.includes(slug)) slugs.push(slug);
+          if (slugs.length >= limit) return slugs;
+        }
       }
     } catch { /* ignore */ }
+  }
+  return slugs;
+}
+
+/* ── OPTIMIZED: Accept ANY 200 response from /phim/${slug} ── */
+function verifiedAuxiliaryServerName(serverName: unknown, provider: string): string {
+  const clean = String(serverName || 'Vietsub').trim();
+  const prefix = provider === 'kkphim' ? 'KKPhim' : provider === 'phimapi' ? 'PhimAPI' : 'OPhim';
+  return `${prefix} verified - ${clean}`;
+}
+
+function externalProviderFromMovie(movie: Record<string, unknown> | null | undefined): string {
+  const text = `${movie?.source_site || ''} ${movie?.source_name || ''}`.toLowerCase();
+  if (text.includes('kkphim')) return 'kkphim';
+  if (text.includes('phimapi')) return 'phimapi';
+  return 'ophim';
+}
+
+function verifiedAuxiliarySourceFromServer(serverName: unknown): string {
+  const text = String(serverName || '').toLowerCase();
+  if (text.includes('kkphim')) return 'verified-kkphim';
+  if (text.includes('phimapi')) return 'verified-phimapi';
+  return 'verified-ophim';
+}
+
+function isSafeAuxiliaryExternalMatch(
+  primary: Record<string, unknown> | null | undefined,
+  external: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!primary || !external) return false;
+  const primaryTmdb = String(primary.tmdb_id || '').trim();
+  const externalTmdb = String(external.tmdb_id || '').trim();
+  if (primaryTmdb && externalTmdb && primaryTmdb === externalTmdb) return true;
+  return sameMovieYearOrUnknown(primary, external) && hasSharedTitle(primary, external);
+}
+
+async function fetchVerifiedAuxiliaryExternalDetail(
+  movie: Record<string, unknown> | null | undefined,
+): Promise<{
+  movie: Record<string, unknown>;
+  episodes: Array<{ server_name: string; server_data: unknown[] }>;
+} | null> {
+  if (!movie) return null;
+  const candidates = Array.from(new Set([
+    movie.ophim_slug,
+    movie.origin_name,
+    movie.title_en,
+    movie.title_original,
+    movie.name,
+    String(movie.slug || '').replace(/^blvietsub-\d+-/, '').replace(/-/g, ' '),
+  ]
+    .map((value) => String(value || '').trim())
+    .filter((value) => value.length >= 3)
+    .slice(0, 5)));
+
+  for (const query of candidates) {
+    const directSlugs = /^[a-z0-9-]+$/i.test(query) ? [query] : [];
+    const searchSlugs = await searchOphimCandidateSlugs(query, 5);
+    for (const candidateSlug of Array.from(new Set([...directSlugs, ...searchSlugs]))) {
+      const detail = await fetchExternalMovieDetail(candidateSlug);
+      if (!detail || !detailHasPlayableEpisodes(detail)) continue;
+      if (!isSafeAuxiliaryExternalMatch(movie, detail.movie)) continue;
+      const provider = externalProviderFromMovie(detail.movie);
+      return {
+        movie: detail.movie,
+        episodes: detail.episodes.map((server) => ({
+          server_name: verifiedAuxiliaryServerName(server.server_name, provider),
+          server_data: server.server_data,
+        })),
+      };
+    }
   }
   return null;
 }
 
-/* ── OPTIMIZED: Accept ANY 200 response from /phim/${slug} ── */
+async function persistVerifiedAuxiliaryEpisodes(
+  supabase: ReturnType<typeof createClient>,
+  movieId: string,
+  detail: { episodes: Array<{ server_name: string; server_data: unknown[] }> },
+): Promise<{ inserted: number; updated: number; skipped: number }> {
+  if (!movieId || !detail?.episodes?.length) return { inserted: 0, updated: 0, skipped: 0 };
+
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const server of detail.episodes) {
+    const serverName = String(server.server_name || '').trim();
+    if (!serverName || !isTrustedQueerEpisodeSource(verifiedAuxiliarySourceFromServer(serverName), serverName)) {
+      skipped += Array.isArray(server.server_data) ? server.server_data.length : 0;
+      continue;
+    }
+
+    for (const rawEpisode of (server.server_data ?? []) as Array<Record<string, unknown>>) {
+      const epName = String(rawEpisode.name || '').trim();
+      const slugVal = String(rawEpisode.slug || epName || '').trim();
+      const epNum = extractEpNumber(slugVal || epName);
+      const linkEmbed = normalizeDailymotionUrl(String(rawEpisode.link_embed || '').trim());
+      const linkM3u8 = String(rawEpisode.link_m3u8 || '').trim();
+      if (epNum <= 0 || (!linkEmbed && !linkM3u8)) {
+        skipped += 1;
+        continue;
+      }
+
+      const payload = {
+        movie_id: movieId,
+        episode_number: epNum,
+        episode_name: epName || `Tập ${epNum}`,
+        slug: slugVal || `tap-${epNum}`,
+        server_name: serverName,
+        link_embed: linkEmbed,
+        link_m3u8: linkM3u8,
+        subtitle_url: String(rawEpisode.subtitle_url || rawEpisode.subtitle || '').trim(),
+        thumbnail_url: String(rawEpisode.thumb_url || rawEpisode.thumbnail_url || '').trim(),
+        duration: String(rawEpisode.time || rawEpisode.duration || '').trim(),
+        source: verifiedAuxiliarySourceFromServer(serverName),
+        is_backup: true,
+      };
+
+      const { data: existing, error: existingError } = await supabase
+        .from('movie_episodes')
+        .select('id,link_embed,link_m3u8,subtitle_url,slug,episode_name')
+        .eq('movie_id', movieId)
+        .eq('server_name', serverName)
+        .eq('episode_number', epNum)
+        .maybeSingle();
+      if (existingError) {
+        console.warn('verified_auxiliary_lookup_failed', { movieId, serverName, epNum, error: existingError.message });
+        skipped += 1;
+        continue;
+      }
+
+      if (existing?.id) {
+        const current = existing as Record<string, unknown>;
+        const shouldUpdate =
+          String(current.link_embed || '') !== payload.link_embed ||
+          String(current.link_m3u8 || '') !== payload.link_m3u8 ||
+          String(current.subtitle_url || '') !== payload.subtitle_url ||
+          String(current.slug || '') !== payload.slug ||
+          String(current.episode_name || '') !== payload.episode_name;
+        if (shouldUpdate) {
+          const { error: updateError } = await supabase
+            .from('movie_episodes')
+            .update(payload)
+            .eq('id', String(current.id));
+          if (updateError) {
+            console.warn('verified_auxiliary_update_failed', { movieId, serverName, epNum, error: updateError.message });
+            skipped += 1;
+          } else {
+            updated += 1;
+          }
+        }
+        continue;
+      }
+
+      const { error: insertError } = await supabase.from('movie_episodes').insert(payload);
+      if (insertError) {
+        if (/duplicate key value/i.test(insertError.message || '')) {
+          const { error: duplicateUpdateError } = await supabase
+            .from('movie_episodes')
+            .update(payload)
+            .eq('movie_id', movieId)
+            .eq('server_name', serverName)
+            .eq('episode_number', epNum);
+          if (duplicateUpdateError) {
+            console.warn('verified_auxiliary_duplicate_update_failed', {
+              movieId,
+              serverName,
+              epNum,
+              error: duplicateUpdateError.message,
+            });
+            skipped += 1;
+          } else {
+            updated += 1;
+          }
+          continue;
+        }
+        console.warn('verified_auxiliary_insert_failed', { movieId, serverName, epNum, error: insertError.message });
+        skipped += 1;
+        continue;
+      }
+      inserted += 1;
+    }
+  }
+
+  return { inserted, updated, skipped };
+}
+
 async function fetchExternalMovieDetail(
   slug: string,
 ): Promise<{
@@ -1246,7 +1487,11 @@ serve(async (req) => {
 
     if (!forceRefresh) {
       const cachedDetail = await readCachedDetail(supabase, slug);
-      if (cachedDetail?.status && !isDetailEpisodeIncomplete(cachedDetail)) {
+      if (
+        cachedDetail?.status &&
+        !isDetailEpisodeIncomplete(cachedDetail) &&
+        !hasUntrustedQueerEpisodeServer(cachedDetail)
+      ) {
         return jsonResponse(cachedDetail, 200, {
           'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800',
           'X-Cache': 'DB-HIT',
@@ -1297,6 +1542,7 @@ serve(async (req) => {
 
     const useSupabase = !!movieData;
     const supabaseOphimId = movieData ? String(movieData.ophim_id || '').trim() : '';
+    const isQueerSourceMovie = isBlvietsubMovieRecord(movieData || movie);
 
     /* ── 2. Load episodes from DB ── */
     const serverMap = new Map<string, unknown[]>();
@@ -1320,7 +1566,7 @@ serve(async (req) => {
           .order('episode_number', { ascending: true }),
         supabase
           .from('streams')
-          .select('server_name, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count')
+          .select('server_name, source, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count')
           .eq('movie_id', movieId)
           .eq('is_active', true)
           .order('priority', { ascending: false })
@@ -1351,6 +1597,7 @@ serve(async (req) => {
         const slugVal = String(em.slug || `tap-${num}`);
         const serverName = String(em.server_name || 'Nguồn');
         const source = String(em.source || 'manual');
+        if (isQueerSourceMovie && !isTrustedQueerEpisodeSource(source, serverName)) continue;
         let epData = {
           name: String(em.episode_name || `Tập ${num}`),
           slug: slugVal,
@@ -1373,6 +1620,7 @@ serve(async (req) => {
       for (const row of oldEps ?? []) {
         const rm = row as Record<string, unknown>;
         const serverName = String(rm.server_name || 'Nguồn');
+        if (isQueerSourceMovie) continue;
         let epData: Record<string, unknown>;
         const num = Number(rm.episode_number ?? 0);
         const slugVal = String(rm.episode_slug || (num > 0 ? String(num) : 'full'));
@@ -1435,6 +1683,7 @@ serve(async (req) => {
       // 2c. Streams table — skip dead streams
       for (const s of streams ?? []) {
         const sm = s as Record<string, unknown>;
+        if (isQueerSourceMovie && !isTrustedQueerEpisodeSource(sm.source, sm.server_name)) continue;
         const streamUrl = String(sm.stream_url || '').trim();
         const embedUrl = String(sm.embed_url || '').trim();
         if (!streamUrl && !embedUrl) continue;
@@ -1488,21 +1737,74 @@ serve(async (req) => {
       normalizedSlug((movieData as Record<string, unknown>).slug) !== normalizedSlug(slug) &&
       isOphimLikeMovieRecord((movieData || movie) as Record<string, unknown>);
     const shouldRepairOnDemand = expectedEpisode > 1 && (dbMaxEpisode === 0 || dbMaxEpisode < expectedEpisode);
+    // A manual refresh is an explicit request to re-check the known BLVietsub
+    // source. It lets a completed series catch its final episode even when
+    // its old database badge was internally consistent.
+    const shouldForceKnownBlvietsubSync =
+      forceRefresh && isBlvietsubMovieRecord((movieData || movie) as Record<string, unknown>) &&
+      Boolean(getBlvietsubMovieUrl((movieData || movie) as Record<string, unknown>));
     let repairTriggered = false;
-    if (shouldRepairOnDemand) {
+    if (shouldRepairOnDemand || shouldForceKnownBlvietsubSync) {
       repairTriggered = triggerOnDemandEpisodeRepair(
         supabase,
         (movieData || movie) as Record<string, unknown>,
         slug,
-        'movie_detail_episode_mismatch',
+        shouldForceKnownBlvietsubSync ? 'movie_detail_force_refresh' : 'movie_detail_episode_mismatch',
       );
     }
+
+    if (isQueerSourceMovie && movieData) {
+      const verifiedAuxiliary = await fetchVerifiedAuxiliaryExternalDetail(movieData as Record<string, unknown>);
+      if (verifiedAuxiliary) {
+        for (const srv of verifiedAuxiliary.episodes) {
+          const serverName = String(srv.server_name || 'OPhim verified');
+          const sds = (srv.server_data ?? []) as Array<Record<string, unknown>>;
+          for (const ep of sds) {
+            const slugVal = String(ep.slug || ep.name || '');
+            const epName = String(ep.name || '');
+            const epNum = extractEpNumber(slugVal || epName);
+            if (hasSeenEpisode(seen, serverName, slugVal, epNum, epName)) continue;
+            markSeenEpisode(seen, serverName, slugVal, epNum, epName);
+            pushEpisode(serverMap, serverName, {
+              name: epName,
+              slug: slugVal,
+              filename: String(ep.filename || ''),
+              link_embed: normalizeDailymotionUrl(String(ep.link_embed || '')),
+              link_m3u8: String(ep.link_m3u8 || ''),
+              subtitle_url: String(ep.subtitle_url || ep.subtitle || ''),
+            });
+          }
+        }
+        edgeWaitUntil(
+          persistVerifiedAuxiliaryEpisodes(supabase, String(movieId || ''), verifiedAuxiliary)
+            .then((result) => {
+              if (result.inserted || result.updated) {
+                return clearDetailCaches(supabase, [
+                  slug,
+                  String((movieData as Record<string, unknown>).slug || ''),
+                  String((movieData as Record<string, unknown>).ophim_slug || ''),
+                ]);
+              }
+              return null;
+            })
+            .catch((error) => {
+              console.warn('verified_auxiliary_persist_failed', {
+                slug,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }),
+        );
+      }
+    }
+
     const shouldFetchExternal =
-      serverMap.size === 0 ||
-      !useSupabase ||
-      shouldRepairOnDemand ||
-      shouldCheckFreshOngoingExternal ||
-      shouldCheckRequestedSlugAlias;
+      !isQueerSourceMovie && (
+        serverMap.size === 0 ||
+        !useSupabase ||
+        shouldRepairOnDemand ||
+        shouldCheckFreshOngoingExternal ||
+        shouldCheckRequestedSlugAlias
+      );
 
     if (shouldFetchExternal) {
       let detailSlug = slug;

@@ -19,7 +19,7 @@ const BANNERS: BannerItem[] = [
   {
     id: 'winaz',
     url: 'https://winaz.it.com/?utm_source=Khophim&utm_medium=facebook&utm_campaign=booking',
-    image: '/banners/winaz-728x90.gif',
+    image: '/banners/winaz-728x90-20260715.gif',
     alt: 'WinAZ banner',
   },
 ];

@@ -70,7 +70,7 @@ function getLatestPlayableEpisode(episodes) {
     .sort((a, b) => epSortKey(b) - epSortKey(a))[0] ?? null;
 }
 
-const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'DM', 'SUPABASE', 'OPHIM', 'SS', 'OK', 'ABYSS', 'VK'];
+const STREAM_SERVER_PRIORITY = ['OPHIM', 'KKPHIM', 'KHOPHIM', 'DM', 'SUPABASE', 'SS', 'OK', 'ABYSS', 'VK'];
 
 function normalizeServerPriorityText(value) {
   return value
@@ -94,11 +94,25 @@ function getServerPriorityRank(server, episode) {
     compact.includes('DAILY') ||
     compact.includes('DAILYLY') ||
     /(^|[./])dai\.ly/i.test(String(episode?.link_embed || ''));
+  const hasOphimSource =
+    tokens.has('OPHIM') ||
+    compact.includes('OPHIM') ||
+    String(episode?.link_embed || episode?.link_m3u8 || '').toLowerCase().includes('ophim') ||
+    String(episode?.link_embed || episode?.link_m3u8 || '').toLowerCase().includes('opstream');
+  const hasKkphimSource =
+    tokens.has('KKPHIM') ||
+    tokens.has('PHIMAPI') ||
+    compact.includes('KKPHIM') ||
+    compact.includes('PHIMAPI') ||
+    String(episode?.link_embed || episode?.link_m3u8 || '').toLowerCase().includes('kkphim') ||
+    String(episode?.link_embed || episode?.link_m3u8 || '').toLowerCase().includes('phimapi');
   const isOwnHlsSource = Boolean(episode?.link_m3u8) && (
     compact.includes('KHOPHIM') ||
     compact.includes('VIDEOKHOPHIMORG') ||
     compact.includes('SUPABASE')
   );
+  if (hasOphimSource) return STREAM_SERVER_PRIORITY.indexOf('OPHIM');
+  if (hasKkphimSource) return STREAM_SERVER_PRIORITY.indexOf('KKPHIM');
   if (hasDailymotionSource && !isOwnHlsSource) return STREAM_SERVER_PRIORITY.indexOf('DM');
   if (tokens.has('KHOPHIM') || compact.includes('KHOPHIM') || compact.includes('VIDEOKHOPHIMORG')) {
     return STREAM_SERVER_PRIORITY.indexOf('KHOPHIM');
@@ -272,6 +286,37 @@ const ownHlsVsDaily = [
 assert(
   pickBestEpisodeByPriority(ownHlsVsDaily, 'tap-24')?.serverIndex === 0,
   'KhoPhim HLS should still be preferred over Dailymotion'
+);
+
+const ophimFastButBehindBlvietsub = [
+  {
+    server_name: 'OPhim verified - Vietsub',
+    server_data: [
+      { name: 'Tap 1', slug: 'tap-1', link_m3u8: 'https://opstream.test/movie/tap-1.m3u8' },
+      { name: 'Tap 2', slug: 'tap-2', link_m3u8: 'https://opstream.test/movie/tap-2.m3u8' },
+      { name: 'Tap 5', slug: 'tap-5', link_m3u8: 'https://opstream.test/movie/tap-5.m3u8' },
+    ],
+  },
+  {
+    server_name: 'BLVietsub SS',
+    server_data: [
+      { name: 'Tap 1', slug: 'tap-1', link_embed: 'https://ssplay.net/v/tap-1.html' },
+      { name: 'Tap 2', slug: 'tap-2', link_embed: 'https://ssplay.net/v/tap-2.html' },
+      { name: 'Tap 6', slug: 'tap-6', link_embed: 'https://ssplay.net/v/tap-6.html' },
+    ],
+  },
+];
+assert(
+  pickBestEpisodeByPriority(ophimFastButBehindBlvietsub, 'tap-2')?.serverIndex === 0,
+  'Verified OPhim should be preferred for the same episode when it has a stronger source'
+);
+assert(
+  pickBestEpisodeByPriority(ophimFastButBehindBlvietsub, 'tap-6')?.serverIndex === 1,
+  'BLVietsub must serve newer episodes when verified OPhim is behind'
+);
+assert(
+  getHighestEpisodeFromServers(ophimFastButBehindBlvietsub) === 6,
+  'Episode brain must keep the highest playable episode across all verified sources'
 );
 
 const metadataEpisode = 148;
