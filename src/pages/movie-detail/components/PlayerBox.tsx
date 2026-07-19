@@ -429,44 +429,14 @@ export default function PlayerBox({
     });
   }, []);
 
-  const toggleEmbedFullscreen = useCallback(async () => {
-    const el = embedContainerRef.current;
-    if (!el) return;
+  const toggleEmbedFullscreen = useCallback(() => {
+    if (!embedContainerRef.current) return;
     if (isEmbedPseudoFullscreen) {
       exitEmbedPseudoFullscreen();
       return;
     }
-
-    const safariDocument = document as Document & {
-      webkitFullscreenElement?: Element;
-      webkitExitFullscreen?: () => void;
-    };
-    const nativeFullscreenElement = document.fullscreenElement || safariDocument.webkitFullscreenElement;
-    if (nativeFullscreenElement) {
-      if (document.exitFullscreen) await document.exitFullscreen().catch(() => {});
-      else safariDocument.webkitExitFullscreen?.();
-      return;
-    }
-
-    try {
-      if (el.requestFullscreen) {
-        await el.requestFullscreen({ navigationUI: 'hide' });
-        return;
-      }
-      const safariElement = el as HTMLDivElement & { webkitRequestFullscreen?: () => void };
-      if (safariElement.webkitRequestFullscreen) {
-        safariElement.webkitRequestFullscreen();
-        return;
-      }
-      const iosVideo = directVideoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
-      if (iosVideo?.webkitEnterFullscreen) {
-        iosVideo.webkitEnterFullscreen();
-        return;
-      }
-    } catch {
-      // Fall back for in-app browsers that deny the native API.
-    }
-
+    // Parent-controlled viewport fullscreen is reliable for cross-origin
+    // embeds and direct video in Chrome, Safari, iOS, Android and WebViews.
     enterEmbedPseudoFullscreen();
   }, [enterEmbedPseudoFullscreen, exitEmbedPseudoFullscreen, isEmbedPseudoFullscreen]);
 
@@ -820,7 +790,7 @@ export default function PlayerBox({
         {!episode?.is_scheduled && (
           <>
         {effectivePlayerMode === 'embed' && embedSrc && !iframeBlocked && (
-          <div ref={embedContainerRef} className={`${isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'aspect-video w-full'} relative group bg-black`}>
+          <div ref={embedContainerRef} className={`${isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'relative aspect-video w-full'} group bg-black`}>
             {!iframeLoaded && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0c14]">
                 <div className="w-10 h-10 rounded-full border-2 border-red-500/20 border-t-red-500 animate-spin mb-3" />
@@ -880,17 +850,15 @@ export default function PlayerBox({
               </div>
             )}
             {/* Overlay fullscreen button on embed video */}
-            {iframeLoaded && (
-              <button
+            <button
                 type="button"
                 aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
                 onClick={() => void toggleEmbedFullscreen()}
                 title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-                className="absolute top-3 right-3 z-20 flex h-12 w-12 items-center justify-center rounded-xl bg-black/85 text-white border border-white/25 shadow-lg backdrop-blur-sm transition-all hover:bg-black hover:border-white/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100"
+                className={`absolute z-30 flex items-center justify-center rounded-xl bg-black/90 text-white border border-white/40 shadow-xl backdrop-blur-sm transition-all hover:bg-black hover:border-white/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100 ${isEmbedFullscreen ? 'top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] h-14 w-14' : 'top-3 right-3 h-12 w-12'}`}
               >
                 <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-base`} />
-              </button>
-            )}
+            </button>
           </div>
         )}
 
@@ -968,7 +936,7 @@ export default function PlayerBox({
         )}
 
         {effectivePlayerMode === 'video' && (
-          <div ref={embedContainerRef} className={`${isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'aspect-video w-full'} bg-black relative`}>
+          <div ref={embedContainerRef} className={`${isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'relative aspect-video w-full'} bg-black`}>
             <video
               key={`${directVideoSrc}-${iframeKey}`}
               ref={directVideoRef}
