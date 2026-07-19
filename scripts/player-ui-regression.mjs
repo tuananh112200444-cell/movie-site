@@ -6,6 +6,7 @@ const movieApi = fs.readFileSync('src/services/movieApi.ts', 'utf8');
 const detailProxy = fs.readFileSync('supabase/functions/movie-detail-proxy/index.ts', 'utf8');
 const fullscreenUtils = fs.readFileSync('src/utils/playerFullscreen.ts', 'utf8');
 const globalCss = fs.readFileSync('src/index.css', 'utf8');
+const playerSection = fs.readFileSync('src/pages/movie-detail/components/MovieDetailPlayerSection.tsx', 'utf8');
 
 const checks = [
   [hls.includes('document.fullscreenEnabled === true && el.requestFullscreen'), 'HLS player must only use a confirmed native fullscreen API'],
@@ -34,6 +35,7 @@ const checks = [
   [movieApi.includes("case 'dailymotion':\n      // Dailymotion") && movieApi.includes('return TRUSTED_PLATFORM_SOURCE_BONUS - 360;'), 'Dailymotion embeds must remain fallback-only because HTTP success does not prove iframe playback'],
   [movieApi.includes("case 'stable_embed':\n      return TRUSTED_PLATFORM_SOURCE_BONUS + 60;"), 'Known stable embeds must outrank opaque Dailymotion embeds'],
   [!movieApi.includes('DAILYMOTION_PREFERRED_SOURCE_BONUS'), 'Dailymotion must not receive duplicate reliability and server bonuses'],
+  [playerSection.includes('const activeMatch = activeServerData.find') && playerSection.includes('onSelectEp(activeMatch);'), 'Episode switching must preserve the source explicitly selected by the viewer'],
 ];
 
 const failures = checks.filter(([ok]) => !ok).map(([, message]) => message);

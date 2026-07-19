@@ -205,7 +205,6 @@ export default function MovieDetailPage() {
     const isFresh = searchParams.has('fresh');
     const source = searchParams.get('source') || undefined;
     let cancelled = false;
-    let relatedTimer: ReturnType<typeof setTimeout> | null = null;
     if (isFresh) {
       setSearchParams({}, { replace: true });
     }
@@ -235,22 +234,6 @@ export default function MovieDetailPage() {
           setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
         } else {
           setActiveServer(-1);
-        }
-
-        // DEFER related movies: only fetch after 2s idle or when user scrolls near bottom
-        const genre = resolvedData.movie?.category?.[0]?.slug;
-        const country = resolvedData.movie?.country?.[0]?.slug;
-        if ((genre || country) && !relatedFetchedRef.current) {
-          relatedFetchedRef.current = true;
-          const run = () => {
-            fetchMoviesByCategory({ category: genre, country, page: 1 })
-              .then((r) => {
-                if (!cancelled) setRelated(r.items?.filter((m) => m.slug !== slug).slice(0, 6) ?? []);
-              })
-              .catch(() => {});
-          };
-          // Defer to prioritize player loading first.
-          relatedTimer = setTimeout(run, 8000);
         }
 
         if (!isFresh && shouldRefreshEpisodeDetail(data)) {
@@ -284,9 +267,31 @@ export default function MovieDetailPage() {
 
     return () => {
       cancelled = true;
-      if (relatedTimer) clearTimeout(relatedTimer);
     };
   }, [slug]);
+
+  // Related content is non-critical. Fetch it only after the visitor approaches
+  // the lower page sections, so the player never competes with source APIs.
+  useEffect(() => {
+    if (!showBottom || !detail?.movie || !slug || relatedFetchedRef.current) return;
+    const genre = detail.movie.category?.[0]?.slug;
+    const country = detail.movie.country?.[0]?.slug;
+    if (!genre && !country) return;
+
+    let cancelled = false;
+    relatedFetchedRef.current = true;
+    fetchMoviesByCategory({ category: genre, country, page: 1 })
+      .then((result) => {
+        if (!cancelled) {
+          setRelated(result.items?.filter((item) => item.slug !== slug).slice(0, 6) ?? []);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.movie, showBottom, slug]);
 
   /* ── ESC to exit cinema mode ── */
   useEffect(() => {

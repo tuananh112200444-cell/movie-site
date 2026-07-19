@@ -176,7 +176,7 @@ export default function UserComments({ slug, movieName }: UserCommentsProps) {
       <div className="px-5 md:px-7 pt-5 pb-4 border-b border-white/[0.06]">
         <div className="flex items-center gap-3 mb-1">
           <div className="w-1 h-5 bg-red-500 rounded-full flex-shrink-0" />
-          <h3 className="text-white font-bold text-base">Bình Luận &amp; Đánh Giá</h3>
+          <h2 className="text-white font-bold text-base">Bình Luận &amp; Đánh Giá</h2>
           <span className="text-white/30 text-sm ml-1">— {movieName}</span>
           <span className="ml-auto text-white/30 text-xs bg-white/5 border border-white/8 px-2.5 py-1 rounded-full">
             {comments.length} bình luận

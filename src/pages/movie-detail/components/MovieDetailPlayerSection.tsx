@@ -296,6 +296,16 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
         onSelectEp(item.ep);
         return;
       }
+      // Respect a manual source choice across episode changes. Auto-scoring is
+      // only a fallback when that source does not contain the requested episode.
+      const activeServerData = activeServer >= 0 ? episodes[activeServer]?.server_data ?? [] : [];
+      const activeMatch = activeServerData.find(
+        (ep) => getEpisodeMergeKey(ep) === item.key && hasPlayableUrl(ep),
+      );
+      if (activeMatch) {
+        onSelectEp(activeMatch);
+        return;
+      }
       const allAvailableServers = item.serverIndices
         .map((idx) => {
           const srv = episodes[idx];
@@ -321,7 +331,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       if (!fallback?.server_data?.[0]) return;
       onSwitchServer(fallback.originalIndex);
       onSelectEp(fallback.server_data[0]);
-    }, [episodes, onSwitchServer, onSelectEp, serverTypeTab]);
+    }, [activeServer, episodes, onSwitchServer, onSelectEp, serverTypeTab]);
 
     const handlePrev = useCallback(() => {
       if (!hasPrev || !navigableEpisodes[currentEpIdx - 1]) return;
@@ -404,7 +414,10 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
               </div>
             )}
             <button
+              type="button"
               onClick={toggleCinemaMode}
+              aria-label={cinemaMode ? 'Thoát chế độ Cinema' : 'Bật chế độ Cinema'}
+              aria-pressed={cinemaMode}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer whitespace-nowrap ${
                 cinemaMode
                   ? 'bg-red-500/20 border-red-500/30 text-red-400'
