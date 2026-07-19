@@ -3997,15 +3997,17 @@ function getRecentBadHostPenalty(ep: EpisodeData): number {
   if (typeof window === 'undefined') return 0;
   const url = ep.link_m3u8 || ep.link_embed || '';
   const host = getUrlHost(url);
-  const cluster = getEpisodeFailureCluster(ep);
-  if (!host && !cluster) return 0;
+  if (!host) return 0;
   try {
     const raw = window.localStorage.getItem('khophim.bad-source-hosts.v1');
     const map = raw ? JSON.parse(raw) as Record<string, number> : {};
-    const lastBadAt = Math.max(Number(map[host] || 0), Number(map[cluster] || 0));
+    // A transient mobile/background failure must only affect the exact host.
+    // Penalising an entire provider cluster can make every movie look broken
+    // after the browser suspends one stream while the user leaves the page.
+    const lastBadAt = Number(map[host] || 0);
     if (!lastBadAt) return 0;
     const ageMs = Date.now() - lastBadAt;
-    if (ageMs >= 30 * 60 * 1000) return 0;
+    if (ageMs >= 5 * 60 * 1000) return 0;
     const sourceKind = getEpisodeSourceKind(ep);
     const multiplier = sourceKind === 'ophim' || sourceKind === 'kkphim' ? 1.35 : 1;
     return Math.round(SERVER_RECENT_BAD_HOST_PENALTY * multiplier);
