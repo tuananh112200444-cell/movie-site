@@ -103,8 +103,10 @@ export default class AppErrorBoundary extends Component<Props, State> {
       return;
     }
 
-    if (isChunkLoadError(error) && safeSessionGet(RECOVERY_KEY) !== '1') {
-      safeSessionSet(RECOVERY_KEY, '1');
+    const lastRecoveryAt = Number(safeSessionGet(RECOVERY_KEY) ?? '0');
+    const canRecoverChunk = !Number.isFinite(lastRecoveryAt) || Date.now() - lastRecoveryAt > 15_000;
+    if (isChunkLoadError(error) && canRecoverChunk) {
+      safeSessionSet(RECOVERY_KEY, String(Date.now()));
       Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()]).catch(() => {});
     }
   }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
+import { isPortraitPhoneViewport, tryLockPlayerLandscape, unlockPlayerOrientation } from '@/utils/playerFullscreen';
 
 interface Props {
   src: string;
@@ -756,26 +757,35 @@ export default function LightweightHlsPlayer({
   const enterPseudoFullscreen = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
+    const rotateToLandscape = isPortraitPhoneViewport();
     pseudoFsRef.current = true;
     scrollPositionRef.current = window.scrollY;
     setIsFullscreen(true);
     el.style.position = 'fixed';
-    el.style.top = '0';
-    el.style.left = '0';
-    el.style.width = '100vw';
-    el.style.height = '100vh';
+    el.style.top = rotateToLandscape ? '50%' : '0';
+    el.style.left = rotateToLandscape ? '50%' : '0';
+    el.style.width = rotateToLandscape ? '100dvh' : '100dvw';
+    el.style.height = rotateToLandscape ? '100dvw' : '100dvh';
+    el.style.transform = rotateToLandscape ? 'translate(-50%, -50%) rotate(90deg)' : '';
     el.style.zIndex = '9999';
     el.style.borderRadius = '0';
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
     // A transformed ancestor establishes a fixed-position containing block.
     // Compensate its offset so the player aligns with the real viewport.
-    const fixedRect = el.getBoundingClientRect();
-    el.style.left = `${-fixedRect.left}px`;
-    el.style.top = `${-fixedRect.top}px`;
-    // Try landscape on mobile
-    if ((screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock) {
-      (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape').catch(() => {});
+    if (!rotateToLandscape) {
+      const fixedRect = el.getBoundingClientRect();
+      el.style.left = `${-fixedRect.left}px`;
+      el.style.top = `${-fixedRect.top}px`;
+    } else {
+      void tryLockPlayerLandscape().then((locked) => {
+        if (!locked || !pseudoFsRef.current || window.innerWidth <= window.innerHeight) return;
+        el.style.top = '0';
+        el.style.left = '0';
+        el.style.width = '100dvw';
+        el.style.height = '100dvh';
+        el.style.transform = '';
+      });
     }
   }, []);
 
@@ -789,13 +799,12 @@ export default function LightweightHlsPlayer({
     el.style.left = '';
     el.style.width = '';
     el.style.height = '';
+    el.style.transform = '';
     el.style.zIndex = '';
     el.style.borderRadius = '';
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
-    if ((screen.orientation as ScreenOrientation & { unlock?: () => void }).unlock) {
-      (screen.orientation as ScreenOrientation & { unlock?: () => void }).unlock?.();
-    }
+    unlockPlayerOrientation();
     window.scrollTo({ top: scrollPositionRef.current, behavior: 'auto' });
   }, []);
 
@@ -828,6 +837,15 @@ export default function LightweightHlsPlayer({
         // The no-options form has the widest support (notably Safari and
         // embedded mobile browsers) while still entering native fullscreen.
         await el.requestFullscreen();
+        if (isPortraitPhoneViewport()) {
+          await tryLockPlayerLandscape();
+          await new Promise((resolve) => window.setTimeout(resolve, 150));
+          if (window.innerWidth <= window.innerHeight && document.fullscreenElement) {
+            await document.exitFullscreen().catch(() => {});
+            enterPseudoFullscreen();
+            return;
+          }
+        }
         await new Promise((resolve) => window.setTimeout(resolve, 250));
         if (document.fullscreenElement || safariDocument.webkitFullscreenElement) return;
       }
@@ -848,6 +866,7 @@ export default function LightweightHlsPlayer({
   useEffect(() => () => {
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
+    unlockPlayerOrientation();
   }, []);
 
   /* ── Listen ESC to exit pseudo-fullscreen ── */
@@ -860,14 +879,6 @@ export default function LightweightHlsPlayer({
   }, [exitPseudoFullscreen]);
 
   /* ── Listen orientation change to exit pseudo-fullscreen ── */
-  useEffect(() => {
-    const onOrientation = () => {
-      if (pseudoFsRef.current && window.orientation === 0) exitPseudoFullscreen();
-    };
-    window.addEventListener('orientationchange', onOrientation);
-    return () => window.removeEventListener('orientationchange', onOrientation);
-  }, [exitPseudoFullscreen]);
-
   const seekToPct = useCallback((pct: number) => {
     const v = videoRef.current;
     if (!v || !duration) return;
