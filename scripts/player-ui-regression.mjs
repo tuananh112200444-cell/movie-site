@@ -18,6 +18,10 @@ const checks = [
   [!box.includes("h-[100dvh] w-screen' : 'aspect-video w-full'} relative"), 'Fullscreen container must not receive conflicting fixed and relative positioning'],
   [box.includes("aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}"), 'Embed/MP4 fullscreen controls need accessible names'],
   [box.includes('h-12 w-12'), 'Embed fullscreen control must keep a 48px touch target'],
+  [box.includes('data-kp-fullscreen="true"'), 'KhoPhim fullscreen control needs a stable selector above source-player controls'],
+  [box.includes('data-kp-source-fullscreen-proxy="true"'), 'Source-player fullscreen affordance must delegate to the reliable parent control'],
+  [box.includes("'top-3 right-3 h-12 w-12'"), 'KhoPhim fullscreen control must stay in the expected top-right corner'],
+  [box.includes('bg-black/20'), 'Embed fullscreen control must remain translucent over the movie'],
   [movieApi.includes("host.includes('short.icu')) return 'known_bad'"), 'Client source scoring must reject the dead short.icu host'],
   [detailProxy.includes("host === 'short.icu'"), 'Movie detail API must suppress the dead short.icu host'],
 ];
