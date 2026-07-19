@@ -788,6 +788,16 @@ async function findGlobalMovieForEntry(
   return selectPreferredMovie(matches);
 }
 
+async function findBestMovieForEntry(
+  supabase: SupabaseClient,
+  entry: ParsedEntry,
+  indexes: ReturnType<typeof buildMovieIndexes>,
+): Promise<MovieRow | null> {
+  const localMatch = findMovieForEntry(entry, indexes);
+  const globalMatch = await findGlobalMovieForEntry(supabase, entry);
+  return selectPreferredMovie([localMatch, globalMatch].filter((movie): movie is MovieRow => Boolean(movie?.id)));
+}
+
 async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<MovieRow[]> {
   const rows: MovieRow[] = [];
   const pageSize = 1000;
@@ -2163,11 +2173,8 @@ serve(async (req) => {
       }
       const movieRows = await fetchExistingQueerMovies(supabase);
       const movieIndexes = buildMovieIndexes(movieRows);
-      let movie = findMovieForEntry(entry, movieIndexes);
-      if (!movie) {
-        movie = await findGlobalMovieForEntry(supabase, entry);
-        if (movie) movieRows.push(movie);
-      }
+      let movie = await findBestMovieForEntry(supabase, entry, movieIndexes);
+      if (movie && !movieRows.some((row) => row.id === movie?.id)) movieRows.push(movie);
       let created = false;
       if (!movie) {
         movie = await createMovieFromEntry(supabase, entry);
@@ -2223,23 +2230,20 @@ serve(async (req) => {
     const missing: string[] = [];
 
     for (const entry of entries) {
-      let movie = findMovieForEntry(entry, movieIndexes);
+      let movie = await findBestMovieForEntry(supabase, entry, movieIndexes);
       try {
         let createdThisMovie = false;
-        if (!movie) {
-          movie = await findGlobalMovieForEntry(supabase, entry);
-          if (movie) {
-            movieRows.push(movie);
-            const refreshedIndexes = buildMovieIndexes(movieRows);
-            movieIndexes.byPostId.clear();
-            movieIndexes.byTitle.clear();
-            movieIndexes.bySlug.clear();
-            movieIndexes.bySourceUrl.clear();
-            refreshedIndexes.byPostId.forEach((value, key) => movieIndexes.byPostId.set(key, value));
-            refreshedIndexes.byTitle.forEach((value, key) => movieIndexes.byTitle.set(key, value));
-            refreshedIndexes.bySlug.forEach((value, key) => movieIndexes.bySlug.set(key, value));
-            refreshedIndexes.bySourceUrl.forEach((value, key) => movieIndexes.bySourceUrl.set(key, value));
-          }
+        if (movie && !movieRows.some((row) => row.id === movie?.id)) {
+          movieRows.push(movie);
+          const refreshedIndexes = buildMovieIndexes(movieRows);
+          movieIndexes.byPostId.clear();
+          movieIndexes.byTitle.clear();
+          movieIndexes.bySlug.clear();
+          movieIndexes.bySourceUrl.clear();
+          refreshedIndexes.byPostId.forEach((value, key) => movieIndexes.byPostId.set(key, value));
+          refreshedIndexes.byTitle.forEach((value, key) => movieIndexes.byTitle.set(key, value));
+          refreshedIndexes.bySlug.forEach((value, key) => movieIndexes.bySlug.set(key, value));
+          refreshedIndexes.bySourceUrl.forEach((value, key) => movieIndexes.bySourceUrl.set(key, value));
         }
         if (!movie) {
           movie = await createMovieFromEntry(supabase, entry);
