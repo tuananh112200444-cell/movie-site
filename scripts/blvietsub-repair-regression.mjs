@@ -11,6 +11,7 @@ const checks = [
   ['repair queue retains movie and source URL', /\.slice\(0, cappedLimit\);[\s\S]{0,500}\{ movie, sourceUrl \}/],
   ['one-video sources cannot pollute healthy series', /dbBeforeEpisode >= 4 && sourceMaxEpisode <= 1[\s\S]{0,700}backward_guarded: true/],
   ['guarded titles rotate behind the repair queue', /Mark the check as completed[\s\S]{0,220}last_synced_at/],
+  ['source-specific duplicates still compete with global canonical movies', /findBestMovieForEntry[\s\S]{0,420}selectPreferredMovie\(\[localMatch, globalMatch\]/],
 ];
 
 const failures = checks.filter(([, pattern]) => !pattern.test(source)).map(([name]) => name);

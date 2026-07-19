@@ -1950,7 +1950,9 @@ export async function searchMoviesInSupabase(
   }
 }
 
-const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v5';
+// Bump when the canonical catalog changes materially so open tabs do not keep
+// serving a 30-minute index that still contains an unpublished duplicate.
+const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v6';
 const SUPABASE_SEARCH_INDEX_TTL = 30 * 60 * 1000;
 let supabaseSearchIndexInflight: Promise<MovieItem[]> | null = null;
 const supabaseSearchIndexMemory = new Map<string, { items: MovieItem[]; ts: number }>();
