@@ -261,7 +261,6 @@ function rememberBadSourceHost(host: string): void {
     const map = raw ? JSON.parse(raw) as Record<string, number> : {};
     const now = Date.now();
     map[host] = now;
-    map[getSourceFailureClusterFromUrl(host)] = now;
     window.localStorage.setItem(BAD_SOURCE_HOSTS_KEY, JSON.stringify(map));
   } catch {
     // Best-effort hint only; playback fallback must still work if storage is blocked.

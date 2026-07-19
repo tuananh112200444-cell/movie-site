@@ -171,6 +171,8 @@ export default function LightweightHlsPlayer({
   const fatalRetryRef = useRef(0);
   const nonFatalNetworkRetryRef = useRef(0);
   const streamRecoveryRef = useRef(0);
+  const pageActiveRef = useRef(typeof document === 'undefined' ? true : !document.hidden);
+  const wasPageSuspendedRef = useRef(false);
   const pseudoFsRef = useRef(false);
   const scrollPositionRef = useRef(0);
 
@@ -193,6 +195,34 @@ export default function LightweightHlsPlayer({
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [pipActive, setPipActive] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
+
+  /* Mobile browsers abort HLS requests when the tab/app is backgrounded.
+     Treat that as suspension, not as a dead source, and rebuild the player
+     when the page becomes active again (including BFCache restoration). */
+  useEffect(() => {
+    const suspend = () => {
+      pageActiveRef.current = false;
+      wasPageSuspendedRef.current = true;
+    };
+    const resume = () => {
+      if (document.hidden) return;
+      pageActiveRef.current = true;
+      if (!wasPageSuspendedRef.current) return;
+      wasPageSuspendedRef.current = false;
+      setHasError(false);
+      setErrorMsg('');
+      setRetryNonce((value) => value + 1);
+    };
+    const onVisibilityChange = () => document.hidden ? suspend() : resume();
+    window.addEventListener('pagehide', suspend);
+    window.addEventListener('pageshow', resume);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', suspend);
+      window.removeEventListener('pageshow', resume);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   useEffect(() => {
@@ -356,6 +386,7 @@ export default function LightweightHlsPlayer({
       });
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!pageActiveRef.current || document.hidden) return;
         if (!data.fatal) {
           const details = String(data.details || '');
           if (data.type === 'networkError' && /frag|level|manifest/i.test(details)) {
@@ -457,6 +488,7 @@ export default function LightweightHlsPlayer({
         if (autoPlay) video.play().catch(() => {});
       };
       const onErr = () => {
+        if (!pageActiveRef.current || document.hidden) return;
         setHasError(true);
         setErrorMsg('Không thể phát stream');
         onPlayerIssue?.({
