@@ -49,12 +49,12 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
   return (
     <Link
       to={href}
-      className="group relative flex flex-col cursor-pointer rounded-[1.15rem] p-1 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.035]"
+      className="group relative flex cursor-pointer flex-row gap-3 rounded-[1.15rem] border border-white/[0.07] bg-white/[0.025] p-2 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.035] sm:flex-col sm:gap-0 sm:border-0 sm:bg-transparent sm:p-1"
       onMouseEnter={() => prefetchMovieDetail(movie.slug)}
       onMouseLeave={() => cancelPrefetchMovieDetail(movie.slug)}
     >
       {/* Poster */}
-      <div className="relative aspect-[2/3] rounded-[1rem] overflow-hidden bg-[#141823] ring-1 ring-white/[0.07] shadow-[0_14px_38px_rgba(0,0,0,0.24)] transition-all duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.34)]">
+      <div className="relative aspect-[2/3] w-[108px] flex-shrink-0 rounded-[1rem] overflow-hidden bg-[#141823] ring-1 ring-white/[0.07] shadow-[0_14px_38px_rgba(0,0,0,0.24)] transition-all duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.34)] sm:w-auto">
         <img
           src={currentSrc}
           alt={movie.name}
@@ -86,7 +86,7 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
             </span>
           )}
         </div>
-        <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+        <div className="absolute top-2 right-2 hidden flex-col items-end gap-1 sm:flex">
           <MovieCountdown movie={movie} />
           {isFull ? (
             <span className="bg-green-500/85 text-white text-xs font-bold px-1.5 py-0.5 rounded-md shadow-lg shadow-green-950/30">
@@ -107,28 +107,40 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
       </div>
 
       {/* Info */}
-      <div className="mt-2.5 px-0.5">
+      <div className="min-w-0 flex-1 px-0.5 py-1 sm:mt-2.5 sm:py-0">
         <HighlightText
           text={movie.name}
           query={query}
-          className="text-[0.95rem] sm:text-base font-bold text-white/90 group-hover:text-white line-clamp-2 leading-snug transition-colors"
+          className="text-base font-bold text-white/90 group-hover:text-white line-clamp-3 sm:line-clamp-2 leading-snug transition-colors"
         />
         {movie.origin_name && (
           <HighlightText
             text={movie.origin_name}
             query={query}
-            className="text-sm text-white/45 line-clamp-1 mt-0.5"
+            className="text-sm text-white/45 line-clamp-2 sm:line-clamp-1 mt-1"
           />
         )}
-        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
           <span className="rounded-md bg-red-500/12 px-1.5 py-0.5 text-xs font-semibold text-red-300">
             {release.label}
           </span>
-          {release.detail && <span className="truncate text-xs font-medium text-amber-300/75">{release.detail}</span>}
+          {release.detail && <span className="max-w-full text-xs font-medium leading-snug text-amber-300/80">{release.detail}</span>}
           {year > 0 && <span className="text-xs text-white/40">{year}</span>}
           <span className="text-xs text-white/30">•</span>
           {movie.category?.[0] && (
             <span className="text-xs text-white/40">{movie.category[0].name}</span>
+          )}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:hidden">
+          <span className={`rounded-md px-2 py-1 text-xs font-semibold ${
+            isFull ? 'bg-green-500/15 text-green-300' : 'bg-amber-500/15 text-amber-300'
+          }`}>
+            {release.episodeLabel}
+          </span>
+          {movie.lang && (
+            <span className="rounded-md bg-blue-500/15 px-2 py-1 text-xs font-semibold text-blue-300">
+              {movie.lang}
+            </span>
           )}
         </div>
       </div>

@@ -1160,7 +1160,7 @@ export default function SearchPage() {
             {/* Loading skeleton */}
             {loading && results.length === 0 ? (
               viewMode === 'grid' ? (
-                <div className="grid movie-grid-desktop">
+                <div className="grid movie-grid-desktop search-results-grid">
                 {Array.from({ length: 24 }).map((_, i) => (
                     <div key={i}>
                       <div className="aspect-[2/3] skeleton rounded-xl" />
@@ -1208,7 +1208,7 @@ export default function SearchPage() {
             ) : filteredResults.length > 0 ? (
               <>
                 {viewMode === 'grid' ? (
-                  <div className="grid movie-grid-desktop">
+                  <div className="grid movie-grid-desktop search-results-grid">
                     {filteredResults.map((m, index) => (
                       <SearchResultItem key={searchResultKey(m, index)} movie={m} query={q} viewMode="grid" />
                     ))}
