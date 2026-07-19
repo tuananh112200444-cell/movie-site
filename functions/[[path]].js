@@ -1879,6 +1879,56 @@ async function proxyBlvietsub(request, context) {
   }
 }
 
+async function proxyMovieDetail(request, context) {
+  const url = new URL(request.url);
+  const slug = String(url.searchParams.get('slug') || '').trim();
+  const refresh = url.searchParams.get('refresh') === '1';
+  if (!slug || slug.length > 240 || !/^[\p{L}\p{N}._~-]+$/u.test(slug)) {
+    return new Response(JSON.stringify({ status: false, message: 'Invalid slug' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+
+  const upstreamUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
+  upstreamUrl.searchParams.set('slug', slug);
+  if (refresh) upstreamUrl.searchParams.set('refresh', '1');
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}`, { method: 'GET' });
+
+  try {
+    if (!refresh && request.method === 'GET' && typeof caches !== 'undefined') {
+      const cached = await caches.default.match(cacheKey);
+      if (cached) {
+        const headers = new Headers(cached.headers);
+        headers.set('X-KhoPhim-Detail-Cache', 'HIT');
+        return new Response(cached.body, { status: cached.status, headers });
+      }
+    }
+
+    const upstream = await fetch(upstreamUrl.toString(), {
+      headers: { Accept: 'application/json' },
+      cf: refresh ? undefined : { cacheTtl: 300, cacheEverything: true },
+      signal: AbortSignal.timeout(10000),
+    });
+    const headers = new Headers(upstream.headers);
+    headers.delete('Set-Cookie');
+    headers.set('Content-Type', 'application/json; charset=utf-8');
+    headers.set('Cache-Control', refresh ? 'no-store' : 'public, max-age=300, s-maxage=300, stale-while-revalidate=1800');
+    headers.set('X-KhoPhim-Detail-Cache', refresh ? 'REFRESH' : 'MISS');
+    for (const [key, value] of Object.entries(SECURITY_HEADERS)) headers.set(key, value);
+    const response = new Response(upstream.body, { status: upstream.status, headers });
+    if (!refresh && request.method === 'GET' && upstream.ok && typeof caches !== 'undefined') {
+      contextWaitUntil(context, caches.default.put(cacheKey, response.clone()));
+    }
+    return response;
+  } catch (error) {
+    return new Response(JSON.stringify({ status: false, message: error instanceof Error ? error.message : 'Detail unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+}
+
 function isAllowedSsplayResolveUrl(target) {
   try {
     const parsed = new URL(target);
@@ -2093,6 +2143,10 @@ export async function onRequest(context) {
 
   if (pathname === '/internal/blvietsub-proxy') {
     return proxyBlvietsub(request, context);
+  }
+
+  if (pathname === '/api/movie-detail') {
+    return proxyMovieDetail(request, context);
   }
 
   if (pathname === '/internal/ssplay-resolve') {

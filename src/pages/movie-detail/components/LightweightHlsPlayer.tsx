@@ -34,7 +34,7 @@ const MAX_NON_FATAL_NETWORK_RETRIES = 2;
 const STALL_RECOVERY_DELAY_MS = 3500;
 const STALL_PROGRESS_CHECK_MS = 2500;
 const STALL_MIN_PROGRESS_SECONDS = 0.05;
-const PLAYER_LOGO_URL = '/brand/khophim-logo-v2.png';
+const PLAYER_LOGO_URL = '/brand/khophim-favicon-v2-96.png';
 
 function getPlaybackProfile() {
   if (typeof window === 'undefined') {

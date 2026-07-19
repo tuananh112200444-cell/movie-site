@@ -1203,7 +1203,7 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false): Pr
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
-    const url = new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`);
+    const url = new URL('/api/movie-detail', typeof window !== 'undefined' ? window.location.origin : 'https://khophim.org');
     url.searchParams.set('slug', slug);
     if (forceRefresh) url.searchParams.set('refresh', '1');
     const res = await fetch(
@@ -3690,7 +3690,6 @@ const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
 const SERVER_RECENT_BAD_HOST_PENALTY = 1800;
 const OPHIM_PREFERRED_SOURCE_BONUS = 380;
 const KKPHIM_PREFERRED_SOURCE_BONUS = 360;
-const DAILYMOTION_PREFERRED_SOURCE_BONUS = 240;
 const RESILIENT_DIRECT_SOURCE_BONUS = 620;
 const TRUSTED_PLATFORM_SOURCE_BONUS = 460;
 const THIRD_PARTY_EMBED_SOURCE_BONUS = 80;
@@ -3959,9 +3958,12 @@ function getSourceResilienceScore(ep: EpisodeData): number {
     case 'kkphim':
       return TRUSTED_PLATFORM_SOURCE_BONUS + 60;
     case 'dailymotion':
-      return TRUSTED_PLATFORM_SOURCE_BONUS;
+      // Dailymotion can return HTTP 200 while refusing playback inside its
+      // iframe for an individual video/domain. Treat it as a fallback, not a
+      // preferred source, because parent-side health probes cannot see that UI.
+      return TRUSTED_PLATFORM_SOURCE_BONUS - 360;
     case 'stable_embed':
-      return TRUSTED_PLATFORM_SOURCE_BONUS - 220;
+      return TRUSTED_PLATFORM_SOURCE_BONUS + 60;
     case 'third_party_embed':
       return THIRD_PARTY_EMBED_SOURCE_BONUS;
     case 'ssplay_abyss':
@@ -3974,23 +3976,6 @@ function getSourceResilienceScore(ep: EpisodeData): number {
     default:
       return 0;
   }
-}
-
-function isDailymotionEpisode(ep?: EpisodeData): boolean {
-  if (!ep) return false;
-  const host = getUrlHost(ep.link_embed || ep.link_m3u8 || '');
-  const text = normalizeServerPriorityText([
-    ep.link_embed,
-    ep.link_m3u8,
-    ep.filename,
-    ep.name,
-  ].filter(Boolean).join(' '));
-  return (
-    host.includes('dailymotion.com') ||
-    host === 'dai.ly' ||
-    text.includes('DAILYMOTION') ||
-    text.includes('DAILY')
-  );
 }
 
 function getRecentBadHostPenalty(ep: EpisodeData): number {
@@ -4070,7 +4055,6 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) score += 120;
   if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) score += OPHIM_PREFERRED_SOURCE_BONUS;
   if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) score += KKPHIM_PREFERRED_SOURCE_BONUS;
-  if (host.includes('dailymotion.com') || host === 'dai.ly') score += DAILYMOTION_PREFERRED_SOURCE_BONUS;
   if (lower.includes('.m3u8')) score += 70;
   if (host.includes('versondd.top') || host.includes('short.icu')) score -= 1200;
   if (host.includes('blvietsub.com')) score -= 900;
@@ -4094,9 +4078,6 @@ export function getServerQualityScore(server: EpisodeServer): number {
   if (firstEp?.link_m3u8) score += 10;
   if (firstEp?.link_embed) score += 3;
   score += getBestPlayableEpisodeScore(server);
-  if ((server.server_data ?? []).some((ep) => isDailymotionEpisode(ep))) {
-    score += DAILYMOTION_PREFERRED_SOURCE_BONUS;
-  }
 
   // Vietnamese audio preferred (vietsub, thuyetminh, longtieng)
   const tokens = name.split(/[\s\-_#]+/).filter(Boolean);

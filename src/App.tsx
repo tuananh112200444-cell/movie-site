@@ -197,10 +197,10 @@ function App() {
       cancelIdleCallback?: (id: number) => void;
     };
     if (win.requestIdleCallback) {
-      const id = win.requestIdleCallback(run, { timeout: 5000 });
+      const id = win.requestIdleCallback(run, { timeout: 15000 });
       return () => win.cancelIdleCallback?.(id);
     }
-    const timer = window.setTimeout(run, 2500);
+    const timer = window.setTimeout(run, 12000);
     return () => window.clearTimeout(timer);
   }, []);
 

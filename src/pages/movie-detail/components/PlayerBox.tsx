@@ -251,7 +251,7 @@ const DIRECT_VIDEO_STALL_TIMEOUT_MS = 7000;
 const DIRECT_VIDEO_STALL_CHECK_MS = 2500;
 const DIRECT_VIDEO_MIN_PROGRESS_SECONDS = 0.25;
 const DIRECT_VIDEO_MAX_RECOVERY_ATTEMPTS = 1;
-const PLAYER_LOGO_URL = '/brand/khophim-logo-v2.png';
+const PLAYER_LOGO_URL = '/brand/khophim-favicon-v2-96.png';
 const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
 
 function rememberBadSourceHost(host: string): void {

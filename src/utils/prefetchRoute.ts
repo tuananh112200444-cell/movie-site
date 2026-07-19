@@ -83,9 +83,9 @@ function prefetchMovieDetailApi(slug: string): void {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 2500);
   activeDetailPrefetches.add(slug);
-  fetch(`${supabaseUrl}/functions/v1/movie-detail-proxy?slug=${encodeURIComponent(slug)}`, {
+  fetch(`/api/movie-detail?slug=${encodeURIComponent(slug)}`, {
     signal: controller.signal,
-    cache: 'no-store',
+    cache: 'force-cache',
   })
     .catch(() => {})
     .finally(() => {

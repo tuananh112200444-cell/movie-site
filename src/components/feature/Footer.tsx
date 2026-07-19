@@ -110,7 +110,7 @@ function Footer() {
             <div className="flex items-center gap-2.5 mb-4 sm:mb-5">
               <div className="relative w-9 h-9 flex items-center justify-center">
                 <div className="absolute inset-0 bg-red-500/15 rounded-xl blur-sm" />
-                <img src="/brand/khophim-logo-v2.png"
+                <img src="/brand/khophim-favicon-v2-96.png"
                   alt="KhoPhim" width="36" height="36" className="relative w-full h-full object-contain" />
               </div>
               <div className="flex flex-col">

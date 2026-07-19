@@ -250,7 +250,7 @@ export default function MovieDetailPage() {
               .catch(() => {});
           };
           // Defer to prioritize player loading first.
-          relatedTimer = setTimeout(run, 3000);
+          relatedTimer = setTimeout(run, 8000);
         }
 
         if (!isFresh && shouldRefreshEpisodeDetail(data)) {
