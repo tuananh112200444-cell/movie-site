@@ -31,6 +31,9 @@ const checks = [
   [fullscreenUtils.includes('getOrientationApi()?.unlock?.()'), 'Player fullscreen must restore orientation on exit'],
   [movieApi.includes("host.includes('short.icu')) return 'known_bad'"), 'Client source scoring must reject the dead short.icu host'],
   [detailProxy.includes("host === 'short.icu'"), 'Movie detail API must suppress the dead short.icu host'],
+  [movieApi.includes("case 'dailymotion':\n      // Dailymotion") && movieApi.includes('return TRUSTED_PLATFORM_SOURCE_BONUS - 360;'), 'Dailymotion embeds must remain fallback-only because HTTP success does not prove iframe playback'],
+  [movieApi.includes("case 'stable_embed':\n      return TRUSTED_PLATFORM_SOURCE_BONUS + 60;"), 'Known stable embeds must outrank opaque Dailymotion embeds'],
+  [!movieApi.includes('DAILYMOTION_PREFERRED_SOURCE_BONUS'), 'Dailymotion must not receive duplicate reliability and server bonuses'],
 ];
 
 const failures = checks.filter(([ok]) => !ok).map(([, message]) => message);

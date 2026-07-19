@@ -367,9 +367,9 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
             alt={displayTitle}
             width="1920"
             height="320"
-            className="w-full h-full object-cover object-center opacity-15"
-            loading="eager"
-            fetchPriority="high"
+            className="hidden sm:block w-full h-full object-cover object-center opacity-15"
+            loading="lazy"
+            fetchPriority="low"
             decoding="async"
             onLoad={backdropFallback.onLoad}
             onError={backdropFallback.onError}

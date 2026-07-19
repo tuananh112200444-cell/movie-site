@@ -264,7 +264,7 @@ export default function Navbar() {
               {/* Icon container */}
               <div className="absolute inset-0 bg-gradient-to-br from-red-500/30 to-red-700/20 rounded-xl ring-1 ring-red-500/50 group-hover:ring-red-400/80 group-hover:from-red-500/45 group-hover:to-red-700/35 transition-all duration-300" />
               <img
-                src="/brand/khophim-logo-v2.png"
+                src="/brand/khophim-favicon-v2-96.png"
                 alt="KhoPhim"
                 className="relative w-5 h-5 lg:w-6 lg:h-6 object-contain drop-shadow-lg"
               />
