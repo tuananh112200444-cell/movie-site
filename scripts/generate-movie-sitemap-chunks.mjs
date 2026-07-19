@@ -3,12 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 const FUNCTION_URL = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml';
 
 const targets = [
-  ['sitemap-movies-recent.xml', 'recent=1&page_size=2000'],
-  ['sitemap-movies-upcoming.xml', 'upcoming=1&page_size=5000'],
-  ...Array.from({ length: 8 }, (_, index) => [
-    `sitemap-movies-${index + 1}.xml`,
-    `page=${index + 1}&page_size=5000`,
-  ]),
+  ['sitemap-movies-recent.xml', 'recent=1&page_size=2000&v=20260719-index-quality-v2'],
 ];
 
 async function fetchSitemap(fileName, query) {
@@ -64,7 +59,7 @@ for (const [fileName, query] of targets) {
   results.push({ fileName, count });
 }
 
-console.log(`Generated ${results.length} movie sitemap chunks:`);
+console.log(`Generated ${results.length} curated movie sitemap:`);
 for (const result of results) {
   console.log(`- ${result.fileName}: ${result.count} URLs`);
 }

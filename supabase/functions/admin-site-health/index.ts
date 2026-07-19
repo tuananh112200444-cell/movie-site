@@ -1,3 +1,6 @@
+import { verifyAdminRequest } from '../_shared/admin-session.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+
 type CheckResult = {
   key: string;
   label: string;
@@ -28,6 +31,9 @@ const CHECKS = [
   { key: 'sitemap-index', label: 'Sitemap index', group: 'seo' as const, url: `${SITE_URL}/sitemap.xml` },
   { key: 'sitemap-movies', label: 'Sitemap movies', group: 'seo' as const, url: `${SITE_URL}/sitemap-movies.xml` },
   { key: 'robots', label: 'Robots.txt', group: 'seo' as const, url: `${SITE_URL}/robots.txt` },
+  { key: 'rss-feed', label: 'RSS phim moi', group: 'seo' as const, url: `${SITE_URL}/feed.xml` },
+  { key: 'press-kit', label: 'Press kit', group: 'page' as const, url: `${SITE_URL}/press/` },
+  { key: 'mhophim', label: 'MHoPhim', group: 'page' as const, url: 'https://mhophim.com/' },
   { key: 'home-proxy', label: 'Home proxy', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/home-proxy` },
   { key: 'search-index', label: 'Search index cache', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/search-index-proxy?limit=80` },
   { key: 'movie-detail', label: 'Movie detail proxy', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/movie-detail-proxy?slug=goi-ngay-bac-si-khuong` },
@@ -51,11 +57,6 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-function verifyAdminToken(req: Request): boolean {
-  const auth = req.headers.get('Authorization') ?? '';
-  if (!auth.startsWith('Bearer ')) return false;
-  return auth.slice(7).trim().length > 20;
-}
 
 function json(body: unknown, status: number, corsHeaders: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
@@ -145,7 +146,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405, corsHeaders);
 
   try {
-    if (!verifyAdminToken(req)) {
+    if (!await verifyAdminRequest(req)) {
       return json({ error: 'Unauthorized - admin login required' }, 401, corsHeaders);
     }
 
@@ -158,6 +159,13 @@ Deno.serve(async (req) => {
     const failed = results.filter((item) => !item.ok).length;
     const slow = results.filter((item) => item.ok && item.elapsed_ms > (item.group === 'api' ? 4500 : 2500)).length;
     const score = Math.max(0, 100 - failed * 18 - slow * 6);
+    const supabase = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', { auth: { persistSession: false } });
+    const { data: operationsHealth } = await supabase
+      .from('operations_health_snapshots')
+      .select('*')
+      .order('checked_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     return json({
       ok: true,
@@ -171,6 +179,7 @@ Deno.serve(async (req) => {
         avg_elapsed_ms: Math.round(results.reduce((sum, item) => sum + item.elapsed_ms, 0) / Math.max(1, results.length)),
       },
       results,
+      operations_health: operationsHealth || null,
       action_items: buildActions(results),
     }, 200, corsHeaders);
   } catch (error) {

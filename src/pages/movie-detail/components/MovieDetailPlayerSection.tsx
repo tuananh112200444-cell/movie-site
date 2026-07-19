@@ -105,6 +105,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     const [activeTab, setActiveTab] = useState<'episodes' | 'trailer'>('episodes');
     const [episodesCollapsed, setEpisodesCollapsed] = useState(true);
     const [isDesktopEpisodeLayout, setIsDesktopEpisodeLayout] = useState(false);
+    const [showSourceOptions, setShowSourceOptions] = useState(false);
     const [serverTypeTab, setServerTypeTab] = useState<'all' | 'khophim' | 'vietsub' | 'thuyetminh' | 'longtieng' | 'other'>('all');
     const hasScheduledState = useMemo(
       () => Boolean(
@@ -557,12 +558,28 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
               {/* Watch controls */}
               {episodes.length > 0 && (
                 <div className="movie-watch-panel mt-4 sm:mt-5 rounded-2xl border border-white/[0.08] overflow-hidden">
-                  <div className="flex items-center gap-2 border-b border-white/[0.07] px-3 py-3 sm:px-4 lg:px-5 lg:py-4">
-                    <span className="w-1.5 h-5 bg-red-500 rounded-full shadow-[0_0_18px_rgba(239,68,68,.45)]" />
-                    <p className="text-white/68 text-xs font-semibold uppercase tracking-wider">Nguồn Phim</p>
-                    <span className="text-white/30 text-[11px] ml-1">
-                      ({episodes.length} nguồn)
-                    </span>
+                  <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-3 py-3 sm:px-4 lg:px-5 lg:py-4">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,.65)]" />
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-white/85">Đang tự động chọn nguồn tốt nhất</p>
+                        <p className="mt-0.5 text-[10px] text-white/40">
+                          {episodes.length > 1 ? `${episodes.length} nguồn dự phòng sẵn sàng` : 'Nguồn phát đã sẵn sàng'}
+                        </p>
+                      </div>
+                    </div>
+                    {episodes.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowSourceOptions((value) => !value)}
+                        aria-expanded={showSourceOptions}
+                        className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-white/70 transition hover:border-white/20 hover:bg-white/[0.1] hover:text-white"
+                      >
+                        <i className="ri-server-line" />
+                        <span>{showSourceOptions ? 'Ẩn nguồn' : 'Đổi nguồn'}</span>
+                        <i className={`${showSourceOptions ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} text-base`} />
+                      </button>
+                    )}
                   </div>
 
                   {canCollapseEpisodes && (
@@ -577,6 +594,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     </div>
                   )}
 
+                  {(showSourceOptions || episodes.length === 1) && <>
                   {/* Type filter tabs */}
                   <div className="overflow-x-auto px-3 pt-3 sm:px-4 lg:px-5 lg:pt-4">
                   <div className="flex w-max gap-1.5 sm:w-auto sm:flex-wrap lg:gap-2">
@@ -626,22 +644,25 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       const type = getServerTypeStyle(typeKey);
                       const isActive = idx === activeServer;
                       const sourceName = getServerDisplayName(srv, idx);
+                      const friendlyName = isActive ? 'Đang phát' : `Dự phòng ${idx + 1}`;
                       return (
                         <button
                           key={idx}
                           onClick={() => onSwitchServer(idx)}
+                          aria-pressed={isActive}
+                          aria-label={`${friendlyName}, ${srv.server_data?.length ?? 0} tập`}
                           className={`flex h-12 lg:h-14 items-center gap-2 rounded-xl border px-3 text-left transition-all cursor-pointer active:scale-[0.99] ${
                             isActive
                               ? 'bg-white text-[#11131b] border-white shadow-lg shadow-white/10'
                               : 'bg-white/[0.05] text-white/68 border-white/[0.08] hover:bg-white/[0.10] hover:text-white hover:border-white/18'
                           }`}
                         >
-                          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${isActive ? 'bg-white' : type.dotClass}`} />
+                          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${isActive ? 'bg-emerald-500' : type.dotClass}`} />
                           <i className={`${type.icon} shrink-0 text-base`} />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs sm:text-sm lg:text-[15px] font-bold">{type.label}</span>
-                            <span className={`block truncate text-[10px] sm:text-[11px] ${isActive ? 'text-white/80' : 'text-white/35'}`}>
-                              {sourceName} · {srv.server_data?.length ?? 0}
+                            <span className="block truncate text-xs sm:text-sm lg:text-[15px] font-bold">{friendlyName}</span>
+                            <span className={`block truncate text-[10px] sm:text-[11px] ${isActive ? 'text-black/55' : 'text-white/35'}`}>
+                              {sourceName} · {srv.server_data?.length ?? 0} tập
                             </span>
                           </span>
                           {isActive && (
@@ -651,6 +672,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       );
                     })}
                   </div>
+                  </>}
                 </div>
               )}
 

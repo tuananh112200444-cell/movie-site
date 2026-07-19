@@ -58,7 +58,7 @@ function QueerUniverseHero({ movies, loading }: QueerUniverseHeroProps) {
   const active = featured[activeIndex];
   const activeHref = getDetailHref(active);
   const background = getOptimizedImageUrl(active.thumb_url || active.poster_url, 1500, 86);
-  const poster = getOptimizedImageUrl(active.thumb_url || active.poster_url, 520, 86);
+  const poster = getOptimizedImageUrl(active.poster_url || active.thumb_url, 520, 86);
 
   return (
     <section className="relative w-full overflow-hidden bg-[#071014]" style={{ aspectRatio: '16/6', minHeight: 320 }}>

@@ -197,10 +197,15 @@ begin
       delete from public.movie_api_cache
       where slug in (target_slug, (select slug from public.movies where id = source_id));
 
-      if to_regclass('public.movie_reviews') is not null then
-        delete from public.movie_reviews
-        where slug = (select slug from public.movies where id = source_id);
-      end if;
+      insert into public.movie_slug_aliases (alias_slug, movie_id, canonical_slug, reason, updated_at)
+      select slug, target_id, target_slug, 'auto-duplicate-candidates', now()
+      from public.movies
+      where id = source_id and slug <> target_slug
+      on conflict (alias_slug) do update
+      set movie_id = excluded.movie_id,
+          canonical_slug = excluded.canonical_slug,
+          reason = excluded.reason,
+          updated_at = now();
 
       update public.movies
       set

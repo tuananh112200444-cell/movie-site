@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyAdminRequest } from '../_shared/admin-session.ts';
 
 /**
  * Admin Review Delete – with admin token verification + rate limiting
@@ -14,12 +15,6 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-function verifyAdminToken(req: Request): boolean {
-  const auth = req.headers.get('Authorization') ?? '';
-  if (!auth.startsWith('Bearer ')) return false;
-  const token = auth.slice(7).trim();
-  return token.length > 20;
-}
 
 async function checkRateLimit(supabase: ReturnType<typeof createClient>, ipHash: string, endpoint: string): Promise<{ ok: boolean }> {
   const windowStart = new Date();
@@ -71,7 +66,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    if (!verifyAdminToken(req)) {
+    if (!await verifyAdminRequest(req)) {
       return new Response(JSON.stringify({ error: 'Unauthorized – admin login required' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -234,6 +234,25 @@ assert(
   'Dailymotion embed should be preferred over slower third-party embed sources for the same episode'
 );
 
+const stableOkVsFragileMirrors = [
+  {
+    server_name: 'Server OK',
+    server_data: [{ name: 'Tap 38', slug: 'tap-38', link_embed: 'https://ok.ru/videoembed/123456' }],
+  },
+  {
+    server_name: 'Server ABYSS',
+    server_data: [{ name: 'Tap 38', slug: 'tap-38', link_embed: 'https://short.icu/fragile-mirror' }],
+  },
+  {
+    server_name: 'Server VK',
+    server_data: [{ name: 'Tap 38', slug: 'tap-38', link_embed: 'https://vk.com/video-1_2' }],
+  },
+];
+assert(
+  pickBestEpisodeByPriority(stableOkVsFragileMirrors, 'tap-38')?.serverIndex === 0,
+  'OK embed must be chosen before short.icu or VK mirrors for the same episode'
+);
+
 const ssplayActiveWithAbyssMirror = [
   {
     server_name: 'Server SS',

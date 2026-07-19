@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyAdminRequest } from '../_shared/admin-session.ts';
 
 /**
  * Admin Review Save – with admin token verification + rate limiting
@@ -17,14 +18,6 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
 }
 
 /** Extract and verify admin Bearer token */
-function verifyAdminToken(req: Request): boolean {
-  const auth = req.headers.get('Authorization') ?? '';
-  if (!auth.startsWith('Bearer ')) return false;
-  const token = auth.slice(7).trim();
-  // The token is a base64 string; we just verify it's non-empty and was issued by our admin-auth function
-  // (The real protection is that the token is only valid for 1h and stored in sessionStorage)
-  return token.length > 20;
-}
 
 /** Rate limit: 30 requests per IP per 60 seconds */
 async function checkRateLimit(supabase: ReturnType<typeof createClient>, ipHash: string, endpoint: string): Promise<{ ok: boolean; remaining?: number }> {
@@ -84,7 +77,7 @@ Deno.serve(async (req) => {
 
   try {
     // ─── Admin Auth Check ───
-    if (!verifyAdminToken(req)) {
+    if (!await verifyAdminRequest(req)) {
       return new Response(JSON.stringify({ error: 'Unauthorized – admin login required' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

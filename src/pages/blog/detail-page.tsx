@@ -132,7 +132,7 @@ export default function BlogDetailPage() {
       name: 'KhoPhim',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png',
+        url: 'https://khophim.org/brand/khophim-logo-v2.png',
       },
     },
     image: {
@@ -303,7 +303,7 @@ export default function BlogDetailPage() {
             <div className="bg-[#0d0f18] border border-white/[0.06] rounded-xl p-5">
               <div className="flex items-center gap-3 mb-3">
                 <img
-                  src="https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png"
+                  src="/brand/khophim-logo-v2.png"
                   alt="KhoPhim"
                   width="40" height="40"
                   className="w-10 h-10 rounded-xl"

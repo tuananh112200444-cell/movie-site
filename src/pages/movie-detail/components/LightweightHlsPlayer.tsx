@@ -33,7 +33,7 @@ const MAX_NON_FATAL_NETWORK_RETRIES = 2;
 const STALL_RECOVERY_DELAY_MS = 3500;
 const STALL_PROGRESS_CHECK_MS = 2500;
 const STALL_MIN_PROGRESS_SECONDS = 0.05;
-const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
+const PLAYER_LOGO_URL = '/brand/khophim-logo-v2.png';
 
 function getPlaybackProfile() {
   if (typeof window === 'undefined') {
@@ -171,6 +171,7 @@ export default function LightweightHlsPlayer({
   const nonFatalNetworkRetryRef = useRef(0);
   const streamRecoveryRef = useRef(0);
   const pseudoFsRef = useRef(false);
+  const scrollPositionRef = useRef(0);
 
   const [loaded, setLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -598,7 +599,7 @@ export default function LightweightHlsPlayer({
     const onFS = () => {
       const docEl = document as Document & { webkitFullscreenElement?: Element };
       const fs = Boolean(document.fullscreenElement || docEl.webkitFullscreenElement);
-      setIsFullscreen(fs);
+      setIsFullscreen(fs || pseudoFsRef.current);
     };
 
     const onIOSBegin = () => setIsFullscreen(true);
@@ -756,6 +757,7 @@ export default function LightweightHlsPlayer({
     const el = containerRef.current;
     if (!el) return;
     pseudoFsRef.current = true;
+    scrollPositionRef.current = window.scrollY;
     setIsFullscreen(true);
     el.style.position = 'fixed';
     el.style.top = '0';
@@ -764,11 +766,17 @@ export default function LightweightHlsPlayer({
     el.style.height = '100vh';
     el.style.zIndex = '9999';
     el.style.borderRadius = '0';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    // A transformed ancestor establishes a fixed-position containing block.
+    // Compensate its offset so the player aligns with the real viewport.
+    const fixedRect = el.getBoundingClientRect();
+    el.style.left = `${-fixedRect.left}px`;
+    el.style.top = `${-fixedRect.top}px`;
     // Try landscape on mobile
     if ((screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock) {
       (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape').catch(() => {});
     }
-    window.scrollTo({ top: 0, behavior: 'auto' });
   }, []);
 
   const exitPseudoFullscreen = useCallback(() => {
@@ -783,79 +791,65 @@ export default function LightweightHlsPlayer({
     el.style.height = '';
     el.style.zIndex = '';
     el.style.borderRadius = '';
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
     if ((screen.orientation as ScreenOrientation & { unlock?: () => void }).unlock) {
       (screen.orientation as ScreenOrientation & { unlock?: () => void }).unlock?.();
     }
+    window.scrollTo({ top: scrollPositionRef.current, behavior: 'auto' });
   }, []);
 
-  const toggleFullscreen = useCallback(() => {
+  const toggleFullscreen = useCallback(async () => {
     const el = containerRef.current;
     const video = videoRef.current;
     if (!el || !video) return;
 
-    // Exit pseudo first if active
     if (pseudoFsRef.current) {
       exitPseudoFullscreen();
       return;
     }
 
-    const isFsNow = Boolean(
-      document.fullscreenElement ||
-      (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement
-    );
-
-    if (isFsNow) {
-      // Exit native
-      try {
-        if (document.exitFullscreen) document.exitFullscreen();
-        else if ((document as Document & { webkitExitFullscreen?: () => void }).webkitExitFullscreen) {
-          (document as Document & { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.();
-        }
-      } catch {
-        exitPseudoFullscreen();
-      }
+    const safariDocument = document as Document & {
+      webkitFullscreenElement?: Element;
+      webkitExitFullscreen?: () => void;
+    };
+    const nativeFullscreenElement = document.fullscreenElement || safariDocument.webkitFullscreenElement;
+    if (nativeFullscreenElement) {
+      if (document.exitFullscreen) await document.exitFullscreen().catch(() => {});
+      else safariDocument.webkitExitFullscreen?.();
       return;
     }
 
-    // Try native fullscreen (container first, then video)
-    let nativeSuccess = false;
+    // Native fullscreen is the primary experience: it hides the browser/page
+    // chrome and makes the movie occupy the physical screen.
     try {
       if (el.requestFullscreen) {
-        el.requestFullscreen().then(() => { nativeSuccess = true; }).catch(() => {});
-      } else if ((el as HTMLDivElement & { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen) {
-        (el as HTMLDivElement & { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen?.();
-        nativeSuccess = true;
+        await el.requestFullscreen({ navigationUI: 'hide' });
+        return;
+      }
+      const safariElement = el as HTMLDivElement & { webkitRequestFullscreen?: () => void };
+      if (safariElement.webkitRequestFullscreen) {
+        safariElement.webkitRequestFullscreen();
+        return;
+      }
+      const iosVideo = video as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+      if (iosVideo.webkitEnterFullscreen) {
+        iosVideo.webkitEnterFullscreen();
+        return;
       }
     } catch {
-      nativeSuccess = false;
+      // Browsers embedded in social apps may deny native fullscreen.
     }
 
-    // If native container didn't work, try video.webkitEnterFullscreen (iOS)
-    if (!nativeSuccess) {
-      const iosVideo = video as HTMLVideoElement & {
-        webkitEnterFullscreen?: () => void;
-        webkitDisplayingFullscreen?: boolean;
-      };
-      try {
-        if (iosVideo.webkitEnterFullscreen && !iosVideo.webkitDisplayingFullscreen) {
-          iosVideo.webkitEnterFullscreen();
-          return;
-        }
-      } catch {
-        // fall through to pseudo
-      }
-    }
-
-    // If we reach here and still not fullscreen, use pseudo-fullscreen
-    setTimeout(() => {
-      const stillNotFs = !(
-        document.fullscreenElement ||
-        (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement ||
-        pseudoFsRef.current
-      );
-      if (stillNotFs) enterPseudoFullscreen();
-    }, 150);
+    // Last-resort fallback keeps playback usable when native fullscreen is
+    // unavailable, but normal browsers always take the native path above.
+    enterPseudoFullscreen();
   }, [enterPseudoFullscreen, exitPseudoFullscreen]);
+
+  useEffect(() => () => {
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+  }, []);
 
   /* ── Listen ESC to exit pseudo-fullscreen ── */
   useEffect(() => {
@@ -965,7 +959,7 @@ export default function LightweightHlsPlayer({
         {/* Gradient */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/60 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/80 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black via-black/85 to-transparent" />
         </div>
 
         {/* Pause button center */}
@@ -995,29 +989,34 @@ export default function LightweightHlsPlayer({
         <div data-controls className="relative z-10 px-3 pb-3 sm:px-4 sm:pb-4" onClick={(e) => e.stopPropagation()}>
           {/* Progress */}
           <div
-            className="w-full cursor-pointer mb-2 relative"
+            role="slider"
+            aria-label="Tua phim"
+            aria-valuemin={0}
+            aria-valuemax={Math.max(0, Math.round(duration))}
+            aria-valuenow={Math.max(0, Math.round(currentTime))}
+            className="group/progress flex h-5 w-full cursor-pointer items-center mb-1 relative touch-none"
             onClick={handleProgressClick}
           >
-            <div className="w-full h-1 rounded-full bg-white/15 overflow-hidden">
+            <div className="w-full h-1.5 group-hover/progress:h-2 rounded-full bg-white/35 overflow-hidden transition-[height]">
               <div className="h-full rounded-full bg-red-500 transition-[width] duration-100" style={{ width: `${progress}%` }} />
             </div>
           </div>
 
           {/* Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-3">
-            <button type="button" aria-label={isPlaying ? 'Tạm dừng phim' : 'Phát phim'} onClick={togglePlay} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 transition-all cursor-pointer flex-shrink-0">
+            <button type="button" aria-label={isPlaying ? 'Tạm dừng phim' : 'Phát phim'} title={isPlaying ? 'Tạm dừng (K)' : 'Phát (K)'} onClick={togglePlay} className="w-11 h-11 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 transition-all cursor-pointer flex-shrink-0">
               <i className={`${isPlaying ? 'ri-pause-fill' : 'ri-play-fill'} text-lg ${!isPlaying ? 'ml-0.5' : ''}`} />
             </button>
 
-            <button onClick={() => seekBy(-10)} title="Lui 10 giây" className="hidden sm:flex w-8 h-8 items-center justify-center rounded-lg text-white/55 hover:text-white hover:bg-white/10 transition-all cursor-pointer flex-shrink-0">
+            <button aria-label="Lùi 10 giây" onClick={() => seekBy(-10)} title="Lùi 10 giây" className="hidden sm:flex w-11 h-11 items-center justify-center rounded-lg text-white/85 hover:text-white hover:bg-white/15 transition-all cursor-pointer flex-shrink-0">
               <i className="ri-replay-10-line text-lg" />
             </button>
-            <button onClick={() => seekBy(10)} title="Tới 10 giây" className="hidden sm:flex w-8 h-8 items-center justify-center rounded-lg text-white/55 hover:text-white hover:bg-white/10 transition-all cursor-pointer flex-shrink-0">
+            <button aria-label="Tới 10 giây" onClick={() => seekBy(10)} title="Tới 10 giây" className="hidden sm:flex w-11 h-11 items-center justify-center rounded-lg text-white/85 hover:text-white hover:bg-white/15 transition-all cursor-pointer flex-shrink-0">
               <i className="ri-forward-10-line text-lg" />
             </button>
 
             <div className="hidden sm:flex items-center gap-1.5 group/vol">
-              <button onClick={toggleMute} className="w-7 h-7 flex items-center justify-center text-white/60 hover:text-white cursor-pointer">
+              <button aria-label={isMuted ? 'Bật âm thanh' : 'Tắt âm thanh'} title={isMuted ? 'Bật âm thanh (M)' : 'Tắt âm thanh (M)'} onClick={toggleMute} className="w-11 h-11 flex items-center justify-center rounded-lg text-white/85 hover:text-white hover:bg-white/15 cursor-pointer">
                 <i className={`text-sm ${isMuted || volume === 0 ? 'ri-volume-mute-line text-red-400' : volume < 0.5 ? 'ri-volume-down-line' : 'ri-volume-up-line'}`} />
               </button>
               <div className="w-0 overflow-hidden group-hover/vol:w-16 transition-all">
@@ -1031,7 +1030,7 @@ export default function LightweightHlsPlayer({
               </div>
             </div>
 
-            <span className="text-white/60 text-xs font-mono whitespace-nowrap">
+            <span className="text-white/90 text-xs font-mono whitespace-nowrap">
               {fmtTime(currentTime)}<span className="text-white/30"> / {fmtTime(duration)}</span>
             </span>
 
@@ -1040,8 +1039,9 @@ export default function LightweightHlsPlayer({
               <div className="relative">
                 <button
                   onClick={() => { setShowQualityMenu((value) => !value); setShowSpeedMenu(false); }}
+                  aria-label="Chọn chất lượng"
                   title="Chọn chất lượng"
-                  className="h-9 px-2.5 rounded-lg text-[11px] font-bold text-white/70 hover:text-white hover:bg-white/10 border border-white/10 transition-all cursor-pointer"
+                  className="h-11 min-w-12 px-2.5 rounded-lg text-xs font-bold text-white/90 hover:text-white hover:bg-white/15 border border-white/20 transition-all cursor-pointer"
                 >
                   {selectedLevel < 0 ? 'Auto' : `${levels.find((level) => level.index === selectedLevel)?.height || ''}p`}
                 </button>
@@ -1063,8 +1063,9 @@ export default function LightweightHlsPlayer({
             <div className="relative">
               <button
                 onClick={() => { setShowSpeedMenu((value) => !value); setShowQualityMenu(false); }}
+                aria-label="Tốc độ phát"
                 title="Tốc độ phát"
-                className="h-9 px-2.5 rounded-lg text-[11px] font-bold text-white/70 hover:text-white hover:bg-white/10 border border-white/10 transition-all cursor-pointer"
+                className="h-11 min-w-11 px-2.5 rounded-lg text-xs font-bold text-white/90 hover:text-white hover:bg-white/15 border border-white/20 transition-all cursor-pointer"
               >
                 {playbackRate}x
               </button>
@@ -1086,21 +1087,22 @@ export default function LightweightHlsPlayer({
             {subtitleUrl && (
               <button
                 onClick={() => setCaptionsEnabled((value) => !value)}
+                aria-label={captionsEnabled ? 'Tắt phụ đề' : 'Bật phụ đề'}
                 title="Phụ đề tiếng Việt"
-                className={`w-9 h-9 flex items-center justify-center cursor-pointer flex-shrink-0 ${
-                  captionsEnabled ? 'text-cyan-300' : 'text-white/45 hover:text-white'
+                className={`w-11 h-11 rounded-lg flex items-center justify-center cursor-pointer flex-shrink-0 hover:bg-white/15 ${
+                  captionsEnabled ? 'text-cyan-300' : 'text-white/85 hover:text-white'
                 }`}
               >
                 <i className="ri-closed-captioning-line text-lg" />
               </button>
             )}
 
-            <button onClick={togglePictureInPicture} title="Xem nổi" className={`hidden sm:flex w-9 h-9 items-center justify-center cursor-pointer flex-shrink-0 ${pipActive ? 'text-red-400' : 'text-white/45 hover:text-white'}`}>
+            <button aria-label="Hình trong hình" onClick={togglePictureInPicture} title="Hình trong hình" className={`hidden sm:flex w-11 h-11 rounded-lg items-center justify-center cursor-pointer flex-shrink-0 hover:bg-white/15 ${pipActive ? 'text-red-400' : 'text-white/85 hover:text-white'}`}>
               <i className="ri-picture-in-picture-line text-lg" />
             </button>
 
-            <button onClick={toggleFullscreen} className="w-9 h-9 flex items-center justify-center text-white/60 hover:text-white cursor-pointer flex-shrink-0">
-              <i className={`${isFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-lg`} />
+            <button aria-label={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'} title={isFullscreen ? 'Thoát toàn màn hình (F)' : 'Toàn màn hình (F)'} onClick={() => void toggleFullscreen()} className="w-11 h-11 flex items-center justify-center rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer flex-shrink-0">
+              <i className={`${isFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl`} />
             </button>
           </div>
         </div>

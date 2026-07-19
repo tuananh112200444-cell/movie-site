@@ -145,10 +145,17 @@ if (childSitemaps.length < 3) {
 if (childSitemaps.includes(`${SITE_URL}/sitemap-movies.xml`)) {
   addError('sitemap.xml should not list the full sitemap-movies.xml; use chunked movie sitemaps to improve crawl stability.');
 }
+const recentMovieSitemap = `${SITE_URL}/sitemap-movies-recent.xml`;
+if (!childSitemaps.includes(recentMovieSitemap)) {
+  addError(`sitemap.xml is missing the curated recent movie sitemap: ${recentMovieSitemap}`);
+}
+if (!childSitemaps.includes(`${SITE_URL}/feed.xml`)) {
+  addError('sitemap.xml is missing the curated recent-movie RSS feed.');
+}
 for (let page = 1; page <= 8; page += 1) {
   const chunkLoc = `${SITE_URL}/sitemap-movies-${page}.xml`;
-  if (!childSitemaps.includes(chunkLoc)) {
-    addError(`sitemap.xml is missing chunked movie sitemap: ${chunkLoc}`);
+  if (childSitemaps.includes(chunkLoc)) {
+    addError(`sitemap.xml should not expose broad movie chunks during index-quality recovery: ${chunkLoc}`);
   }
 }
 
@@ -159,7 +166,7 @@ for (const loc of childSitemaps) {
   }
   const fileName = loc.replace(`${SITE_URL}/`, '');
   if (!fileName.endsWith('.xml')) continue;
-  if (isDynamicMovieSitemap(fileName)) {
+  if (isDynamicMovieSitemap(fileName) || fileName === 'feed.xml') {
     continue;
   }
   if (!(await exists(resolve('public', fileName)))) {

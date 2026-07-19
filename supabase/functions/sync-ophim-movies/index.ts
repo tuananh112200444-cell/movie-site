@@ -1027,7 +1027,8 @@ serve(async (req) => {
   const url = new URL(req.url);
   const cronSecret = Deno.env.get('CRON_SECRET') || '';
   const secret = url.searchParams.get('secret') || req.headers.get('x-cron-secret') || '';
-  if (cronSecret && secret !== cronSecret) return json({ success: false, error: 'Unauthorized' }, 401);
+  if (!cronSecret) return json({ success: false, error: 'CRON_SECRET is not configured' }, 503);
+  if (secret !== cronSecret) return json({ success: false, error: 'Unauthorized' }, 401);
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');

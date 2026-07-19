@@ -264,17 +264,17 @@ export default function Navbar() {
               {/* Icon container */}
               <div className="absolute inset-0 bg-gradient-to-br from-red-500/30 to-red-700/20 rounded-xl ring-1 ring-red-500/50 group-hover:ring-red-400/80 group-hover:from-red-500/45 group-hover:to-red-700/35 transition-all duration-300" />
               <img
-                src="https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png"
+                src="/brand/khophim-logo-v2.png"
                 alt="KhoPhim"
                 className="relative w-5 h-5 lg:w-6 lg:h-6 object-contain drop-shadow-lg"
               />
             </div>
-            <div className="hidden sm:flex flex-col leading-none gap-0.5">
+            <div className="hidden min-[390px]:flex flex-col leading-none gap-0.5">
               <span className="font-black text-lg lg:text-xl tracking-tight leading-none">
                 <span className="text-white drop-shadow-sm">Kho</span>
                 <span className="bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">Phim</span>
               </span>
-              <span className="text-[9px] text-white/45 font-semibold tracking-[0.18em] uppercase">Xem phim miễn phí</span>
+              <span className="hidden min-[480px]:block text-[9px] text-white/45 font-semibold tracking-[0.18em] uppercase">Xem phim miễn phí</span>
             </div>
           </Link>
 
@@ -404,7 +404,7 @@ export default function Navbar() {
               <div className="w-px h-4 bg-white/[0.08] mx-1" />
             </div>
 
-            <div className="hidden min-[390px]:flex lg:hidden items-center gap-0.5">
+            <div className="hidden min-[640px]:flex lg:hidden items-center gap-0.5">
               {SOCIAL_LINKS.map(({ href, icon, title, mobileColor }) => {
                 return (
                 <a

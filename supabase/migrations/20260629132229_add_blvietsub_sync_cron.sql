@@ -10,7 +10,8 @@ select cron.schedule(
   '3,18,33,48 * * * *',
   $$
     select net.http_get(
-      url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-blvietsub-feed?limit=20&use_cursor=1&cursor_key=blvietsub_sitemap_external&refresh_search=1&secret=YOUR_CRON_SECRET',
+      url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-blvietsub-feed?limit=20&use_cursor=1&cursor_key=blvietsub_sitemap_external&refresh_search=1',
+      headers := jsonb_build_object('x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET' limit 1)),
       timeout_milliseconds := 120000
     );
   $$

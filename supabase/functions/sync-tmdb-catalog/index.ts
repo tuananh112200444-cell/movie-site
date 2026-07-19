@@ -417,7 +417,8 @@ serve(async (req) => {
 
   const url = new URL(req.url);
   const providedSecret = url.searchParams.get('secret') || req.headers.get('x-sync-secret') || '';
-  if (CRON_SECRET && providedSecret !== CRON_SECRET) return jsonResponse({ error: 'Unauthorized' }, 401);
+  if (!CRON_SECRET) return jsonResponse({ error: 'Sync authentication is not configured' }, 503);
+  if (providedSecret !== CRON_SECRET) return jsonResponse({ error: 'Unauthorized' }, 401);
 
   const startedAt = Date.now();
   const body = await req.json().catch(() => ({})) as Record<string, unknown>;

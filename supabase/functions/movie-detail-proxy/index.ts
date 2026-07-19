@@ -331,9 +331,15 @@ function isKnownBlockedEmbedHost(value = ''): boolean {
       return raw;
     }
   })();
-  if (raw.includes('versondd.top') || decoded.includes('versondd.top')) return true;
+  if (
+    raw.includes('versondd.top') || decoded.includes('versondd.top') ||
+    raw.includes('short.icu') || decoded.includes('short.icu')
+  ) return true;
   const host = getUrlHost(value);
-  return host === 'versondd.top' || host.endsWith('.versondd.top');
+  return (
+    host === 'versondd.top' || host.endsWith('.versondd.top') ||
+    host === 'short.icu' || host.endsWith('.short.icu')
+  );
 }
 
 async function readCachedDetail(
@@ -1520,6 +1526,31 @@ serve(async (req) => {
       }
     }
 
+    // Compatibility layer for slugs retired by a safe movie merge. Resolve only
+    // to an explicitly recorded canonical movie; never guess by title here.
+    if (!movie) {
+      for (const variant of slugVariants) {
+        const { data: alias } = await supabase
+          .from('movie_slug_aliases')
+          .select('movie_id,canonical_slug')
+          .eq('alias_slug', variant)
+          .maybeSingle();
+        if (!alias?.movie_id) continue;
+        const { data: canonical, error } = await supabase
+          .from('movies')
+          .select(MOVIE_DETAIL_SELECT)
+          .eq('id', alias.movie_id)
+          .eq('is_published', true)
+          .maybeSingle();
+        if (!error && canonical) {
+          movie = canonical as Record<string, unknown>;
+          movieId = movie.id as string;
+          movieData = movie;
+          break;
+        }
+      }
+    }
+
     // Fallback: ilike search
     if (!movie) {
       const safeSlug = slug.replace(/%/g, '\\%').replace(/_/g, '\\_');
@@ -1877,6 +1908,59 @@ serve(async (req) => {
         .filter((ep) => !!(ep.link_m3u8?.trim() || ep.link_embed?.trim()));
       if (playable.length > 0) {
         episodeServers.push({ server_name: serverName, server_data: playable });
+      }
+    }
+
+    // Older BLVietsub sync runs numbered legacy buttons globally, turning two
+    // complete hosts into N singleton servers. Rebuild those rows by host.
+    if (isQueerSourceMovie && episodeServers.length > 4) {
+      const initialMaxCoverage = Math.max(...episodeServers.map((server) => server.server_data.length));
+      if (initialMaxCoverage === 1) {
+        const byHost = new Map<string, { server_name: string; server_data: Record<string, unknown>[]; seen: Set<string> }>();
+        for (const server of episodeServers) {
+          for (const rawEpisode of server.server_data) {
+            const episode = rawEpisode as Record<string, unknown>;
+            const url = String(episode.link_m3u8 || episode.link_embed || '');
+            const host = getUrlHost(url) || String(server.server_name || 'unknown').toLowerCase();
+            if (!byHost.has(host)) {
+              const label = host.includes('abyssplayer')
+                ? 'BLVietsub HX'
+                : host.includes('ssplay')
+                  ? 'BLVietsub SS'
+                  : `BLVietsub ${byHost.size + 1}`;
+              byHost.set(host, { server_name: label, server_data: [], seen: new Set() });
+            }
+            const group = byHost.get(host)!;
+            const key = String(epSortKey(episode as { slug?: string; name?: string }));
+            if (group.seen.has(key)) continue;
+            group.seen.add(key);
+            group.server_data.push(episode);
+          }
+        }
+        const regrouped = [...byHost.values()]
+          .filter((server) => server.server_data.length > 1)
+          .map(({ server_name, server_data }) => ({
+            server_name,
+            server_data: server_data.sort((a, b) => epSortKey(a) - epSortKey(b)),
+          }));
+        const recoveredRows = regrouped.reduce((sum, server) => sum + server.server_data.length, 0);
+        if (regrouped.length > 0 && recoveredRows >= Math.ceil(episodeServers.length * 0.75)) {
+          episodeServers.splice(0, episodeServers.length, ...regrouped);
+        }
+      }
+    }
+
+    // Some legacy BLVietsub sync runs stored every episode/player button as a
+    // separate SV server. When complete servers exist, hide those singleton
+    // duplicates from playback instead of presenting dozens of fake choices.
+    if (isQueerSourceMovie && episodeServers.length > 3) {
+      const maxCoverage = Math.max(...episodeServers.map((server) => server.server_data.length));
+      if (maxCoverage >= 4) {
+        const minimumUsefulCoverage = Math.max(2, Math.ceil(maxCoverage * 0.5));
+        const usefulServers = episodeServers.filter((server) => server.server_data.length >= minimumUsefulCoverage);
+        if (usefulServers.length > 0) {
+          episodeServers.splice(0, episodeServers.length, ...usefulServers);
+        }
       }
     }
 

@@ -250,6 +250,8 @@ export default function UserComments({ slug, movieName }: UserCommentsProps) {
                   <button
                     key={s}
                     type="button"
+                    aria-label={`Đánh giá ${s} sao`}
+                    aria-pressed={rating === s}
                     onClick={() => setRating(s)}
                     onMouseEnter={() => setHoverRating(s)}
                     onMouseLeave={() => setHoverRating(0)}

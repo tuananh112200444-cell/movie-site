@@ -110,7 +110,7 @@ function Footer() {
             <div className="flex items-center gap-2.5 mb-4 sm:mb-5">
               <div className="relative w-9 h-9 flex items-center justify-center">
                 <div className="absolute inset-0 bg-red-500/15 rounded-xl blur-sm" />
-                <img src="https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png"
+                <img src="/brand/khophim-logo-v2.png"
                   alt="KhoPhim" width="36" height="36" className="relative w-full h-full object-contain" />
               </div>
               <div className="flex flex-col">
@@ -251,6 +251,7 @@ function Footer() {
             </div>
             <div className="flex items-center gap-3 text-[11px] text-white/45">
               <Link to="/about" className="hover:text-white/80 transition-colors">Giới Thiệu</Link>
+              <a href="/press/" className="hover:text-white/80 transition-colors">Báo Chí & Thương Hiệu</a>
               <span>·</span>
               <Link to="/policy" className="hover:text-white/80 transition-colors">Chính Sách</Link>
               <span>·</span>

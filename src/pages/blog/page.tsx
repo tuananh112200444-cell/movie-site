@@ -60,7 +60,7 @@ export default function BlogPage() {
       name: 'KhoPhim',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png',
+        url: 'https://khophim.org/brand/khophim-logo-v2.png',
       },
     },
     blogPosts: filteredPosts.slice(0, 10).map(post => ({

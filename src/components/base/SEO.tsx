@@ -93,7 +93,7 @@ const SEO = memo(function SEO({
       '@id': `${SITE_URL}/#organization`,
       name: SITE_NAME_SHORT,
       url: SITE_URL,
-      logo: `${SITE_URL}/logo.png`,
+      logo: `${SITE_URL}/brand/khophim-logo-v2.png`,
       sameAs: ['https://www.tiktok.com/@khophim.org'],
     },
   ], []);
@@ -140,7 +140,9 @@ const SEO = memo(function SEO({
     document.head.querySelectorAll('[data-kp-seo-managed="true"]').forEach((node) => node.remove());
 
     ensureMeta('name', 'description', truncatedDescription);
-    ensureMeta('name', 'keywords', keywords);
+    // Google does not use the keywords meta tag. Keeping it would encourage
+    // duplicated keyword lists instead of useful, visible page content.
+    ensureMeta('name', 'keywords', undefined);
     ensureMeta('name', 'robots', robotsContent);
     ensureMeta('name', 'googlebot', robotsContent);
     ensureMeta('name', 'last-modified', updatedDate);

@@ -11,10 +11,13 @@
     "/favicon.png",
     "/logo.svg",
     "/logo.png",
+    "/brand/*",
+    "/press/*",
     "/site.webmanifest",
     "/robots.txt",
     "/llms.txt",
     "/home-fallback.json",
+    "/release.json",
     "/queer-fallback.json",
     "/sitemap*.xml",
     "/service-worker.js"

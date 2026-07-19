@@ -5,6 +5,7 @@
 /sitemap.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-index 200!
 /sitemap-movies.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml 200!
 /sitemap-movies-dynamic https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml 200!
+/feed.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/movie-rss-feed 200!
 /sitemap-movies-recent.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?recent=1&page_size=2000 200!
 /sitemap-movies-upcoming.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?upcoming=1&page_size=5000 200!
 /sitemap-movies-1.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?page=1&page_size=5000 200!

@@ -50,7 +50,7 @@ export default function MovieReviewSection({ slug, movieName, originName, year, 
       '@type': 'Organization',
       name: 'KhoPhim',
       url: 'https://khophim.org',
-      logo: { '@type': 'ImageObject', url: 'https://khophim.org/logo.png' },
+      logo: { '@type': 'ImageObject', url: 'https://khophim.org/brand/khophim-logo-v2.png' },
     },
     about: {
       '@type': 'Movie',

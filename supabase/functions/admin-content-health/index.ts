@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyAdminRequest } from '../_shared/admin-session.ts';
 
 type MovieRow = {
   id: string;
@@ -69,11 +70,6 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-function verifyAdminToken(req: Request): boolean {
-  const auth = req.headers.get('Authorization') ?? '';
-  if (!auth.startsWith('Bearer ')) return false;
-  return auth.slice(7).trim().length > 20;
-}
 
 function json(body: unknown, status: number, corsHeaders: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
@@ -287,7 +283,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405, corsHeaders);
 
   try {
-    if (!verifyAdminToken(req)) {
+    if (!await verifyAdminRequest(req)) {
       return json({ error: 'Unauthorized - admin login required' }, 401, corsHeaders);
     }
 

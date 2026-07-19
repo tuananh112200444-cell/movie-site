@@ -72,6 +72,28 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: HEADERS });
 }
 
+function hasPlayableLink(row: Record<string, unknown>): boolean {
+  return ['link_m3u8', 'link_embed'].some((key) => {
+    const value = String(row[key] || '').trim();
+    return /^https?:\/\//i.test(value) || value.startsWith('//');
+  });
+}
+
+async function enrichSeoMovie(supabase: ReturnType<typeof createClient>, movie: Record<string, unknown>) {
+  const movieId = String(movie.id || '');
+  if (!movieId) return { ...movie, seo_has_playable_episode: false };
+
+  const [adminEpisodes, episodes] = await Promise.all([
+    supabase.from('movie_episodes').select('link_m3u8,link_embed').eq('movie_id', movieId).limit(20),
+    supabase.from('episodes').select('link_m3u8,link_embed').eq('movie_id', movieId).limit(20),
+  ]);
+  const rows = [
+    ...(adminEpisodes.data || []),
+    ...(episodes.data || []),
+  ] as Array<Record<string, unknown>>;
+  return { ...movie, seo_has_playable_episode: rows.some(hasPlayableLink) };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
   if (req.method !== 'GET' && req.method !== 'HEAD') return json({ status: false, message: 'Method not allowed' }, 405);
@@ -99,7 +121,7 @@ Deno.serve(async (req) => {
       .eq('is_published', true)
       .maybeSingle();
     if (error) return json({ status: false, message: error.message }, 500);
-    if (!error && data?.slug) return json({ status: true, movie: data });
+    if (!error && data?.slug) return json({ status: true, movie: await enrichSeoMovie(supabase, data) });
   }
 
   for (const variant of variants) {
@@ -110,7 +132,7 @@ Deno.serve(async (req) => {
       .eq('is_published', true)
       .maybeSingle();
     if (error) return json({ status: false, message: error.message }, 500);
-    if (!error && data?.slug) return json({ status: true, movie: data });
+    if (!error && data?.slug) return json({ status: true, movie: await enrichSeoMovie(supabase, data) });
   }
 
   return json({ status: false, message: 'Movie not found' }, 404);
