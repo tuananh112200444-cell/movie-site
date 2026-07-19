@@ -811,6 +811,7 @@ export default function LightweightHlsPlayer({
 
     const safariDocument = document as Document & {
       webkitFullscreenElement?: Element;
+      webkitFullscreenEnabled?: boolean;
       webkitExitFullscreen?: () => void;
     };
     const nativeFullscreenElement = document.fullscreenElement || safariDocument.webkitFullscreenElement;
@@ -823,14 +824,12 @@ export default function LightweightHlsPlayer({
     // Native fullscreen is the primary experience: it hides the browser/page
     // chrome and makes the movie occupy the physical screen.
     try {
-      if (el.requestFullscreen) {
-        await el.requestFullscreen({ navigationUI: 'hide' });
-        return;
-      }
-      const safariElement = el as HTMLDivElement & { webkitRequestFullscreen?: () => void };
-      if (safariElement.webkitRequestFullscreen) {
-        safariElement.webkitRequestFullscreen();
-        return;
+      if (document.fullscreenEnabled === true && el.requestFullscreen) {
+        // The no-options form has the widest support (notably Safari and
+        // embedded mobile browsers) while still entering native fullscreen.
+        await el.requestFullscreen();
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+        if (document.fullscreenElement || safariDocument.webkitFullscreenElement) return;
       }
       const iosVideo = video as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
       if (iosVideo.webkitEnterFullscreen) {
