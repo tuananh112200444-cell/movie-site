@@ -154,6 +154,7 @@ for (const row of [
 const needsRepair = [];
 const noBackup = [];
 const unhealthyOnly = [];
+const legacySingleEpisodeRechecks = [];
 const backupCoverage = {
   totalPlayable: 0,
   withVerifiedBackup: 0,
@@ -169,6 +170,16 @@ for (const movie of movies) {
   const kinds = new Set(playableRows.map(sourceKind));
   const sourceText = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
   const isBlvietsub = sourceText.includes('blvietsub') || sourceText.includes('admin-queer');
+
+  if (isBlvietsub && advertised <= 1 && playableMax <= 1) {
+    legacySingleEpisodeRechecks.push({
+      slug: movie.slug,
+      name: movie.name,
+      advertised,
+      playableMax,
+      sources: [...kinds],
+    });
+  }
 
   if (playableMax > 0) backupCoverage.totalPlayable += 1;
   if (isBlvietsub) backupCoverage.blvietsubMovies += 1;
@@ -216,9 +227,11 @@ console.log(JSON.stringify({
   needsRepairCount: needsRepair.length,
   noBackupBlvietsubCount: noBackup.length,
   unhealthyOnlyCount: unhealthyOnly.length,
+  legacySingleEpisodeRecheckCount: legacySingleEpisodeRechecks.length,
   needsRepairSamples: needsRepair.slice(0, 10),
   noBackupBlvietsubSamples: noBackup.slice(0, 10),
   unhealthyOnlySamples: unhealthyOnly.slice(0, 10),
+  legacySingleEpisodeRecheckSamples: legacySingleEpisodeRechecks.slice(0, 20),
   failures,
 }, null, 2));
 

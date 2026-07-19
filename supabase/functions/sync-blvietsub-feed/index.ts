@@ -81,6 +81,7 @@ interface MovieRow {
   thumb_url?: string | null;
   poster_url?: string | null;
   episode_current?: string | null;
+  episode_total?: string | null;
   current_episode?: number | null;
   total_episodes?: number | null;
   status?: string | null;
@@ -587,8 +588,12 @@ function scoreRoutineRepairMovie(
   const updatedHours = Math.max(0, (now - toTime(movie.updated_at)) / 36e5);
   const looksOngoing = !isCompletedText(movie.status) && !isCompletedText(movie.episode_current);
   const mismatch = Math.max(0, displayedEpisode - localMaxEpisode);
+  const legacySingleEpisode = displayedEpisode <= 1 && Number(movie.total_episodes || 0) <= 1;
 
   let score = 0;
+  // A migrated series incorrectly frozen as completed 1/1 otherwise competes
+  // only on age and can starve forever behind ongoing titles.
+  if (legacySingleEpisode) score += 9000;
   if (displayedEpisode > 0 && localRows === 0) score += 10000;
   if (mismatch > 0) score += 5000 + mismatch * 250;
   if (looksOngoing) score += 1200;
@@ -1557,6 +1562,7 @@ async function updateMovieMetadata(
   const mergedTotal = Math.max(existingTotal, episodeCount);
   if (mergedCurrent !== current || Number(movie.total_episodes || 0) !== mergedTotal) {
     update.episode_current = `${TAP_LABEL} ${mergedCurrent}`;
+    update.episode_total = `${mergedTotal} Tập`;
     update.current_episode = mergedCurrent;
     update.total_episodes = mergedTotal;
   }
@@ -1622,9 +1628,22 @@ async function syncEntryToMovie(
   supabase: SupabaseClient,
   movie: MovieRow,
   entry: ParsedEntry,
-): Promise<{ inserted: number; updated: boolean; source_max_episode: number; db_before_episode: number }> {
+): Promise<{ inserted: number; updated: boolean; source_max_episode: number; db_before_episode: number; backward_guarded: boolean }> {
   const dbBeforeEpisode = getMovieCurrentEpisode(movie);
   const sourceMaxEpisode = Math.max(1, maxPlayableEpisodeNumber(entry.episodes) || playableEpisodeCount(entry.episodes));
+  // A same-title page can be a one-video compilation or a different remake.
+  // Never merge that into a healthy multi-episode record: doing so can attach
+  // episode 1 from the wrong title even though monotonic metadata prevents a
+  // numeric downgrade.
+  if (dbBeforeEpisode >= 4 && sourceMaxEpisode <= 1) {
+    return {
+      inserted: 0,
+      updated: false,
+      source_max_episode: sourceMaxEpisode,
+      db_before_episode: dbBeforeEpisode,
+      backward_guarded: true,
+    };
+  }
   const inserted = await insertMissingEpisodes(supabase, movie, entry);
   const updated = await updateMovieMetadata(supabase, movie, entry);
   if (inserted > 0 || updated || sourceMaxEpisode !== dbBeforeEpisode) {
@@ -1635,6 +1654,7 @@ async function syncEntryToMovie(
     updated,
     source_max_episode: sourceMaxEpisode,
     db_before_episode: dbBeforeEpisode,
+    backward_guarded: false,
   };
 }
 
@@ -1651,6 +1671,7 @@ async function repairExistingBlvietsubMovies(
   inserted: number;
   updated: number;
   transient_skipped: number;
+  backward_guarded: number;
   transient_details: string[];
   drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }>;
   errors: string[];
@@ -1659,7 +1680,7 @@ async function repairExistingBlvietsubMovies(
   const queryLimit = includeCompleted ? 800 : 1000;
   const { data, error } = await supabase
     .from('movies')
-    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, status, year, last_synced_at, updated_at')
+    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, episode_total, current_episode, total_episodes, status, year, last_synced_at, updated_at')
     .eq('is_published', true)
     .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub.com%,source_url.ilike.%blvietsub.com%')
     .order('last_synced_at', { ascending: true, nullsFirst: true })
@@ -1672,6 +1693,7 @@ async function repairExistingBlvietsubMovies(
   let inserted = 0;
   let updated = 0;
   let transientSkipped = 0;
+  let backwardGuarded = 0;
   const transientDetails: string[] = [];
   const drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }> = [];
   const errors: string[] = [];
@@ -1701,36 +1723,43 @@ async function repairExistingBlvietsubMovies(
     }))
     .filter((item) => item.score >= 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, cappedLimit)
-    .map((item) => item.movie);
+    .slice(0, cappedLimit);
 
-  for (const { movie, sourceUrl } of rows) {
-    checked += 1;
-    try {
-      const entry = await fetchWordPressEntryByUrl(sourceUrl);
-      if (!entry) continue;
-      const result = await syncEntryToMovie(supabase, movie, entry);
-      inserted += result.inserted;
-      if (result.updated) updated += 1;
-      if (result.inserted > 0 || result.updated || result.source_max_episode > result.db_before_episode) {
-        repaired += 1;
-        drift.push({
-          slug: movie.slug,
-          title: entry.title || movie.name || movie.slug,
-          before: result.db_before_episode,
-          after: result.source_max_episode,
-          inserted: result.inserted,
-        });
+  // Four concurrent source reads keep a 12-title repair batch inside the cron
+  // timeout while remaining gentle to BLVietsub and Supabase.
+  for (let index = 0; index < rows.length; index += 4) {
+    await Promise.all(rows.slice(index, index + 4).map(async ({ movie, sourceUrl }) => {
+      checked += 1;
+      try {
+        const entry = await fetchWordPressEntryByUrl(sourceUrl);
+        if (!entry) return;
+        const result = await syncEntryToMovie(supabase, movie, entry);
+        if (result.backward_guarded) {
+          backwardGuarded += 1;
+          return;
+        }
+        inserted += result.inserted;
+        if (result.updated) updated += 1;
+        if (result.inserted > 0 || result.updated || result.source_max_episode > result.db_before_episode) {
+          repaired += 1;
+          drift.push({
+            slug: movie.slug,
+            title: entry.title || movie.name || movie.slug,
+            before: result.db_before_episode,
+            after: result.source_max_episode,
+            inserted: result.inserted,
+          });
+        }
+      } catch (error) {
+        const message = `${movie.slug}: ${error instanceof Error ? error.message : String(error)}`;
+        if (isTransientExternalFetchError(error)) {
+          transientSkipped += 1;
+          transientDetails.push(message);
+        } else {
+          errors.push(message);
+        }
       }
-    } catch (error) {
-      const message = `${movie.slug}: ${error instanceof Error ? error.message : String(error)}`;
-      if (isTransientExternalFetchError(error)) {
-        transientSkipped += 1;
-        transientDetails.push(message);
-      } else {
-        errors.push(message);
-      }
-    }
+    }));
   }
 
   return {
@@ -1742,6 +1771,7 @@ async function repairExistingBlvietsubMovies(
     inserted,
     updated,
     transient_skipped: transientSkipped,
+    backward_guarded: backwardGuarded,
     transient_details: transientDetails.slice(0, 20),
     drift: drift.slice(0, 20),
     errors: errors.slice(0, 20),

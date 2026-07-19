@@ -328,6 +328,7 @@ const staleLabels = [];
 const noPlayable = [];
 const catalogNoPlayable = [];
 const queerExternalRows = [];
+const legacySingleEpisodeRechecks = [];
 const checked = [];
 
 for (const movie of movies || []) {
@@ -350,7 +351,20 @@ for (const movie of movies || []) {
       });
     }
   }
-  if (advertised <= 1) continue;
+  if (advertised <= 1) {
+    if (isBlvietsubMovie(movie) && playable <= 1) {
+      legacySingleEpisodeRechecks.push({
+        slug: movie.slug,
+        name: movie.name,
+        source_site: movie.source_site || movie.source_name,
+        episode_current: movie.episode_current,
+        current_episode: movie.current_episode,
+        playable,
+        updated_at: movie.updated_at,
+      });
+    }
+    continue;
+  }
   const record = {
     slug: movie.slug,
     name: movie.name,
@@ -411,6 +425,10 @@ if (queerExternalRows.length > 0) {
   failures.push(`Found ${queerExternalRows.length} BLVietsub/admin-queer playable rows polluted by external OPhim/KKPhim/PhimAPI sources.`);
 }
 
+if (legacySingleEpisodeRechecks.length > 0) {
+  warnings.push(`Found ${legacySingleEpisodeRechecks.length} BLVietsub movies frozen at one episode; the source repair cron must recheck these instead of trusting completed 1/1 metadata.`);
+}
+
 console.log(JSON.stringify({
   checkedMovies: movies?.length || 0,
   checkedEpisodeMovies: checked.length,
@@ -426,9 +444,11 @@ console.log(JSON.stringify({
   noPlayableCount: noPlayable.length,
   catalogNoPlayableCount: catalogNoPlayable.length,
   queerExternalRowCount: queerExternalRows.length,
+  legacySingleEpisodeRecheckCount: legacySingleEpisodeRechecks.length,
   samples: severe.slice(0, 12),
   blvietsubSamples: severeBlvietsub.slice(0, 8),
   staleLabelSamples: staleLabels.slice(0, 8),
+  legacySingleEpisodeRecheckSamples: legacySingleEpisodeRechecks.slice(0, 12),
   noPlayableSamples: noPlayable.slice(0, 8),
   catalogNoPlayableSamples: catalogNoPlayable.slice(0, 8),
   queerExternalRowSamples: queerExternalRows.slice(0, 8),
