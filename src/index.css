@@ -771,6 +771,13 @@ input::placeholder, textarea::placeholder {
   min-width: 0;
 }
 
+@media (max-width: 639px) {
+  .movie-grid-desktop.search-results-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+}
+
 /* ─── Content visibility — lazy render off-screen sections ─── */
 /* Tăng tốc FCP/LCP bằng cách skip render section chưa vào viewport */
 .content-visibility-auto {
