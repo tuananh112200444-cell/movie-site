@@ -849,15 +849,27 @@ export default function PlayerBox({
                 ))}
               </div>
             )}
+            {/* Keep the source player's bottom-right fullscreen affordance
+                visible, but handle the click in the parent so it also works
+                in WebViews that deny fullscreen to cross-origin iframes. */}
+            <button
+              type="button"
+              data-kp-source-fullscreen-proxy="true"
+              aria-label={isEmbedFullscreen ? 'Thu nhỏ từ nút nguồn phát' : 'Phóng to từ nút nguồn phát'}
+              title={isEmbedFullscreen ? 'Thu nhỏ' : 'Phóng to'}
+              onClick={() => void toggleEmbedFullscreen()}
+              className="absolute bottom-0 right-0 z-30 h-16 w-16 cursor-pointer border-0 bg-transparent p-0 opacity-0 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-white"
+            />
             {/* Overlay fullscreen button on embed video */}
             <button
                 type="button"
                 aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
                 onClick={() => void toggleEmbedFullscreen()}
                 title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-                className={`absolute z-30 flex items-center justify-center rounded-xl bg-black/90 text-white border border-white/40 shadow-xl backdrop-blur-sm transition-all hover:bg-black hover:border-white/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100 ${isEmbedFullscreen ? 'top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] h-14 w-14' : 'top-3 right-3 h-12 w-12'}`}
+                data-kp-fullscreen="true"
+                className={`absolute z-40 flex items-center justify-center rounded-xl bg-black/20 text-white border border-white/35 shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[2px] transition-all hover:bg-black/55 hover:border-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100 ${isEmbedFullscreen ? 'top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] h-14 w-14' : 'top-3 right-3 h-12 w-12'}`}
               >
-                <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-base`} />
+                <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl drop-shadow-[0_1px_3px_rgba(0,0,0,1)]`} />
             </button>
           </div>
         )}
@@ -966,9 +978,10 @@ export default function PlayerBox({
               aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
               title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
               onClick={() => void toggleEmbedFullscreen()}
-              className="absolute right-3 top-3 z-30 flex h-12 w-12 items-center justify-center rounded-xl border border-white/25 bg-black/85 text-white shadow-lg hover:bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+              data-kp-fullscreen="true"
+              className="absolute top-3 right-3 z-40 flex h-12 w-12 items-center justify-center rounded-xl border border-white/35 bg-black/20 text-white shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[2px] hover:bg-black/55 hover:border-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
             >
-              <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl`} />
+              <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl drop-shadow-[0_1px_3px_rgba(0,0,0,1)]`} />
             </button>
           </div>
         )}
