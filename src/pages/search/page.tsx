@@ -343,7 +343,15 @@ export default function SearchPage() {
     searchIndexLoadRef.current = fetchSupabaseSearchIndex({ limit: 5000 })
       .then((items) => {
         if (items.length > 0) {
-          setLocalPool((prev) => mergeMoviesUnique([...items, ...prev]));
+          setLocalPool((prev) => {
+            const merged = mergeMoviesUnique([...items, ...prev]);
+            const prevKeys = new Set(prev.map((movie) => String(movie._id || movie.slug || '')));
+            const hasCatalogChange = merged.length !== prev.length || merged.some((movie) => !prevKeys.has(String(movie._id || movie.slug || '')));
+            // Returning the previous reference is important: doSearch depends
+            // on localPool, so an equivalent new array would restart the
+            // search, clear its results and create an index-load loop.
+            return hasCatalogChange ? merged : prev;
+          });
         }
         return items;
       })
