@@ -114,10 +114,18 @@ function getEpisodeNumber(value?: string | number): number {
 }
 
 function getMovieEpisodeNumber(movie: MovieItem): number {
-  return Math.max(
+  const candidates = [
     getEpisodeNumber(movie.current_episode),
-    getEpisodeNumber(movie.episode_current)
+    getEpisodeNumber(movie.episode_current),
+  ].filter((value) => value > 0);
+  const declaredTotal = Math.max(
+    getEpisodeNumber(movie.total_episodes),
+    getEpisodeNumber(movie.episode_total),
   );
+  const credible = declaredTotal > 0
+    ? candidates.filter((value) => value <= declaredTotal)
+    : candidates;
+  return credible.length ? Math.max(...credible) : 0;
 }
 
 function isPendingEpisodeLabel(value?: string | null): boolean {
@@ -142,9 +150,19 @@ function sourcePriority(movie: MovieItem): number {
 function getMergedEpisodeText(preferred: MovieItem, fallback: MovieItem): string {
   const preferredEp = getMovieEpisodeNumber(preferred);
   const fallbackEp = getMovieEpisodeNumber(fallback);
-  const maxEp = Math.max(preferredEp, fallbackEp);
+  const declaredTotal = Math.max(
+    getEpisodeNumber(preferred.total_episodes),
+    getEpisodeNumber(preferred.episode_total),
+    getEpisodeNumber(fallback.total_episodes),
+    getEpisodeNumber(fallback.episode_total),
+  );
+  const candidates = [preferredEp, fallbackEp].filter((value) => value > 0);
+  const credible = declaredTotal > 0
+    ? candidates.filter((value) => value <= declaredTotal)
+    : candidates;
+  const maxEp = credible.length ? Math.max(...credible) : 0;
   if (!maxEp) return preferred.episode_current || fallback.episode_current || '';
-  return preferredEp >= maxEp && preferred.episode_current ? preferred.episode_current : `Tập ${maxEp}`;
+  return preferredEp === maxEp && preferred.episode_current ? preferred.episode_current : `Tập ${maxEp}`;
 }
 
 function movieCompleteness(movie: MovieItem): number {

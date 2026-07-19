@@ -6,6 +6,7 @@ import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
 import { movieDetailUrl } from '../../utils/slugEncoder';
 import { setSmartSessionCache } from '../../utils/smartCache';
+import { getSearchReleaseMeta } from '../../utils/searchPresentation';
 
 interface Props {
   query: string;
@@ -364,6 +365,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
                   : 'Phim';
                 const isHighlighted = idx === highlightIndex;
                 const year = parseMovieYear(movie); 
+                const release = getSearchReleaseMeta(movie);
 
                 return (
                   <li key={[movie.slug, movie._id, movie.ophim_id, movie.tmdb_id, movie.source_site, idx].filter(Boolean).join(':')}>
@@ -391,14 +393,18 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
                       <div className="flex-1 min-w-0">
                         <p className="text-white text-base font-semibold truncate leading-tight">{movie.name}</p>
                         <p className="text-white/50 text-sm truncate mt-0.5">{movie.origin_name}</p>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-xs font-semibold text-red-300">
+                            {release.label}
+                          </span>
+                          {release.detail && (
+                            <span className="max-w-[13rem] truncate text-xs font-medium text-amber-300/80">{release.detail}</span>
+                          )}
                            {year > 0 && (
                             <span className="text-white/40 text-sm">{year}</span>
                           )}
                           <span className="text-red-400/70 text-sm">{typeLabel}</span>
-                          {movie.episode_current && (
-                            <span className="text-white/40 text-sm">{movie.episode_current}</span>
-                          )}
+                          <span className="text-white/40 text-sm">{release.episodeLabel}</span>
                         </div>
                       </div>
                       <i className="ri-arrow-right-s-line text-white/20 flex-shrink-0" />
