@@ -5,6 +5,7 @@ import { getSourceHost, reportPlayerIssue, type PlayerIssuePayload } from '@/ser
 import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
 import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
+import { isPortraitPhoneViewport, tryLockPlayerLandscape, unlockPlayerOrientation } from '@/utils/playerFullscreen';
 /* ─── URL helpers ─── */
 const SSPLAY_VARIANTS = ['SU', 'SG', 'SD', 'HY'] as const;
 type SsplayVariant = typeof SSPLAY_VARIANTS[number];
@@ -389,11 +390,28 @@ export default function PlayerBox({
 
   const [isEmbedFullscreen, setIsEmbedFullscreen] = useState(false);
   const [isEmbedPseudoFullscreen, setIsEmbedPseudoFullscreen] = useState(false);
+  const isEmbedPseudoFullscreenRef = useRef(false);
+  const [isEmbedLandscapeFallback, setIsEmbedLandscapeFallback] = useState(false);
   const embedScrollPositionRef = useRef(0);
+  const nativeFullscreenIntentUntilRef = useRef(0);
+  const enterEmbedPseudoFullscreenRef = useRef<() => void>(() => {});
   const [directVideoSpeed, setDirectVideoSpeed] = useState(1);
 
   useEffect(() => {
-    const handler = () => setIsEmbedFullscreen(Boolean(document.fullscreenElement));
+    const handler = () => {
+      const active = Boolean(document.fullscreenElement);
+      const pseudoActive = isEmbedPseudoFullscreenRef.current;
+      setIsEmbedFullscreen(active || pseudoActive);
+      if (!active && !pseudoActive) {
+        if (Date.now() < nativeFullscreenIntentUntilRef.current) {
+          nativeFullscreenIntentUntilRef.current = 0;
+          window.setTimeout(() => enterEmbedPseudoFullscreenRef.current(), 0);
+          return;
+        }
+        setIsEmbedLandscapeFallback(false);
+        unlockPlayerOrientation();
+      }
+    };
     document.addEventListener('fullscreenchange', handler);
     document.addEventListener('webkitfullscreenchange', handler);
     return () => {
@@ -403,7 +421,10 @@ export default function PlayerBox({
   }, []);
 
   const exitEmbedPseudoFullscreen = useCallback(() => {
+    nativeFullscreenIntentUntilRef.current = 0;
+    isEmbedPseudoFullscreenRef.current = false;
     setIsEmbedPseudoFullscreen(false);
+    setIsEmbedLandscapeFallback(false);
     setIsEmbedFullscreen(false);
     if (embedContainerRef.current) {
       embedContainerRef.current.style.left = '';
@@ -411,32 +432,77 @@ export default function PlayerBox({
     }
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
+    unlockPlayerOrientation();
     window.scrollTo({ top: embedScrollPositionRef.current, behavior: 'auto' });
   }, []);
 
   const enterEmbedPseudoFullscreen = useCallback(() => {
+    nativeFullscreenIntentUntilRef.current = 0;
+    isEmbedPseudoFullscreenRef.current = true;
+    const rotateToLandscape = isPortraitPhoneViewport();
     embedScrollPositionRef.current = window.scrollY;
     setIsEmbedPseudoFullscreen(true);
+    setIsEmbedLandscapeFallback(rotateToLandscape);
     setIsEmbedFullscreen(true);
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
     requestAnimationFrame(() => {
       const el = embedContainerRef.current;
       if (!el) return;
-      const fixedRect = el.getBoundingClientRect();
-      el.style.left = `${-fixedRect.left}px`;
-      el.style.top = `${-fixedRect.top}px`;
+      if (!rotateToLandscape) {
+        const fixedRect = el.getBoundingClientRect();
+        el.style.left = `${-fixedRect.left}px`;
+        el.style.top = `${-fixedRect.top}px`;
+      }
     });
+    if (rotateToLandscape) {
+      void tryLockPlayerLandscape().then((locked) => {
+        if (locked && window.innerWidth > window.innerHeight) {
+          setIsEmbedLandscapeFallback(false);
+        }
+      });
+    }
   }, []);
+  enterEmbedPseudoFullscreenRef.current = enterEmbedPseudoFullscreen;
 
-  const toggleEmbedFullscreen = useCallback(() => {
-    if (!embedContainerRef.current) return;
+  const toggleEmbedFullscreen = useCallback(async () => {
+    const el = embedContainerRef.current;
+    if (!el) return;
     if (isEmbedPseudoFullscreen) {
       exitEmbedPseudoFullscreen();
       return;
     }
-    // Parent-controlled viewport fullscreen is reliable for cross-origin
-    // embeds and direct video in Chrome, Safari, iOS, Android and WebViews.
+
+    if (document.fullscreenElement) {
+      nativeFullscreenIntentUntilRef.current = 0;
+      await document.exitFullscreen().catch(() => {});
+      unlockPlayerOrientation();
+      return;
+    }
+
+    if (document.fullscreenEnabled === true && el.requestFullscreen) {
+      try {
+        const enteredFromPortrait = isPortraitPhoneViewport();
+        nativeFullscreenIntentUntilRef.current = Date.now() + 4000;
+        await el.requestFullscreen();
+        setIsEmbedFullscreen(true);
+        if (enteredFromPortrait) {
+          await tryLockPlayerLandscape();
+          await new Promise((resolve) => window.setTimeout(resolve, 150));
+          if (window.innerWidth <= window.innerHeight) {
+            nativeFullscreenIntentUntilRef.current = 0;
+            await document.exitFullscreen().catch(() => {});
+            enterEmbedPseudoFullscreen();
+            return;
+          }
+          setIsEmbedLandscapeFallback(false);
+        }
+        return;
+      } catch {
+        nativeFullscreenIntentUntilRef.current = 0;
+        // Continue to the cross-browser viewport fallback.
+      }
+    }
     enterEmbedPseudoFullscreen();
   }, [enterEmbedPseudoFullscreen, exitEmbedPseudoFullscreen, isEmbedPseudoFullscreen]);
 
@@ -448,9 +514,23 @@ export default function PlayerBox({
     return () => window.removeEventListener('keydown', onEscape);
   }, [exitEmbedPseudoFullscreen, isEmbedPseudoFullscreen]);
 
+  useEffect(() => {
+    if (!isEmbedFullscreen) return;
+    const syncLandscapeLayout = () => {
+      setIsEmbedLandscapeFallback(isPortraitPhoneViewport());
+    };
+    window.addEventListener('resize', syncLandscapeLayout);
+    window.addEventListener('orientationchange', syncLandscapeLayout);
+    return () => {
+      window.removeEventListener('resize', syncLandscapeLayout);
+      window.removeEventListener('orientationchange', syncLandscapeLayout);
+    };
+  }, [isEmbedFullscreen]);
+
   useEffect(() => () => {
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
+    unlockPlayerOrientation();
   }, []);
 
   const embedIsSourcePage = useMemo(() => isBlvietsubWatchPageUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
@@ -790,7 +870,11 @@ export default function PlayerBox({
         {!episode?.is_scheduled && (
           <>
         {effectivePlayerMode === 'embed' && embedSrc && !iframeBlocked && (
-          <div ref={embedContainerRef} className={`${isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'relative aspect-video w-full'} group bg-black`}>
+          <div
+            ref={embedContainerRef}
+            className={`${isEmbedLandscapeFallback ? 'kp-landscape-fullscreen z-[9999]' : isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'relative aspect-video w-full'} group bg-black`}
+            style={isEmbedLandscapeFallback ? { left: '50%', top: '50%', width: '100dvh', height: '100dvw', transform: 'translate(-50%, -50%) rotate(90deg)' } : undefined}
+          >
             {!iframeLoaded && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0c14]">
                 <div className="w-10 h-10 rounded-full border-2 border-red-500/20 border-t-red-500 animate-spin mb-3" />
@@ -948,7 +1032,11 @@ export default function PlayerBox({
         )}
 
         {effectivePlayerMode === 'video' && (
-          <div ref={embedContainerRef} className={`${isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'relative aspect-video w-full'} bg-black`}>
+          <div
+            ref={embedContainerRef}
+            className={`${isEmbedLandscapeFallback ? 'kp-landscape-fullscreen z-[9999]' : isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'relative aspect-video w-full'} bg-black`}
+            style={isEmbedLandscapeFallback ? { left: '50%', top: '50%', width: '100dvh', height: '100dvw', transform: 'translate(-50%, -50%) rotate(90deg)' } : undefined}
+          >
             <video
               key={`${directVideoSrc}-${iframeKey}`}
               ref={directVideoRef}

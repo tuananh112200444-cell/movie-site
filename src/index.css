@@ -877,6 +877,18 @@ img {
   animation: none !important;
 }
 @supports selector(:has(.x)) { } /* placeholder for potential :has usage */
+
+/* Portrait-phone fallback when the browser refuses a real orientation lock.
+   Keep this independent from animation utilities, which may disable transform. */
+.kp-landscape-fullscreen {
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 100dvh !important;
+  height: 100dvw !important;
+  transform: translate(-50%, -50%) rotate(90deg) !important;
+  transform-origin: center center !important;
+}
 @keyframes stagger-in {
   to { opacity: 1; transform: translateY(0); }
 }
