@@ -6,6 +6,7 @@ import { parseMovieYear } from '@/utils/searchRanking';
 import { movieDetailUrl } from '@/utils/slugEncoder';
 import { cancelPrefetchMovieDetail, prefetchMovieDetail } from '@/utils/prefetchRoute';
 import MovieCountdown from '@/components/base/MovieCountdown';
+import { getSearchReleaseMeta } from '@/utils/searchPresentation';
 
 
 interface Props {
@@ -44,6 +45,7 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
     movie.type === 'single' ||
     (movie.episode_current ?? '').toLowerCase().includes('full');
   const year = parseMovieYear(movie);
+  const release = getSearchReleaseMeta(movie);
   return (
     <Link
       to={href}
@@ -92,7 +94,7 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
             </span>
           ) : (
             <span className="bg-amber-500/90 text-white text-xs font-bold px-1.5 py-0.5 rounded-md shadow-lg shadow-amber-950/30">
-              {movie.episode_current ?? 'Tập 1'}
+              {release.episodeLabel}
             </span>
           )}
         </div>
@@ -118,7 +120,11 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
             className="text-sm text-white/45 line-clamp-1 mt-0.5"
           />
         )}
-        <div className="flex items-center gap-2 mt-1.5">
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          <span className="rounded-md bg-red-500/12 px-1.5 py-0.5 text-xs font-semibold text-red-300">
+            {release.label}
+          </span>
+          {release.detail && <span className="truncate text-xs font-medium text-amber-300/75">{release.detail}</span>}
           {year > 0 && <span className="text-xs text-white/40">{year}</span>}
           <span className="text-xs text-white/30">•</span>
           {movie.category?.[0] && (
@@ -147,6 +153,7 @@ function ListItem({ movie, query }: { movie: MovieItem; query: string }) {
     movie.type === 'single' ||
     (movie.episode_current ?? '').toLowerCase().includes('full');
   const year = parseMovieYear(movie);
+  const release = getSearchReleaseMeta(movie);
   return (
     <Link
       to={href}
@@ -205,6 +212,14 @@ function ListItem({ movie, query }: { movie: MovieItem; query: string }) {
 
         {/* Meta chips */}
         <div className="flex items-center gap-2 flex-wrap mt-2">
+          <span className="rounded-md border border-red-400/15 bg-red-500/10 px-2 py-0.5 text-sm font-semibold text-red-300">
+            {release.label}
+          </span>
+          {release.detail && (
+            <span className="rounded-md border border-amber-400/10 bg-amber-500/10 px-2 py-0.5 text-sm font-medium text-amber-200/80">
+              {release.detail}
+            </span>
+          )}
           {year > 0 && (
             <span className="text-sm text-white/55 bg-white/[0.06] border border-white/[0.06] px-2 py-0.5 rounded-md">
               {year}
@@ -244,7 +259,7 @@ function ListItem({ movie, query }: { movie: MovieItem; query: string }) {
                 : 'bg-amber-500/15 text-amber-400'
             }`}
           >
-            {isFull ? 'Full' : movie.episode_current ?? 'Tập 1'}
+            {release.episodeLabel}
           </span>
           {movie.lang?.toLowerCase().includes('vietsub') && (
             <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-blue-500/15 text-blue-400">
