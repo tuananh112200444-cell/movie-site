@@ -82,6 +82,11 @@ const CASES = [
     expectSlug: 'blvietsub-1652315128481409420-fix-the-error',
     description: 'BLVietsub title should be searchable from Supabase',
   },
+  {
+    query: 'khemjira',
+    expectSlug: 'khemjira-phai-song-sot',
+    description: 'Canonical Khemjira must remain searchable after duplicate merge',
+  },
 ];
 
 function escapePostgrestIlike(value) {
