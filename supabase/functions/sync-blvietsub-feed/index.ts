@@ -520,6 +520,9 @@ function shouldRoutineRepairMovie(movie: MovieRow, includeCompleted: boolean): b
   const looksCompleted = isCompletedText(movie.status) || isCompletedText(movie.episode_current);
 
   if (!looksCompleted) return true;
+  // Legacy series may be frozen as "completed 1/1" after a source migration.
+  // Recheck these high-risk rows instead of trusting our own stale total.
+  if (current <= 1 && total <= 1) return true;
   if (!total) return true;
   return current > 0 && current < total;
 }
@@ -960,7 +963,23 @@ async function fetchWordPressSearchAlias(movieUrl: string, title = ''): Promise<
 }
 
 function getWordPressMovieSlug(movieUrl: string): string {
-  return movieUrl.match(/\/phim\/([^/]+)\/?$/i)?.[1] || '';
+  try {
+    const pathname = new URL(movieUrl).pathname.replace(/^\/+|\/+$/g, '');
+    const parts = pathname.split('/').filter(Boolean);
+    const slug = parts[0]?.toLowerCase() === 'phim' ? parts[1] : parts.length === 1 ? parts[0] : '';
+    if (!slug || /^(actors?|categor(?:y|ies)|tags?|blog|feed|page|author|wp-json|wp-content)$/i.test(slug)) return '';
+    return slug;
+  } catch {
+    return '';
+  }
+}
+
+function getWordPressOriginName(title: string, content: string): string {
+  const decoded = decodeHtml(stripTags(content)).replace(/\s+/g, ' ').trim();
+  if (!decoded) return '';
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = decoded.match(new RegExp(`^${escapedTitle}\\s*[-–—:]\\s*(.+?)\\s*\\((?:19|20)\\d{2}\\)`, 'i'));
+  return match?.[1]?.trim() || '';
 }
 
 function normalizeBlvietsubWatchUrl(rawLink = ''): string {
@@ -1136,7 +1155,7 @@ function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: stri
   return {
     postId,
     title,
-    originName: '',
+    originName: getWordPressOriginName(title, content),
     content,
     image,
     year,

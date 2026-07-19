@@ -36,6 +36,7 @@ const checks = [
   [movieApi.includes("case 'stable_embed':\n      return TRUSTED_PLATFORM_SOURCE_BONUS + 60;"), 'Known stable embeds must outrank opaque Dailymotion embeds'],
   [!movieApi.includes('DAILYMOTION_PREFERRED_SOURCE_BONUS'), 'Dailymotion must not receive duplicate reliability and server bonuses'],
   [playerSection.includes('const activeMatch = activeServerData.find') && playerSection.includes('onSelectEp(activeMatch);'), 'Episode switching must preserve the source explicitly selected by the viewer'],
+  [playerSection.includes('`${episodes.length - 1} nguồn dự phòng sẵn sàng`'), 'Source summary must exclude the active server from the backup count'],
 ];
 
 const failures = checks.filter(([ok]) => !ok).map(([, message]) => message);
