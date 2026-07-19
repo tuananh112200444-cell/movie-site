@@ -250,7 +250,7 @@ const DIRECT_VIDEO_STALL_TIMEOUT_MS = 7000;
 const DIRECT_VIDEO_STALL_CHECK_MS = 2500;
 const DIRECT_VIDEO_MIN_PROGRESS_SECONDS = 0.25;
 const DIRECT_VIDEO_MAX_RECOVERY_ATTEMPTS = 1;
-const PLAYER_LOGO_URL = 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png';
+const PLAYER_LOGO_URL = '/brand/khophim-logo-v2.png';
 const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
 
 function rememberBadSourceHost(host: string): void {
@@ -388,6 +388,8 @@ export default function PlayerBox({
   const directVideoRef = useRef<HTMLVideoElement>(null);
 
   const [isEmbedFullscreen, setIsEmbedFullscreen] = useState(false);
+  const [isEmbedPseudoFullscreen, setIsEmbedPseudoFullscreen] = useState(false);
+  const embedScrollPositionRef = useRef(0);
   const [directVideoSpeed, setDirectVideoSpeed] = useState(1);
 
   useEffect(() => {
@@ -400,20 +402,85 @@ export default function PlayerBox({
     };
   }, []);
 
-  const toggleEmbedFullscreen = useCallback(() => {
+  const exitEmbedPseudoFullscreen = useCallback(() => {
+    setIsEmbedPseudoFullscreen(false);
+    setIsEmbedFullscreen(false);
+    if (embedContainerRef.current) {
+      embedContainerRef.current.style.left = '';
+      embedContainerRef.current.style.top = '';
+    }
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+    window.scrollTo({ top: embedScrollPositionRef.current, behavior: 'auto' });
+  }, []);
+
+  const enterEmbedPseudoFullscreen = useCallback(() => {
+    embedScrollPositionRef.current = window.scrollY;
+    setIsEmbedPseudoFullscreen(true);
+    setIsEmbedFullscreen(true);
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => {
+      const el = embedContainerRef.current;
+      if (!el) return;
+      const fixedRect = el.getBoundingClientRect();
+      el.style.left = `${-fixedRect.left}px`;
+      el.style.top = `${-fixedRect.top}px`;
+    });
+  }, []);
+
+  const toggleEmbedFullscreen = useCallback(async () => {
     const el = embedContainerRef.current;
     if (!el) return;
-    if (!document.fullscreenElement && !(document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement) {
-      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
-      else if ((el as HTMLDivElement & { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen) {
-        (el as HTMLDivElement & { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen?.();
-      }
-    } else {
-      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-      else if ((document as Document & { webkitExitFullscreen?: () => void }).webkitExitFullscreen) {
-        (document as Document & { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.();
-      }
+    if (isEmbedPseudoFullscreen) {
+      exitEmbedPseudoFullscreen();
+      return;
     }
+
+    const safariDocument = document as Document & {
+      webkitFullscreenElement?: Element;
+      webkitExitFullscreen?: () => void;
+    };
+    const nativeFullscreenElement = document.fullscreenElement || safariDocument.webkitFullscreenElement;
+    if (nativeFullscreenElement) {
+      if (document.exitFullscreen) await document.exitFullscreen().catch(() => {});
+      else safariDocument.webkitExitFullscreen?.();
+      return;
+    }
+
+    try {
+      if (el.requestFullscreen) {
+        await el.requestFullscreen({ navigationUI: 'hide' });
+        return;
+      }
+      const safariElement = el as HTMLDivElement & { webkitRequestFullscreen?: () => void };
+      if (safariElement.webkitRequestFullscreen) {
+        safariElement.webkitRequestFullscreen();
+        return;
+      }
+      const iosVideo = directVideoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+      if (iosVideo?.webkitEnterFullscreen) {
+        iosVideo.webkitEnterFullscreen();
+        return;
+      }
+    } catch {
+      // Fall back for in-app browsers that deny the native API.
+    }
+
+    enterEmbedPseudoFullscreen();
+  }, [enterEmbedPseudoFullscreen, exitEmbedPseudoFullscreen, isEmbedPseudoFullscreen]);
+
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isEmbedPseudoFullscreen) exitEmbedPseudoFullscreen();
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => window.removeEventListener('keydown', onEscape);
+  }, [exitEmbedPseudoFullscreen, isEmbedPseudoFullscreen]);
+
+  useEffect(() => () => {
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
   }, []);
 
   const embedIsSourcePage = useMemo(() => isBlvietsubWatchPageUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
@@ -753,7 +820,7 @@ export default function PlayerBox({
         {!episode?.is_scheduled && (
           <>
         {effectivePlayerMode === 'embed' && embedSrc && !iframeBlocked && (
-          <div ref={embedContainerRef} className="aspect-video w-full relative group bg-black">
+          <div ref={embedContainerRef} className={`${isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'aspect-video w-full'} relative group bg-black`}>
             {!iframeLoaded && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0c14]">
                 <div className="w-10 h-10 rounded-full border-2 border-red-500/20 border-t-red-500 animate-spin mb-3" />
@@ -815,9 +882,11 @@ export default function PlayerBox({
             {/* Overlay fullscreen button on embed video */}
             {iframeLoaded && (
               <button
-                onClick={toggleEmbedFullscreen}
+                type="button"
+                aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+                onClick={() => void toggleEmbedFullscreen()}
                 title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-                className="absolute top-3 right-3 z-20 flex h-10 w-10 items-center justify-center rounded-xl bg-black/65 text-white/85 border border-white/10 backdrop-blur-sm transition-all hover:bg-black/85 hover:text-white hover:border-white/20 cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                className="absolute top-3 right-3 z-20 flex h-12 w-12 items-center justify-center rounded-xl bg-black/85 text-white border border-white/25 shadow-lg backdrop-blur-sm transition-all hover:bg-black hover:border-white/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100"
               >
                 <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-base`} />
               </button>
@@ -899,7 +968,7 @@ export default function PlayerBox({
         )}
 
         {effectivePlayerMode === 'video' && (
-          <div ref={embedContainerRef} className="aspect-video w-full bg-black relative">
+          <div ref={embedContainerRef} className={`${isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'aspect-video w-full'} bg-black relative`}>
             <video
               key={`${directVideoSrc}-${iframeKey}`}
               ref={directVideoRef}
@@ -924,6 +993,15 @@ export default function PlayerBox({
               Trình duyệt không hỗ trợ phát video.
             </video>
             <PlayerWatermark />
+            <button
+              type="button"
+              aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+              title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+              onClick={() => void toggleEmbedFullscreen()}
+              className="absolute right-3 top-3 z-30 flex h-12 w-12 items-center justify-center rounded-xl border border-white/25 bg-black/85 text-white shadow-lg hover:bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+            >
+              <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl`} />
+            </button>
           </div>
         )}
 
@@ -952,16 +1030,16 @@ export default function PlayerBox({
       {effectivePlayerMode !== 'embed' && (
       <div className="movie-watch-topbar mt-2 flex items-center justify-between gap-2 px-2 py-2 flex-wrap lg:mt-3 lg:px-3">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <button onClick={onPrev} disabled={!hasPrev} title="Tập trước"
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-white/45 hover:text-white hover:bg-white/10 transition-all cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed">
+          <button aria-label="Tập trước" onClick={onPrev} disabled={!hasPrev} title="Tập trước"
+            className="w-11 h-11 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/15 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed">
             <i className="ri-skip-back-line text-base" />
           </button>
-          <button onClick={onNext} disabled={!hasNext} title="Tập sau"
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-white/45 hover:text-white hover:bg-white/10 transition-all cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed">
+          <button aria-label="Tập sau" onClick={onNext} disabled={!hasNext} title="Tập sau"
+            className="w-11 h-11 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/15 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed">
             <i className="ri-skip-forward-line text-base" />
           </button>
-          <button onClick={() => { setIframeLoaded(false); setIframeKey((k) => k + 1); }} title="Tải lại"
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-white/45 hover:text-white hover:bg-white/10 transition-all cursor-pointer">
+          <button aria-label="Tải lại player" onClick={() => { setIframeLoaded(false); setIframeKey((k) => k + 1); }} title="Tải lại player"
+            className="w-11 h-11 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/15 transition-all cursor-pointer">
             <i className="ri-refresh-line text-base" />
           </button>
 
@@ -1014,9 +1092,10 @@ export default function PlayerBox({
           )}
           {effectivePlayerMode === 'video' && (
             <button
-              onClick={toggleEmbedFullscreen}
+              aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+              onClick={() => void toggleEmbedFullscreen()}
               title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-              className="w-9 h-9 flex items-center justify-center rounded-xl text-white/45 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+              className="w-11 h-11 flex items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-all cursor-pointer"
             >
               <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-base`} />
             </button>

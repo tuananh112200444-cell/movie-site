@@ -1,0 +1,63 @@
+{
+  "started_at": "2026-07-19T03:12:32.045Z",
+  "status": "passed",
+  "steps": [
+    {
+      "name": "security:secrets",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 1578
+    },
+    {
+      "name": "security:supabase",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 1073
+    },
+    {
+      "name": "type-check",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 13900
+    },
+    {
+      "name": "build",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 28458
+    },
+    {
+      "name": "search:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 10119
+    },
+    {
+      "name": "movie:data:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 201394
+    },
+    {
+      "name": "watch:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 548
+    },
+    {
+      "name": "diagnostics:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 1087
+    }
+  ],
+  "finished_at": "2026-07-19T03:16:50.208Z"
+}

@@ -24,6 +24,7 @@ const LIST_TYPES = [
 ];
 
 interface MovieItem {
+  id?: string;
   slug?: string;
   name?: string;
   thumb_url?: string;
@@ -31,6 +32,8 @@ interface MovieItem {
   modified?: { time?: string };
   updated_at?: string;
   episode_current?: string;
+  current_episode?: number;
+  content?: string;
   is_published?: boolean;
   seo_catalog_status?: string;
   catalog_source?: string;
@@ -126,6 +129,28 @@ function isUpcoming(movie: MovieItem): boolean {
   const releaseTime = movie.release_at ? new Date(movie.release_at).getTime() : 0;
   if (status === 'upcoming' || ep.includes('sap chieu') || releaseTime > Date.now()) return true;
   return status === 'upcoming' || ep.includes('sap chieu') || ep.includes('sắp chiếu') || (releaseTime > Date.now());
+}
+
+function isLikelyPlayable(movie: MovieItem): boolean {
+  const episode = normalizeSearchText(movie.episode_current);
+  if (!episode || episode.includes('trailer') || episode.includes('sap chieu') || episode.includes('dang cap nhat')) return false;
+  return episode === 'full' || episode.includes('hoan tat') || /\d/.test(episode) || Number(movie.current_episode || 0) > 0;
+}
+
+function isIndexableMovie(movie: MovieItem): boolean {
+  const name = String(movie.name || '').trim();
+  const image = String(movie.poster_url || movie.thumb_url || '').trim();
+  const description = String(movie.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const year = getSeoYear(movie);
+  return movie.is_published !== false
+    && !isUpcoming(movie)
+    && !isTrailer(movie)
+    && isLikelyPlayable(movie)
+    && name.length >= 2
+    && image.length > 0
+    && description.length >= 80
+    && year >= 1900
+    && year <= new Date().getUTCFullYear() + 1;
 }
 
 function getFreshnessScore(movie: MovieItem): number {
@@ -230,7 +255,7 @@ async function fetchSupabaseMovies(offset = 0, limit = 50000, mode: 'all' | 'rec
         if (from >= endExclusive) return [] as MovieItem[];
         let query = supabase
           .from('movies')
-          .select('slug,name,thumb_url,poster_url,updated_at,episode_current,is_published,seo_catalog_status,catalog_source,release_at,tmdb_popularity,trailer_url,status,year')
+          .select('id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,content,is_published,seo_catalog_status,catalog_source,release_at,tmdb_popularity,trailer_url,status,year')
           .eq('is_published', true)
           .not('slug', 'is', null);
 
@@ -295,19 +320,30 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
   ]);
 
   const ophimMovies = lists.flat();
+  const qualityByMovieId = new Map<string, boolean>();
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && supabaseMovies.length > 0) {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    const ids = supabaseMovies.map((movie) => movie.id).filter(Boolean) as string[];
+    for (let start = 0; start < ids.length; start += 500) {
+      const { data } = await supabase
+        .from('movie_seo_quality_status')
+        .select('movie_id,eligible_for_index')
+        .in('movie_id', ids.slice(start, start + 500));
+      for (const row of data || []) qualityByMovieId.set(String(row.movie_id), Boolean(row.eligible_for_index));
+    }
+  }
   const seen = new Set<string>();
   let movies = [...supabaseMovies, ...ophimMovies]
     .filter((movie) => {
       const slug = movie.slug?.trim();
       if (!slug || seen.has(slug)) return false;
       seen.add(slug);
-      return movie.is_published !== false;
+      if (!isIndexableMovie(movie)) return false;
+      return !movie.id || !qualityByMovieId.has(movie.id) || qualityByMovieId.get(movie.id) === true;
     });
 
   if (options.mode === 'upcoming') {
-    movies = movies
-      .filter((movie) => isUpcoming(movie) || isTrailer(movie) || Boolean(movie.trailer_url))
-      .sort((a, b) => getFreshnessScore(b) - getFreshnessScore(a));
+    movies = [];
   } else if (options.mode === 'recent') {
     movies = movies
       .filter((movie) => !isUpcoming(movie))

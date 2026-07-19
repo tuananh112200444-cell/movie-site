@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useImageFallback } from '@/hooks/useImageFallback';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import type { MovieDetail } from '@/types/movie';
 import { getPosterUrl, getThumbUrl, getMovieDisplayName, getOptimizedImageSrcSet } from '@/services/movieApi';
@@ -76,7 +77,13 @@ function MobileMovieInfo({ movie }: { movie: MovieDetail }) {
           </div>
         ))}
         {items.length > 2 && (
-          <button onClick={() => setOpen(!open)} className="ml-auto text-white/30 hover:text-red-400 transition-colors cursor-pointer">
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            aria-label={open ? 'Thu gọn thông tin phim' : 'Mở rộng thông tin phim'}
+            aria-expanded={open}
+            className="ml-auto text-white/30 hover:text-red-400 transition-colors cursor-pointer"
+          >
             <i className={`${open ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} text-sm`} />
           </button>
         )}
@@ -306,6 +313,8 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
   const backdropPath = movie.poster_url || movie.thumb_url;
   const poster = useMemo(() => getPosterUrl(posterPath), [posterPath]);
   const thumb = useMemo(() => getThumbUrl(backdropPath), [backdropPath]);
+  const posterFallback = useImageFallback(posterPath, backdropPath, false, 520, 86);
+  const backdropFallback = useImageFallback(backdropPath, posterPath, false, 1440, 84);
 
   const displayTitle = getMovieDisplayName(movie);
   const displayOrigin = movie.title_en?.trim() || movie.origin_name;
@@ -353,8 +362,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
       <div className="relative pt-16">
         <div className="absolute inset-0 overflow-hidden h-[200px] sm:h-[280px] md:h-[320px]">
           <img
-            src={thumb}
-            srcSet={backdropPath ? getOptimizedImageSrcSet(backdropPath, [760, 1120, 1440], 84) : undefined}
+            src={backdropFallback.currentSrc || thumb}
             sizes="100vw"
             alt={displayTitle}
             width="1920"
@@ -363,6 +371,8 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
             loading="eager"
             fetchPriority="high"
             decoding="async"
+            onLoad={backdropFallback.onLoad}
+            onError={backdropFallback.onError}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0f1117]/50 to-[#0f1117]" />
         </div>
@@ -386,8 +396,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
             <div className="flex-shrink-0">
               <div className="relative w-24 sm:w-40 md:w-52 rounded-xl overflow-hidden bg-[#1a1d27]" style={{ aspectRatio: '2/3' }}>
                 <img
-                  src={poster}
-                  srcSet={posterPath ? getOptimizedImageSrcSet(posterPath, [220, 360, 520], 86) : undefined}
+                  src={posterFallback.currentSrc || poster}
                   sizes="(min-width: 768px) 208px, (min-width: 640px) 160px, 96px"
                   alt={displayTitle}
                   width="400"
@@ -396,6 +405,8 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
                   loading="eager"
                   fetchPriority="high"
                   decoding="async"
+                  onLoad={posterFallback.onLoad}
+                  onError={posterFallback.onError}
                 />
                 {isTrailerOnly && (
                   <div className="absolute inset-0 flex items-end">

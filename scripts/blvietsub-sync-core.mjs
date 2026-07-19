@@ -328,6 +328,9 @@ function addParsedEpisode(episodes, episodeNumber, serverNumber, rawLink, type =
     return;
   }
   const normalizedLink = link.replace(/\/+$/, '');
+  // short.icu no longer resolves publicly; persisting these links creates a
+  // server that can never start playback.
+  if (/^https?:\/\/(?:[^/]+\.)?short\.icu(?:\/|$)/i.test(normalizedLink)) return;
   for (const existing of episodes.values()) {
     const existingLink = (existing.link_embed || existing.link_m3u8 || '').replace(/\/+$/, '');
     if (existing.episode_number === episodeNumber && existingLink === normalizedLink) return;
@@ -362,15 +365,22 @@ function parseStreamingServerEpisodes(html = '') {
     perEpisodeCount.set(episodeNumber, nextServer);
     addParsedEpisode(episodes, episodeNumber, nextServer, link, type, episodeId);
   }
-  let anonymousServer = 0;
+  // Modern BLVietsub pages expose the same player links twice: structured
+  // streaming-server nodes and legacy blv-episode-btn buttons. The legacy
+  // buttons have no stable server index, so counting them globally creates
+  // SV 1..84 singleton duplicates. Only use them for older pages that do not
+  // contain the structured representation.
+  if (episodes.size > 0) return episodes;
+  const legacyPerEpisodeCount = new Map();
   for (const match of html.matchAll(/<button\b[^>]*class=["'][^"']*\bblv-episode-btn\b[^"']*["'][^>]*>[\s\S]*?<\/button>/gi)) {
     const tag = match[0];
     const link = extractAttr(tag, 'data-url');
     const label = stripTags(tag);
     const info = parseEpisodeInfo(label);
     if (!info.number || !link) continue;
-    anonymousServer += 1;
-    addParsedEpisode(episodes, info.number, anonymousServer, link, 'embed', label);
+    const serverNumber = (legacyPerEpisodeCount.get(info.number) || 0) + 1;
+    legacyPerEpisodeCount.set(info.number, serverNumber);
+    addParsedEpisode(episodes, info.number, serverNumber, link, 'embed', label);
   }
   return episodes;
 }
@@ -698,6 +708,7 @@ async function updateMovie(supabase, movie, entry) {
     showtimes: entry.sourceUrl,
     source_url: entry.sourceUrl,
     last_synced_at: new Date().toISOString(),
+    ...(entry.image ? { thumb_url: entry.image, poster_url: entry.image } : {}),
     episode_current: `${TAP_LABEL} ${episodeCount}`,
     current_episode: episodeCount,
     total_episodes: episodeCount,

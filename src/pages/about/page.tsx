@@ -19,7 +19,7 @@ const aboutSchema = [
       url: SITE_URL,
       logo: {
         '@type': 'ImageObject',
-        url: 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png',
+        url: 'https://khophim.org/brand/khophim-logo-v2.png',
       },
     },
   },
@@ -37,7 +37,7 @@ const aboutSchema = [
     name: 'KhoPhim',
     alternateName: ['khophim', 'khophim.org', 'kho phim', 'KhoPhim', 'kho phim', 'kho phim online', 'kho phim miễn phí', 'kho phim vietsub', 'kho phim hd', 'kho phim 2026', 'kho phim lớn nhất', 'kho phim hàng đầu', 'kho phim mới nhất', 'kho phim bom tấn', 'Kho Phim Online'],
     url: SITE_URL,
-    logo: 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png',
+    logo: 'https://khophim.org/brand/khophim-logo-v2.png',
     description:
       'KhoPhim là nền tảng xem phim online miễn phí vietsub HD hàng đầu Việt Nam. Hơn 50,000 bộ phim lẻ, phim bộ, phim chiếu rạp, anime cập nhật hàng ngày.',
     foundingDate: '2020',

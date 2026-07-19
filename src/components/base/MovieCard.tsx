@@ -126,7 +126,7 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
   return (
     <Link
       to={detailUrl}
-      className="group flex h-full cursor-pointer flex-col rounded-xl active:scale-[0.985] transition-transform duration-150"
+      className="group movie-card-contain flex h-full cursor-pointer flex-col rounded-lg active:scale-[0.985] transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d14]"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -298,7 +298,7 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="relative flex h-full flex-col rounded-xl p-0.5 transition-[transform,box-shadow,background-color] duration-300 ease-out md:hover:z-30 md:hover:-translate-y-1 md:hover:bg-white/[0.035] md:hover:shadow-[0_18px_44px_-28px_rgba(0,0,0,0.88)]">
+      <div className="relative flex h-full flex-col rounded-lg p-0.5 transition-[transform,box-shadow,background-color] duration-300 ease-out md:hover:z-30 md:hover:-translate-y-1 md:hover:bg-white/[0.035] md:hover:shadow-[0_18px_44px_-28px_rgba(0,0,0,0.88)]">
         <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg bg-[#151824] ring-1 ring-white/[0.06] transition-[ring-color,box-shadow] duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_16px_36px_-30px_rgba(255,255,255,0.62)]">
           <div className={`absolute inset-0 z-[1] blur-placeholder transition-opacity duration-500 ${imgLoaded ? 'opacity-0' : 'opacity-100'}`} />
           {imgError && (

@@ -143,9 +143,9 @@ const homeSchema = [
     logo: {
       '@type': 'ImageObject',
       '@id': `${SITE_URL}/#logo`,
-      url: 'https://public.readdy.ai/ai/img_res/e1260dce-9377-44c8-83b0-d22bf9614677.png',
-      width: 200,
-      height: 200,
+      url: 'https://khophim.org/brand/khophim-logo-v2.png',
+      width: 1024,
+      height: 1024,
       caption: 'KhoPhim – Xem Phim Online Miễn Phí',
     },
     image: {
@@ -243,7 +243,7 @@ function useInViewOnce(rootMargin = '200px') {
 function DeferredHomeSection({
   children,
   minHeight = 360,
-  rootMargin = '700px',
+  rootMargin = '160px',
 }: {
   children: ReactNode;
   minHeight?: number;
@@ -251,7 +251,12 @@ function DeferredHomeSection({
 }) {
   const { ref, visible } = useInViewOnce(rootMargin);
   return (
-    <div ref={ref} style={!visible ? { minHeight: `min(${minHeight}px, 16vh)` } : undefined}>
+    <div
+      ref={ref}
+      style={!visible
+        ? { minHeight: `${minHeight}px`, contentVisibility: 'auto', containIntrinsicSize: `0 ${minHeight}px` }
+        : { contentVisibility: 'auto', containIntrinsicSize: `0 ${minHeight}px` }}
+    >
       {visible ? children : null}
     </div>
   );
@@ -577,9 +582,10 @@ export default function Home() {
     const priorityMovies = (homeData.trending ?? []).slice(0, 6);
     if (priorityMovies.length === 0) return;
 
+    const heroWidth = window.innerWidth < 640 ? 720 : window.innerWidth < 1280 ? 1080 : 1360;
     const heroUrls = priorityMovies
-      .slice(0, 2)
-      .map((movie) => getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 1400, 86))
+      .slice(0, 1)
+      .map((movie) => getOptimizedImageUrl(movie.poster_url || movie.thumb_url, heroWidth, 82))
       .filter(Boolean);
     if (heroUrls[0]) injectPreloadLink(heroUrls[0]);
     preloadBatch(heroUrls.slice(0, 1), {
@@ -591,6 +597,16 @@ export default function Home() {
     });
   }, [activePortal, homeData.trending]);
   const trendingMovies = homeData.trending ?? [];
+  const stableHeroMoviesRef = useRef<MovieItem[]>([]);
+  if (stableHeroMoviesRef.current.length === 0 && trendingMovies.length > 0) {
+    // Keep the first meaningful hero set stable for this visit. The background
+    // refresh may arrive seconds later; swapping the largest image at that
+    // point would reset LCP and create a distracting visual jump.
+    stableHeroMoviesRef.current = trendingMovies.slice(0, 5);
+  }
+  const heroMovies = stableHeroMoviesRef.current.length > 0
+    ? stableHeroMoviesRef.current
+    : trendingMovies;
   const topRatedMovies = useMemo(() => {
     const seen = new Set<string>();
     return [
@@ -631,12 +647,12 @@ export default function Home() {
       })
       .slice(0, 8);
   }, [homeData, topRatedMovies, trendingMovies]);
-  const bannerLoading = homeLoading && trendingMovies.length === 0;
+  const bannerLoading = homeLoading && heroMovies.length === 0;
   if (activePortal === 'queer') {
     return (
       <div className="min-h-screen kp-cinema-page text-white">
         <SEO
-          title="Vu Tru Dam My / GL - KhoPhim"
+          title="Vũ Trụ Đam Mỹ / BL / GL – KhoPhim"
           description="Khong gian phim Dam My, BL, GL va Bach Hop tren KhoPhim, lay du lieu tu Supabase."
           canonical={QUEER_PORTAL_PATH}
           ogType="website"
@@ -663,7 +679,7 @@ export default function Home() {
       <Navbar />
       
       <div className="relative z-0">
-        <HeroBanner movies={trendingMovies} loading={bannerLoading} />
+        <HeroBanner movies={heroMovies} loading={bannerLoading} />
       </div>
 
       <main className="home-desktop-shell pt-2 md:pt-7">

@@ -521,8 +521,21 @@ export default function GenrePage() {
     );
   }
 
-  const seoTitle = `Phim ${meta.name} Vietsub HD Miễn Phí | KhoPhim`;
+  const seoTitle = `Phim ${meta.name} mới cập nhật | KhoPhim`;
   const canonicalPath = `/the-loai/${slug}`;
+  const verifiedDescription = totalItems > 0
+    ? `Khám phá ${totalItems.toLocaleString('vi-VN')} phim ${meta.name.toLowerCase()} đang có trong danh mục KhoPhim. Lọc theo năm phát hành và thời gian cập nhật để chọn phim phù hợp.`
+    : `Khám phá danh sách phim ${meta.name.toLowerCase()} trên KhoPhim, sắp xếp theo thời gian cập nhật hoặc năm phát hành.`;
+  const safeFaq = [
+    {
+      q: `Danh sách phim ${meta.name.toLowerCase()} được sắp xếp thế nào?`,
+      a: `Bạn có thể sắp xếp phim ${meta.name.toLowerCase()} theo thời gian cập nhật, năm mới nhất hoặc năm cũ nhất.`,
+    },
+    {
+      q: `Làm sao xem thông tin một phim ${meta.name.toLowerCase()}?`,
+      a: 'Chọn thẻ phim để xem nội dung giới thiệu, năm phát hành, quốc gia, diễn viên, đạo diễn và trạng thái tập hiện có.',
+    },
+  ];
 
   // Self-referencing canonical — includes page param when page > 1
   const canonicalUrl = page > 1 
@@ -549,7 +562,7 @@ export default function GenrePage() {
       '@type': 'CollectionPage',
       name: seoTitle,
       url: `${SITE_URL}${canonicalPath}`,
-      description: meta.desc,
+      description: verifiedDescription,
       inLanguage: 'vi',
       isPartOf: { '@type': 'WebSite', name: 'KhoPhim', url: SITE_URL },
     },
@@ -569,7 +582,7 @@ export default function GenrePage() {
     {
       '@context': 'https://schema.org',
       '@type': 'FAQPage',
-      mainEntity: meta.faq.map(({ q, a }) => ({
+      mainEntity: safeFaq.map(({ q, a }) => ({
         '@type': 'Question',
         name: q,
         acceptedAnswer: { '@type': 'Answer', text: a },
@@ -583,8 +596,7 @@ export default function GenrePage() {
     <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={seoTitle}
-        description={meta.desc}
-        keywords={meta.keywords}
+        description={verifiedDescription}
         canonical={canonicalUrl}
         prev={prevPage}
         next={nextPage}
@@ -651,7 +663,7 @@ export default function GenrePage() {
                 Phim {meta.name} Vietsub HD Miễn Phí{page > 1 ? ` – Trang ${page}` : ''}
               </h1>
               <p className="text-white/50 text-xs sm:text-sm max-w-2xl leading-relaxed line-clamp-2">
-                {meta.desc}
+                {verifiedDescription}
               </p>
             </div>
 
@@ -735,7 +747,7 @@ export default function GenrePage() {
             Câu hỏi thường gặp về Phim {meta.name}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {meta.faq.map((item, i) => (
+            {safeFaq.map((item, i) => (
               <div
                 key={i}
                 className="bg-white/3 border border-white/8 rounded-xl overflow-hidden"

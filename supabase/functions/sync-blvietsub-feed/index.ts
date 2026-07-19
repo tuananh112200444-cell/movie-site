@@ -1065,15 +1065,16 @@ function parseStreamingServerEpisodes(html: string): Map<string, ParsedEpisode> 
     perEpisodeCount.set(episodeNumber, serverNumber);
     addParsedEpisode(episodes, episodeNumber, serverNumber, link, type, episodeId);
   }
-  let anonymousServer = 0;
+  const legacyPerEpisodeCount = new Map<number, number>();
   for (const match of html.matchAll(/<button\b[^>]*class=["'][^"']*\bblv-episode-btn\b[^"']*["'][^>]*>[\s\S]*?<\/button>/gi)) {
     const tag = match[0];
     const link = extractAttr(tag, 'data-url');
     const label = stripTags(tag);
     const info = parseEpisodeInfo(label);
     if (!info.number || !link) continue;
-    anonymousServer += 1;
-    addParsedEpisode(episodes, info.number, anonymousServer, link, 'embed', label);
+    const serverNumber = (legacyPerEpisodeCount.get(info.number) || 0) + 1;
+    legacyPerEpisodeCount.set(info.number, serverNumber);
+    addParsedEpisode(episodes, info.number, serverNumber, link, 'embed', label);
   }
   return episodes;
 }
@@ -1542,8 +1543,11 @@ async function updateMovieMetadata(
   }
 
   if (entry.image) {
-    if (!String(movie.thumb_url || '').trim()) update.thumb_url = entry.image;
-    if (!String(movie.poster_url || '').trim()) update.poster_url = entry.image;
+    // The source frequently replaces expired third-party image URLs. Refresh
+    // both fields even when the old value is non-empty, otherwise a dead URL
+    // survives forever and every frontend fallback starts from bad data.
+    update.thumb_url = entry.image;
+    update.poster_url = entry.image;
   }
 
   Object.keys(update).forEach((key) => update[key] === undefined && delete update[key]);
@@ -1997,7 +2001,10 @@ serve(async (req) => {
   const syncSecret = Deno.env.get('BLVIETSUB_SYNC_SECRET') || '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
   const isInternalServiceCall = Boolean(serviceKey) && req.headers.get('authorization') === `Bearer ${serviceKey}`;
-  if (!isInternalServiceCall && (cronSecret || syncSecret) && secret !== cronSecret && secret !== syncSecret) {
+  if (!isInternalServiceCall && !cronSecret && !syncSecret) {
+    return json({ success: false, error: 'Sync authentication is not configured' }, 503);
+  }
+  if (!isInternalServiceCall && secret !== cronSecret && secret !== syncSecret) {
     return json({ success: false, error: 'Unauthorized' }, 401);
   }
 

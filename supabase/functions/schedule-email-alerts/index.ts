@@ -221,7 +221,8 @@ serve(async (req) => {
 
   const url = new URL(req.url);
   const secret = url.searchParams.get('secret') || req.headers.get('x-cron-secret') || '';
-  if (CRON_SECRET && secret !== CRON_SECRET) {
+  if (!CRON_SECRET) return jsonResponse({ error: 'CRON_SECRET is not configured' }, 503);
+  if (secret !== CRON_SECRET) {
     return jsonResponse({ error: 'Unauthorized' }, 401);
   }
 

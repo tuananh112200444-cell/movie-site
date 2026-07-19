@@ -606,21 +606,40 @@ export function getImageUrl(path: string): string {
  * Desktop gets a denser source for sharper large screens; mobile stays lighter but still retina-friendly.
  */
 const OPTIMIZE_ENABLED = true;
+
+function getTmdbCardImageUrl(original: string, requestedWidth: number): string | null {
+  if (!/^https?:\/\/image\.tmdb\.org\/t\/p\//i.test(original)) return null;
+
+  const size = requestedWidth <= 340
+    ? 'w342'
+    : requestedWidth <= 560
+      ? 'w500'
+      : requestedWidth <= 900
+        ? 'w780'
+        : 'w1280';
+
+  return original.replace(/\/t\/p\/[^/]+\//i, `/t/p/${size}/`);
+}
+
 export function getOptimizedImageUrl(path: string, width = 360, quality = 82): string {
   const original = getImageUrl(path);
   if (!OPTIMIZE_ENABLED || !original || original === FALLBACK_IMG) return original;
   if (original.includes('wsrv.nl/?url=')) return original;
+  // TMDB supports fixed CDN renditions. Use them directly instead of requesting
+  // an unnecessary original-sized poster through a third-party proxy.
+  const tmdbImage = getTmdbCardImageUrl(original, width);
+  if (tmdbImage) return tmdbImage;
   if (/^https?:\/\/icdn\.darkbytes\.xyz\//i.test(original)) return original;
   if (shouldBypassImageProxy(original)) return original;
   // wsrv.nl free image proxy — resize + compress + WebP auto
   const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth || 1440;
   const dpr = typeof window === 'undefined' ? 1.5 : Math.min(window.devicePixelRatio || 1, 2);
   const isDesktop = viewportWidth >= 1024;
-  const density = isDesktop ? Math.max(1.35, Math.min(dpr, 1.65)) : Math.max(1.55, Math.min(dpr, 1.85));
+  const density = isDesktop ? Math.max(1.2, Math.min(dpr, 1.5)) : Math.max(1.35, Math.min(dpr, 1.6));
   const maxWidth = isDesktop ? 1680 : 1120;
   const minQuality = isDesktop ? 82 : 78;
   const maxQuality = isDesktop ? 88 : 84;
-  const safeWidth = Math.max(320, Math.min(Math.round(width * density), maxWidth));
+  const safeWidth = Math.max(180, Math.min(Math.round(width * density), maxWidth));
   const safeQuality = Math.max(minQuality, Math.min(quality, maxQuality));
   const encoded = encodeURIComponent(original);
   return `https://wsrv.nl/?url=${encoded}&w=${safeWidth}&q=${safeQuality}&output=webp&fit=cover&we`;
@@ -702,13 +721,13 @@ export function getOptimizedImageFallbacks(
 }
 
 export function getPosterUrl(path: string): string {
-  return getOptimizedImageUrl(path, 620, 88);
+  return getOptimizedImageUrl(path, 420, 84);
 }
 export function getThumbUrl(path: string): string {
-  return getOptimizedImageUrl(path, 1280, 88);
+  return getOptimizedImageUrl(path, 960, 84);
 }
 export function getFeaturedUrl(path: string): string {
-  return getOptimizedImageUrl(path, 1180, 88);
+  return getOptimizedImageUrl(path, 820, 84);
 }
 export function getHeroUrl(path: string): string {
   return getOptimizedImageUrl(path, 1680, 90);
@@ -958,12 +977,15 @@ export async function fetchNewMovies(page = 1): Promise<MovieListResponse> {
 }
 
 export async function fetchLatestReleaseMovies(page = 1): Promise<MovieListResponse> {
-  const supabaseResult = await fetchMoviesFromSupabaseList({ page, sortField: 'year', sortType: 'desc' });
+  // "Phim mới" means titles with the most recently synced release/episode, not
+  // the highest release year. The source sync updates updated_at when its
+  // episode list changes, so keep that ordering intact all the way to the UI.
+  const supabaseResult = await fetchMoviesFromSupabaseList({ page, sortField: 'modified.time', sortType: 'desc' });
   if (supabaseResult) return supabaseResult;
   const result = await fetchNewMoviesMultiSource(page);
   return {
     ...result,
-    items: sortListItems(result.items ?? [], 'year', 'desc'),
+    items: sortListItems(result.items ?? [], 'modified.time', 'desc'),
   };
 }
 
@@ -3890,7 +3912,7 @@ export function getSourceFailureClusterFromUrl(value = ''): string {
   if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) {
     return 'kkphim';
   }
-  if (host.includes('versondd.top')) return 'known_bad';
+  if (host.includes('versondd.top') || host.includes('short.icu')) return 'known_bad';
   if (isHlsStreamUrl(raw) || isDirectFileUrl(raw)) return `direct:${host || 'unknown'}`;
   return host || lower.slice(0, 80);
 }
@@ -3908,7 +3930,7 @@ export function getEpisodeSourceKind(ep?: EpisodeData | null): EpisodeSourceKind
 
   if (!url) return 'empty';
   if (!m3u8 && embed && isBlvietsubWatchPageUrl(embed)) return 'blvietsub_page';
-  if (host.includes('versondd.top')) return 'known_bad';
+  if (host.includes('versondd.top') || host.includes('short.icu')) return 'known_bad';
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) return 'own_direct';
   if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) return 'ophim';
   if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) {
@@ -4048,7 +4070,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) score += KKPHIM_PREFERRED_SOURCE_BONUS;
   if (host.includes('dailymotion.com') || host === 'dai.ly') score += DAILYMOTION_PREFERRED_SOURCE_BONUS;
   if (lower.includes('.m3u8')) score += 70;
-  if (host.includes('versondd.top')) score -= 1200;
+  if (host.includes('versondd.top') || host.includes('short.icu')) score -= 1200;
   if (host.includes('blvietsub.com')) score -= 900;
   if (embed && !m3u8 && score < 20) score += 10;
 

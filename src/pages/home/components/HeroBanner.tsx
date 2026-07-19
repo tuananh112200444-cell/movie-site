@@ -46,6 +46,10 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
   // Auto-next timer
   useEffect(() => {
     if (featured.length === 0) return;
+    // Rotating a full-viewport hero keeps replacing the LCP candidate on
+    // phones. Mobile users already have explicit slide tabs, so keep the first
+    // hero stable and avoid late image downloads/layout work.
+    if (window.matchMedia('(max-width: 639px)').matches) return;
     const timer = setInterval(next, 6000);
     return () => clearInterval(timer);
   }, [next, featured.length]);
@@ -69,14 +73,12 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
   if (featured.length === 0) return null;
 
   const active = featured[activeIndex];
+  const backgroundWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 720 : 1360;
   const activePosterUrl = getOptimizedImageUrl(active?.thumb_url || active?.poster_url, 620, 86);
   const rating = getStableRating(active.name ?? '');
   const viewCount = getViewCount(active.name ?? '');
   const activeDetailHref = getMovieDetailHref(active);
   const favored = isFav(active._id);
-
-  // Only render visible slides (active + next) — saves initial DOM size
-  const nextIndex = (activeIndex + 1) % featured.length;
 
   return (
     <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/5.7', minHeight: 'clamp(188px, 48vw, 460px)' }}>
@@ -84,17 +86,10 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       {/* Only render active + next slides to reduce initial DOM & image count */}
       <MemoSlideBackground
         key={active._id}
-        src={getOptimizedImageUrl(active.poster_url || active.thumb_url, 1360, 84)}
+        src={getOptimizedImageUrl(active.poster_url || active.thumb_url, backgroundWidth, 82)}
         alt={active.name}
         active={true}
         priority={true}
-      />
-      <MemoSlideBackground
-        key={featured[nextIndex]._id}
-        src={getOptimizedImageUrl(featured[nextIndex].poster_url || featured[nextIndex].thumb_url, 1120, 82)}
-        alt={featured[nextIndex].name}
-        active={false}
-        priority={false}
       />
 
       {/* Overlays — stronger gradients for more drama */}

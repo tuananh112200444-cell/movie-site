@@ -1,0 +1,13 @@
+{
+  "release_id": "20260719043256-4a30bc2cb143-dirty",
+  "generated_at": "2026-07-19T04:32:56.078Z",
+  "commit": "4a30bc2cb143",
+  "dirty": true,
+  "schema_contract": "20260719-ops-seo-v1",
+  "components": {
+    "frontend": "cloudflare-pages",
+    "worker": "cloudflare-pages-functions",
+    "backend": "supabase-edge-functions",
+    "database": "supabase-postgres"
+  }
+}

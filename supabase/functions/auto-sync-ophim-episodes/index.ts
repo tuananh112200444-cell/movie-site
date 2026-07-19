@@ -405,15 +405,17 @@ serve(async (req) => {
   const secret = url.searchParams.get('secret') ?? '';
   const cronSecret = Deno.env.get('CRON_SECRET');
 
-  if (cronSecret && secret !== cronSecret) {
+  if (!cronSecret) {
+    return new Response(JSON.stringify({ error: 'CRON_SECRET is not configured' }), {
+      status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (secret !== cronSecret) {
     return new Response(
       JSON.stringify({ error: 'Unauthorized — invalid or missing cron secret' }),
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  }
-
-  if (!cronSecret) {
-    console.warn('[auto-sync] CRON_SECRET not set — running without auth. Set CRON_SECRET in Supabase secrets for production.');
   }
 
   const startTime = Date.now();

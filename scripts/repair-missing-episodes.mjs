@@ -37,6 +37,9 @@ const MAX_ADVERTISED = Math.max(MIN_ADVERTISED, Number(arg('max-advertised', '12
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error('Missing VITE_PUBLIC_SUPABASE_URL or VITE_PUBLIC_SUPABASE_ANON_KEY in .env');
 }
+if (APPLY && !SQL_FILE && !CRON_SECRET) {
+  throw new Error('Refusing unauthenticated repair: set SUPABASE_CRON_SECRET or generate a reviewed --sql-file.');
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },

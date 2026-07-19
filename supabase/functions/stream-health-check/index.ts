@@ -205,7 +205,7 @@ function authorized(req: Request, url: URL): boolean {
     Deno.env.get('STREAM_HEALTH_SECRET') || '',
     Deno.env.get('PLAYER_REPAIR_SECRET') || '',
   ].filter(Boolean);
-  return allowed.length === 0 || allowed.includes(provided);
+  return allowed.length > 0 && allowed.includes(provided);
 }
 
 serve(async (req) => {

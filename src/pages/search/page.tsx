@@ -821,6 +821,7 @@ export default function SearchPage() {
                 {query && (
                   <button
                     type="button"
+                    aria-label="Xóa từ khóa tìm kiếm"
                     onClick={() => { setQuery(''); setSuggestions([]); setShowSuggestions(true); inputRef.current?.focus(); }}
                     className="w-8 h-8 flex items-center justify-center text-white/30 hover:text-white/60 transition-colors cursor-pointer flex-shrink-0"
                   >

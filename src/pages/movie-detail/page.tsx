@@ -484,7 +484,7 @@ export default function MovieDetailPage() {
     <div className="min-h-screen kp-cinema-page text-white" data-player-fix="blvietsub-embed-autoplay-20260704">
       <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
       <Navbar />
-      <div className="max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">
+      <main className="max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">
         <div className="flex flex-row gap-3 sm:gap-8 mb-8">
           <div className="flex-shrink-0 w-24 sm:w-40 md:w-52 skeleton rounded-xl" style={{ aspectRatio: '2/3' }} />
           <div className="flex-1 space-y-3 pt-2">
@@ -500,7 +500,7 @@ export default function MovieDetailPage() {
           </div>
         </div>
         <div className="aspect-video w-full skeleton rounded-xl" />
-      </div>
+      </main>
     </div>
   );
 
@@ -508,8 +508,9 @@ export default function MovieDetailPage() {
     <div className="min-h-screen kp-cinema-page text-white">
       <SEO title="Không tìm thấy phim – KhoPhim" description="Phim không tồn tại hoặc đã bị xóa." noIndex={true} />
       <Navbar />
-      <div className="flex flex-col items-center justify-center min-h-[70vh] gap-4 px-4">
+      <main className="flex flex-col items-center justify-center min-h-[70vh] gap-4 px-4">
         <i className="ri-error-warning-line text-5xl text-white/20" />
+        <h1 className="text-xl font-bold text-white">Không tìm thấy phim</h1>
         <p className="text-white/40 text-center max-w-md">{error ?? 'Không tìm thấy phim'}</p>
         <p className="text-white/20 text-xs font-mono">slug: {slug ?? '—'}</p>
         <div className="flex items-center gap-3 mt-2">
@@ -521,7 +522,7 @@ export default function MovieDetailPage() {
           </button>
           <Link to="/" className="text-red-400 hover:text-red-300 text-sm">← Về trang chủ</Link>
         </div>
-      </div>
+      </main>
     </div>
   );
 
@@ -531,6 +532,8 @@ export default function MovieDetailPage() {
   return (
     <div className="min-h-screen kp-cinema-page text-white">
       <Navbar />
+
+      <main id="main-content">
 
       {/* Hero section */}
       <MovieDetailHero
@@ -634,6 +637,8 @@ export default function MovieDetailPage() {
           </div>
         )}
       </div>
+
+      </main>
 
       <Footer />
     </div>

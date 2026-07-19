@@ -30,19 +30,28 @@ function getMovieKey(movie: Movie): string {
 
 function sortByNewReleasePriority(movies: Movie[]): Movie[] {
   return [...movies].sort((a, b) => {
-    const ya = Number(a.year) || 0;
-    const yb = Number(b.year) || 0;
-    if (ya !== yb) return yb - ya;
-    const ea = firstNumber(a.current_episode) || firstNumber(a.episode_current);
-    const eb = firstNumber(b.current_episode) || firstNumber(b.episode_current);
-    const fa = String(a.episode_current ?? '').toLowerCase().includes('full') ? 1 : 0;
-    const fb = String(b.episode_current ?? '').toLowerCase().includes('full') ? 1 : 0;
-    if (fa !== fb) return fa - fb;
-    if (ea !== eb) return eb - ea;
     const ta = new Date(a.modified?.time ?? 0).getTime();
     const tb = new Date(b.modified?.time ?? 0).getTime();
-    return tb - ta;
+    if (ta !== tb) return tb - ta;
+
+    // When two updates arrive together, surface a continuing series before a
+    // completed title. Episode count is deliberately only a tie-breaker: a
+    // long-running older show must not bury a title that received a new episode.
+    const fa = isCompletedMovie(a) ? 1 : 0;
+    const fb = isCompletedMovie(b) ? 1 : 0;
+    if (fa !== fb) return fa - fb;
+
+    const ea = firstNumber(a.current_episode) || firstNumber(a.episode_current);
+    const eb = firstNumber(b.current_episode) || firstNumber(b.episode_current);
+    if (ea !== eb) return eb - ea;
+
+    return (Number(b.year) || 0) - (Number(a.year) || 0);
   });
+}
+
+function isCompletedMovie(movie: Movie): boolean {
+  const label = String(movie.episode_current ?? '').trim().toLowerCase();
+  return ['full', 'full hd', 'hoàn tất', 'hoan tat', 'completed'].includes(label);
 }
 
 function firstNumber(value?: string | number): number {
@@ -101,28 +110,34 @@ async function fetchFastLatestMovies(page: number): Promise<Movie[]> {
   if (primary?.items?.length) return primary.items;
 
   const results = await Promise.allSettled(
-    NEW_MOVIES_TYPES.map((type) => fetchMoviesByType(type, page, 'year', 'desc'))
+    NEW_MOVIES_TYPES.map((type) => fetchMoviesByType(type, page, 'modified.time', 'desc'))
   );
   return results
     .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchMoviesByType>>> => result.status === 'fulfilled')
     .flatMap((result) => result.value.items ?? []);
 }
 
-const newMoviesSchema = [
+function buildNewMoviesSchema(pageLabel: string, basePath: string) {
+  const isUpdatePage = basePath === '/phim-moi-cap-nhat';
+  const pageDescription = isUpdatePage
+    ? 'Tổng hợp phim vừa cập nhật tập hoặc nguồn phát mới nhất tại KhoPhim. Phim lẻ, phim bộ, phim chiếu rạp và anime vietsub HD miễn phí.'
+    : 'Tổng hợp phim mới nhất 2026 cập nhật hàng ngày tại KhoPhim. Phim lẻ, phim bộ, phim chiếu rạp, anime mới nhất vietsub HD Full HD miễn phí.';
+
+  return [
   {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Trang Chủ', item: SITE_URL },
-      { '@type': 'ListItem', position: 2, name: 'Phim Mới Nhất 2026', item: `${SITE_URL}/phim-moi-nhat` },
+      { '@type': 'ListItem', position: 2, name: `${pageLabel} 2026`, item: `${SITE_URL}${basePath}` },
     ],
   },
   {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
-    name: 'Phim Mới Nhất 2026 – KhoPhim',
-    url: `${SITE_URL}/phim-moi-nhat`,
-    description: 'Tổng hợp phim mới nhất 2026 cập nhật hàng ngày tại KhoPhim. Phim lẻ, phim bộ, phim chiếu rạp, anime mới nhất vietsub HD Full HD miễn phí.',
+    name: `${pageLabel} 2026 – KhoPhim`,
+    url: `${SITE_URL}${basePath}`,
+    description: pageDescription,
     inLanguage: 'vi',
     isPartOf: { '@type': 'WebSite', name: 'KhoPhim', url: SITE_URL },
   },
@@ -132,10 +147,10 @@ const newMoviesSchema = [
     mainEntity: [
       {
         '@type': 'Question',
-        name: 'Phim mới nhất hôm nay xem ở đâu miễn phí?',
+        name: isUpdatePage ? 'Phim mới cập nhật hôm nay xem ở đâu miễn phí?' : 'Phim mới nhất hôm nay xem ở đâu miễn phí?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'KhoPhim (khophim.org) cập nhật phim mới nhất hàng ngày. Trang Phim Mới Nhất tổng hợp toàn bộ phim vừa được thêm mới từ tất cả thể loại, giúp bạn không bỏ lỡ bộ phim nào. Miễn phí, vietsub HD, không quảng cáo.',
+          text: `KhoPhim (khophim.org) cập nhật phim mới hàng ngày. Trang ${pageLabel} tổng hợp phim từ tất cả thể loại, giúp bạn không bỏ lỡ phim vừa ra mắt hoặc vừa có tập mới. Miễn phí, vietsub HD, không quảng cáo.`,
         },
       },
       {
@@ -156,7 +171,8 @@ const newMoviesSchema = [
       },
     ],
   },
-];
+  ];
+}
 
 const FILTERS = [
   { key: 'all', label: 'Tất Cả', icon: 'ri-grid-line', color: 'from-red-600 to-rose-500' },
@@ -195,6 +211,12 @@ export default function NewMoviesPage() {
   // ── Page derived directly from URL param (single source of truth) ──
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
   const basePath = location.pathname === '/phim-moi-cap-nhat' ? '/phim-moi-cap-nhat' : '/phim-moi-nhat';
+  const isUpdatePage = basePath === '/phim-moi-cap-nhat';
+  const pageLabel = isUpdatePage ? 'Phim Mới Cập Nhật' : 'Phim Mới Nhất';
+  const pageDescription = isUpdatePage
+    ? 'Tổng hợp phim vừa cập nhật tập hoặc nguồn phát mới từ tất cả thể loại · Vietsub HD miễn phí · Không quảng cáo'
+    : 'Tổng hợp phim mới ra mắt và vừa cập nhật từ tất cả thể loại · Vietsub HD miễn phí · Không quảng cáo';
+  const pageSchema = useMemo(() => buildNewMoviesSchema(pageLabel, basePath), [pageLabel, basePath]);
 
   const handleSetPage = useCallback((p: number) => {
     navigate({
@@ -218,8 +240,8 @@ export default function NewMoviesPage() {
     });
     if (fresh.length === 0) return;
     fresh.forEach((m) => seenRef.current.add(getMovieKey(m)));
-    // Keep this page ordered by what viewers expect as "new movies": release year first,
-    // then actively updating episodes, then database update time.
+    // Keep this page ordered by the newest release/episode update. Year and
+    // episode number are only tie-breakers inside sortByNewReleasePriority.
     poolRef.current = sortByNewReleasePriority([...poolRef.current, ...fresh]);
     setPool(poolRef.current);
   }, []);
@@ -315,14 +337,14 @@ export default function NewMoviesPage() {
   return (
     <div className="min-h-screen kp-cinema-page text-white">
       <SEO
-        title="Phim Mới Nhất 2026 – Vietsub HD Miễn Phí | KhoPhim"
-        description="Xem phim mới nhất 2026 vietsub HD miễn phí tại KhoPhim. Tổng hợp phim lẻ, phim bộ, phim chiếu rạp, anime cập nhật hàng ngày. 50.000+ bộ phim, không quảng cáo, không cần đăng ký. Xem ngay!"
+        title={`${pageLabel} 2026 – Vietsub HD Miễn Phí | KhoPhim`}
+        description={`${pageDescription}. 50.000+ bộ phim, không cần đăng ký.`}
         keywords="phim mới nhất 2026, phim mới cập nhật hôm nay, xem phim mới online miễn phí, phim mới vietsub hôm nay, phim mới nhất hôm nay, phim mới cập nhật 2026, xem phim mới miễn phí HD, phim mới ra 2026, phim hot 2026, phim hay mới nhất"
         canonical={canonicalUrl}
         prev={prevPage}
         next={nextPage}
         ogType="website"
-        schema={newMoviesSchema}
+        schema={pageSchema}
       />
       <Navbar />
 
@@ -332,7 +354,7 @@ export default function NewMoviesPage() {
           {showHeroBg ? (
             <img
               src="https://readdy.ai/api/search-image?query=cinematic film reel collection dark background with glowing red light rays movie posters scattered dramatic lighting professional photography ultra wide angle deep black background with subtle red glow abstract cinema atmosphere&width=1400&height=400&seq=newmovies-hero-bg-002&orientation=landscape"
-              alt="Phim mới nhất"
+              alt={pageLabel}
               className={`w-full h-full object-cover object-center transition-opacity duration-700 ${heroImgLoaded ? 'opacity-20' : 'opacity-0'}`}
               onLoad={() => setHeroImgLoaded(true)}
             />
@@ -351,7 +373,7 @@ export default function NewMoviesPage() {
           <nav className="flex items-center gap-1.5 mb-5 text-xs text-white/30">
             <Link to="/" className="hover:text-white/60 transition-colors">Trang chủ</Link>
             <i className="ri-arrow-right-s-line" />
-            <span className="text-white/50">Phim Mới Nhất</span>
+            <span className="text-white/50">{pageLabel}</span>
           </nav>
 
           <div className="flex items-center gap-2 mb-3">
@@ -370,11 +392,11 @@ export default function NewMoviesPage() {
           </div>
 
           <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight mb-2">
-            Phim Mới Nhất <span className="text-red-500">2026</span>
+            {pageLabel} <span className="text-red-500">2026</span>
             {page > 1 ? <span className="text-white/40 text-xl ml-2">– Trang {page}</span> : ''}
           </h1>
           <p className="text-white/40 text-xs sm:text-sm md:text-base max-w-lg leading-relaxed mb-4 sm:mb-6">
-            Tổng hợp phim mới cập nhật hàng ngày từ tất cả thể loại · Vietsub HD miễn phí · Không quảng cáo
+            {pageDescription}
           </p>
 
           <div className="flex flex-wrap gap-3 sm:gap-4 md:gap-6">
@@ -682,7 +704,7 @@ function FeaturedCard({ movie }: { movie: Movie }) {
 
         {/* Bottom info */}
         <div className="absolute bottom-0 left-0 right-0 p-4 z-[2]">
-          <h3 className="text-white text-lg md:text-xl font-bold line-clamp-1 group-hover:text-red-400 transition-colors">
+          <h3 className="min-h-[3rem] text-lg font-bold leading-6 text-white line-clamp-2 group-hover:text-red-400 transition-colors md:min-h-0 md:text-xl md:line-clamp-1">
             {movie.name}
           </h3>
           <p className="text-white/50 text-xs mt-1 line-clamp-1">{movie.origin_name}</p>
@@ -719,8 +741,12 @@ function SideFeaturedCard({ movie }: { movie: Movie }) {
   const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
 
   return (
-    <Link to={movieDetailUrl(movie.slug)} className="group relative block rounded-xl overflow-hidden bg-[#16192a] cursor-pointer">
-      <div className="relative" style={{ aspectRatio: '16/10' }}>
+    <Link
+      to={movieDetailUrl(movie.slug)}
+      className="group relative block overflow-hidden rounded-lg bg-[#16192a] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d14]"
+      aria-label={`Xem phim ${movie.name}`}
+    >
+      <div className="relative aspect-[16/11] sm:aspect-[16/10]">
         {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton z-[1]" />}
         {imgError && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">
@@ -744,8 +770,8 @@ function SideFeaturedCard({ movie }: { movie: Movie }) {
           )}
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-2.5 z-[2]">
-          <h4 className="text-white text-xs font-bold line-clamp-1 group-hover:text-red-400 transition-colors">
+        <div className="absolute bottom-0 left-0 right-0 z-[2] p-2 sm:p-2.5">
+          <h4 className="min-h-8 text-[11px] font-bold leading-4 text-white line-clamp-2 group-hover:text-red-400 transition-colors sm:min-h-0 sm:text-xs">
             {movie.name}
           </h4>
           <div className="flex items-center gap-1.5 mt-1">

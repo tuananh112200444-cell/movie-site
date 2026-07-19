@@ -138,15 +138,19 @@ function QueerMovieImage({
   className: string;
   priority?: boolean;
 }) {
-  const primary = movie.thumb_url || movie.poster_url;
-  const fallback = movie.poster_url && movie.poster_url !== primary ? movie.poster_url : undefined;
+  // BLVietsub frequently stores a wide cover in thumb_url and a portrait
+  // poster in poster_url. Prefer the portrait asset for cards, but keep the
+  // valid wide cover as a usable fallback instead of replacing it with the
+  // generic placeholder solely because of its aspect ratio.
+  const primary = movie.poster_url || movie.thumb_url;
+  const fallback = movie.thumb_url && movie.thumb_url !== primary ? movie.thumb_url : undefined;
   const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
     primary,
     fallback,
     false,
     width,
     quality,
-    { preferredAspect: 'portrait' },
+    {},
   );
 
   return (
@@ -437,7 +441,7 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
         <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-black uppercase tracking-[0.24em] text-cyan-200">Không gian riêng</p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-white md:text-3xl">Vũ Trụ Đam Mỹ / BL / GL</h2>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-white md:text-3xl">Vũ Trụ Đam Mỹ / BL / GL</h1>
           </div>
           <button
             type="button"

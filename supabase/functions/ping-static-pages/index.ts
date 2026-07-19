@@ -1,3 +1,5 @@
+import { verifyAdminRequest } from '../_shared/admin-session.ts';
+
 /**
  * Ping Static Pages – with admin token verification + rate limiting
  */
@@ -12,12 +14,6 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-function verifyAdminToken(req: Request): boolean {
-  const auth = req.headers.get('Authorization') ?? '';
-  if (!auth.startsWith('Bearer ')) return false;
-  const token = auth.slice(7).trim();
-  return token.length > 20;
-}
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req.headers.get('origin'));
@@ -27,7 +23,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    if (!verifyAdminToken(req)) {
+    if (!await verifyAdminRequest(req)) {
       return new Response(JSON.stringify({ error: 'Unauthorized – admin login required' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyAdminSession } from '../_shared/admin-session.ts';
 
 const CORS_ORIGIN = Deno.env.get('CORS_ORIGIN') ?? 'https://khophim.org';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -48,8 +49,7 @@ async function verifyAdminToken(token: string): Promise<{ valid: boolean; expire
     const expiresAt = Number(expiresAtStr);
     if (!expiresAt || Number.isNaN(expiresAt)) return { valid: false };
 
-    const secret = SUPABASE_SERVICE_ROLE_KEY.slice(0, 32) || 'khophim-admin-fallback';
-    const valid = await hmacVerify(payload, signature, secret);
+    const valid = await verifyAdminSession(token);
     return { valid: valid && expiresAt > Math.floor(Date.now() / 1000), expiresAt };
   } catch {
     return { valid: false };

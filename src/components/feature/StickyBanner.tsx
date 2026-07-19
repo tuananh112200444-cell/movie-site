@@ -62,6 +62,15 @@ export default function StickyBanner() {
       return false;
     }
   });
+  const [imageReady, setImageReady] = useState(false);
+
+  useEffect(() => {
+    if (dismissed) return;
+    // Advertising is not part of the critical viewing path. Reserving the
+    // aspect ratio prevents CLS while the delayed request protects LCP.
+    const id = window.setTimeout(() => setImageReady(true), 12_000);
+    return () => window.clearTimeout(id);
+  }, [dismissed]);
 
   useEffect(() => {
     if (dismissed) return;
@@ -99,14 +108,19 @@ export default function StickyBanner() {
             onClick={handleBannerClick}
             className="block active:scale-[0.99] transition-transform cursor-pointer"
           >
-            <img
-              src="/banners/winaz-728x90-20260715.gif"
-              alt="WinAZ banner"
-              className="aspect-[728/90] h-auto max-h-[46px] w-full object-contain object-center sm:max-h-[62px] lg:max-h-[48px]"
-              loading="eager"
-              width={728}
-              height={90}
-            />
+            <div className="aspect-[728/90] max-h-[46px] w-full bg-white/[0.025] sm:max-h-[62px] lg:max-h-[48px]">
+              {imageReady && (
+                <img
+                  src="/banners/winaz-728x90-20260715.gif"
+                  alt="WinAZ banner"
+                  className="h-full w-full object-contain object-center"
+                  loading="lazy"
+                  decoding="async"
+                  width={728}
+                  height={90}
+                />
+              )}
+            </div>
 
             <span className="absolute bottom-1 left-2 text-[9px] text-white/30 font-medium tracking-wide uppercase select-none pointer-events-none">
               Ad

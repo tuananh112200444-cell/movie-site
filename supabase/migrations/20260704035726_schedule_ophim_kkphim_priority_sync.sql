@@ -13,7 +13,8 @@ begin
     '1,16,31,46 * * * *',
     $cmd$
       select net.http_get(
-        url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-ophim-movies?provider=ophim&pages=1&limit=8&episodes=1&secret=YOUR_CRON_SECRET',
+        url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-ophim-movies?provider=ophim&pages=1&limit=8&episodes=1',
+        headers := jsonb_build_object('x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET' limit 1)),
         timeout_milliseconds := 150000
       );
     $cmd$
@@ -24,7 +25,8 @@ begin
     '6,21,36,51 * * * *',
     $cmd$
       select net.http_get(
-        url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-ophim-movies?provider=kkphim&pages=1&limit=8&episodes=1&secret=YOUR_CRON_SECRET',
+        url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-ophim-movies?provider=kkphim&pages=1&limit=8&episodes=1',
+        headers := jsonb_build_object('x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET' limit 1)),
         timeout_milliseconds := 150000
       );
     $cmd$

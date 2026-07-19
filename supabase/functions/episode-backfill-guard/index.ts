@@ -368,7 +368,8 @@ serve(async (req) => {
   const cronSecret = Deno.env.get('CRON_SECRET') || '';
   const blvietsubSecret = Deno.env.get('BLVIETSUB_SYNC_SECRET') || '';
   const providedSecret = url.searchParams.get('secret') || req.headers.get('x-cron-secret') || '';
-  if ((cronSecret || blvietsubSecret) && providedSecret !== cronSecret && providedSecret !== blvietsubSecret) {
+  if (!cronSecret && !blvietsubSecret) return json({ success: false, error: 'Sync authentication is not configured' }, 503);
+  if (providedSecret !== cronSecret && providedSecret !== blvietsubSecret) {
     return json({ success: false, error: 'Unauthorized' }, 401);
   }
 

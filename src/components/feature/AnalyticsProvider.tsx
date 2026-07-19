@@ -7,21 +7,6 @@ const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID || 'G-6B5GLB9W6
  * Load GA4 script động trong React — tránh block render của index.html.
  * Chỉ load 1 lần, track page view mỗi khi route thay đổi.
  */
-function loadGAScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src*="googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}"]`)) {
-      resolve();
-      return;
-    }
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load GA4 script'));
-    document.head.appendChild(script);
-  });
-}
-
 function initGA(): void {
   if (typeof window === 'undefined') return;
   window.dataLayer = window.dataLayer || [];
@@ -129,13 +114,9 @@ export default function AnalyticsProvider({ children }: { children: React.ReactN
     if (gaLoaded.current) return;
     gaLoaded.current = true;
 
-    loadGAScript()
-      .then(() => {
-        initGA();
-      })
-      .catch(() => {
-        // GA4 script load failed — silent in production
-      });
+    // GTM from index.html owns the network script; this provider only adds
+    // route-aware events to the shared dataLayer.
+    initGA();
   }, []);
 
   // Track page view khi route thay đổi

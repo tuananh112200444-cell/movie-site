@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { isAdminSessionConfigured, issueAdminSession } from '../_shared/admin-session.ts';
 
 const CORS_ORIGIN = Deno.env.get('CORS_ORIGIN') ?? 'https://khophim.org';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -48,29 +49,6 @@ async function hashPin(pin: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function hmacSign(message: string, secret: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
-}
-
-async function generateSignedToken(): Promise<{ token: string; expiresAt: number }> {
-  const randomBytes = crypto.getRandomValues(new Uint8Array(16));
-  const randomPart = btoa(String.fromCharCode(...randomBytes));
-  const expiresAt = Math.floor(Date.now() / 1000) + 3600; // 1 hour
-  const payload = `${randomPart}.${expiresAt}`;
-  const secret = SUPABASE_SERVICE_ROLE_KEY.slice(0, 32) || 'khophim-admin-fallback';
-  const signature = await hmacSign(payload, secret);
-  const token = btoa(`${payload}.${signature}`);
-  return { token, expiresAt };
-}
 
 function getClientIP(req: Request): string {
   const forwarded = req.headers.get('x-forwarded-for');
@@ -109,6 +87,9 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !isAdminSessionConfigured()) {
+      return json({ error: 'Admin authentication is not configured.' }, 503, corsHeaders);
+    }
     const body = (await req.json()) as { pin?: string; action?: string; newPin?: string };
     const pin = body.pin ?? '';
     const action = body.action ?? 'verify';
@@ -229,7 +210,7 @@ serve(async (req) => {
       { onConflict: 'ip_hash' }
     );
 
-    const { token, expiresAt } = await generateSignedToken();
+    const { token, expiresAt } = await issueAdminSession();
     return json({ token, expiresAt, message: 'Authenticated' }, 200, corsHeaders);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

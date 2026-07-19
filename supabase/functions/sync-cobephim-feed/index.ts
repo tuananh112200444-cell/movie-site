@@ -519,7 +519,8 @@ serve(async (req) => {
     .map((value) => String(value || '').trim())
     .filter(Boolean);
   const providedSecret = req.headers.get('x-cron-secret') || url.searchParams.get('secret') || '';
-  if (expectedSecrets.length && !expectedSecrets.includes(providedSecret)) return json({ success: false, error: 'Unauthorized' }, 401);
+  if (!expectedSecrets.length) return json({ success: false, error: 'Sync authentication is not configured' }, 503);
+  if (!expectedSecrets.includes(providedSecret)) return json({ success: false, error: 'Unauthorized' }, 401);
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
