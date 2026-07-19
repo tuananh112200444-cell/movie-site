@@ -9,7 +9,8 @@ const checks = [
   ['original title is recovered from WordPress metadata', /originName: getWordPressOriginName\(title, content\)/],
   ['repair batches use bounded concurrency', /rows\.slice\(index, index \+ 4\)\.map/],
   ['repair queue retains movie and source URL', /\.slice\(0, cappedLimit\);[\s\S]{0,500}\{ movie, sourceUrl \}/],
-  ['one-video sources cannot pollute healthy series', /dbBeforeEpisode >= 4 && sourceMaxEpisode <= 1[\s\S]{0,240}backward_guarded: true/],
+  ['one-video sources cannot pollute healthy series', /dbBeforeEpisode >= 4 && sourceMaxEpisode <= 1[\s\S]{0,700}backward_guarded: true/],
+  ['guarded titles rotate behind the repair queue', /Mark the check as completed[\s\S]{0,220}last_synced_at/],
 ];
 
 const failures = checks.filter(([, pattern]) => !pattern.test(source)).map(([name]) => name);
