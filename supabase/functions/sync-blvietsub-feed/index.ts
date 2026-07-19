@@ -1636,6 +1636,12 @@ async function syncEntryToMovie(
   // episode 1 from the wrong title even though monotonic metadata prevents a
   // numeric downgrade.
   if (dbBeforeEpisode >= 4 && sourceMaxEpisode <= 1) {
+    // Mark the check as completed so this guarded title rotates to the back of
+    // the queue instead of starving all later repair candidates.
+    await supabase
+      .from('movies')
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq('id', movie.id);
     return {
       inserted: 0,
       updated: false,
