@@ -314,7 +314,6 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
   const poster = useMemo(() => getPosterUrl(posterPath), [posterPath]);
   const thumb = useMemo(() => getThumbUrl(backdropPath), [backdropPath]);
   const posterFallback = useImageFallback(posterPath, backdropPath, false, 520, 86);
-  const backdropFallback = useImageFallback(backdropPath, posterPath, false, 1440, 84);
 
   const displayTitle = getMovieDisplayName(movie);
   const displayOrigin = movie.title_en?.trim() || movie.origin_name;
@@ -362,7 +361,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
       <div className="relative pt-16">
         <div className="absolute inset-0 overflow-hidden h-[200px] sm:h-[280px] md:h-[320px]">
           <img
-            src={backdropFallback.currentSrc || thumb}
+            src={thumb}
             sizes="100vw"
             alt={displayTitle}
             width="1920"
@@ -371,8 +370,6 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
             loading="lazy"
             fetchPriority="low"
             decoding="async"
-            onLoad={backdropFallback.onLoad}
-            onError={backdropFallback.onError}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0f1117]/50 to-[#0f1117]" />
         </div>
