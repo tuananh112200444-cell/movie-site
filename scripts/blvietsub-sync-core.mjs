@@ -414,6 +414,14 @@ function firstWatchUrl(html, movieSlug) {
   return getWatchUrls(html, movieSlug)[0]?.url || '';
 }
 
+function getWordPressOriginName(title = '', content = '') {
+  const decoded = decodeHtml(stripTags(content)).replace(/\s+/g, ' ').trim();
+  if (!decoded) return '';
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = decoded.match(new RegExp(`^${escapedTitle}\\s*[-–—:]\\s*(.+?)\\s*\\((?:19|20)\\d{2}\\)`, 'i'));
+  return match?.[1]?.trim() || '';
+}
+
 async function fetchText(url, timeoutMs = 25000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -442,7 +450,7 @@ export function parseMoviePage(movieUrl, updatedAt, html, playerHtml = '') {
   return {
     postId,
     title,
-    originName: '',
+    originName: getWordPressOriginName(title, content),
     content,
     image,
     year: Number(html.match(/\b((?:19|20)\d{2})\b/)?.[1] || 0) || new Date(updatedAt || Date.now()).getFullYear(),

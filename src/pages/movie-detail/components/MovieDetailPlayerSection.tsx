@@ -577,7 +577,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       <div className="min-w-0">
                         <p className="truncate text-xs font-bold text-white/85">Đang tự động chọn nguồn tốt nhất</p>
                         <p className="mt-0.5 text-[10px] text-white/40">
-                          {episodes.length > 1 ? `${episodes.length} nguồn dự phòng sẵn sàng` : 'Nguồn phát đã sẵn sàng'}
+                          {episodes.length > 1 ? `${episodes.length - 1} nguồn dự phòng sẵn sàng` : 'Nguồn phát đã sẵn sàng'}
                         </p>
                       </div>
                     </div>
