@@ -11,7 +11,6 @@ begin
         url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/movie-rss-feed',
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
-          'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'SUPABASE_ANON_KEY' order by created_at desc limit 1),
           'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET' order by created_at desc limit 1)
         ),
         body := '{}'::jsonb,

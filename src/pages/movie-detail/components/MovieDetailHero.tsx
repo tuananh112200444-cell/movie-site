@@ -4,6 +4,7 @@ import { useImageFallback } from '@/hooks/useImageFallback';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import type { MovieDetail } from '@/types/movie';
 import { getPosterUrl, getThumbUrl, getMovieDisplayName, getOptimizedImageSrcSet } from '@/services/movieApi';
+import AudioLanguageBadges from '@/components/base/AudioLanguageBadges';
 import MovieCountdown from '@/components/base/MovieCountdown';
 
 interface Props {
@@ -118,13 +119,13 @@ function SocialShare({ title, url }: { title: string; url: string }) {
       {shareLinks.map((link) =>
         link.href ? (
           <a key={link.name} href={link.href} target="_blank" rel="noopener noreferrer nofollow"
-            className={`w-8 h-8 flex items-center justify-center ${link.color} text-white rounded-lg transition-all hover:scale-110`}
+            className={`w-11 h-11 flex items-center justify-center ${link.color} text-white rounded-xl transition-all hover:scale-105 touch-manipulation`}
             title={link.name}>
             <i className={`${link.icon} text-xs`} />
           </a>
         ) : (
           <button key={link.name} onClick={link.onClick}
-            className={`w-8 h-8 flex items-center justify-center ${link.color} rounded-lg transition-all hover:scale-110 cursor-pointer`}
+            className={`w-11 h-11 flex items-center justify-center ${link.color} rounded-xl transition-all hover:scale-105 cursor-pointer touch-manipulation`}
             title="Sao chép link">
             <i className={`${link.icon} text-xs`} />
           </button>
@@ -168,6 +169,14 @@ function compactText(value = '', max = 155): string {
 function getEpisodeSeoLabel(movie: MovieDetail): string {
   const current = String(movie.episode_current || '').trim();
   const total = getDisplayEpisodeTotal(movie);
+  const currentNumbers = current.match(/\d+/g)?.map(Number).filter(Number.isFinite) ?? [];
+  const totalNumber = parseEpisodeNumber(total);
+  if (currentNumbers.length >= 2 && totalNumber && currentNumbers.includes(totalNumber)) {
+    return current;
+  }
+  if (/ho[aà]n\s*(t[aấ]t|th[aà]nh)|full|tr[oọ]n\s*b[oộ]/i.test(current) && currentNumbers.length > 0) {
+    return current;
+  }
   if (current && total && current !== total && !current.toLowerCase().includes(total.toLowerCase())) {
     return `${current}/${total}`;
   }
@@ -179,8 +188,15 @@ function buildCtrMovieTitle(movie: MovieDetail, displayTitle: string): string {
   const quality = movie.quality || 'HD';
   const lang = movie.lang || 'Vietsub';
   const year = movie.year ? ` ${movie.year}` : '';
-  if (episode) return `Xem ${displayTitle} ${episode} ${lang} ${quality}${year} | KhoPhim`;
-  return `Xem ${displayTitle} ${lang} ${quality}${year} | KhoPhim`;
+  const compactEpisode = /ho[aà]n\s*(t[aấ]t|th[aà]nh)|full|tr[oọ]n\s*b[oộ]/i.test(episode)
+    ? 'Trọn Bộ'
+    : episode;
+  const base = `Xem ${displayTitle}${compactEpisode ? ` ${compactEpisode}` : ''} ${lang} ${quality}`;
+  const withYear = `${base}${year} | KhoPhim`;
+  if (withYear.length <= 68) return withYear;
+  const withoutYear = `${base} | KhoPhim`;
+  if (withoutYear.length <= 68) return withoutYear;
+  return `Xem ${displayTitle} ${quality} | KhoPhim`;
 }
 
 function buildMovieSchema({
@@ -203,6 +219,7 @@ function buildMovieSchema({
   hasEpisodes: boolean;
 }) {
   const canonical = `${SITE_URL}/phim/${slug}`;
+  const watchUrl = `${SITE_URL}/xem-phim/${slug}`;
   const dateModified = toIsoDate(movie);
   const genres = movie.category?.map((c) => c.name).filter(Boolean) ?? [];
   const countries = movie.country?.map((c) => c.name).filter(Boolean) ?? [];
@@ -262,31 +279,10 @@ function buildMovieSchema({
       keywords: keywords.join(', '),
       potentialAction: hasEpisodes ? {
         '@type': 'WatchAction',
-        target: canonical,
+        target: watchUrl,
       } : undefined,
     },
   ];
-
-  if (hasEpisodes) {
-    schemas.push({
-      '@context': 'https://schema.org',
-      '@type': 'VideoObject',
-      '@id': `${canonical}#video`,
-      name: `Xem phim ${displayTitle} ${movie.lang || 'Vietsub'} ${movie.quality || 'HD'}`,
-      description: cleanDescription,
-      thumbnailUrl: [poster, thumb].filter(Boolean),
-      uploadDate: dateModified,
-      dateModified,
-      embedUrl: canonical,
-      url: canonical,
-      inLanguage: movie.lang || 'vi',
-      isFamilyFriendly: true,
-      potentialAction: {
-        '@type': 'WatchAction',
-        target: canonical,
-      },
-    });
-  }
 
   schemas.push(
     {
@@ -358,23 +354,23 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
         updatedAt={movie.modified?.time}
       />
 
-      <div className="relative pt-16">
-        <div className="absolute inset-0 overflow-hidden h-[200px] sm:h-[280px] md:h-[320px]">
+      <div className="movie-detail-hero relative pt-16">
+        <div className="movie-detail-backdrop absolute inset-x-0 top-0 overflow-hidden h-[290px] sm:h-[430px] md:h-[520px]">
           <img
             src={thumb}
             sizes="100vw"
             alt={displayTitle}
             width="1920"
             height="320"
-            className="hidden sm:block w-full h-full object-cover object-center opacity-15"
-            loading="lazy"
-            fetchPriority="low"
+            className="hidden sm:block w-full h-full object-cover object-center opacity-20"
+            loading="eager"
+            fetchPriority="high"
             decoding="async"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0f1117]/50 to-[#0f1117]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#090b12]/30 via-[#0b0e16]/75 to-[#090c13]" />
         </div>
 
-        <div className="relative max-w-[1760px] mx-auto px-3 sm:px-4 pt-8 sm:pt-12 pb-4 sm:pb-6">
+        <div className="relative max-w-[1760px] mx-auto px-3 sm:px-4 pt-8 sm:pt-16 pb-5 sm:pb-10">
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 mb-3 sm:mb-4 flex-wrap">
             <Link to="/" className="text-white/30 text-xs hover:text-white/60">Trang chủ</Link>
@@ -388,10 +384,10 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
             <span className="text-white/50 text-xs line-clamp-1">{displayTitle}</span>
           </div>
 
-          <div className="flex flex-row gap-3 sm:gap-8">
+          <div className="movie-detail-hero-card flex flex-row gap-3 sm:gap-8 rounded-2xl sm:rounded-[28px] border border-white/[0.08] bg-[#0b0f18]/75 p-3 sm:p-6 backdrop-blur-md">
             {/* Poster */}
             <div className="flex-shrink-0">
-              <div className="relative w-24 sm:w-40 md:w-52 rounded-xl overflow-hidden bg-[#1a1d27]" style={{ aspectRatio: '2/3' }}>
+              <div className="relative w-24 sm:w-40 md:w-52 rounded-xl sm:rounded-2xl overflow-hidden bg-[#1a1d27] shadow-2xl shadow-black/50 ring-1 ring-white/10" style={{ aspectRatio: '2/3' }}>
                 <img
                   src={posterFallback.currentSrc || poster}
                   sizes="(min-width: 768px) 208px, (min-width: 640px) 160px, 96px"
@@ -415,7 +411,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
               </div>
               <button onClick={onWatchNow}
                 disabled={!hasEpisodes && !isTrailerOnly}
-                className={`mt-2 w-full flex items-center justify-center gap-1.5 text-white text-xs sm:text-sm font-semibold py-2.5 rounded-xl transition-all whitespace-nowrap active:scale-[0.97] cursor-pointer ${
+                className={`mt-2 min-h-11 w-full flex items-center justify-center gap-1.5 text-white text-xs sm:text-sm font-semibold px-3 rounded-xl transition-all whitespace-nowrap active:scale-[0.97] cursor-pointer touch-manipulation ${
                   !hasEpisodes && !isTrailerOnly
                     ? 'bg-white/10 text-white/40 cursor-not-allowed'
                     : isTrailerOnly
@@ -427,7 +423,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
                 <span className="xs:hidden">{!hasEpisodes && !isTrailerOnly ? 'Cập nhật' : isTrailerOnly ? 'Trailer' : 'Xem'}</span>
               </button>
               <button onClick={onFavToggle}
-                className={`mt-1.5 w-full flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-xl transition-all cursor-pointer whitespace-nowrap active:scale-[0.97] border ${
+                className={`mt-1.5 min-h-11 w-full flex items-center justify-center gap-1.5 text-xs font-medium px-3 rounded-xl transition-all cursor-pointer whitespace-nowrap active:scale-[0.97] border touch-manipulation ${
                   favored ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/60 hover:text-red-400 hover:border-red-500/30'
                 }`}>
                 <i className={favored ? 'ri-heart-fill' : 'ri-heart-line'} />
@@ -437,8 +433,8 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <h1 className="text-white font-bold text-lg sm:text-2xl md:text-3xl leading-tight mb-0.5 sm:mb-1 line-clamp-2 sm:line-clamp-none">{displayTitle}</h1>
-              {displayOrigin && <p className="text-white/40 text-xs sm:text-sm mb-2 sm:mb-3 line-clamp-1">{displayOrigin}</p>}
+              <h1 className="text-white font-black text-lg sm:text-3xl md:text-4xl leading-tight mb-0.5 sm:mb-1 line-clamp-2 sm:line-clamp-none tracking-[-0.025em]">{displayTitle}</h1>
+              {displayOrigin && <p className="text-white/55 text-xs sm:text-sm mb-2 sm:mb-3 line-clamp-1">{displayOrigin}</p>}
               {displayChinese && displayChinese !== displayTitle && displayChinese !== displayOrigin && (
                 <p className="text-white/30 text-xs mb-2 sm:mb-3 line-clamp-1">{displayChinese}</p>
               )}
@@ -446,7 +442,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
               {/* Badges */}
               <div className="flex flex-wrap gap-1 sm:gap-2 mb-2 sm:mb-3">
                 {movie.quality && <span className="text-[10px] sm:text-xs font-bold bg-red-500 text-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg">{movie.quality}</span>}
-                {movie.lang && <span className="text-[10px] sm:text-xs bg-white/10 text-white/80 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg">{movie.lang}</span>}
+                <AudioLanguageBadges value={movie.lang} />
                 {movie.year && <span className="text-[10px] sm:text-xs bg-white/10 text-white/80 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg">{movie.year}</span>}
                 {movie.time && <span className="text-[10px] sm:text-xs bg-white/10 text-white/80 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg hidden sm:inline-flex items-center gap-1"><i className="ri-time-line mr-0.5" />{movie.time}</span>}
                 {!hasEpisodes && !isTrailerOnly ? (
@@ -517,7 +513,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
 
               {cleanContent && (
                 <div className="mt-1 sm:mt-2">
-                  <p className={`text-white/55 text-xs sm:text-sm leading-[1.7] sm:leading-relaxed ${showDesc ? '' : 'line-clamp-3'}`}>{cleanContent}</p>
+                  <p className={`text-white/70 text-xs sm:text-sm leading-[1.7] sm:leading-relaxed ${showDesc ? '' : 'line-clamp-3'}`}>{cleanContent}</p>
                   {cleanContent.length > 150 && (
                     <button onClick={() => setShowDesc((v) => !v)}
                       className="text-red-400 text-xs mt-1 hover:text-red-300 cursor-pointer whitespace-nowrap flex items-center gap-1 transition-colors">

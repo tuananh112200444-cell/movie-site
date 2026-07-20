@@ -289,7 +289,7 @@ async function fetchSupabaseMovies(offset = 0, limit = 50000, mode: 'all' | 'rec
   return rows;
 }
 
-function getSitemapOptions(req: Request): { offset: number; limit: number; includeOphim: boolean; mode: 'all' | 'recent' | 'upcoming' } {
+function getSitemapOptions(req: Request): { offset: number; limit: number; outputLimit: number; includeOphim: boolean; mode: 'all' | 'recent' | 'upcoming' } {
   const url = new URL(req.url);
   const page = Number(url.searchParams.get('page') || '0');
   const pageSize = Math.min(10000, Math.max(100, Number(url.searchParams.get('page_size') || '10000')));
@@ -297,18 +297,18 @@ function getSitemapOptions(req: Request): { offset: number; limit: number; inclu
   const upcoming = url.searchParams.get('upcoming') === '1';
 
   if (upcoming) {
-    return { offset: 0, limit: Math.min(5000, pageSize), includeOphim: false, mode: 'upcoming' };
+    return { offset: 0, limit: 50000, outputLimit: Math.min(5000, pageSize), includeOphim: false, mode: 'upcoming' };
   }
 
   if (recent) {
-    return { offset: 0, limit: Math.min(2000, pageSize), includeOphim: false, mode: 'recent' };
+    return { offset: 0, limit: 2000, outputLimit: Math.min(500, pageSize), includeOphim: false, mode: 'recent' };
   }
 
   if (Number.isFinite(page) && page > 0) {
-    return { offset: (Math.floor(page) - 1) * pageSize, limit: pageSize, includeOphim: false, mode: 'all' };
+    return { offset: (Math.floor(page) - 1) * pageSize, limit: pageSize, outputLimit: pageSize, includeOphim: false, mode: 'all' };
   }
 
-  return { offset: 0, limit: 50000, includeOphim: false, mode: 'all' };
+  return { offset: 0, limit: 50000, outputLimit: 50000, includeOphim: false, mode: 'all' };
 }
 
 async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: number }> {
@@ -339,6 +339,11 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       if (!slug || seen.has(slug)) return false;
       seen.add(slug);
       if (!isIndexableMovie(movie)) return false;
+      // Never expose an unreviewed database movie to Google. Historically this
+      // fallback admitted almost the entire public catalogue and created tens
+      // of thousands of "Discovered - currently not indexed" URLs. OPhim
+      // fallback rows have no local id; local rows must explicitly pass the
+      // materialized SEO quality view before entering any sitemap.
       return !movie.id || !qualityByMovieId.has(movie.id) || qualityByMovieId.get(movie.id) === true;
     });
 
@@ -352,7 +357,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     movies = movies.sort(compareMovieSeoOrder);
   }
 
-  movies = movies.slice(0, options.mode === 'all' ? 50000 : options.limit + 650);
+  movies = movies.slice(0, options.mode === 'all' ? 50000 : options.outputLimit);
 
   const urls = movies.map((movie) => {
     const slug = movie.slug ?? '';

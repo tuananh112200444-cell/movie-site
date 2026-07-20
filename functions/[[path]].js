@@ -493,7 +493,15 @@ function withHeaders(response, pathname) {
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     if (!headers.has(key)) headers.set(key, value);
   }
-  if (!headers.has('Cache-Control')) {
+  const contentType = headers.get('Content-Type') || '';
+  // Pages assets may carry index.html's historical no-store header into SPA
+  // fallbacks. Override only HTML documents; hashed assets keep their own
+  // immutable policy and APIs keep their explicit cache semantics.
+  if (/text\/html/i.test(contentType)) {
+    const edgeTtl = /^\/xem-phim\//.test(pathname) ? 30 : 60;
+    const staleTtl = /^\/xem-phim\//.test(pathname) ? 120 : 300;
+    headers.set('Cache-Control', `public, max-age=0, must-revalidate, s-maxage=${edgeTtl}, stale-while-revalidate=${staleTtl}`);
+  } else if (!headers.has('Cache-Control')) {
     headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
   }
   if (isNoIndexPath(pathname)) {
@@ -1468,6 +1476,7 @@ function renderMoviePrerender(pathname, movie, slug) {
   const canonicalSlug = decodeURIComponent(pathSlug || requestedSlug || String(movie.slug || '')).trim() || String(movie.slug || slug).trim() || slug;
   const canonicalPath = `/phim/${canonicalSlug}`;
   const canonical = `${SITE_URL}${encodeCanonicalPath(canonicalPath)}`;
+  const watchUrl = `${SITE_URL}/xem-phim/${encodeURIComponent(canonicalSlug)}`;
   const genreItems = taxonomyItems(movie.category);
   const countryItems = taxonomyItems(movie.country);
   const genres = genreItems.map((item) => item.name);
@@ -1553,22 +1562,8 @@ function renderMoviePrerender(pathname, movie, slug) {
       genre: genres,
       countryOfOrigin: countries.map((country) => ({ '@type': 'Country', name: country })),
       inLanguage: lang,
-      potentialAction: hasPlayableEpisode ? { '@type': 'WatchAction', target: canonical } : undefined,
+      potentialAction: hasPlayableEpisode ? { '@type': 'WatchAction', target: watchUrl } : undefined,
     },
-    ...(hasPlayableEpisode ? [{
-      '@context': 'https://schema.org',
-      '@type': 'VideoObject',
-      '@id': `${canonical}#video`,
-      name: `${name} - ${lang}`,
-      description,
-      thumbnailUrl: poster,
-      uploadDate: modifiedIso || (year ? `${year}-01-01T00:00:00+07:00` : new Date().toISOString()),
-      dateModified: modifiedIso,
-      embedUrl: canonical,
-      url: canonical,
-      inLanguage: lang,
-      isFamilyFriendly: true,
-    }] : []),
     {
       '@context': 'https://schema.org',
       '@type': 'WebPage',
@@ -1593,9 +1588,14 @@ function renderMoviePrerender(pathname, movie, slug) {
       ? `<a href="${SITE_URL}/the-loai/${escapeHtml(genre.slug)}">${escapeHtml(genre.name)}</a>`
       : `<span>${escapeHtml(genre.name)}</span>`)
     .join('');
+  const countryCanonicalPaths = new Map([
+    ['viet-nam', '/phim-viet-nam'], ['han-quoc', '/phim-han-quoc'],
+    ['trung-quoc', '/phim-trung-quoc'], ['nhat-ban', '/phim-nhat-ban'],
+    ['thai-lan', '/phim-thai-lan'], ['au-my', '/phim-au-my'],
+  ]);
   const countryLinks = countryItems.slice(0, 3)
     .map((country) => country.slug
-      ? `<a href="${SITE_URL}/filter?country=${escapeHtml(country.slug)}">${escapeHtml(country.name)}</a>`
+      ? `<a href="${SITE_URL}${countryCanonicalPaths.get(country.slug) || `/filter?country=${escapeHtml(country.slug)}`}">${escapeHtml(country.name)}</a>`
       : `<span>${escapeHtml(country.name)}</span>`)
     .join('');
   const actorLinks = actors.slice(0, 8)
@@ -1694,6 +1694,19 @@ function renderMovieNotFound(pathname, slug) {
 }
 
 async function proxySitemap(pathname, request, context) {
+  if (/^\/sitemap-movies-\d+\.xml$/.test(pathname) || pathname === '/sitemap-movies-upcoming.xml') {
+    return new Response(request.method === 'HEAD' ? null : '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
+      status: 410,
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+        'X-Robots-Tag': 'noindex, nofollow',
+        'X-Sitemap-Retired': 'index-bloat-cleanup',
+        ...SECURITY_HEADERS,
+      },
+    });
+  }
+
   if (pathname === '/sitemap.xml' || isLegacySitemapAlias(pathname)) {
     const today = currentVietnamDate();
     const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
@@ -1727,7 +1740,7 @@ async function proxySitemap(pathname, request, context) {
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  const sitemapVersion = '20260719-feed-quality-v3';
+  const sitemapVersion = '20260720-quality-gated-v4';
   let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=5000&v=${sitemapVersion}`;
@@ -1825,6 +1838,10 @@ async function proxyBlvietsub(request, context) {
   const targetUrl = new URL(target);
   const fresh = url.searchParams.get('fresh') === '1' || url.searchParams.get('fresh') === 'true';
   const cacheKey = new Request(targetUrl.toString(), { method: 'GET' });
+  // A short-lived failure marker acts as a POP-level circuit breaker. When
+  // BLVietsub is down, every visitor should not trigger another slow upstream
+  // request. Successful responses continue to use the normal content cache.
+  const failureKey = new Request(`${SITE_URL}/__circuit/blvietsub/${encodeURIComponent(targetUrl.toString())}`, { method: 'GET' });
   try {
     if (!fresh && request.method === 'GET' && typeof caches !== 'undefined') {
       const cached = await caches.default.match(cacheKey);
@@ -1836,6 +1853,12 @@ async function proxyBlvietsub(request, context) {
           statusText: cached.statusText,
           headers,
         });
+      }
+      const openCircuit = await caches.default.match(failureKey);
+      if (openCircuit) {
+        const headers = new Headers(openCircuit.headers);
+        headers.set('X-KhoPhim-Circuit', 'OPEN');
+        return new Response(openCircuit.body, { status: 503, headers });
       }
     }
 
@@ -1865,17 +1888,24 @@ async function proxyBlvietsub(request, context) {
     });
     if (!fresh && request.method === 'GET' && typeof caches !== 'undefined') {
       contextWaitUntil(context, caches.default.put(cacheKey, response.clone()));
+      contextWaitUntil(context, caches.default.delete(failureKey));
     }
     return response;
   } catch (error) {
-    return new Response(error instanceof Error ? error.message : 'BLVietsub proxy failed', {
-      status: 502,
+    const failureResponse = new Response(error instanceof Error ? error.message : 'BLVietsub proxy failed', {
+      status: 503,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'public, max-age=0, s-maxage=30',
+        'Retry-After': '30',
+        'X-KhoPhim-Circuit': 'TRIPPED',
         ...SECURITY_HEADERS,
       },
     });
+    if (!fresh && request.method === 'GET' && typeof caches !== 'undefined') {
+      contextWaitUntil(context, caches.default.put(failureKey, failureResponse.clone()));
+    }
+    return failureResponse;
   }
 }
 
@@ -1894,6 +1924,7 @@ async function proxyMovieDetail(request, context) {
   upstreamUrl.searchParams.set('slug', slug);
   if (refresh) upstreamUrl.searchParams.set('refresh', '1');
   const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}`, { method: 'GET' });
+  const failureKey = new Request(`${SITE_URL}/__circuit/movie-detail/${encodeURIComponent(slug)}`, { method: 'GET' });
 
   try {
     if (!refresh && request.method === 'GET' && typeof caches !== 'undefined') {
@@ -1902,6 +1933,12 @@ async function proxyMovieDetail(request, context) {
         const headers = new Headers(cached.headers);
         headers.set('X-KhoPhim-Detail-Cache', 'HIT');
         return new Response(cached.body, { status: cached.status, headers });
+      }
+      const openCircuit = await caches.default.match(failureKey);
+      if (openCircuit) {
+        const headers = new Headers(openCircuit.headers);
+        headers.set('X-KhoPhim-Circuit', 'OPEN');
+        return new Response(openCircuit.body, { status: 503, headers });
       }
     }
 
@@ -1919,13 +1956,24 @@ async function proxyMovieDetail(request, context) {
     const response = new Response(upstream.body, { status: upstream.status, headers });
     if (!refresh && request.method === 'GET' && upstream.ok && typeof caches !== 'undefined') {
       contextWaitUntil(context, caches.default.put(cacheKey, response.clone()));
+      contextWaitUntil(context, caches.default.delete(failureKey));
     }
     return response;
   } catch (error) {
-    return new Response(JSON.stringify({ status: false, message: error instanceof Error ? error.message : 'Detail unavailable' }), {
+    const failureResponse = new Response(JSON.stringify({ status: false, message: error instanceof Error ? error.message : 'Detail unavailable' }), {
       status: 503,
-      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'public, max-age=0, s-maxage=15',
+        'Retry-After': '15',
+        'X-KhoPhim-Circuit': 'TRIPPED',
+        ...SECURITY_HEADERS,
+      },
     });
+    if (!refresh && request.method === 'GET' && typeof caches !== 'undefined') {
+      contextWaitUntil(context, caches.default.put(failureKey, failureResponse.clone()));
+    }
+    return failureResponse;
   }
 }
 

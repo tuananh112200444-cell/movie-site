@@ -14,10 +14,13 @@
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
 /
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=300
 
 /phim/*
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=300
+
+/xem-phim/*
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=30, stale-while-revalidate=120
 
 /search*
   Cache-Control: public, max-age=30, s-maxage=120, stale-while-revalidate=300
@@ -120,4 +123,4 @@
   Content-Type: text/plain; charset=utf-8
 
 /index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=300

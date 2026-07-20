@@ -44,7 +44,7 @@ function ContinueCard({
     <div className="group relative flex items-center gap-2 sm:gap-4 p-2 sm:p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.05] transition-all duration-200">
       {/* Thumbnail + Progress */}
       <Link
-        to={`/phim/${encodeURIComponent(entry.slug)}${progressInfo && progressInfo.epSlug !== 'full' ? `?tap=${encodeURIComponent(progressInfo.epSlug)}` : ''}`}
+        to={`/xem-phim/${encodeURIComponent(entry.slug)}${progressInfo && progressInfo.epSlug !== 'full' ? `/${encodeURIComponent(progressInfo.epSlug)}` : ''}`}
         className="relative flex-shrink-0 w-[120px] sm:w-[180px] md:w-[220px] aspect-[16/9] rounded-lg overflow-hidden bg-[#1a1d27] block"
       >
         <img
@@ -172,7 +172,7 @@ function ContinueCard({
         {/* Hover actions */}
         <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <Link
-            to={`/phim/${encodeURIComponent(entry.slug)}${progressInfo && progressInfo.epSlug !== 'full' ? `?tap=${encodeURIComponent(progressInfo.epSlug)}` : ''}`}
+            to={`/xem-phim/${encodeURIComponent(entry.slug)}${progressInfo && progressInfo.epSlug !== 'full' ? `/${encodeURIComponent(progressInfo.epSlug)}` : ''}`}
             className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
           >
             <i className="ri-play-circle-line" />

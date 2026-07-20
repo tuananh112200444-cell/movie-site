@@ -9,12 +9,6 @@ import type { Movie } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
 
 /* â”€â”€ Helpers â”€â”€ */
-function getViewerCount(rank: number): string {
-  const base = [18600, 14200, 11500, 8900, 7200, 5600, 4100, 3200, 2400, 1700];
-  const count = (base[rank] ?? 900) + Math.floor(Math.sin(rank * 7.3) * 400 + 400);
-  return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
-}
-
 function timeAgo(dateStr: string): string {
   if (!dateStr) return '';
   const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
@@ -158,8 +152,8 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`
-                whitespace-nowrap px-3.5 py-1.5 rounded-md text-sm font-semibold
-                transition-all duration-200 cursor-pointer flex-shrink-0
+                min-h-11 whitespace-nowrap px-3.5 py-2 rounded-md text-sm font-semibold
+                transition-all duration-200 cursor-pointer flex-shrink-0 touch-manipulation
                 ${active
                   ? 'bg-white text-black shadow-lg shadow-black/25'
                   : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80 border border-white/10'
@@ -245,8 +239,8 @@ interface TrendingCardProps {
 
 function TrendingCard({ movie, rank }: TrendingCardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 520, 88),
-    getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 520, 88),
+    getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 240, 78),
+    getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 240, 78),
     isImagePreloaded(getPosterUrl(movie.thumb_url || movie.poster_url)),
   );
   const ep = getEpInfo(movie.episode_current);
@@ -363,13 +357,10 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
               </span>
             </div>
 
-            {/* â”€â”€ Views + time (bottom-right) â”€â”€ */}
+            {/* Freshness is factual; never present generated viewer counts as analytics. */}
             <div className="absolute bottom-2 right-2 z-[12] flex flex-col items-end gap-0.5">
-              <span className="text-[9px] md:text-[10px] font-semibold text-white/60 bg-black/40 px-1.5 py-0.5 rounded-md">
-                {getViewerCount(rank)} xem
-              </span>
               {mTime && (
-                <span className="text-[9px] text-green-500/70 hidden md:block">
+                <span className="rounded-md bg-black/55 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300/85">
                   {timeAgo(mTime)}
                 </span>
               )}

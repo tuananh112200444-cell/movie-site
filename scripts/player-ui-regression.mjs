@@ -7,6 +7,9 @@ const detailProxy = fs.readFileSync('supabase/functions/movie-detail-proxy/index
 const fullscreenUtils = fs.readFileSync('src/utils/playerFullscreen.ts', 'utf8');
 const globalCss = fs.readFileSync('src/index.css', 'utf8');
 const playerSection = fs.readFileSync('src/pages/movie-detail/components/MovieDetailPlayerSection.tsx', 'utf8');
+const moviePage = fs.readFileSync('src/pages/movie-detail/page.tsx', 'utf8');
+const router = fs.readFileSync('src/router/config.tsx', 'utf8');
+const continueWatching = fs.readFileSync('src/pages/home/components/ContinueWatching.tsx', 'utf8');
 
 const checks = [
   [hls.includes('document.fullscreenEnabled === true && el.requestFullscreen'), 'HLS player must only use a confirmed native fullscreen API'],
@@ -36,7 +39,14 @@ const checks = [
   [movieApi.includes("case 'stable_embed':\n      return TRUSTED_PLATFORM_SOURCE_BONUS + 60;"), 'Known stable embeds must outrank opaque Dailymotion embeds'],
   [!movieApi.includes('DAILYMOTION_PREFERRED_SOURCE_BONUS'), 'Dailymotion must not receive duplicate reliability and server bonuses'],
   [playerSection.includes('const activeMatch = activeServerData.find') && playerSection.includes('onSelectEp(activeMatch);'), 'Episode switching must preserve the source explicitly selected by the viewer'],
-  [playerSection.includes('`${episodes.length - 1} nguồn dự phòng sẵn sàng`'), 'Source summary must exclude the active server from the backup count'],
+  [playerSection.includes('`${selectableServerOptions.length - 1} nguồn dự phòng cho tập này`'), 'Source summary must count only backups that contain the active episode'],
+  [playerSection.includes('supportsActiveEpisode') && playerSection.includes('selectableServerOptions'), 'Source picker must hide servers that cannot play the active episode'],
+  [router.includes("path: '/xem-phim/:slug'") && router.includes("path: '/xem-phim/:slug/:episode'"), 'Dedicated watch routes must support movie and episode URLs'],
+  [moviePage.includes("location.pathname.startsWith('/xem-phim/')"), 'Movie page must distinguish information and watch modes'],
+  [moviePage.includes('noIndex={true}') && moviePage.includes('canonical={`/phim/${slug'), 'Watch pages must be noindex and canonicalize to movie information'],
+  [moviePage.includes('const MovieDetailPlayerSection = lazy('), 'Player UI must be lazy-loaded away from the information page'],
+  [continueWatching.includes('`/xem-phim/${encodeURIComponent(entry.slug)}'), 'Continue-watching links must open the dedicated player'],
+  [moviePage.includes('requestedEpisodeNumber') && moviePage.includes('epSortKey(episode) === requestedEpisodeNumber'), 'Episode URLs must match equivalent slugs such as 3 and tap-03 across sources'],
 ];
 
 const failures = checks.filter(([ok]) => !ok).map(([, message]) => message);

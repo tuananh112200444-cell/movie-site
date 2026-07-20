@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-07-19T03:12:32.045Z",
+  "started_at": "2026-07-20T16:32:51.553Z",
   "status": "passed",
   "steps": [
     {
@@ -7,57 +7,64 @@
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 1578
+      "elapsed_ms": 1995
     },
     {
       "name": "security:supabase",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 1073
+      "elapsed_ms": 1419
+    },
+    {
+      "name": "schema:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 848
     },
     {
       "name": "type-check",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 13900
+      "elapsed_ms": 34723
     },
     {
       "name": "build",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 28458
+      "elapsed_ms": 32142
     },
     {
       "name": "search:test",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 10119
+      "elapsed_ms": 11060
     },
     {
       "name": "movie:data:test",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 201394
+      "elapsed_ms": 202076
     },
     {
       "name": "watch:test",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 548
+      "elapsed_ms": 707
     },
     {
       "name": "diagnostics:test",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 1087
+      "elapsed_ms": 1110
     }
   ],
-  "finished_at": "2026-07-19T03:16:50.208Z"
+  "finished_at": "2026-07-20T16:37:37.639Z"
 }

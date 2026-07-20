@@ -54,6 +54,7 @@ function trackBannerClick(pagePath: string) {
 
 export default function StickyBanner() {
   const location = useLocation();
+  const [bannerReady, setBannerReady] = useState(false);
   const [visible, setVisible] = useState(true);
   const [dismissed, setDismissed] = useState(() => {
     try {
@@ -62,20 +63,29 @@ export default function StickyBanner() {
       return false;
     }
   });
-  const [imageReady, setImageReady] = useState(false);
-
-  useEffect(() => {
-    if (dismissed) return;
-    // Advertising is not part of the critical viewing path. Reserving the
-    // aspect ratio prevents CLS while the delayed request protects LCP.
-    const id = window.setTimeout(() => setImageReady(true), 12_000);
-    return () => window.clearTimeout(id);
-  }, [dismissed]);
-
   useEffect(() => {
     if (dismissed) return;
     setVisible(true);
   }, [location.pathname, dismissed]);
+
+  useEffect(() => {
+    if (dismissed) return undefined;
+
+    // The animated campaign asset is close to 1 MB. Keep the banner's space and
+    // call-to-action visible immediately, but let the hero/LCP image use the
+    // constrained mobile connection first.
+    let timer = 0;
+    const schedule = () => {
+      timer = window.setTimeout(() => setBannerReady(true), 1_800);
+    };
+    if (document.readyState === 'complete') schedule();
+    else window.addEventListener('load', schedule, { once: true });
+
+    return () => {
+      window.removeEventListener('load', schedule);
+      window.clearTimeout(timer);
+    };
+  }, [dismissed]);
 
   const handleClose = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -109,7 +119,7 @@ export default function StickyBanner() {
             className="block active:scale-[0.99] transition-transform cursor-pointer"
           >
             <div className="aspect-[728/90] max-h-[46px] w-full bg-white/[0.025] sm:max-h-[62px] lg:max-h-[48px]">
-              {imageReady && (
+              {bannerReady ? (
                 <img
                   src="/banners/winaz-728x90-20260715.gif"
                   alt="WinAZ banner"
@@ -119,6 +129,13 @@ export default function StickyBanner() {
                   width={728}
                   height={90}
                 />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center bg-gradient-to-r from-[#101a3f] via-[#18345f] to-[#101a3f] text-xs font-black tracking-[0.22em] text-white/80"
+                  aria-label="WinAZ banner đang tải"
+                >
+                  WINAZ
+                </div>
               )}
             </div>
 
@@ -130,7 +147,7 @@ export default function StickyBanner() {
           <button
             onClick={handleClose}
             type="button"
-            className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center rounded-full bg-black/60 text-white/70 hover:bg-black/80 hover:text-white transition-all active:scale-90 cursor-pointer z-20"
+            className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-full bg-black/35 text-white/80 hover:bg-black/70 hover:text-white transition-all active:scale-90 cursor-pointer z-20 touch-manipulation"
             aria-label="Đóng banner"
             title="Đóng"
           >

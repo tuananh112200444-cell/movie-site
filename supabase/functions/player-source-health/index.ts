@@ -150,7 +150,10 @@ function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
       current.score += eventType === 'stall_fatal' ? 5 : 4;
     } else if (SOURCE_RECOVERY_EVENTS.has(eventType)) {
       current.recovery += 1;
-      current.score -= 1;
+      // A retry/recovery event is evidence that the player recovered, but it
+      // does not undo a fatal failure emitted by another viewer. Previously a
+      // busy, unstable host could accumulate enough retries to cancel every
+      // critical event and incorrectly look healthy.
     }
 
     addUnique(current.server_names, event.server_name);

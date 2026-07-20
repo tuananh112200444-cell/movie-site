@@ -2,7 +2,7 @@
 import { memo } from 'react';
 
 const STATS = [
-  { value: '50,000+', label: 'Bộ Phim' },
+  { value: 'Đa dạng', label: 'Thư Viện Phim' },
   { value: 'HD/4K', label: 'Chất Lượng' },
   { value: '100%', label: 'Miễn Phí' },
   { value: '0', label: 'Quảng Cáo' },
@@ -121,15 +121,15 @@ function Footer() {
               </div>
             </div>
             <p className="text-white/60 text-sm leading-relaxed mb-2">
-              <span className="text-white/60 font-medium">KhoPhim</span> — kho phim online miễn phí lớn nhất Việt Nam.
+              <span className="text-white/60 font-medium">KhoPhim</span> — website khám phá và xem phim tiếng Việt.
             </p>
             <p className="text-white/55 text-xs leading-relaxed mb-4 sm:mb-5">
-              Truy cập <a href="https://khophim.org" className="text-red-300 underline decoration-red-300/60 underline-offset-2 hover:text-red-300 transition-colors">khophim.org</a> để xem hơn 50,000 bộ phim vietsub HD, Full HD không quảng cáo, cập nhật hàng ngày.
+              Truy cập <a href="https://khophim.org" className="text-red-300 underline decoration-red-300/60 underline-offset-2 hover:text-red-300 transition-colors">khophim.org</a> để tìm phim theo tên, thể loại, quốc gia và trạng thái cập nhật.
             </p>
 
             {/* Quick search box */}
             <Link to="/search"
-              className="flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5 mb-4 sm:mb-5 hover:border-red-500/30 hover:bg-white/[0.07] transition-all group cursor-pointer active:scale-[0.98]">
+              className="flex min-h-11 items-center gap-2.5 bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2.5 mb-4 sm:mb-5 hover:border-red-500/30 hover:bg-white/[0.07] transition-all group cursor-pointer active:scale-[0.98] touch-manipulation">
               <i className="ri-search-line text-sm text-white/55 group-hover:text-red-300 transition-colors" />
               <span className="text-[13px] text-white/55 group-hover:text-white/80 transition-colors">Tìm kiếm phim...</span>
             </Link>
@@ -137,9 +137,9 @@ function Footer() {
             {/* Social */}
             <div className="flex items-center gap-2">
               {SOCIAL_LINKS.map(({ href, icon, label, color }) => (
-                <a key={href} href={href} target="_blank" rel="noopener noreferrer nofollow"
+                <a key={href} href={href} target="_blank" rel={label === 'TikTok' ? 'me noopener noreferrer' : 'noopener noreferrer nofollow'}
                   title={label}
-                  className={`w-9 h-9 flex items-center justify-center bg-white/[0.04] text-white/60 border border-white/[0.06] rounded-xl transition-all cursor-pointer active:scale-90 active:opacity-70 ${color}`}>
+                  className={`flex h-11 w-11 items-center justify-center bg-white/[0.04] text-white/60 border border-white/[0.06] rounded-xl transition-all cursor-pointer active:scale-90 active:opacity-70 touch-manipulation ${color}`}>
                   <i className={`${icon} text-sm`} />
                   <span className="sr-only">{label}</span>
                 </a>
@@ -157,7 +157,7 @@ function Footer() {
               {CAT_LINKS.map((item) => (
                 <li key={item.to}>
                   <Link to={item.to}
-                    className="text-[12px] sm:text-[13px] text-white/60 hover:text-red-300 active:text-red-300 transition-colors flex items-center gap-2 group active:scale-[0.98]">
+                    className="flex min-h-11 items-center gap-2 text-[12px] text-white/60 transition-colors hover:text-red-300 active:scale-[0.98] active:text-red-300 sm:min-h-0 sm:text-[13px] group touch-manipulation">
                     <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
                       <i className={`${item.icon} text-[10px] sm:text-xs text-white/45 group-hover:text-red-300 transition-colors`} />
                     </span>
@@ -178,7 +178,7 @@ function Footer() {
               {COUNTRY_LINKS.map((item) => (
                 <li key={item.to}>
                   <Link to={item.to}
-                    className="text-[12px] sm:text-[13px] text-white/60 hover:text-red-300 active:text-red-300 transition-colors flex items-center gap-2.5 group active:scale-[0.98]">
+                    className="flex min-h-11 items-center gap-2.5 text-[12px] text-white/60 transition-colors hover:text-red-300 active:scale-[0.98] active:text-red-300 sm:min-h-0 sm:text-[13px] group touch-manipulation">
                     <span className="text-sm sm:text-base leading-none">{item.flag}</span>
                     {item.label}
                   </Link>
@@ -197,7 +197,7 @@ function Footer() {
               {GENRE_LINKS.map((item) => (
                 <li key={item.to}>
                   <Link to={item.to}
-                    className="text-[12px] sm:text-[13px] text-white/60 hover:text-red-300 active:text-red-300 transition-colors flex items-center gap-2 group active:scale-[0.98]">
+                    className="flex min-h-11 items-center gap-2 text-[12px] text-white/60 transition-colors hover:text-red-300 active:scale-[0.98] active:text-red-300 sm:min-h-0 sm:text-[13px] group touch-manipulation">
                     <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
                       <i className={`${item.icon} text-[10px] sm:text-xs text-white/45 group-hover:text-red-300 transition-colors`} />
                     </span>
@@ -216,7 +216,7 @@ function Footer() {
               {SEO_LANDING_LINKS.map((item) => (
                 <li key={item.to}>
                   <Link to={item.to}
-                    className="text-[12px] sm:text-[13px] text-white/60 hover:text-amber-300 active:text-amber-300 transition-colors flex items-center gap-2 group active:scale-[0.98]">
+                    className="flex min-h-11 items-center gap-2 text-[12px] text-white/60 transition-colors hover:text-amber-300 active:scale-[0.98] active:text-amber-300 sm:min-h-0 sm:text-[13px] group touch-manipulation">
                     <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
                       <i className={`${item.icon} text-[10px] sm:text-xs text-white/45 group-hover:text-amber-300 transition-colors`} />
                     </span>

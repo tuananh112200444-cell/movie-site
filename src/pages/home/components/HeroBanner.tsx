@@ -22,6 +22,22 @@ function getViewCount(name: string): string {
   if (base >= 1000000) return `${(base / 1000000).toFixed(1)}M`;
   return `${Math.round(base / 1000)}K`;
 }
+
+function getDisplayTime(value?: string): string | null {
+  const time = String(value ?? '').trim();
+  if (!time) return null;
+  const normalized = time.toLocaleLowerCase('vi-VN');
+  if (
+    normalized === 'undefined' ||
+    normalized === 'null' ||
+    normalized.includes('undefined') ||
+    normalized.includes('? phút') ||
+    normalized === '0 phút' ||
+    normalized === '0 phút/tập' ||
+    normalized === 'đang cập nhật'
+  ) return null;
+  return time;
+}
 function getMovieDetailHref(movie: MovieItem): string {
   const href = movieDetailUrl(movie.slug);
   const isOphimSource =
@@ -73,10 +89,16 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
   if (featured.length === 0) return null;
 
   const active = featured[activeIndex];
-  const backgroundWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 720 : 1360;
+  // A 480px request becomes a ~648–768px WebP after DPR scaling, which is
+  // already sharp for the full-width mobile hero without downloading a near
+  // desktop-sized backdrop on constrained connections.
+  const isMobileHero = typeof window !== 'undefined' && window.innerWidth < 640;
+  const backgroundWidth = isMobileHero ? 420 : 1360;
+  const backgroundQuality = isMobileHero ? 78 : 82;
   const activePosterUrl = getOptimizedImageUrl(active?.thumb_url || active?.poster_url, 620, 86);
   const rating = getStableRating(active.name ?? '');
   const viewCount = getViewCount(active.name ?? '');
+  const displayTime = getDisplayTime(active.time);
   const activeDetailHref = getMovieDetailHref(active);
   const favored = isFav(active._id);
 
@@ -86,7 +108,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       {/* Only render active + next slides to reduce initial DOM & image count */}
       <MemoSlideBackground
         key={active._id}
-        src={getOptimizedImageUrl(active.poster_url || active.thumb_url, backgroundWidth, 82)}
+        src={getOptimizedImageUrl(active.poster_url || active.thumb_url, backgroundWidth, backgroundQuality)}
         alt={active.name}
         active={true}
         priority={true}
@@ -146,10 +168,10 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
               <span className="flex items-center gap-1 text-[9px] md:text-xs text-white/50">
                 <i className="ri-eye-line text-white/30 text-[10px]" />{viewCount} lượt xem
               </span>
-              {active.time && (
+              {displayTime && (
                 <span className="flex items-center gap-1 text-[9px] md:text-xs text-white/50">
                   <span className="text-white/20">·</span>
-                  <i className="ri-time-line text-white/30 text-[10px]" />{active.time}
+                  <i className="ri-time-line text-white/30 text-[10px]" />{displayTime}
                 </span>
               )}
               {active.episode_current && active.episode_current.toLowerCase() !== 'trailer' && (
@@ -179,19 +201,19 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
 
             <div className="hero-cta-enter flex items-center gap-2 md:gap-3">
               <Link to={movieDetailUrl(active.slug)}
-                className="group flex min-h-10 items-center gap-2 bg-red-500 hover:bg-red-600 text-white text-xs md:text-sm font-bold px-3.5 py-2 sm:px-6 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-200 hover:scale-[1.04] active:scale-[0.97] whitespace-nowrap shadow-lg shadow-red-500/30">
+                className="group flex min-h-11 items-center gap-2 bg-red-500 hover:bg-red-600 text-white text-xs md:text-sm font-bold px-3.5 py-2 sm:px-6 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-200 hover:scale-[1.04] active:scale-[0.97] whitespace-nowrap shadow-lg shadow-red-500/30 touch-manipulation">
                 <div className="w-4 h-4 md:w-5 md:h-5 flex items-center justify-center bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
                   <i className="ri-play-fill text-[10px] md:text-xs ml-0.5" />
                 </div>
                 Xem Ngay
               </Link>
               <Link to={activeDetailHref}
-                className="flex min-h-10 items-center gap-1.5 bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs md:text-sm font-semibold px-3 py-2 md:gap-2 md:px-5 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 border border-white/[0.12] hover:border-white/25 hover:scale-[1.02] active:scale-[0.97] whitespace-nowrap">
+                className="flex min-h-11 items-center gap-1.5 bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs md:text-sm font-semibold px-3 py-2 md:gap-2 md:px-5 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 border border-white/[0.12] hover:border-white/25 hover:scale-[1.02] active:scale-[0.97] whitespace-nowrap touch-manipulation">
                 <i className="ri-information-line text-white/60 text-xs" />Chi Tiết
               </Link>
               <button
                 onClick={(e) => { e.preventDefault(); toggle(active); }}
-                className={`flex h-10 w-10 items-center justify-center rounded-lg sm:w-10 sm:h-10 sm:rounded-xl transition-all duration-200 border cursor-pointer whitespace-nowrap active:scale-[0.93] ${
+                className={`flex h-11 w-11 items-center justify-center rounded-lg sm:rounded-xl transition-all duration-200 border cursor-pointer whitespace-nowrap active:scale-[0.93] touch-manipulation ${
                   favored
                     ? 'bg-red-500/20 border-red-500/40 text-red-400 hover:bg-red-500/30'
                     : 'bg-white/[0.08] border-white/[0.12] text-white/60 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10'
@@ -257,13 +279,13 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
         ))}
       </div>
 
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 rounded-full bg-black/24 px-2 py-1 md:hidden" role="tablist" aria-label="Điều hướng slide">
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex rounded-full bg-black/24 md:hidden" role="tablist" aria-label="Điều hướng slide">
         {featured.map((m, i) => (
           <button key={i} onClick={() => handleSelectSlide(i)}
             role="tab" aria-selected={i === activeIndex} aria-label={`Chuyển đến slide ${i + 1}: ${m.name}`}
-            className={`rounded-full transition-all duration-300 cursor-pointer active:scale-90 ${
-              i === activeIndex ? 'h-1.5 w-4 bg-red-500' : 'h-1.5 w-1.5 bg-white/35 active:bg-white/60'
-            }`} />
+            className="flex h-11 w-11 items-center justify-center rounded-full transition-transform duration-300 cursor-pointer active:scale-90 touch-manipulation">
+            <span className={`block rounded-full transition-all duration-300 ${i === activeIndex ? 'h-1.5 w-4 bg-red-500' : 'h-1.5 w-1.5 bg-white/35'}`} />
+          </button>
         ))}
       </div>
     </div>

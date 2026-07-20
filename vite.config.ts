@@ -1,11 +1,38 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import AutoImport from "unplugin-auto-import/vite";
 import { compression } from "vite-plugin-compression2";
 
 const base = process.env.BASE_PATH || "/";
 const isPreview = process.env.IS_PREVIEW ? true : false;
+
+function homeHeroPreloadPlugin() {
+  return {
+    name: 'khophim-home-hero-preload',
+    transformIndexHtml() {
+      try {
+        const payload = JSON.parse(readFileSync(resolve(__dirname, 'public/home-fallback.json'), 'utf8')) as {
+          sections?: { trending?: Array<{ poster_url?: string; thumb_url?: string }> };
+        };
+        const movie = payload.sections?.trending?.[0];
+        const path = String(movie?.poster_url || movie?.thumb_url || '').trim();
+        if (!path) return [];
+        const original = /^https?:\/\//i.test(path)
+          ? path
+          : `https://img.ophim.live/uploads/movies/${path.replace(/^\/+/, '')}`;
+        const optimized = (width: number) => `https://wsrv.nl/?url=${encodeURIComponent(original)}&w=${width}&q=82&output=webp&fit=cover&we`;
+        return [
+          { tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'image', href: optimized(768), media: '(max-width: 639px)', fetchpriority: 'high' } },
+          { tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'image', href: optimized(1680), media: '(min-width: 640px)', fetchpriority: 'high' } },
+        ];
+      } catch {
+        return [];
+      }
+    },
+  };
+}
 // https://vite.dev/config/
 export default defineConfig({
   define: {
@@ -16,6 +43,7 @@ export default defineConfig({
     __READDY_AI_DOMAIN__: JSON.stringify(process.env.READDY_AI_DOMAIN || ""),
   },
   plugins: [
+    homeHeroPreloadPlugin(),
     react(),
     // Gzip + Brotli compression giup giam manh dung luong truyen tai.
     compression({

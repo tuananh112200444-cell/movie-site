@@ -19,7 +19,10 @@ function parseRootMarginPx(rootMargin: string): number {
 }
 
 function shouldTriggerImmediately(sectionIndex: number, hasData: boolean) {
-  return isMobileViewport() && hasData && sectionIndex <= 1;
+  // The discovery, quick-picks and trending blocks already fill the initial
+  // mobile viewport. Rendering category shelves immediately made dozens of
+  // offscreen posters compete with the hero LCP.
+  return !isMobileViewport() && hasData && sectionIndex === 0;
 }
 
 function withSectionTimeout<T>(promise: Promise<T>, timeoutMs = 8000): Promise<T> {
@@ -90,13 +93,18 @@ export default function LazyMovieSection({
   useEffect(() => {
     const el = ref.current;
     if (!el || triggered) return;
-    const observerRootMargin = isMobileViewport() ? '480px' : rootMargin;
+    // Mobile has less bandwidth and a shorter viewport. A smaller look-ahead
+    // prevents several poster shelves from starting together while still
+    // preparing the next shelf before it becomes visible.
+    const observerRootMargin = isMobileViewport() ? '240px' : rootMargin;
     const marginPx = parseRootMarginPx(observerRootMargin);
 
     const checkPosition = () => {
       const rect = el.getBoundingClientRect();
       const viewportH = window.innerHeight || document.documentElement.clientHeight || 0;
-      if (rect.top <= viewportH + marginPx && rect.bottom >= -marginPx) {
+      // One-way progressive queue: once the visitor reaches or passes this
+      // shelf, it must render even if a fast swipe skipped over its bounds.
+      if (rect.top <= viewportH + marginPx) {
         setTriggered(true);
       }
     };
@@ -187,7 +195,18 @@ export default function LazyMovieSection({
     };
   }, [fallbackAttempted, fetchKey, fetchType, hasData, limit, triggered]);
 
-  const prioritizeFirstRow = sectionIndex === 0;
+  useEffect(() => {
+    if (!triggered || hasData || fallbackMovies.length > 0) return;
+    const retryWhenUsable = () => setFallbackAttempted(false);
+    window.addEventListener('online', retryWhenUsable);
+    window.addEventListener('pageshow', retryWhenUsable);
+    return () => {
+      window.removeEventListener('online', retryWhenUsable);
+      window.removeEventListener('pageshow', retryWhenUsable);
+    };
+  }, [fallbackMovies.length, hasData, triggered]);
+
+  const prioritizeFirstRow = sectionIndex === 0 && !isMobileViewport();
   const sectionMovies = hasData ? (propMovies ?? []) : fallbackMovies;
   const sectionLoading = hasData ? Boolean(propLoading) : fallbackLoading;
 

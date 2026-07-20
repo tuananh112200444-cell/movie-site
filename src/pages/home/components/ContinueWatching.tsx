@@ -66,8 +66,8 @@ function HistoryCard({ entry, onRemove }: HistoryCardProps) {
   const [imgError, setImgError] = useState(false);
 
   const watchUrl = entry.lastEpSlug
-    ? `/xem/${entry.slug}?ep=${entry.lastEpSlug}&server=0`
-    : `/xem/${entry.slug}`;
+    ? `/xem-phim/${encodeURIComponent(entry.slug)}/${encodeURIComponent(entry.lastEpSlug)}`
+    : `/xem-phim/${encodeURIComponent(entry.slug)}`;
 
   const progress = entry.watchedDuration && entry.watchedDuration > 0
     ? Math.min((entry.watchedTime ?? 0) / entry.watchedDuration, 1)

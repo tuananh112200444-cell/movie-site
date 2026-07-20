@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { MovieItem } from '../../../types/movie';
-import { getOptimizedImageUrl } from '../../../services/movieApi';
+import { applyImageElementFallback, getOptimizedImageUrl } from '../../../services/movieApi';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
 
 interface QueerUniverseHeroProps {
@@ -134,7 +134,7 @@ function QueerUniverseHero({ movies, loading }: QueerUniverseHeroProps) {
 
           <Link to={activeHref} className="hidden lg:block relative w-[150px] xl:w-[180px] flex-shrink-0 group" style={{ aspectRatio: '2/3' }}>
             <div className="relative h-full w-full overflow-hidden rounded-2xl border border-white/14 bg-white/[0.06] shadow-[0_26px_70px_-32px_rgba(34,211,238,0.75)]">
-              <img src={poster} alt={active.name} className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105" />
+              <img src={poster} alt={active.name} onError={(event) => applyImageElementFallback(event.currentTarget)} className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
               <div className="absolute bottom-0 left-0 right-0 p-3">
                 <p className="line-clamp-2 text-xs font-black text-white">{active.name}</p>
@@ -161,6 +161,7 @@ function QueerUniverseHero({ movies, loading }: QueerUniverseHeroProps) {
               alt={movie.name}
               className="absolute inset-0 h-full w-full object-cover object-top"
               loading={index === 0 ? 'eager' : 'lazy'}
+              onError={(event) => applyImageElementFallback(event.currentTarget)}
             />
           </button>
         ))}
@@ -193,6 +194,10 @@ const MemoHeroImage = memo(function HeroImage({ src, alt }: { src: string; alt: 
         decoding="async"
         fetchPriority="high"
         onLoad={() => setLoaded(true)}
+        onError={(event) => {
+          applyImageElementFallback(event.currentTarget);
+          setLoaded(true);
+        }}
       />
       {!loaded && <div className="absolute inset-0 bg-[#111827] animate-pulse" />}
     </>

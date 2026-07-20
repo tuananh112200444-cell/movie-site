@@ -87,6 +87,7 @@ export interface EpisodeData {
   source_response_time_ms?: number;
   source_failure_count?: number;
   source_priority?: number;
+  audio_type?: 'vietsub' | 'thuyetminh' | 'longtieng' | 'raw';
   is_scheduled?: boolean;
   scheduled_target_at?: string;
   scheduled_note?: string;

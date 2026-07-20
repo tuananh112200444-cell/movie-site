@@ -80,7 +80,7 @@ export default function Year2026Banner() {
           <div className="flex items-center gap-2 md:gap-3 justify-center md:justify-start flex-wrap">
             <Link
               to="/phim-hot-2026"
-              className="group/btn flex items-center gap-1.5 md:gap-2 bg-red-500 hover:bg-red-600 text-white text-xs md:text-sm font-bold px-3 py-2 md:px-5 md:py-2.5 rounded-lg md:rounded-xl transition-all hover:scale-[1.03] active:scale-[0.97] whitespace-nowrap shadow-lg shadow-red-500/25 hover:shadow-red-500/40 relative overflow-hidden"
+              className="group/btn flex min-h-11 items-center gap-1.5 md:gap-2 bg-red-500 hover:bg-red-600 text-white text-xs md:text-sm font-bold px-3 py-2 md:px-5 md:py-2.5 rounded-lg md:rounded-xl transition-all hover:scale-[1.03] active:scale-[0.97] whitespace-nowrap shadow-lg shadow-red-500/25 hover:shadow-red-500/40 relative overflow-hidden touch-manipulation"
             >
               {/* Button shine on hover — CSS transform thay vì background-position */}
               <span
@@ -94,7 +94,7 @@ export default function Year2026Banner() {
             </Link>
             <Link
               to="/phim-moi-nhat"
-              className="flex items-center gap-1.5 md:gap-2 bg-white/[0.06] hover:bg-white/[0.10] text-white/70 hover:text-white text-xs md:text-sm font-medium px-3 py-2 md:px-5 md:py-2.5 rounded-lg md:rounded-xl transition-all border border-white/[0.08] hover:border-white/20 whitespace-nowrap"
+              className="flex min-h-11 items-center gap-1.5 md:gap-2 bg-white/[0.06] hover:bg-white/[0.10] text-white/70 hover:text-white text-xs md:text-sm font-medium px-3 py-2 md:px-5 md:py-2.5 rounded-lg md:rounded-xl transition-all border border-white/[0.08] hover:border-white/20 whitespace-nowrap touch-manipulation"
             >
               <i className="ri-refresh-line text-sm" />
               Phim Mới Cập Nhật

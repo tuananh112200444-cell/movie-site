@@ -6,14 +6,8 @@ import HeroBanner from './components/HeroBanner';
 import LazyMovieSection from './components/LazyMovieSection';
 import ContinueWatching from './components/ContinueWatching';
 import TrendingSection from './components/TrendingSection';
-import TopCinemaMoviesSection from './components/TopCinemaMoviesSection';
-import Top10TodaySection from './components/Top10TodaySection';
-import GenreSEOSection from './components/GenreSEOSection';
-import TopRatedSection from './components/TopRatedSection';
 import Year2026Banner from './components/Year2026Banner';
 import HomeDiscoverySection from './components/HomeDiscoverySection';
-import QueerUniverseHome from './components/QueerUniverseHome';
-import TrailerMoviesSection from './components/TrailerMoviesSection';
 import SEO, { SITE_URL } from '../../components/base/SEO';
 import { fetchHomePageData, getOptimizedImageUrl } from '../../services/movieApi';
 import { prefetchCriticalRoutes } from '../../utils/prefetchRoute';
@@ -22,11 +16,18 @@ import { movieDetailUrl } from '../../utils/slugEncoder';
 import { removeSmartSessionCache, setSmartSessionCache } from '../../utils/smartCache';
 import type { MovieItem } from '../../types/movie';
 import { useImageFallback } from '../../hooks/useImageFallback';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 // Lazy load bottom sections
 const FAQSection       = lazy(() => import('./components/FAQSection'));
 const AboutSection     = lazy(() => import('./components/AboutSection'));
 const SiteGuideSection = lazy(() => import('./components/SiteGuideSection'));
+const GenreSEOSection  = lazy(() => import('./components/GenreSEOSection'));
+const TopCinemaMoviesSection = lazy(() => import('./components/TopCinemaMoviesSection'));
+const Top10TodaySection = lazy(() => import('./components/Top10TodaySection'));
+const TopRatedSection = lazy(() => import('./components/TopRatedSection'));
+const TrailerMoviesSection = lazy(() => import('./components/TrailerMoviesSection'));
+const QueerUniverseHome = lazy(() => import('./components/QueerUniverseHome'));
 
 function VietnamPoetryBanner() {
   return (
@@ -235,7 +236,21 @@ function useInViewOnce(rootMargin = '200px') {
       { rootMargin }
     );
     obs.observe(el);
-    return () => obs.disconnect();
+    const checkPosition = () => {
+      const rect = el.getBoundingClientRect();
+      const margin = Number.parseInt(rootMargin, 10) || 200;
+      if (rect.top <= window.innerHeight + margin) setVisible(true);
+    };
+    checkPosition();
+    window.addEventListener('scroll', checkPosition, { passive: true });
+    window.addEventListener('resize', checkPosition);
+    window.addEventListener('pageshow', checkPosition);
+    return () => {
+      obs.disconnect();
+      window.removeEventListener('scroll', checkPosition);
+      window.removeEventListener('resize', checkPosition);
+      window.removeEventListener('pageshow', checkPosition);
+    };
   }, [visible, rootMargin]);
   return { ref, visible };
 }
@@ -278,7 +293,7 @@ function MobileQuickCategories() {
         <Link
           key={item.href}
           to={item.href}
-          className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.05] px-3.5 text-xs font-bold text-white/82 active:scale-95"
+          className="flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.05] px-3.5 text-xs font-bold text-white/82 active:scale-95 touch-manipulation"
         >
           <i className={`${item.icon} text-red-400`} />
           {item.label}
@@ -319,7 +334,7 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
           </span>
           <h2 className="truncate text-base font-black tracking-tight text-white">Xem ngay hôm nay</h2>
         </div>
-        <Link to="/search" className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-white/52 active:text-white">
+        <Link to="/search" className="flex min-h-11 shrink-0 items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-3 text-xs font-bold text-white/52 active:text-white touch-manipulation">
           Tìm thêm
         </Link>
       </div>
@@ -380,7 +395,8 @@ function MobileQuickMovieCard({ movie, index }: { movie: MovieItem; index: numbe
 }
 
 const ALL_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
-const CRITICAL_HOME_SECTIONS = ALL_SECTIONS;
+const DESKTOP_HOME_SECTIONS = ALL_SECTIONS;
+const MOBILE_HOME_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh'];
 const HOME_CACHE_KEY = 'kp_home_proxy_v6_short';
 const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
@@ -469,6 +485,7 @@ async function loadStaticHomeFallback(signal?: AbortSignal, allowedSections?: st
 export default function Home() {
   const location = useLocation();
   const navigate = useNavigate();
+  const compactMobile = useMediaQuery('(max-width: 639px)');
   const { ref: bottomRef, visible: bottomVisible } = useInViewOnce('300px');
   const activePortal: 'movies' | 'queer' = location.pathname === QUEER_PORTAL_PATH ? 'queer' : 'movies';
 
@@ -509,7 +526,11 @@ export default function Home() {
       controller = new AbortController();
       lastHomeFetchRef.current = Date.now();
 
-      fetchHomePageData(CRITICAL_HOME_SECTIONS, { signal: controller.signal })
+      const requestedSections = window.matchMedia('(max-width: 639px)').matches
+        ? MOBILE_HOME_SECTIONS
+        : DESKTOP_HOME_SECTIONS;
+
+      fetchHomePageData(requestedSections, { signal: controller.signal })
         .then((res) => {
           if (cancelled) return;
           if (res.status) {
@@ -531,7 +552,10 @@ export default function Home() {
 
     if (!hasHomeMovies(homeDataRef.current)) {
       fallbackController = new AbortController();
-      loadStaticHomeFallback(fallbackController.signal)
+      const fallbackSections = window.matchMedia('(max-width: 639px)').matches
+        ? MOBILE_HOME_SECTIONS
+        : DESKTOP_HOME_SECTIONS;
+      loadStaticHomeFallback(fallbackController.signal, fallbackSections)
         .then((fallbackSections) => {
           if (cancelled || !hasHomeMovies(fallbackSections)) return;
           setHomeData((current) => {
@@ -582,10 +606,12 @@ export default function Home() {
     const priorityMovies = (homeData.trending ?? []).slice(0, 6);
     if (priorityMovies.length === 0) return;
 
-    const heroWidth = window.innerWidth < 640 ? 720 : window.innerWidth < 1280 ? 1080 : 1360;
+    const isMobileHero = window.innerWidth < 640;
+    const heroWidth = isMobileHero ? 420 : window.innerWidth < 1280 ? 1080 : 1360;
+    const heroQuality = isMobileHero ? 78 : 82;
     const heroUrls = priorityMovies
       .slice(0, 1)
-      .map((movie) => getOptimizedImageUrl(movie.poster_url || movie.thumb_url, heroWidth, 82))
+      .map((movie) => getOptimizedImageUrl(movie.poster_url || movie.thumb_url, heroWidth, heroQuality))
       .filter(Boolean);
     if (heroUrls[0]) injectPreloadLink(heroUrls[0]);
     preloadBatch(heroUrls.slice(0, 1), {
@@ -659,7 +685,9 @@ export default function Home() {
         />
         <Navbar />
         <div className="pt-3 lg:pt-4">
-          <QueerUniverseHome onBack={() => setActivePortal(null)} onSelectPortal={setActivePortal} />
+          <Suspense fallback={<div className="min-h-[65vh] skeleton" />}>
+            <QueerUniverseHome onBack={() => setActivePortal(null)} onSelectPortal={setActivePortal} />
+          </Suspense>
         </div>
         <Footer />
       </div>
@@ -683,71 +711,91 @@ export default function Home() {
       </div>
 
       <main className="home-desktop-shell pt-2 md:pt-7">
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-400/10 bg-emerald-400/[0.035] px-3 py-2 text-[11px] text-white/55 sm:mb-4 sm:px-4 sm:text-xs">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+            </span>
+            <span className="truncate">Kho phim được đồng bộ và kiểm tra nguồn phát tự động</span>
+          </span>
+          <Link to="/phim-moi-nhat" className="shrink-0 font-bold text-emerald-300 transition-colors hover:text-emerald-200">
+            Phim mới <i className="ri-arrow-right-line" aria-hidden="true" />
+          </Link>
+        </div>
         <HomeDiscoverySection onSelect={setActivePortal} />
         <MobileQuickCategories />
         <VietnamPoetryBanner />
         <MobileQuickMovies movies={mobileQuickMovies} loading={homeLoading} />
         <ContinueWatching />
         <TrendingSection movies={trendingMovies} loading={bannerLoading} />
-        <DeferredHomeSection minHeight={260}>
-          <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? EMPTY_MOVIES} loading={homeLoading} />
+        <DeferredHomeSection minHeight={compactMobile ? 210 : 260}>
+          <Suspense fallback={<div className="h-[210px] sm:h-[260px] skeleton" />}>
+            <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? EMPTY_MOVIES} loading={homeLoading} />
+          </Suspense>
         </DeferredHomeSection>
-        <DeferredHomeSection minHeight={240}>
-          <Top10TodaySection initialMovies={trendingMovies} loading={homeLoading} />
+        <DeferredHomeSection minHeight={compactMobile ? 210 : 240}>
+          <Suspense fallback={<div className="h-[210px] sm:h-[240px] skeleton" />}>
+            <Top10TodaySection initialMovies={trendingMovies} loading={homeLoading} />
+          </Suspense>
         </DeferredHomeSection>
-        <DeferredHomeSection minHeight={220}>
-          <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} />
+        <DeferredHomeSection minHeight={compactMobile ? 210 : 220}>
+          <Suspense fallback={<div className="h-[210px] sm:h-[220px] skeleton" />}>
+            <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} />
+          </Suspense>
         </DeferredHomeSection>
         <Year2026Banner />
         <DeferredHomeSection minHeight={180}>
-          <TrailerMoviesSection />
+          <Suspense fallback={<div className="h-[180px] skeleton" />}>
+            <TrailerMoviesSection />
+          </Suspense>
         </DeferredHomeSection>
 
         {/* Category shelves sit below the discovery/ranking sections for a cleaner viewing flow. */}
         <LazyMovieSection
-          fetchType="type" fetchKey="phim-le" limit={18}
+          fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 18}
           title="Phim Lẻ Hay" viewAllLink="/phim-le"
           cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
           movies={homeData['phim-le'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
-          fetchType="type" fetchKey="phim-bo" limit={18}
+          fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 18}
           title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
           cols={6} rootMargin="120px" sectionIndex={1} theme="trending"
           movies={homeData['phim-bo'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
-          fetchType="type" fetchKey="hoat-hinh" limit={18}
+          fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 9 : 18}
           title="Hoạt Hình Mới Nhất" viewAllLink="/hoat-hinh"
           cols={6} rootMargin="120px" sectionIndex={2} theme="anime"
           movies={homeData['hoat-hinh'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
-          fetchType="country" fetchKey="han-quoc" limit={18}
+          fetchType="country" fetchKey="han-quoc" limit={compactMobile ? 9 : 18}
           title="Phim Hàn Quốc" viewAllLink="/phim-han-quoc"
           cols={6} rootMargin="120px" sectionIndex={3} theme="kdrama"
           movies={homeData['han-quoc'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
-          fetchType="country" fetchKey="au-my" limit={18}
+          fetchType="country" fetchKey="au-my" limit={compactMobile ? 9 : 18}
           title="Phim Âu Mỹ" viewAllLink="/phim-au-my"
           cols={6} rootMargin="120px" sectionIndex={4} theme="hollywood"
           movies={homeData['au-my'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
-          fetchType="country" fetchKey="trung-quoc" limit={18}
+          fetchType="country" fetchKey="trung-quoc" limit={compactMobile ? 9 : 18}
           title="Phim Trung Quốc" viewAllLink="/phim-trung-quoc"
           cols={6} rootMargin="120px" sectionIndex={5} theme="oriental"
           movies={homeData['trung-quoc'] ?? []}
           loading={homeLoading}
         />
         <LazyMovieSection
-          fetchType="country" fetchKey="thai-lan" limit={18}
+          fetchType="country" fetchKey="thai-lan" limit={compactMobile ? 9 : 18}
           title="Phim Thái Lan" viewAllLink="/phim-thai-lan"
           cols={6} rootMargin="120px" sectionIndex={6} theme="tropical"
           movies={homeData['thai-lan'] ?? []}

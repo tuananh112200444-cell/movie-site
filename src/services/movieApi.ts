@@ -147,15 +147,17 @@ function validateOphimExactMatch(
    OPTIMIZED: chỉ gọi 2 nguồn nhanh nhất (OPhim + KKPhim)
    ════════════════════════════════════════════ */
 const LIST_SOURCES = [
-  { base: 'https://ophim1.com',  name: 'OPhim',   site: 'ophim', timeout: 5000, listEndpoint: '/v1/api/danh-sach/', mirror: 'https://ophim.tv' },
-  { base: 'https://phimapi.com', name: 'KKPhim',  site: 'phimapi', timeout: 5000, listEndpoint: '/v1/api/danh-sach/', mirror: 'https://phimapi.net' },
+  { base: 'https://ophim1.com',  name: 'OPhim',   site: 'ophim', timeout: 5000, listEndpoint: '/v1/api/danh-sach/', newMoviesEndpoint: '/v1/api/danh-sach/phim-moi-cap-nhat', mirror: 'https://ophim.tv' },
+  // KKPhim exposes the latest-feed route without the /v1/api prefix. Its
+  // category routes still use /v1/api, which are built separately below.
+  { base: 'https://phimapi.com', name: 'KKPhim',  site: 'phimapi', timeout: 5000, listEndpoint: '/v1/api/danh-sach/', newMoviesEndpoint: '/danh-sach/phim-moi-cap-nhat', mirror: 'https://phimapi.net' },
 ] as const;
 
 export async function fetchNewMoviesMultiSource(page = 1): Promise<MovieListResponse> {
   // Build requests: primary + mirror for each source
   const sourceRequests = LIST_SOURCES.map((src) => {
-    const primaryUrl = `${src.base}${src.listEndpoint}phim-moi-cap-nhat?page=${page}`;
-    const mirrorUrl = src.mirror ? `${src.mirror}${src.listEndpoint}phim-moi-cap-nhat?page=${page}` : null;
+    const primaryUrl = `${src.base}${src.newMoviesEndpoint}?page=${page}`;
+    const mirrorUrl = src.mirror ? `${src.mirror}${src.newMoviesEndpoint}?page=${page}` : null;
     return { primaryUrl, mirrorUrl, name: src.name, site: src.site, timeout: src.timeout };
   });
 
@@ -583,22 +585,32 @@ export function getMovieDisplayName(item: {
 }
 
 export function getImageUrl(path: string): string {
-  if (!path) return FALLBACK_IMG;
-  const hit = imgUrlCache.get(path);
+  const normalizedPath = String(path || '').trim();
+  if (!normalizedPath || /^(?:null|undefined|about:blank|javascript:)/i.test(normalizedPath)) return FALLBACK_IMG;
+  if (/^data:/i.test(normalizedPath)) return normalizedPath;
+  if (/^\/\//.test(normalizedPath)) return `https:${normalizedPath}`;
+  const hit = imgUrlCache.get(normalizedPath);
   if (hit) return hit;
   let url: string;
-  if (path.startsWith('http')) {
-    url = path;
-  } else if (path.startsWith('/')) {
-    url = `https://img.ophim.live${path}`;
-  } else if (path.includes('uploads/movies/')) {
-    url = `https://img.ophim.live/${path}`;
+  if (normalizedPath.startsWith('http')) {
+    url = normalizedPath;
+  } else if (normalizedPath.startsWith('/')) {
+    url = `https://img.ophim.live${normalizedPath}`;
+  } else if (normalizedPath.includes('uploads/movies/')) {
+    url = `https://img.ophim.live/${normalizedPath}`;
   } else {
-    url = `${IMG_BASE}${path}`;
+    url = `${IMG_BASE}${normalizedPath}`;
   }
   url = url.replace(/^https?:\/\/rophimk\.online\/upload\//i, 'https://phimimg.com/upload/');
-  imgUrlCache.set(path, url);
+  imgUrlCache.set(normalizedPath, url);
   return url;
+}
+
+export function applyImageElementFallback(image: HTMLImageElement): void {
+  if (image.dataset.kpFallbackApplied === '1') return;
+  image.dataset.kpFallbackApplied = '1';
+  image.removeAttribute('srcset');
+  image.src = FALLBACK_IMG;
 }
 
 /**
@@ -622,14 +634,17 @@ function getTmdbCardImageUrl(original: string, requestedWidth: number): string |
 }
 
 export function getOptimizedImageUrl(path: string, width = 360, quality = 82): string {
-  const original = getImageUrl(path);
+  let original = getImageUrl(path);
   if (!OPTIMIZE_ENABLED || !original || original === FALLBACK_IMG) return original;
-  if (original.includes('wsrv.nl/?url=')) return original;
+  // Rebuild already-proxied URLs for the actual component size. Keeping an old
+  // wsrv URL here caused small mobile posters to download 768-832px variants.
+  if (original.includes('wsrv.nl/?url=')) {
+    original = getOriginalImageFromProxy(original) || original;
+  }
   // TMDB supports fixed CDN renditions. Use them directly instead of requesting
   // an unnecessary original-sized poster through a third-party proxy.
   const tmdbImage = getTmdbCardImageUrl(original, width);
   if (tmdbImage) return tmdbImage;
-  if (/^https?:\/\/icdn\.darkbytes\.xyz\//i.test(original)) return original;
   if (shouldBypassImageProxy(original)) return original;
   // wsrv.nl free image proxy — resize + compress + WebP auto
   const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth || 1440;
@@ -867,8 +882,15 @@ function sortListItems(
   return [...items].sort((a, b) => (valueOf(a) - valueOf(b)) * direction);
 }
 
-const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, chieurap, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+// Keep this list aligned with the production `movies` table. `chieurap` used
+// to be present in an upstream payload but is not a database column; selecting
+// it made every direct list request fail with PostgREST 42703/HTTP 400.
+const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+// Minimal public contract used when an optional column is renamed/removed in
+// production. Cards remain usable while the richer schema is being repaired.
+const SUPABASE_LIST_CORE_SELECT = 'id, slug, name, origin_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, category, country, is_published, updated_at, source_site, source_name';
 const SUPABASE_LIST_PAGE_SIZE = 36;
+let supabaseListUsesCoreContract = false;
 
 function typeFilterValues(type?: string): string[] {
   if (!type || type === 'phim-moi-cap-nhat') return [];
@@ -891,6 +913,10 @@ async function fetchMoviesFromSupabaseList(params: {
   sortType?: 'asc' | 'desc';
 }): Promise<MovieListResponse | null> {
   if (!ENABLE_SUPABASE_TEXT_SEARCH) return null;
+  // Cinema membership is maintained by the home proxy/upstream catalog. The
+  // production movies table has no `chieurap` column, so do not issue an
+  // invalid PostgREST filter here.
+  if (params.type === 'phim-chieu-rap') return null;
   const page = Math.max(1, params.page ?? 1);
   const from = (page - 1) * SUPABASE_LIST_PAGE_SIZE;
   const to = from + SUPABASE_LIST_PAGE_SIZE - 1;
@@ -899,57 +925,60 @@ async function fetchMoviesFromSupabaseList(params: {
     const needsExactCount = Boolean(
       params.type || params.category || params.country || params.year || params.keyword?.trim()
     );
-    let query = supabase
-      .from('movies')
-      .select(SUPABASE_LIST_SELECT, { count: needsExactCount ? 'exact' : 'estimated' })
-      .eq('is_published', true);
+    const buildQuery = (selectFields: string, coreContract: boolean) => {
+      let query = supabase
+        .from('movies')
+        .select(selectFields, { count: needsExactCount ? 'exact' : 'estimated' })
+        .eq('is_published', true);
 
-    if (params.type === 'phim-chieu-rap') {
-      query = query.eq('chieurap', true);
-    }
+      const typeValues = typeFilterValues(params.type);
+      if (typeValues.length === 1) query = query.eq('type', typeValues[0]);
+      else if (typeValues.length > 1) query = query.in('type', typeValues);
 
-    const typeValues = typeFilterValues(params.type);
-    if (typeValues.length === 1) {
-      query = query.eq('type', typeValues[0]);
-    } else if (typeValues.length > 1) {
-      query = query.in('type', typeValues);
-    }
+      if (params.category) query = query.filter('category', 'cs', JSON.stringify([{ slug: params.category }]));
+      if (params.country) query = query.filter('country', 'cs', JSON.stringify([{ slug: params.country }]));
+      if (params.year) query = query.eq('year', Number(params.year));
+      if (params.keyword?.trim()) {
+        const safeKw = escapePostgrestIlike(params.keyword.trim());
+        const normalizedKw = escapePostgrestIlike(normalizeSearchText(params.keyword.trim()));
+        const searchColumns = coreContract
+          ? [`name.ilike.%${safeKw}%`, `origin_name.ilike.%${safeKw}%`, `slug.ilike.%${normalizedKw.replace(/\s+/g, '-')}%`]
+          : [
+              `name.ilike.%${safeKw}%`,
+              `origin_name.ilike.%${safeKw}%`,
+              `title_vi.ilike.%${safeKw}%`,
+              `title_en.ilike.%${safeKw}%`,
+              `slug.ilike.%${normalizedKw.replace(/\s+/g, '-')}%`,
+              `normalized_name.ilike.%${normalizedKw}%`,
+            ];
+        query = query.or(searchColumns.join(','));
+      }
 
-    if (params.category) query = query.filter('category', 'cs', JSON.stringify([{ slug: params.category }]));
-    if (params.country) query = query.filter('country', 'cs', JSON.stringify([{ slug: params.country }]));
-    if (params.year) query = query.eq('year', Number(params.year));
-    if (params.keyword?.trim()) {
-      const safeKw = escapePostgrestIlike(params.keyword.trim());
-      const normalizedKw = escapePostgrestIlike(normalizeSearchText(params.keyword.trim()));
-      query = query.or([
-        `name.ilike.%${safeKw}%`,
-        `origin_name.ilike.%${safeKw}%`,
-        `title_vi.ilike.%${safeKw}%`,
-        `title_en.ilike.%${safeKw}%`,
-        `slug.ilike.%${normalizedKw.replace(/\s+/g, '-')}%`,
-        `normalized_name.ilike.%${normalizedKw}%`,
-      ].join(','));
-    }
+      const ascending = params.sortType === 'asc';
+      query = params.sortField === 'year'
+        ? query.order('year', { ascending, nullsFirst: false }).order('updated_at', { ascending: false, nullsFirst: false })
+        : query.order('updated_at', { ascending, nullsFirst: false });
+      return query.range(from, to);
+    };
 
-    const ascending = params.sortType === 'asc';
-    if (params.sortField === 'year') {
-      query = query
-        .order('year', { ascending, nullsFirst: false })
-        .order('updated_at', { ascending: false, nullsFirst: false });
-    } else {
-      query = query.order('updated_at', { ascending, nullsFirst: false });
-    }
-    query = query.range(from, to);
-    const response = await Promise.race([
-      query,
+    const runQuery = (coreContract: boolean) => Promise.race([
+      buildQuery(coreContract ? SUPABASE_LIST_CORE_SELECT : SUPABASE_LIST_SELECT, coreContract),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 6500)),
     ]);
+
+    let response = await runQuery(supabaseListUsesCoreContract);
+    if (response?.error?.code === '42703' && !supabaseListUsesCoreContract) {
+      // Remember the degraded contract for this browser session so every shelf
+      // does not repeat the same invalid request.
+      supabaseListUsesCoreContract = true;
+      response = await runQuery(true);
+    }
     if (!response) return null;
     const { data, count, error } = response;
     if (error || !data || data.length === 0) return null;
 
     const items = await enrichMoviesWithSupabaseEpisodeCounts(sortListItems(
-      (data as Record<string, unknown>[]).map(toSupabaseMovieItem),
+      (data as unknown as Record<string, unknown>[]).map(toSupabaseMovieItem),
       params.sortField,
       params.sortType,
     ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer'));
@@ -1311,7 +1340,7 @@ function parseMovieDetailPayload(payload: Record<string, unknown>, fallbackSlug?
     episode_current: String(movieRaw.episode_current ?? ''),
     episode_total: String(movieRaw.episode_total ?? ''),
     quality: String(movieRaw.quality ?? 'HD'),
-    lang: String(movieRaw.lang ?? 'Vietsub'),
+    lang: String(movieRaw.lang ?? ''),
     notify: String(movieRaw.notify ?? ''),
     showtimes: String(movieRaw.showtimes ?? ''),
     year: Number(movieRaw.year ?? 0),
@@ -1549,6 +1578,18 @@ const MOVIE_DETAIL_SELECT = [
   'updated_at',
 ].join(',');
 
+// Stable contract shared by every supported database revision. Optional SEO
+// and scheduling columns are deliberately excluded so a partially-applied
+// migration cannot take the whole detail/player route down.
+const MOVIE_DETAIL_CORE_SELECT = [
+  'id', 'slug', 'name', 'origin_name', 'content', 'type', 'status',
+  'thumb_url', 'poster_url', 'trailer_url', 'time', 'episode_current',
+  'episode_total', 'quality', 'lang', 'year', 'actor', 'director',
+  'category', 'country', 'view', 'source_site', 'source_name',
+  'created_at', 'updated_at',
+].join(',');
+let supabaseDetailUsesCoreContract = false;
+
 async function fetchMovieDetailFromSupabase(
   slug: string,
   timeoutMs = 3500,
@@ -1566,13 +1607,23 @@ async function fetchMovieDetailFromSupabase(
     // 1. Try exact match with multiple slug variants (published only)
     const slugVariants = Array.from(new Set([slug, normalizedSlug, urlDecodedSlug]));
     for (const variant of slugVariants) {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('movies')
-        .select(MOVIE_DETAIL_SELECT)
+        .select(supabaseDetailUsesCoreContract ? MOVIE_DETAIL_CORE_SELECT : MOVIE_DETAIL_SELECT)
         .eq('slug', variant)
         .eq('is_published', true)
         .abortSignal(signal)
         .maybeSingle();
+      if (error?.code === '42703' && !supabaseDetailUsesCoreContract) {
+        supabaseDetailUsesCoreContract = true;
+        ({ data, error } = await supabase
+          .from('movies')
+          .select(MOVIE_DETAIL_CORE_SELECT)
+          .eq('slug', variant)
+          .eq('is_published', true)
+          .abortSignal(signal)
+          .maybeSingle());
+      }
       if (!error && data) {
         movie = data as unknown as Record<string, unknown>;
         break;
@@ -1583,7 +1634,7 @@ async function fetchMovieDetailFromSupabase(
     if (!movie) {
       const { data, error } = await supabase
         .from('movies')
-        .select(MOVIE_DETAIL_SELECT)
+        .select(supabaseDetailUsesCoreContract ? MOVIE_DETAIL_CORE_SELECT : MOVIE_DETAIL_SELECT)
         .eq('ophim_slug', slug)
         .eq('is_published', true)
         .abortSignal(signal)
@@ -1599,7 +1650,7 @@ async function fetchMovieDetailFromSupabase(
       for (const variant of ophimVariants) {
         const { data, error } = await supabase
           .from('movies')
-          .select(MOVIE_DETAIL_SELECT)
+          .select(supabaseDetailUsesCoreContract ? MOVIE_DETAIL_CORE_SELECT : MOVIE_DETAIL_SELECT)
           .eq('ophim_slug', variant)
           .eq('is_published', true)
           .abortSignal(signal)
@@ -1619,7 +1670,7 @@ async function fetchMovieDetailFromSupabase(
       const safeSlug = slug.replace(/%/g, '\\%').replace(/_/g, '\\_');
       const { data, error } = await supabase
         .from('movies')
-        .select(MOVIE_DETAIL_SELECT)
+        .select(supabaseDetailUsesCoreContract ? MOVIE_DETAIL_CORE_SELECT : MOVIE_DETAIL_SELECT)
         .or(`slug.ilike.%${safeSlug}%,normalized_name.ilike.%${safeSlug}%,name.ilike.%${safeSlug}%,origin_name.ilike.%${safeSlug}%,title_vi.ilike.%${safeSlug}%,title_en.ilike.%${safeSlug}%`)
         .eq('is_published', true)
         .limit(1)
@@ -1675,7 +1726,7 @@ async function fetchMovieDetailFromSupabase(
         release_day: m.release_day === null || m.release_day === undefined ? undefined : Number(m.release_day),
         schedule_timezone: String(m.schedule_timezone || ''),
         quality: String(m.quality || 'HD'),
-        lang: String(m.lang || 'Vietsub'),
+        lang: String(m.lang || ''),
         year: Number(m.year || 0),
         actor: Array.isArray(m.actor) ? (m.actor as string[]) : [],
         director: Array.isArray(m.director) ? (m.director as string[]) : [],
@@ -2725,21 +2776,31 @@ function parseBlvietsubEpisodesByHost(content: string): EpisodeServer[] {
   }));
 }
 
+const blvietsubDetailInflight = new Map<string, { promise: Promise<MovieDetailResponse | null>; timestamp: number }>();
+const BLVIETSUB_DETAIL_DEDUPE_MS = 60_000;
+
 async function fetchMovieDetailFromBlvietsub(slug: string): Promise<MovieDetailResponse | null> {
   const postId = extractBlvietsubPostIdFromSlug(slug);
   if (!postId) return null;
-  try {
-    const proxyUrl = getBlvietsubFeedProxyUrl({ postId });
-    if (!proxyUrl) return null;
-    const data = await fetchJSON<BloggerFeedResponse>(proxyUrl, 5500);
-    const entry = data.entry;
-    return entry ? buildBlvietsubDetail(entry) : null;
-  } catch (e) {
-    if (import.meta.env.DEV && !isAbortLikeError(e)) {
-      console.warn('[fetchMovieDetailFromBlvietsub] Exception:', e);
+  const cached = blvietsubDetailInflight.get(postId);
+  if (cached && Date.now() - cached.timestamp < BLVIETSUB_DETAIL_DEDUPE_MS) return cached.promise;
+
+  const promise = (async () => {
+    try {
+      const proxyUrl = getBlvietsubFeedProxyUrl({ postId });
+      if (!proxyUrl) return null;
+      const data = await fetchJSON<BloggerFeedResponse>(proxyUrl, 5500);
+      const entry = data.entry;
+      return entry ? buildBlvietsubDetail(entry) : null;
+    } catch (e) {
+      if (import.meta.env.DEV && !isAbortLikeError(e)) {
+        console.warn('[fetchMovieDetailFromBlvietsub] Exception:', e);
+      }
+      return null;
     }
-    return null;
-  }
+  })();
+  blvietsubDetailInflight.set(postId, { promise, timestamp: Date.now() });
+  return promise;
 }
 
 async function fetchMovieDetailFromBlvietsubForMovie(movie?: Partial<MovieDetail> | Partial<MovieItem> | null): Promise<MovieDetailResponse | null> {
@@ -2852,7 +2913,7 @@ function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
     thumb_url: (m.thumb_url as string) || (m.poster_url as string) || '',
     poster_url: (m.poster_url as string) || '',
     quality: (m.quality as string) || 'HD',
-    lang: (m.lang as string) || 'Vietsub',
+    lang: (m.lang as string) || '',
     year: (m.year as number) || 0,
     episode_current: normalizedEpisodeCurrent,
     episode_total: (m.episode_total as string) || '',
@@ -3447,16 +3508,22 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
           refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, queerOphimPromise);
         }
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using first quick playable source for "${slug}"`);
+        // The edge bootstrap already contains metadata and playable episodes.
+        // External enrichment must never delay first render/player startup.
         externalPromise = fetchMovieDetailFromExternal(slug);
-        const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900, slug);
-        setCached(cacheKey, mergedQuick);
-        return mergedQuick;
+        setCached(cacheKey, quickPlayable);
+        void mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900, slug)
+          .then((merged) => setCached(cacheKey, merged))
+          .catch(() => {});
+        return quickPlayable;
       }
 
       proxy = await proxyPromise.catch(() => null);
       sb = detailHasPlayableEpisodes(proxy) ? null : await fetchMovieDetailFromSupabase(slug).catch(() => null);
       if (!detailHasPlayableEpisodes(sb)) {
-        const ophimPromise = fetchMovieDetailFromOPhim(slug, false);
+        const ophimPromise = slug.startsWith(BLVIETSUB_SLUG_PREFIX)
+          ? Promise.resolve(null)
+          : fetchMovieDetailFromOPhim(slug, false);
         blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
         [ophim, blvietsub] = await Promise.all([
           withNullTimeout(ophimPromise, 4500),
@@ -3640,8 +3707,8 @@ export async function fetchTrendingMovies(): Promise<MovieListResponse> {
 async function computeTrending(): Promise<MovieListResponse> {
   // Multi-source trending: try all LIST_SOURCES for fresh movies
   const allRequests = LIST_SOURCES.flatMap((src) => [
-    { url: `${src.base}${src.listEndpoint}phim-moi-cap-nhat?page=1&sort_field=modified.time&sort_type=desc`, source: `phim-moi-${src.name}` },
-    ...(src.mirror ? [{ url: `${src.mirror}${src.listEndpoint}phim-moi-cap-nhat?page=1&sort_field=modified.time&sort_type=desc`, source: `phim-moi-${src.name}-M` }] : []),
+    { url: `${src.base}${src.newMoviesEndpoint}?page=1&sort_field=modified.time&sort_type=desc`, source: `phim-moi-${src.name}` },
+    ...(src.mirror ? [{ url: `${src.mirror}${src.newMoviesEndpoint}?page=1&sort_field=modified.time&sort_type=desc`, source: `phim-moi-${src.name}-M` }] : []),
   ]);
 
   const results = await Promise.allSettled(
@@ -4326,13 +4393,6 @@ export function detectServerType(serverName: string): 'khophim' | 'vietsub' | 't
   const priorityText = normalizeServerPriorityText(serverName);
   const compactPriority = priorityText.replace(/\s+/g, '');
 
-  if (
-    compactPriority.includes('KHOPHIM') ||
-    (priorityText.includes('KHO') && priorityText.includes('PHIM'))
-  ) {
-    return 'khophim';
-  }
-
   // --- Thuyết Minh (check before vietsub to avoid false positives) ---
   if (
     clean.includes('thuyết minh') || clean.includes('thuyet minh') ||
@@ -4363,6 +4423,15 @@ export function detectServerType(serverName: string): 'khophim' | 'vietsub' | 't
     n.includes('vietsub') || n.includes('viet sub')
   ) {
     return 'vietsub';
+  }
+
+  // Keep the audio version more important than the provider identity.
+  // "KhoPhim - Long tieng" must appear in the dubbed filter.
+  if (
+    compactPriority.includes('KHOPHIM') ||
+    (priorityText.includes('KHO') && priorityText.includes('PHIM'))
+  ) {
+    return 'khophim';
   }
 
   return 'other';
@@ -4538,7 +4607,7 @@ export async function getMergedEpisodes(
   const [{ data: meRows, error: meErr }, { data: oldEps }, { data: streams }, { data: movieRow }] = await Promise.all([
     supabase
       .from('movie_episodes')
-      .select('id, episode_number, slug, server_name, source, episode_name, link_embed, link_m3u8, subtitle_url, thumbnail_url, duration, is_backup')
+      .select('id, episode_number, slug, server_name, source, episode_name, link_embed, link_m3u8, subtitle_url, thumbnail_url, duration, is_backup, audio_type')
       .eq('movie_id', movieId)
       .order('episode_number', { ascending: true })
       .abortSignal(querySignal),
@@ -4551,7 +4620,7 @@ export async function getMergedEpisodes(
       .abortSignal(querySignal),
     supabase
       .from('streams')
-      .select('stream_url, embed_url, episode_slug, server_name, subtitle_url, priority, health_status, response_time_ms, failure_count')
+      .select('stream_url, embed_url, episode_slug, server_name, subtitle_url, priority, health_status, response_time_ms, failure_count, audio_type')
       .eq('movie_id', movieId)
       .eq('is_active', true)
       .order('priority', { ascending: false })
@@ -4603,6 +4672,7 @@ export async function getMergedEpisodes(
       link_m3u8: ep.link_m3u8 || '',
       episode_number: num || undefined,
       subtitle_url: ep.subtitle_url || '',
+      audio_type: ep.audio_type || undefined,
     };
 
     
@@ -4754,6 +4824,8 @@ export async function getMergedEpisodes(
       source_response_time_ms: Number(sm.response_time_ms || 0) || undefined,
       source_failure_count: failureCount || undefined,
       source_priority: Number(sm.priority || 0) || undefined,
+      audio_type: (['vietsub', 'thuyetminh', 'longtieng', 'raw'].includes(String(sm.audio_type || ''))
+        ? String(sm.audio_type) : undefined) as EpisodeData['audio_type'],
     };
     if (hasSeenEpisode(seen, serverName, slug, num, epData.name)) continue;
     markSeenEpisode(seen, serverName, slug, num, epData.name);
@@ -5027,7 +5099,7 @@ function parseMovieItem(raw: unknown): Movie | null {
     thumb_url: String(m.thumb_url ?? ''),
     poster_url: String(m.poster_url ?? ''),
     quality: String(m.quality ?? 'HD'),
-    lang: String(m.lang ?? 'Vietsub'),
+    lang: String(m.lang ?? ''),
     year: Number(m.year ?? 0),
     episode_current: String(m.episode_current ?? ''),
     episode_total: String(m.episode_total ?? ''),

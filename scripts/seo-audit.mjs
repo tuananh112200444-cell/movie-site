@@ -62,6 +62,10 @@ const redirects = await read('public/_redirects');
 if (/^\s*https?:\/\//im.test(redirects)) {
   addError('public/_redirects must not use domain-level sources; Cloudflare Pages only supports path-based sources here.');
 }
+const routesConfig = await read('public/_routes.json');
+if (routesConfig.includes('"/sitemap*.xml"')) {
+  addError('Cloudflare routes must let sitemap requests reach the SEO worker so retired chunks can return HTTP 410.');
+}
 if (!redirects.includes('/* /index.html 200')) {
   addError('public/_redirects must keep the SPA fallback after canonical redirects.');
 }
@@ -82,10 +86,33 @@ for (const requiredSnippet of [
     addError(`functions/[[path]].js is missing host SEO guard: ${requiredSnippet}`);
   }
 }
+if (!cloudflareFunction.includes("'X-Sitemap-Retired': 'index-bloat-cleanup'")) {
+  addError('Cloudflare SEO worker must retire legacy numbered movie sitemaps with HTTP 410.');
+}
+if (!cloudflareFunction.includes("potentialAction: hasPlayableEpisode ? { '@type': 'WatchAction', target: watchUrl }")) {
+  addError('Movie prerender WatchAction must target the dedicated watch page.');
+}
+if (/['\"]@type['\"]:\s*['\"]VideoObject['\"]/.test(cloudflareFunction)) {
+  addError('Movie detail prerender must not claim VideoObject after the player moved to a noindex watch page.');
+}
 
 const llms = await read('public/llms.txt').catch(() => '');
 if (!/^#\s+\S+/m.test(llms)) {
   addError('llms.txt must start with an H1 title, for example "# KhoPhim.org".');
+}
+
+const pressPage = await read('public/press/index.html').catch(() => '');
+if (hasMojibake(pressPage)) {
+  addError('Press page contains mojibake and is unsafe for journalists to quote.');
+}
+for (const requiredPressAsset of ['/sitemap.xml', '/feed.xml', '/sitemap', '/llms.txt', '/brand/khophim-logo-v2.png']) {
+  if (!pressPage.includes(requiredPressAsset)) addError(`Press page is missing linkable asset: ${requiredPressAsset}`);
+}
+if (/mua b[aá]n li[eê]n k[eế]t|trao [đd]ổi backlink h[aà]ng lo[aạ]t/i.test(pressPage) === false) {
+  addError('Press page must publish an anti-link-scheme policy.');
+}
+if (/50,000\+|lớn nhất Việt Nam|hàng đầu Việt Nam/i.test(pressPage)) {
+  addError('Press page contains an unverified superlative or fixed catalogue claim.');
 }
 const llmsLinks = [...llms.matchAll(/\[[^\]]+\]\((https:\/\/khophim\.org(?:\/[^)]*)?)\)/g)].map((match) => match[1]);
 if (llmsLinks.length < 8) {
@@ -157,6 +184,18 @@ for (let page = 1; page <= 8; page += 1) {
   if (childSitemaps.includes(chunkLoc)) {
     addError(`sitemap.xml should not expose broad movie chunks during index-quality recovery: ${chunkLoc}`);
   }
+  if (await exists(resolve('public', `sitemap-movies-${page}.xml`))) {
+    addError(`Legacy public/sitemap-movies-${page}.xml must not be shipped after index-bloat cleanup.`);
+  }
+}
+
+const curatedMovieXml = await read('public/sitemap-movies-recent.xml');
+const curatedMovieLocs = extractLocs(curatedMovieXml);
+if (curatedMovieLocs.length < 100 || curatedMovieLocs.length > 750) {
+  addError(`Curated movie sitemap must contain 100-750 URLs during recovery; found ${curatedMovieLocs.length}.`);
+}
+if (await exists(resolve('public', 'sitemap-movies-upcoming.xml'))) {
+  addError('Legacy upcoming sitemap must not be shipped while index quality is recovering.');
 }
 
 for (const loc of childSitemaps) {
@@ -253,6 +292,48 @@ for (const page of satellitePages) {
   if (hasMojibake(html)) {
     addError(`${filePath} contains mojibake text.`);
   }
+}
+
+const adminSeoPage = await read('src/pages/admin-seo/page.tsx').catch(() => '');
+if (/google\.com\/ping\?sitemap=/i.test(adminSeoPage)) {
+  addError('Admin SEO must not use the retired Google sitemap ping endpoint.');
+}
+
+const stickyBanner = await read('src/components/feature/StickyBanner.tsx').catch(() => '');
+if (!stickyBanner.includes('/banners/winaz-728x90-20260715.gif')) {
+  addError('Top banner asset is missing from StickyBanner.');
+}
+if (/setTimeout\([^)]*setImageReady|12_000/.test(stickyBanner)) {
+  addError('Top banner must not be delayed long enough to appear removed.');
+}
+if (!stickyBanner.includes('aspect-[728/90]') || !stickyBanner.includes('WINAZ')) {
+  addError('Top banner must reserve its layout space and show an immediate branded placeholder.');
+}
+const bannerDelay = stickyBanner.match(/setTimeout\(\(\) => setBannerReady\(true\),\s*([\d_]+)\)/)?.[1];
+if (!bannerDelay || Number(bannerDelay.replaceAll('_', '')) > 3000) {
+  addError('Top banner animation must load within three seconds after the page load event.');
+}
+if (!adminSeoPage.includes('gsc-seo-feedback')) {
+  addError('Admin SEO is missing the automated Search Console feedback dashboard.');
+}
+
+const gscFeedbackFunction = await read('supabase/functions/gsc-seo-feedback/index.ts').catch(() => '');
+for (const requiredSnippet of ['searchAnalytics/query', 'urlInspection/index:inspect', 'GOOGLE_SERVICE_ACCOUNT_EMAIL', 'strengthen_internal_links_and_content']) {
+  if (!gscFeedbackFunction.includes(requiredSnippet)) {
+    addError(`Search Console feedback function is missing: ${requiredSnippet}`);
+  }
+}
+
+const gscMigration = await read('supabase/migrations/20260720033000_add_gsc_seo_feedback_loop.sql').catch(() => '');
+for (const requiredSnippet of ['collect-gsc-seo-feedback-daily', 'cleanup-gsc-seo-history-weekly', 'seo_url_inspections']) {
+  if (!gscMigration.includes(requiredSnippet)) {
+    addError(`Search Console automation migration is missing: ${requiredSnippet}`);
+  }
+}
+
+const webSubMigration = await read('supabase/migrations/20260719093000_schedule_movie_feed_websub.sql').catch(() => '');
+if (webSubMigration.includes('SUPABASE_ANON_KEY')) {
+  addError('Movie WebSub cron must use its internal cron secret without a nullable anon authorization header.');
 }
 
 if (warnings.length > 0) {
