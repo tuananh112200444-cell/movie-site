@@ -908,7 +908,7 @@ export default function PlayerBox({
             />
             {iframeLoaded && <PlayerWatermark />}
             {iframeLoaded && embedIsSsplay && (
-              <div className="absolute left-3 top-3 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-black/70 p-1.5 text-[11px] font-black text-white/80 backdrop-blur-sm">
+              <div className="absolute left-2 top-2 z-20 flex flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-black/70 p-1 text-[11px] font-black text-white/80 backdrop-blur-sm sm:left-3 sm:top-3 sm:gap-1.5 sm:p-1.5">
                 <span className="px-1 text-white/45">Nguồn</span>
                 {SSPLAY_VARIANTS.map((variant) => (
                   <button
@@ -921,7 +921,7 @@ export default function PlayerBox({
                       setIframeBlocked(false);
                       setIframeKey((k) => k + 1);
                     }}
-                    className={`rounded-lg px-2 py-1 transition-colors ${
+                    className={`min-h-11 min-w-11 rounded-lg px-2 py-1 transition-colors touch-manipulation ${
                       ssplayVariant === variant
                         ? 'bg-red-500 text-white'
                         : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
@@ -1080,10 +1080,10 @@ export default function PlayerBox({
               <p className="text-white/50 text-[11px] uppercase font-semibold">Tự động chuyển tập sau {autoNextCountdown}s</p>
               <p className="text-white font-bold text-sm">{nextEpName ?? 'Tập tiếp theo'}</p>
               <div className="flex gap-2 w-full">
-                <button onClick={handleCancelAutoNext} className="flex-1 py-1.5 rounded-lg text-xs bg-white/8 text-white/60 border border-white/10 cursor-pointer">
+                <button onClick={handleCancelAutoNext} className="min-h-11 flex-1 rounded-lg text-xs bg-white/8 text-white/60 border border-white/10 cursor-pointer touch-manipulation">
                   Huỷ
                 </button>
-                <button onClick={onNext} className="flex-1 py-1.5 rounded-lg text-xs bg-red-500 text-white font-semibold cursor-pointer">
+                <button onClick={onNext} className="min-h-11 flex-1 rounded-lg text-xs bg-red-500 text-white font-semibold cursor-pointer touch-manipulation">
                   Xem ngay
                 </button>
               </div>
@@ -1114,7 +1114,7 @@ export default function PlayerBox({
           {streamIsHls && episode?.link_embed && !isBlvietsubWatchPageUrl(episode.link_embed) && (
             <div className="flex items-center gap-0.5 bg-black/25 border border-white/[0.08] rounded-xl p-0.5 ml-1">
               <button onClick={() => setPlayerMode('hls')}
-                className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                className={`min-h-11 min-w-11 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
                   effectivePlayerMode === 'hls' ? 'bg-red-500 text-white' : 'text-white/35 hover:text-white/70'
                 }`}>
                 HLS
@@ -1122,7 +1122,7 @@ export default function PlayerBox({
               <button
                 onClick={() => setPlayerMode(isIframeSource(episode.link_embed) ? 'embed' : 'video')}
                 disabled={!isIframeSource(episode.link_embed) && !isDirectVideo(episode.link_embed)}
-                className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                className={`min-h-11 min-w-11 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
                   effectivePlayerMode !== 'hls' ? 'bg-white/15 text-white' : 'text-white/35 hover:text-white/70'
                 }`}>
                 {isIframeSource(episode.link_embed) ? 'Nhúng' : 'MP4'}
@@ -1135,7 +1135,7 @@ export default function PlayerBox({
                 <button
                   key={speed}
                   onClick={() => setDirectVideoSpeed(speed)}
-                  className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`min-h-11 min-w-11 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
                     directVideoSpeed === speed ? 'bg-red-500 text-white' : 'text-white/35 hover:text-white/70'
                   }`}
                 >

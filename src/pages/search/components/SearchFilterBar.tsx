@@ -5,10 +5,12 @@ interface Props {
   selectedYear: string;
   selectedGenre: string;
   selectedCountry: string;
+  selectedAudio: string;
   onTypeChange: (v: string) => void;
   onYearChange: (v: string) => void;
   onGenreChange: (v: string) => void;
   onCountryChange: (v: string) => void;
+  onAudioChange: (v: string) => void;
   onReset: () => void;
   activeCount: number;
 }
@@ -50,15 +52,23 @@ const COUNTRIES = [
   { label: 'Đài Loan', slug: 'dai-loan', icon: '🇹🇼' },
 ];
 
+const AUDIO_TYPES = [
+  { label: 'Vietsub', slug: 'vietsub', icon: 'ri-file-text-line' },
+  { label: 'Thuyết minh', slug: 'thuyetminh', icon: 'ri-mic-2-line' },
+  { label: 'Lồng tiếng', slug: 'longtieng', icon: 'ri-volume-up-line' },
+];
+
 function SearchFilterBar({
   selectedType,
   selectedYear,
   selectedGenre,
   selectedCountry,
+  selectedAudio,
   onTypeChange,
   onYearChange,
   onGenreChange,
   onCountryChange,
+  onAudioChange,
   onReset,
   activeCount,
 }: Props) {
@@ -98,6 +108,12 @@ function SearchFilterBar({
               onRemove={() => onCountryChange('')}
             />
           )}
+          {selectedAudio && (
+            <FilterChip
+              label={AUDIO_TYPES.find((item) => item.slug === selectedAudio)?.label ?? selectedAudio}
+              onRemove={() => onAudioChange('')}
+            />
+          )}
           <button
             onClick={onReset}
             className="text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer flex items-center gap-1 whitespace-nowrap ml-1"
@@ -110,6 +126,19 @@ function SearchFilterBar({
 
       {/* Quick filter pills — horizontal scroll on mobile */}
       <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] p-1" aria-label="Lọc theo phiên bản âm thanh">
+          {AUDIO_TYPES.map((item) => (
+            <button
+              key={item.slug}
+              type="button"
+              aria-pressed={selectedAudio === item.slug}
+              onClick={() => onAudioChange(selectedAudio === item.slug ? '' : item.slug)}
+              className={`flex min-h-9 items-center gap-1 rounded-full px-2.5 text-xs font-semibold transition-colors ${selectedAudio === item.slug ? 'bg-emerald-500 text-white' : 'text-white/50 hover:bg-white/[0.08] hover:text-white'}`}
+            >
+              <i className={item.icon} />{item.label}
+            </button>
+          ))}
+        </div>
         {/* Type dropdown trigger */}
         <div className="relative">
           <button

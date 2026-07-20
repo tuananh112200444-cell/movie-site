@@ -616,6 +616,11 @@ function isTransientExternalFetchError(error: unknown): boolean {
   return /abort|timeout|timed out|signal|fetch failed|network|502|503|504|522|523|524/i.test(text);
 }
 
+function isPermanentExternalFetchError(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : String(error || '');
+  return /(?:^|\s)(404|410)(?:\s|$)/.test(text);
+}
+
 function buildEntryIndexes(entries: ParsedEntry[]) {
   const byPostId = new Map<string, ParsedEntry>();
   const byTitle = new Map<string, ParsedEntry>();
@@ -1687,8 +1692,10 @@ async function repairExistingBlvietsubMovies(
   inserted: number;
   updated: number;
   transient_skipped: number;
+  permanent_skipped: number;
   backward_guarded: number;
   transient_details: string[];
+  permanent_details: string[];
   drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }>;
   errors: string[];
 }> {
@@ -1709,8 +1716,10 @@ async function repairExistingBlvietsubMovies(
   let inserted = 0;
   let updated = 0;
   let transientSkipped = 0;
+  let permanentSkipped = 0;
   let backwardGuarded = 0;
   const transientDetails: string[] = [];
+  const permanentDetails: string[] = [];
   const drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }> = [];
   const errors: string[] = [];
   const pool = (data || []) as MovieRow[];
@@ -1768,7 +1777,14 @@ async function repairExistingBlvietsubMovies(
         }
       } catch (error) {
         const message = `${movie.slug}: ${error instanceof Error ? error.message : String(error)}`;
-        if (isTransientExternalFetchError(error)) {
+        if (isPermanentExternalFetchError(error)) {
+          // A removed source page is not a failed repair. Preserve the local
+          // movie and playable rows, rotate it behind the queue, and retry only
+          // after other candidates have had a turn.
+          permanentSkipped += 1;
+          permanentDetails.push(message);
+          await supabase.from('movies').update({ last_synced_at: new Date().toISOString() }).eq('id', movie.id);
+        } else if (isTransientExternalFetchError(error)) {
           transientSkipped += 1;
           transientDetails.push(message);
         } else {
@@ -1787,8 +1803,10 @@ async function repairExistingBlvietsubMovies(
     inserted,
     updated,
     transient_skipped: transientSkipped,
+    permanent_skipped: permanentSkipped,
     backward_guarded: backwardGuarded,
     transient_details: transientDetails.slice(0, 20),
+    permanent_details: permanentDetails.slice(0, 20),
     drift: drift.slice(0, 20),
     errors: errors.slice(0, 20),
   };
@@ -2141,6 +2159,8 @@ serve(async (req) => {
           scanned_pool: result.scanned_pool,
           transient_skipped: result.transient_skipped,
           transient_details: result.transient_details,
+          permanent_skipped: result.permanent_skipped,
+          permanent_details: result.permanent_details,
           include_completed: includeCompleted,
           seo_automation: seoAutomation,
         },

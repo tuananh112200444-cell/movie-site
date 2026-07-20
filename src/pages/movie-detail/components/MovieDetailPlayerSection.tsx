@@ -11,6 +11,7 @@ import {
 import { useServerNow } from '@/hooks/useServerNow';
 import { getMovieCountdownInfo } from '@/utils/movieSchedule';
 import PlayerBox from './PlayerBox';
+import { getAudioLanguageLabels } from '@/utils/audioLanguage';
 
 const EP_GROUP = 100;
 const MOBILE_COLLAPSED_EPISODES = 24;
@@ -32,6 +33,7 @@ function getServerIdentityText(srv: EpisodeServer): string {
   const firstEp = srv.server_data?.[0];
   return [
     srv.server_name,
+    firstEp?.audio_type,
     firstEp?.link_m3u8,
     firstEp?.link_embed,
   ].filter(Boolean).join(' ');
@@ -214,22 +216,29 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
         srv,
         idx,
         typeKey: detectServerType(getServerIdentityText(srv)),
+        supportsActiveEpisode: !activeEp || (srv.server_data ?? []).some(
+          (episode) => getEpisodeMergeKey(episode) === getEpisodeMergeKey(activeEp) && hasPlayableUrl(episode),
+        ),
       }));
-    }, [episodes]);
+    }, [activeEp, episodes]);
+    const selectableServerOptions = useMemo(
+      () => visibleServerOptions.filter(({ supportsActiveEpisode }) => supportsActiveEpisode),
+      [visibleServerOptions],
+    );
     const serverTypeCounts = useMemo(() => {
       const counts: Record<'all' | 'khophim' | 'vietsub' | 'thuyetminh' | 'longtieng' | 'other', number> = {
-        all: episodes.length,
+        all: selectableServerOptions.length,
         khophim: 0,
         vietsub: 0,
         thuyetminh: 0,
         longtieng: 0,
         other: 0,
       };
-      visibleServerOptions.forEach(({ typeKey }) => {
+      selectableServerOptions.forEach(({ typeKey }) => {
         counts[typeKey] += 1;
       });
       return counts;
-    }, [episodes.length, visibleServerOptions]);
+    }, [selectableServerOptions]);
 
     /* Auto-switch to episodes tab when user selects an episode while on trailer tab */
     useEffect(() => {
@@ -250,16 +259,16 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
 
     useEffect(() => {
       if (serverTypeTab === 'all' || activeServer < 0) return;
-      const activeVisible = visibleServerOptions.some(({ idx, typeKey }) => idx === activeServer && typeKey === serverTypeTab);
+      const activeVisible = selectableServerOptions.some(({ idx, typeKey }) => idx === activeServer && typeKey === serverTypeTab);
       if (activeVisible) return;
       const activeKey = activeEp ? getEpisodeMergeKey(activeEp) : '';
-      const replacement = visibleServerOptions.find(({ srv, typeKey }) => {
+      const replacement = selectableServerOptions.find(({ srv, typeKey }) => {
         if (typeKey !== serverTypeTab) return false;
         if (!activeKey) return true;
         return srv.server_data?.some((ep) => getEpisodeMergeKey(ep) === activeKey);
-      }) ?? visibleServerOptions.find(({ typeKey }) => typeKey === serverTypeTab);
+      }) ?? selectableServerOptions.find(({ typeKey }) => typeKey === serverTypeTab);
       if (replacement) onSwitchServer(replacement.idx);
-    }, [activeEp, activeServer, onSwitchServer, serverTypeTab, visibleServerOptions]);
+    }, [activeEp, activeServer, onSwitchServer, selectableServerOptions, serverTypeTab]);
 
     useEffect(() => {
       const query = window.matchMedia('(min-width: 1024px)');
@@ -403,7 +412,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   <button
                     key={t}
                     onClick={() => setActiveTab(t)}
-                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    className={`flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all cursor-pointer whitespace-nowrap touch-manipulation sm:px-4 sm:text-sm ${
                       activeTab === t ? 'bg-red-500 text-white' : 'text-white/50 hover:text-white'
                     }`}
                   >
@@ -418,7 +427,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
               onClick={toggleCinemaMode}
               aria-label={cinemaMode ? 'Thoát chế độ Cinema' : 'Bật chế độ Cinema'}
               aria-pressed={cinemaMode}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer whitespace-nowrap ${
+              className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 px-3 rounded-xl text-[11px] font-semibold border transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
                 cinemaMode
                   ? 'bg-red-500/20 border-red-500/30 text-red-400'
                   : 'bg-black/50 border-white/15 text-white/70 hover:text-white'
@@ -531,13 +540,13 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       </div>
                       <button
                         onClick={onResume}
-                        className="px-3 py-1.5 bg-amber-500 text-white text-[11px] font-semibold rounded-lg cursor-pointer whitespace-nowrap"
+                        className="min-h-11 px-3 bg-amber-500 text-white text-[11px] font-semibold rounded-lg cursor-pointer whitespace-nowrap touch-manipulation"
                       >
                         Tiếp tục
                       </button>
                       <button
                         onClick={onRestart}
-                        className="px-3 py-1.5 bg-white/8 text-white/60 text-[11px] rounded-lg cursor-pointer whitespace-nowrap border border-white/10"
+                        className="min-h-11 px-3 bg-white/8 text-white/60 text-[11px] rounded-lg cursor-pointer whitespace-nowrap border border-white/10 touch-manipulation"
                       >
                         Xem lại
                       </button>
@@ -577,16 +586,16 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       <div className="min-w-0">
                         <p className="truncate text-xs font-bold text-white/85">Đang tự động chọn nguồn tốt nhất</p>
                         <p className="mt-0.5 text-[10px] text-white/40">
-                          {episodes.length > 1 ? `${episodes.length - 1} nguồn dự phòng sẵn sàng` : 'Nguồn phát đã sẵn sàng'}
+                          {selectableServerOptions.length > 1 ? `${selectableServerOptions.length - 1} nguồn dự phòng cho tập này` : 'Nguồn phát đã sẵn sàng'}
                         </p>
                       </div>
                     </div>
-                    {episodes.length > 1 && (
+                    {selectableServerOptions.length > 1 && (
                       <button
                         type="button"
                         onClick={() => setShowSourceOptions((value) => !value)}
                         aria-expanded={showSourceOptions}
-                        className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-white/70 transition hover:border-white/20 hover:bg-white/[0.1] hover:text-white"
+                        className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-white/70 transition hover:border-white/20 hover:bg-white/[0.1] hover:text-white touch-manipulation"
                       >
                         <i className="ri-server-line" />
                         <span>{showSourceOptions ? 'Ẩn nguồn' : 'Đổi nguồn'}</span>
@@ -637,7 +646,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                           key={t.key}
                           onClick={() => setServerTypeTab(t.key)}
                           disabled={count === 0}
-                          className={`flex h-9 lg:h-10 items-center gap-1.5 px-3 lg:px-4 rounded-full text-[11px] sm:text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
+                          className={`flex h-11 items-center gap-1.5 px-3 lg:px-4 rounded-full text-[11px] sm:text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
                             isActive ? activeColor : t.color
                           } ${count === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
                         >
@@ -651,12 +660,16 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   </div>
 
                   <div className="grid grid-cols-1 gap-2 px-3 py-3 sm:grid-cols-2 sm:px-4 lg:grid-cols-3 lg:gap-2.5 lg:px-5 lg:pb-5 2xl:grid-cols-4">
-                    {visibleServerOptions
+                    {selectableServerOptions
                       .filter(({ typeKey }) => serverTypeTab === 'all' || typeKey === serverTypeTab)
                       .map(({ srv, idx, typeKey }) => {
                       const type = getServerTypeStyle(typeKey);
                       const isActive = idx === activeServer;
                       const sourceName = getServerDisplayName(srv, idx);
+                      const movieLanguages = getAudioLanguageLabels(movie.lang);
+                      const audioLabel = typeKey === 'vietsub' || typeKey === 'thuyetminh' || typeKey === 'longtieng'
+                        ? type.label
+                        : movieLanguages.length === 1 ? movieLanguages[0].label : 'Chưa xác định';
                       const friendlyName = isActive ? 'Đang phát' : `Dự phòng ${idx + 1}`;
                       return (
                         <button
@@ -674,6 +687,9 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                           <i className={`${type.icon} shrink-0 text-base`} />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs sm:text-sm lg:text-[15px] font-bold">{friendlyName}</span>
+                            <span className={`block truncate text-[10px] font-semibold ${isActive ? 'text-emerald-700' : 'text-emerald-300'}`}>
+                              {audioLabel}
+                            </span>
                             <span className={`block truncate text-[10px] sm:text-[11px] ${isActive ? 'text-black/55' : 'text-white/35'}`}>
                               {sourceName} · {srv.server_data?.length ?? 0} tập
                             </span>
@@ -703,7 +719,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     <select
                       value={epGroup}
                       onChange={(e) => setEpGroup(Number(e.target.value))}
-                      className="h-10 rounded-xl border border-white/[0.1] bg-black/30 px-3 text-xs font-semibold text-white/75 outline-none focus:border-red-500/60"
+                      className="h-11 rounded-xl border border-white/[0.1] bg-black/30 px-3 text-xs font-semibold text-white/75 outline-none focus:border-red-500/60"
                     >
                       {groupOptions.map((group) => (
                         <option key={group.index} value={group.index}>
@@ -717,7 +733,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     <button
                       key={i}
                       onClick={() => setEpGroup(i)}
-                      className={`h-9 rounded-lg px-3 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                      className={`h-11 rounded-lg px-3 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
                         epGroup === i
                           ? 'bg-white text-[#10131d]'
                           : 'bg-black/24 text-white/45 border border-white/[0.08] hover:text-white'
@@ -758,7 +774,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       <button
                         key={item.key}
                         onClick={() => handleSelectMergedEp(item)}
-                        className={`flex h-9 lg:h-11 items-center justify-center gap-1 rounded-lg px-1.5 text-center text-[11px] sm:text-xs lg:text-[13px] font-semibold transition-all cursor-pointer active:scale-95 ${
+                        className={`flex h-11 items-center justify-center gap-1 rounded-lg px-1.5 text-center text-[11px] sm:text-xs lg:text-[13px] font-semibold transition-all cursor-pointer active:scale-95 touch-manipulation ${
                           activeEpisodeKey === item.key
                             ? item.ep.is_scheduled
                               ? 'bg-amber-500 text-black shadow-lg shadow-amber-950/25'
@@ -777,7 +793,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   {canCollapseEpisodes && (
                     <button
                       onClick={() => setEpisodesCollapsed((v) => !v)}
-                      className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-white/[0.07] text-xs font-semibold text-white/70 border border-white/[0.08] active:scale-[0.99] sm:hidden"
+                      className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-white/[0.07] text-xs font-semibold text-white/70 border border-white/[0.08] active:scale-[0.99] touch-manipulation sm:hidden"
                     >
                       <span>
                         {episodesCollapsed

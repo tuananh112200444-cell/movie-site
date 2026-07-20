@@ -7,6 +7,7 @@ import { movieDetailUrl } from '../../utils/slugEncoder';
 import { prefetchMovieDetail, cancelPrefetchMovieDetail } from '../../utils/prefetchRoute';
 import { isImagePreloaded, markImagePreloaded } from '../../utils/imagePreloader';
 import MovieCountdown from './MovieCountdown';
+import AudioLanguageBadges from './AudioLanguageBadges';
 
 interface MovieCardProps {
   movie: MovieItem;
@@ -86,8 +87,8 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
     posterPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
-    420,
-    84,
+    280,
+    82,
     { preferredAspect: 'portrait' },
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -255,8 +256,8 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
     posterPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
-    480,
-    84,
+    240,
+    78,
     { preferredAspect: 'portrait' },
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -390,8 +391,8 @@ function RankCard({ movie, rank, priority }: MovieCardProps) {
     posterPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
-    420,
-    84,
+    280,
+    82,
     { preferredAspect: 'portrait' },
   );
   const altText = buildAlt(movie);
@@ -476,8 +477,8 @@ function WideCard({ movie, priority }: MovieCardProps) {
     thumbPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(thumbPath)),
-    760,
-    88,
+    520,
+    84,
     { preferredAspect: 'landscape' },
   );
   const altText = buildAlt(movie);
@@ -519,9 +520,7 @@ function WideCard({ movie, priority }: MovieCardProps) {
             {movie.quality && (
               <span className="text-[9px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-md">{movie.quality}</span>
             )}
-            {movie.lang && (
-              <span className="text-[9px] font-bold bg-black/60 text-white/80 px-1.5 py-0.5 rounded-md border border-white/10">{movie.lang}</span>
-            )}
+            <AudioLanguageBadges value={movie.lang} compact />
           </div>
 
           {/* Play: bỏ shadow phức tạp */}

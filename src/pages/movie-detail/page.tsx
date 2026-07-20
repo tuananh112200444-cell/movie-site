@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
@@ -8,7 +8,6 @@ import { useWatchHistory } from '@/hooks/useWatchHistory';
 import { useResumeWatch } from '@/hooks/useResumeWatch';
 import { useFavorites } from '@/hooks/useFavorites';
 import MovieDetailHero from './components/MovieDetailHero';
-import MovieDetailPlayerSection from './components/MovieDetailPlayerSection';
 import SEO from '@/components/base/SEO';
 import type { MovieDetailResponse, EpisodeData, EpisodeServer, MovieItem } from '@/types/movie';
 import {
@@ -26,6 +25,7 @@ import { runWhenIdle } from '@/utils/performance';
 const UserComments = lazy(() => import('./components/UserComments'));
 const MovieReviewSection = lazy(() => import('@/components/feature/MovieReview'));
 const MovieDetailSEOBlock = lazy(() => import('./components/MovieDetailSEOBlock'));
+const MovieDetailPlayerSection = lazy(() => import('./components/MovieDetailPlayerSection'));
 
 function getPlayableSourceUrl(ep: EpisodeData): string {
   return ep.link_m3u8?.trim() || ep.link_embed?.trim() || '';
@@ -146,8 +146,11 @@ function getLatestPlayableEpisode(episodes: EpisodeData[]): EpisodeData | null {
 }
 
 export default function MovieDetailPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, episode: routeEpisode } = useParams<{ slug: string; episode?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isWatchPage = location.pathname.startsWith('/xem-phim/');
   const { showToast } = useToast();
   const { addEntry, updateProgress } = useWatchHistory();
   const { getResume, saveProgress, clearProgress } = useResumeWatch();
@@ -170,6 +173,7 @@ export default function MovieDetailPage() {
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeEpRef = useRef<string | null>(null);
   const relatedFetchedRef = useRef(false);
+  const resumeCheckedKeyRef = useRef('');
 
   useEffect(() => {
     return () => {
@@ -177,13 +181,34 @@ export default function MovieDetailPage() {
     };
   }, []);
 
+  // Preserve old shared/resume links that used /phim/:slug?tap=:episode.
+  useEffect(() => {
+    if (isWatchPage || !slug) return;
+    const legacyEpisode = searchParams.get('tap');
+    if (!legacyEpisode) return;
+    navigate(`/xem-phim/${slug}/${encodeURIComponent(legacyEpisode)}`, { replace: true });
+  }, [isWatchPage, navigate, searchParams, slug]);
+
   useEffect(() => {
     activeEpRef.current = activeEp?.slug ?? null;
   }, [activeEp?.slug]);
 
+  // Automatic route selection must restore progress too. Previously resume
+  // was evaluated only when a visitor clicked an episode button, so reopening
+  // a saved /xem-phim/:slug/:episode URL silently lost the resume prompt.
+  useEffect(() => {
+    if (!isWatchPage || !slug || !activeEp?.slug) return;
+    const resumeKey = `${slug}__${activeEp.slug}`;
+    if (resumeCheckedKeyRef.current === resumeKey) return;
+    resumeCheckedKeyRef.current = resumeKey;
+    const info = getResume(slug, activeEp.slug);
+    setResumeInfo(info);
+    setShowResumeBanner(info.shouldResume);
+  }, [activeEp?.slug, getResume, isWatchPage, slug]);
+
   /* IntersectionObserver to defer bottom sections until user scrolls near */
   useEffect(() => {
-    if (!detail || showBottom) return;
+    if (isWatchPage || !detail || showBottom) return;
     const el = bottomRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -197,7 +222,7 @@ export default function MovieDetailPage() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [detail, showBottom]);
+  }, [detail, isWatchPage, showBottom]);
 
   /* ── Fetch movie detail ── */
   useEffect(() => {
@@ -213,6 +238,7 @@ export default function MovieDetailPage() {
     setActiveServer(0);
     setActiveEp(null);
     setShowBottom(false);
+    resumeCheckedKeyRef.current = '';
     relatedFetchedRef.current = false;
     setRelated([]);
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -273,7 +299,7 @@ export default function MovieDetailPage() {
   // Related content is non-critical. Fetch it only after the visitor approaches
   // the lower page sections, so the player never competes with source APIs.
   useEffect(() => {
-    if (!showBottom || !detail?.movie || !slug || relatedFetchedRef.current) return;
+    if (isWatchPage || !showBottom || !detail?.movie || !slug || relatedFetchedRef.current) return;
     const genre = detail.movie.category?.[0]?.slug;
     const country = detail.movie.country?.[0]?.slug;
     if (!genre && !country) return;
@@ -291,7 +317,7 @@ export default function MovieDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [detail?.movie, showBottom, slug]);
+  }, [detail?.movie, isWatchPage, showBottom, slug]);
 
   /* ── ESC to exit cinema mode ── */
   useEffect(() => {
@@ -326,8 +352,20 @@ export default function MovieDetailPage() {
     );
   }, [filteredEpisodes]);
 
+  const detailEpisodeLinks = useMemo(() => {
+    const byKey = new Map<string, EpisodeData>();
+    filteredEpisodes.forEach((server) => {
+      (server.server_data ?? []).forEach((episode) => {
+        if (!hasPlayableUrl(episode) || episode.is_scheduled) return;
+        const key = String(epSortKey(episode));
+        if (!byKey.has(key)) byKey.set(key, episode);
+      });
+    });
+    return Array.from(byKey.values()).sort((a, b) => epSortKey(a) - epSortKey(b));
+  }, [filteredEpisodes]);
+
   useEffect(() => {
-    if (!hasEpisodes) return;
+    if (!isWatchPage || !hasEpisodes) return;
     const firstPlayableEpisode = filteredEpisodes
       .flatMap((server) => server.server_data ?? [])
       .find((ep) => hasPlayableUrl(ep));
@@ -351,7 +389,7 @@ export default function MovieDetailPage() {
     } catch {
       return;
     }
-  }, [filteredEpisodes, hasEpisodes]);
+  }, [filteredEpisodes, hasEpisodes, isWatchPage]);
 
   const activeFilteredIndex = useMemo(() => {
     if (!detail?.episodes || activeServer < 0) return -1;
@@ -372,15 +410,33 @@ export default function MovieDetailPage() {
   }, [detail]);
 
   useEffect(() => {
-    if (activeEp || !hasEpisodes || isTrailerOnly || !detail?.episodes) return;
+    if (!isWatchPage || !hasEpisodes || isTrailerOnly || !detail?.episodes) return;
+    let requestedEpisode = '';
+    try {
+      requestedEpisode = routeEpisode ? decodeURIComponent(routeEpisode).toLowerCase() : '';
+    } catch {
+      requestedEpisode = String(routeEpisode || '').toLowerCase();
+    }
+    const requestedEpisodeNumber = Number(requestedEpisode.match(/\d+/)?.[0] ?? 0);
+    const matchesRequestedEpisode = (episode: EpisodeData) =>
+      [episode.slug, episode.name].filter(Boolean).some((value) => String(value).toLowerCase() === requestedEpisode) ||
+      (requestedEpisodeNumber > 0 && epSortKey(episode) === requestedEpisodeNumber);
+    const activeMatchesRequest = Boolean(activeEp && requestedEpisode &&
+      matchesRequestedEpisode(activeEp));
+    if (activeEp && (!requestedEpisode || activeMatchesRequest)) return;
+    const requested = requestedEpisode
+      ? filteredEpisodes.flatMap((server, serverIndex) =>
+          (server.server_data ?? []).map((episode) => ({ episode, serverIndex })))
+          .find(({ episode }) => hasPlayableUrl(episode) && matchesRequestedEpisode(episode))
+      : null;
     const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
-    const best = pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
+    const best = requested ?? pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
     if (!best) return;
     const originalIdx = resolveOriginalServerIndex(filteredEpisodes[best.serverIndex], detail.episodes);
     setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
     setActiveEp(best.episode);
     setInitialSeekTime(0);
-  }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly]);
+  }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly, isWatchPage, routeEpisode]);
 
   const trailerEmbedUrl = useMemo(
     () => (detail?.movie?.trailer_url ? getTrailerEmbedUrl(detail.movie.trailer_url) : null),
@@ -401,8 +457,12 @@ export default function MovieDetailPage() {
       setResumeInfo(info);
       setShowResumeBanner(info.shouldResume);
     }
+    if (isWatchPage && slug) {
+      const episodePath = encodeURIComponent(ep.slug || ep.name || 'tap-1');
+      navigate(`/xem-phim/${slug}/${episodePath}`, { replace: true });
+    }
     setTimeout(() => playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-  }, [detail, slug, addEntry, getResume, showToast]);
+  }, [detail, slug, addEntry, getResume, isWatchPage, navigate, showToast]);
 
   const handleSwitchServer = useCallback((filteredIdx: number) => {
     const targetServer = filteredEpisodes[filteredIdx];
@@ -410,7 +470,6 @@ export default function MovieDetailPage() {
     const originalIdx = resolveOriginalServerIndex(targetServer, detail.episodes);
     if (originalIdx < 0) return;
     const newServerData = detail.episodes[originalIdx]?.server_data ?? [];
-    setActiveServer(originalIdx);
     if (activeEp) {
       const activeNumber = activeEp.episode_number ?? Number((activeEp.slug || activeEp.name || '').match(/\d+/)?.[0] ?? 0);
       const activeKey = activeNumber > 0 ? `num:${activeNumber}` : `text:${activeEp.slug || activeEp.name}`;
@@ -418,10 +477,17 @@ export default function MovieDetailPage() {
         const epNumber = ep.episode_number ?? Number((ep.slug || ep.name || '').match(/\d+/)?.[0] ?? 0);
         const epKey = epNumber > 0 ? `num:${epNumber}` : `text:${ep.slug || ep.name}`;
         return epKey === activeKey && hasPlayableUrl(ep);
-      }) ?? getLatestPlayableEpisode(newServerData);
-      if (newEp) setActiveEp(newEp);
+      });
+      if (!newEp) {
+        showToast(`Nguồn này không có ${activeEp.name || 'tập đang xem'}. Vui lòng chọn nguồn khác.`, 'info');
+        return;
+      }
+      setActiveServer(originalIdx);
+      setActiveEp(newEp);
+      return;
     }
-  }, [filteredEpisodes, detail?.episodes, activeEp]);
+    setActiveServer(originalIdx);
+  }, [filteredEpisodes, detail?.episodes, activeEp, showToast]);
 
   const handleTimeUpdate = useCallback((time: number, duration: number) => {
     if (!slug || !activeEpRef.current) return;
@@ -540,35 +606,92 @@ export default function MovieDetailPage() {
 
       <main id="main-content">
 
+      {isWatchPage && (
+        <SEO
+          title={`Xem ${movie.name}${activeEp?.name ? ` - ${activeEp.name}` : ''}`}
+          description={`Xem ${movie.name} ${activeEp?.name || ''} tại KhoPhim. Chọn tập và nguồn phát phù hợp.`}
+          canonical={`/phim/${slug ?? ''}`}
+          ogImage={getPosterUrl(movie.poster_url || movie.thumb_url)}
+          ogType="video.movie"
+          noIndex={true}
+          updatedAt={movie.modified?.time}
+        />
+      )}
+
       {/* Hero section */}
-      <MovieDetailHero
-        movie={movie}
-        slug={slug ?? ''}
-        favored={favored}
-        isTrailerOnly={isTrailerOnly}
-        hasEpisodes={hasEpisodes}
-        onFavToggle={handleFavToggle}
-        onWatchNow={() => {
-          if (!hasEpisodes && !isTrailerOnly) {
-            showToast('Phim đang cập nhật, chưa có tập phim', 'info');
-            return;
-          }
-          if (isTrailerOnly) {
-            playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            return;
-          }
-          const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
-          const best = pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
-          if (best) {
-            handleSwitchServer(best.serverIndex);
-            handleSelectEp(best.episode);
-          }
-          playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }}
-      />
+      {!isWatchPage && (
+        <MovieDetailHero
+          movie={movie}
+          slug={slug ?? ''}
+          favored={favored}
+          isTrailerOnly={isTrailerOnly}
+          hasEpisodes={hasEpisodes}
+          onFavToggle={handleFavToggle}
+          onWatchNow={() => {
+            if (!hasEpisodes && !isTrailerOnly) {
+              showToast('Phim đang cập nhật, chưa có tập phim', 'info');
+              return;
+            }
+            const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
+            const best = pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
+            const selected = best?.episode;
+            const episodePath = selected ? `/${encodeURIComponent(selected.slug || selected.name || 'tap-1')}` : '';
+            navigate(`/xem-phim/${slug ?? ''}${episodePath}`);
+          }}
+        />
+      )}
+
+      {!isWatchPage && detailEpisodeLinks.length > 0 && (
+        <section className="mx-auto mb-8 max-w-[1760px] px-3 sm:px-4" aria-labelledby="detail-episodes-title">
+          <div className="detail-episode-panel rounded-2xl sm:rounded-[26px] border border-white/[0.08] p-3 sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 id="detail-episodes-title" className="font-black text-white sm:text-lg">Danh sách tập</h2>
+                <p className="mt-0.5 text-xs text-white/60">{detailEpisodeLinks.length} tập · mở trong chế độ xem tập trung</p>
+              </div>
+              <Link to={`/xem-phim/${slug ?? ''}`} className="flex min-h-11 items-center gap-1.5 rounded-xl bg-red-500 px-3 text-xs font-bold text-white touch-manipulation">
+                <i className="ri-play-fill" /> Xem phim
+              </Link>
+            </div>
+            <div className="detail-episode-grid">
+              {detailEpisodeLinks.map((episode) => (
+                <Link
+                  key={`${episode.slug}-${episode.name}`}
+                  to={`/xem-phim/${slug ?? ''}/${encodeURIComponent(episode.slug || episode.name || 'tap-1')}`}
+                  className="detail-episode-button flex min-h-11 items-center justify-center rounded-xl border border-white/10 px-2 text-xs font-bold text-white/80 transition-colors hover:border-red-500/50 hover:bg-red-500/15 hover:text-white touch-manipulation"
+                >
+                  {episode.name || episode.slug}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {isWatchPage && (
+        <div className="cinema-page-container pt-20 sm:pt-24">
+          <div className="movie-watch-topbar mb-3 flex items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
+            <div className="min-w-0">
+              <Link to={`/phim/${slug ?? ''}`} className="inline-flex min-h-11 items-center gap-1 text-xs text-white/55 hover:text-red-300 touch-manipulation">
+                <i className="ri-arrow-left-line" /> Thông tin phim
+              </Link>
+              <h1 className="truncate text-lg font-black text-white sm:text-2xl tracking-[-0.02em]">{movie.name}</h1>
+              {activeEp && <p className="mt-0.5 flex items-center gap-1.5 text-xs text-white/65"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Đang xem {activeEp.name}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={handleFavToggle}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border touch-manipulation ${favored ? 'border-red-500/40 bg-red-500/20 text-red-400' : 'border-white/10 bg-white/5 text-white/60'}`}
+              aria-label={favored ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'}
+            >
+              <i className={favored ? 'ri-heart-fill' : 'ri-heart-line'} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Player section */}
-      <MovieDetailPlayerSection
+      {isWatchPage && <Suspense fallback={<div className="cinema-page-container"><div className="aspect-video w-full skeleton rounded-xl" /></div>}><MovieDetailPlayerSection
         ref={playerRef}
         movie={movie}
         episodes={filteredEpisodes}
@@ -589,10 +712,10 @@ export default function MovieDetailPage() {
         slug={slug ?? ''}
         cinemaMode={cinemaMode}
         setCinemaMode={setCinemaMode}
-      />
+      /></Suspense>}
 
       {/* Bottom sections — deferred + lazy loaded */}
-      <div className="max-w-[1760px] mx-auto px-3 sm:px-4 pb-12">
+      {!isWatchPage && <div className="max-w-[1760px] mx-auto px-3 sm:px-4 pb-12">
         {showBottom ? (
           <>
             {related.length > 0 && (
@@ -641,7 +764,7 @@ export default function MovieDetailPage() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       </main>
 

@@ -3,6 +3,11 @@ import { performance } from 'node:perf_hooks';
 import { createClient } from '@supabase/supabase-js';
 
 const envText = fs.readFileSync('.env', 'utf8');
+const searchPageSource = fs.readFileSync('src/pages/search/page.tsx', 'utf8');
+if (!searchPageSource.includes('const localPoolRef = useRef<MovieItem[]>([]);') ||
+    !searchPageSource.includes('}, [ensureSearchIndexLoaded]);')) {
+  throw new Error('Search request stability guard is missing: index hydration must not restart active URL searches.');
+}
 const env = Object.fromEntries(
   envText
     .split(/\r?\n/)

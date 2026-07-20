@@ -257,7 +257,7 @@ export default function Navbar() {
         <div className="mx-auto flex h-14 max-w-[1760px] items-center justify-between gap-3 px-4 lg:h-16 lg:px-8 2xl:px-10">
 
           {/* ── Logo ── */}
-          <Link to="/" className="flex items-center gap-3 flex-shrink-0 group">
+          <Link to="/" className="flex min-h-11 items-center gap-3 flex-shrink-0 group touch-manipulation">
             <div className="relative w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center flex-shrink-0">
               {/* Glow halo */}
               <div className="absolute inset-0 bg-red-500/40 rounded-xl blur-md group-hover:bg-red-500/60 transition-all duration-300 scale-110" />
@@ -509,6 +509,7 @@ export default function Navbar() {
             }}
               aria-label={mobileMenuOpen ? 'Đóng menu' : 'Mở menu điều hướng'}
               aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-navigation-drawer"
               className="relative z-[70] flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.06] text-white/85 shadow-lg shadow-black/20 transition-colors cursor-pointer lg:hidden hover:bg-white/[0.10] hover:text-white active:scale-95 touch-manipulation">
               <i className={`${mobileMenuOpen ? 'ri-close-line' : 'ri-menu-3-line'} text-[22px]`} aria-hidden="true" />
             </button>
@@ -543,7 +544,7 @@ export default function Navbar() {
                     type="button"
                     onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
                     aria-label="Đóng tìm kiếm"
-                    className="w-8 h-8 flex items-center justify-center text-white/50 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors cursor-pointer"
+                    className="flex h-11 w-11 items-center justify-center text-white/50 hover:text-white rounded-xl hover:bg-white/[0.06] transition-colors cursor-pointer touch-manipulation"
                   >
                     <i className="ri-close-line text-lg" />
                   </button>
@@ -567,7 +568,7 @@ export default function Navbar() {
                         type="button"
                         onClick={() => setSearchQuery('')}
                         aria-label="Xóa tìm kiếm"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-white/35 hover:text-white/70 rounded-full hover:bg-white/[0.08] transition-colors cursor-pointer"
+                        className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-white/50 hover:text-white rounded-full hover:bg-white/[0.08] transition-colors cursor-pointer touch-manipulation"
                       >
                         <i className="ri-close-line text-sm" />
                       </button>
@@ -593,7 +594,7 @@ export default function Navbar() {
                         navigate(`/search?q=${encodeURIComponent(tag)}`);
                         setSearchOpen(false);
                       }}
-                      className="text-[11px] bg-white/[0.05] hover:bg-red-500/15 text-white/40 hover:text-red-400 border border-white/[0.08] hover:border-red-500/25 px-2.5 py-1 rounded-full transition-all cursor-pointer whitespace-nowrap"
+                      className="min-h-11 text-[11px] bg-white/[0.05] hover:bg-red-500/15 text-white/40 hover:text-red-400 border border-white/[0.08] hover:border-red-500/25 px-3 rounded-full transition-all cursor-pointer whitespace-nowrap touch-manipulation"
                     >
                       {tag}
                     </button>
@@ -608,6 +609,11 @@ export default function Navbar() {
       {/* Mobile Menu — Slide-in Drawer */}
       <div
         {...menuSwipeBind()}
+        id="mobile-navigation-drawer"
+        role="dialog"
+        aria-label="Menu điều hướng"
+        aria-hidden={!mobileMenuOpen}
+        inert={!mobileMenuOpen}
         className={`lg:hidden fixed top-0 right-0 bottom-0 z-[60] w-[min(320px,85vw)] md:w-[min(360px,75vw)] bg-[#0a0c14] border-l border-white/[0.06] transition-transform duration-300 ease-out ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'} ${!mobileMenuVisible ? 'pointer-events-none' : ''}`}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
@@ -618,7 +624,7 @@ export default function Navbar() {
           <button
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Đóng menu"
-            className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors cursor-pointer active:scale-95"
+            className="flex h-11 w-11 items-center justify-center text-white/50 hover:text-white rounded-xl hover:bg-white/[0.06] transition-colors cursor-pointer active:scale-95 touch-manipulation"
           >
             <i className="ri-close-line text-xl" />
           </button>
@@ -636,7 +642,7 @@ export default function Navbar() {
               { label: 'Yêu Thích', to: '/yeu-thich', icon: 'ri-heart-line' },
             ].map((item) => (
               <Link key={item.to} to={item.to} onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-xl transition-all ${
+                className={`flex min-h-11 items-center gap-2.5 px-3 py-2.5 text-sm rounded-xl transition-all touch-manipulation ${
                   isActive(item.to)
                     ? 'text-red-400 bg-red-500/10 border border-red-500/20'
                     : 'text-white/70 hover:text-white hover:bg-white/[0.06] border border-transparent'
@@ -651,7 +657,7 @@ export default function Navbar() {
           <div className="mb-2">
             <button
               onClick={() => setMobileGenreOpen(!mobileGenreOpen)}
-              className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] border border-transparent rounded-xl transition-all cursor-pointer"
+              className="flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] border border-transparent rounded-xl transition-all cursor-pointer touch-manipulation"
             >
               <span className="flex items-center gap-2.5">
                 <i className="ri-film-line text-sm w-4 text-center" />
@@ -668,7 +674,7 @@ export default function Navbar() {
                       key={g.slug}
                       to={genreUrl(g.slug)}
                       onClick={() => { setMobileMenuOpen(false); setMobileGenreOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-[12px] rounded-xl transition-all ${
+                      className={`flex min-h-11 items-center gap-2 px-3 py-2 text-[12px] rounded-xl transition-all touch-manipulation ${
                         featured
                           ? 'text-fuchsia-200 bg-fuchsia-500/10 border border-fuchsia-400/25'
                           : 'text-white/55 hover:text-white hover:bg-white/[0.06]'
@@ -687,7 +693,7 @@ export default function Navbar() {
           <div className="mb-2">
             <button
               onClick={() => setMobileCountryOpen(!mobileCountryOpen)}
-              className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] border border-transparent rounded-xl transition-all cursor-pointer"
+              className="flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/[0.06] border border-transparent rounded-xl transition-all cursor-pointer touch-manipulation"
             >
               <span className="flex items-center gap-2.5">
                 <i className="ri-global-line text-sm w-4 text-center" />
@@ -702,7 +708,7 @@ export default function Navbar() {
                     key={c.slug}
                     to={c.to}
                     onClick={() => { setMobileMenuOpen(false); setMobileCountryOpen(false); }}
-                    className="flex items-center gap-2 px-3 py-2 text-[12px] text-white/55 hover:text-white hover:bg-white/[0.06] rounded-xl transition-all"
+                    className="flex min-h-11 items-center gap-2 px-3 py-2 text-[12px] text-white/55 hover:text-white hover:bg-white/[0.06] rounded-xl transition-all touch-manipulation"
                   >
                     <span className="text-base leading-none">{c.flag}</span>
                     {c.name}

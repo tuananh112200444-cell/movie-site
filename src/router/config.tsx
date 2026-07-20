@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 import type { RouteObject } from 'react-router-dom';
 import AdminGuard from '@/components/feature/AdminGuard';
 
@@ -7,6 +7,14 @@ import AdminGuard from '@/components/feature/AdminGuard';
 function RedirectToPhim() {
   const { slug } = useParams<{ slug: string }>();
   return <Navigate to={`/phim/${slug ?? ''}`} replace />;
+}
+
+function RedirectLegacyWatch() {
+  const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
+  const episode = new URLSearchParams(location.search).get('ep');
+  const episodePath = episode ? `/${encodeURIComponent(episode)}` : '';
+  return <Navigate to={`/xem-phim/${slug ?? ''}${episodePath}`} replace />;
 }
 
 /* ─── Eager load: Home ─── */
@@ -132,6 +140,8 @@ const routes: RouteObject[] = [
   // PHIM (chi tiết + tìm kiếm + lọc)
   // ═══════════════════════════════════════════
   { path: '/phim/:slug',        element: <LazyMovieDetail /> },
+  { path: '/xem-phim/:slug',    element: <LazyMovieDetail /> },
+  { path: '/xem-phim/:slug/:episode', element: <LazyMovieDetail /> },
   { path: '/filter',            element: <LazyFilter /> },
   { path: '/phim-moi-nhat',     element: <LazyNewMovies /> },
   { path: '/phim-moi-cap-nhat', element: <LazyNewMovies /> },
@@ -243,8 +253,7 @@ const routes: RouteObject[] = [
   // REDIRECTS - URL cũ → URL mới (301)
   // ═══════════════════════════════════════════
   // Redirect URL phim cũ
-  { path: '/xem/:slug',              element: <RedirectToPhim /> },
-  { path: '/xem-phim/:slug',         element: <RedirectToPhim /> },
+  { path: '/xem/:slug',              element: <RedirectLegacyWatch /> },
   { path: '/review-phim/:slug',      element: <RedirectToPhim /> },
   { path: '/noi-dung-phim/:slug',    element: <RedirectToPhim /> },
   { path: '/download-phim/:slug',    element: <RedirectToPhim /> },

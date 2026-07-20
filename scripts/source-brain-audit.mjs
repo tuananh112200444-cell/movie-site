@@ -20,6 +20,7 @@ const env = { ...loadEnv(), ...process.env };
 const SUPABASE_URL = env.VITE_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = env.VITE_PUBLIC_SUPABASE_ANON_KEY;
 const LIMIT = Math.max(1, Math.min(Number(process.env.SOURCE_BRAIN_LIMIT || 10_000), 20_000));
+const QUERY_CONCURRENCY = Math.max(1, Math.min(Number(process.env.SOURCE_BRAIN_CONCURRENCY || 4), 8));
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error('Missing VITE_PUBLIC_SUPABASE_URL or VITE_PUBLIC_SUPABASE_ANON_KEY in .env');
@@ -114,8 +115,15 @@ async function fetchPublishedMovies() {
 }
 
 async function queryRows(table, select, movieIds) {
-  const rows = [];
-  for (const ids of chunk(movieIds, 200)) {
+  const idChunks = chunk(movieIds, 200);
+  const chunkResults = new Array(idChunks.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < idChunks.length) {
+      const index = cursor++;
+      const ids = idChunks[index];
+      const rows = [];
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase
         .from(table)
@@ -127,8 +135,12 @@ async function queryRows(table, select, movieIds) {
       rows.push(...(data || []));
       if (!data || data.length < 1000) break;
     }
+      chunkResults[index] = rows;
+    }
   }
-  return rows;
+
+  await Promise.all(Array.from({ length: Math.min(QUERY_CONCURRENCY, idChunks.length) }, () => worker()));
+  return chunkResults.flat();
 }
 
 const movies = await fetchPublishedMovies();

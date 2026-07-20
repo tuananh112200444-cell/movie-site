@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import HighlightText from './HighlightText';
 import type { MovieItem } from '@/types/movie';
+import AudioLanguageBadges from '@/components/base/AudioLanguageBadges';
 import { useImageFallback } from '@/hooks/useImageFallback';
 import { parseMovieYear } from '@/utils/searchRanking';
 import { movieDetailUrl } from '@/utils/slugEncoder';
@@ -80,11 +81,7 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
               {movie.quality}
             </span>
           )}
-          {movie.lang?.toLowerCase().includes('vietsub') && (
-            <span className="bg-blue-500/85 text-white text-xs font-bold px-1.5 py-0.5 rounded-md shadow-lg shadow-blue-950/30">
-              Vietsub
-            </span>
-          )}
+          <AudioLanguageBadges value={movie.lang} compact />
         </div>
         <div className="absolute top-2 right-2 hidden flex-col items-end gap-1 sm:flex">
           <MovieCountdown movie={movie} />
@@ -137,11 +134,7 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
           }`}>
             {release.episodeLabel}
           </span>
-          {movie.lang && (
-            <span className="rounded-md bg-blue-500/15 px-2 py-1 text-xs font-semibold text-blue-300">
-              {movie.lang}
-            </span>
-          )}
+          <AudioLanguageBadges value={movie.lang} />
         </div>
       </div>
     </Link>
@@ -273,11 +266,7 @@ function ListItem({ movie, query }: { movie: MovieItem; query: string }) {
           >
             {release.episodeLabel}
           </span>
-          {movie.lang?.toLowerCase().includes('vietsub') && (
-            <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-blue-500/15 text-blue-400">
-              Vietsub
-            </span>
-          )}
+          <AudioLanguageBadges value={movie.lang} compact />
         </div>
       </div>
 

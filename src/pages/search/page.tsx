@@ -4,11 +4,12 @@ import Fuse from 'fuse.js';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
+import AudioLanguageBadges from '@/components/base/AudioLanguageBadges';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import SearchResultItem from './components/SearchResultItem';
 import SearchFilterBar from './components/SearchFilterBar';
 import type { MovieItem } from '@/types/movie';
-import { searchMovies, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, fetchSupabaseSearchIndex, searchMoviesInSupabase } from '@/services/movieApi';
+import { applyImageElementFallback, searchMovies, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, fetchSupabaseSearchIndex, searchMoviesInSupabase } from '@/services/movieApi';
 import {
   mergeMoviesUnique,
   parseMovieYear,
@@ -16,6 +17,7 @@ import {
   type SearchSortMode,
 } from '@/utils/searchRanking';
 import { setSmartSessionCache } from '@/utils/smartCache';
+import { getAudioLanguageLabels } from '@/utils/audioLanguage';
 
 type ViewMode = 'grid' | 'list';
 type SortMode = SearchSortMode;
@@ -119,7 +121,7 @@ async function fetchDirectAliasResults(keyword: string): Promise<MovieItem[]> {
     time: '',
     year: Number(m.year || 0),
     quality: String(m.quality || 'HD'),
-    lang: String(m.lang || 'Vietsub'),
+    lang: String(m.lang || ''),
     episode_current: String(m.episode_current || ''),
     episode_total: String(m.episode_total || ''),
     current_episode: Number(m.current_episode || 0) || undefined,
@@ -297,12 +299,14 @@ export default function SearchPage() {
   const [sortMode, setSortMode] = useState<SortMode>('relevance');
   const [allLoaded, setAllLoaded] = useState(false);
   const [localPool, setLocalPool] = useState<MovieItem[]>([]);
+  const localPoolRef = useRef<MovieItem[]>([]);
 
   // Filter state
   const [filterType, setFilterType] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [filterGenre, setFilterGenre] = useState('');
   const [filterCountry, setFilterCountry] = useState('');
+  const [filterAudio, setFilterAudio] = useState('');
 
   const [suggestions, setSuggestions] = useState<MovieItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -317,6 +321,10 @@ export default function SearchPage() {
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchRunRef = useRef(0);
   const searchIndexLoadRef = useRef<Promise<MovieItem[]> | null>(null);
+
+  useEffect(() => {
+    localPoolRef.current = localPool;
+  }, [localPool]);
 
   // ── Effects ──
   useEffect(() => {
@@ -410,8 +418,12 @@ export default function SearchPage() {
       } catch { /* ignore stale cache */ }
     }
 
-    const instantItems = pg === 1 && localPool.length > 0
-      ? getInstantLocalHits(localPool, normalizedKeyword, 16)
+    // Read the latest catalogue through a ref. Depending on localPool here
+    // recreated doSearch while the index was loading, which restarted the URL
+    // effect and could replace valid mobile results with an empty second run.
+    const currentPool = localPoolRef.current;
+    const instantItems = pg === 1 && currentPool.length > 0
+      ? getInstantLocalHits(currentPool, normalizedKeyword, 16)
       : [];
     const indexPromise = pg === 1
       ? ensureSearchIndexLoaded()
@@ -436,9 +448,33 @@ export default function SearchPage() {
     }
 
     try {
-      const apiResult = await searchMovies(normalizedKeyword, pg, searchCtrl.signal)
-        .then((value) => ({ status: 'fulfilled' as const, value }))
-        .catch((reason) => ({ status: 'rejected' as const, reason }));
+      // Run the direct indexed query beside the multi-source search. The old
+      // sequential path could make mobile wait for slow external mirrors
+      // before asking Supabase for a result it already had.
+      const directSearchPromise = pg === 1
+        ? searchMoviesInSupabase(normalizedKeyword, {
+            limit: 24,
+            timeoutMs: 6000,
+            minLength: 2,
+            signal: searchCtrl.signal,
+          }).catch(() => [])
+        : Promise.resolve([]);
+      void directSearchPromise.then((directItems) => {
+        if (directItems.length === 0 || runId !== searchRunRef.current || searchCtrl.signal.aborted) return;
+        setError('');
+        setResults((prev) => sortMoviesForSearch(
+          mergeMoviesUnique([...(pg === 1 ? knownAliasItems : []), ...prev, ...directItems]),
+          normalizedKeyword,
+          'relevance',
+        ));
+      });
+
+      const [apiResult, directSupabaseItems] = await Promise.all([
+        searchMovies(normalizedKeyword, pg, searchCtrl.signal)
+          .then((value) => ({ status: 'fulfilled' as const, value }))
+          .catch((reason) => ({ status: 'rejected' as const, reason })),
+        directSearchPromise,
+      ]);
       if (runId !== searchRunRef.current) return;
 
       const apiData = apiResult.status === 'fulfilled'
@@ -446,15 +482,8 @@ export default function SearchPage() {
         : { items: [], pagination: { currentPage: pg, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
       let items = pg === 1 ? mergeMoviesUnique([...knownAliasItems, ...(apiData.items ?? [])]) : (apiData.items ?? []);
 
-      if (pg === 1) {
-        const directSupabaseItems = await searchMoviesInSupabase(normalizedKeyword, {
-          limit: 24,
-          timeoutMs: 6000,
-          minLength: 2,
-        }).catch(() => []);
-        if (directSupabaseItems.length > 0) {
-          items = mergeMoviesUnique([...items, ...directSupabaseItems]);
-        }
+      if (pg === 1 && directSupabaseItems.length > 0) {
+        items = mergeMoviesUnique([...items, ...directSupabaseItems]);
       }
 
       if (pg === 1) {
@@ -474,8 +503,8 @@ export default function SearchPage() {
 
       // STEP 2: Merge local index results (searchMovies already includes API, Supabase, and special sources)
       // STEP 3: Fuzzy fallback — only if very few results AND pool loaded
-      if (pg === 1 && items.length < 6 && localPool.length > 0) {
-        const fuse = new Fuse(localPool, {
+      if (pg === 1 && items.length < 6 && currentPool.length > 0) {
+        const fuse = new Fuse(currentPool, {
           keys: ['name', 'origin_name'],
           threshold: 0.3, // stricter = less noise, faster
           distance: 60,
@@ -512,7 +541,7 @@ export default function SearchPage() {
         if (searchAbortRef.current === searchCtrl) searchAbortRef.current = null;
       }
     }
-  }, [ensureSearchIndexLoaded, localPool]);
+  }, [ensureSearchIndexLoaded]);
 
   useEffect(() => {
     if (q) {
@@ -525,6 +554,7 @@ export default function SearchPage() {
       setFilterYear('');
       setFilterGenre('');
       setFilterCountry('');
+      setFilterAudio('');
       setSortMode('relevance');
       doSearch(q, 1);
     }
@@ -715,16 +745,20 @@ export default function SearchPage() {
     if (filterCountry) {
       data = data.filter((m) => m.country?.some((c) => c.slug === filterCountry));
     }
+    if (filterAudio) {
+      data = data.filter((m) => getAudioLanguageLabels(m.lang).some((item) => item.kind === filterAudio));
+    }
     return sortMoviesForSearch(data, q, sortMode);
-  }, [results, filterType, filterYear, filterGenre, filterCountry, sortMode, q]);
+  }, [results, filterType, filterYear, filterGenre, filterCountry, filterAudio, sortMode, q]);
 
-  const activeFilterCount = [filterType, filterYear, filterGenre, filterCountry].filter(Boolean).length;
+  const activeFilterCount = [filterType, filterYear, filterGenre, filterCountry, filterAudio].filter(Boolean).length;
 
   const handleResetFilters = () => {
     setFilterType('');
     setFilterYear('');
     setFilterGenre('');
     setFilterCountry('');
+    setFilterAudio('');
   };
 
   // ── SEO ──
@@ -893,7 +927,7 @@ export default function SearchPage() {
                               loading="lazy"
                               decoding="async"
                               className="w-full h-full object-cover object-top"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              onError={(e) => applyImageElementFallback(e.currentTarget)}
                             />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -902,7 +936,7 @@ export default function SearchPage() {
                             <div className="flex items-center gap-2 mt-1">
                               {year > 0 && <span className="text-white/40 text-xs">{year}</span>}
                               {movie.quality && <span className="text-red-400 text-xs font-semibold">{movie.quality}</span>}
-                              {movie.lang && <span className="text-white/40 text-xs">{movie.lang}</span>}
+                              <AudioLanguageBadges value={movie.lang} compact />
                             </div>
                           </div>
                           <i className="ri-arrow-right-line text-white/15 flex-shrink-0 text-sm" />
@@ -1145,10 +1179,12 @@ export default function SearchPage() {
                 selectedYear={filterYear}
                 selectedGenre={filterGenre}
                 selectedCountry={filterCountry}
+                selectedAudio={filterAudio}
                 onTypeChange={setFilterType}
                 onYearChange={setFilterYear}
                 onGenreChange={setFilterGenre}
                 onCountryChange={setFilterCountry}
+                onAudioChange={setFilterAudio}
                 onReset={handleResetFilters}
                 activeCount={activeFilterCount}
               />

@@ -255,7 +255,7 @@ export default function UserComments({ slug, movieName }: UserCommentsProps) {
                     onClick={() => setRating(s)}
                     onMouseEnter={() => setHoverRating(s)}
                     onMouseLeave={() => setHoverRating(0)}
-                    className="w-7 h-7 flex items-center justify-center cursor-pointer transition-transform hover:scale-110"
+                    className="flex h-11 w-11 items-center justify-center cursor-pointer rounded-lg transition-transform hover:scale-105 touch-manipulation"
                   >
                     <i className={`ri-star-fill text-xl transition-colors ${
                       (hoverRating || rating) >= s ? 'text-amber-400' : 'text-white/15'
@@ -283,7 +283,7 @@ export default function UserComments({ slug, movieName }: UserCommentsProps) {
               <button
                 type="submit"
                 disabled={submitting || !name.trim() || !text.trim()}
-                className="flex items-center gap-2 px-5 py-2 bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap"
+                className="flex min-h-11 items-center gap-2 px-5 bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap touch-manipulation"
               >
                 {submitting ? (
                   <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Đang gửi...</>
@@ -305,7 +305,7 @@ export default function UserComments({ slug, movieName }: UserCommentsProps) {
             <button
               key={s}
               onClick={() => setSortBy(s)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
+              className={`min-h-11 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
                 sortBy === s
                   ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                   : 'text-white/40 hover:text-white border border-transparent hover:border-white/10'
@@ -338,7 +338,7 @@ export default function UserComments({ slug, movieName }: UserCommentsProps) {
                 <p className="text-white/60 text-sm leading-relaxed">{c.text}</p>
                 <button
                   onClick={() => handleLike(c.id)}
-                  className={`mt-2 flex items-center gap-1.5 text-[11px] transition-all cursor-pointer ${
+                  className={`mt-1 flex min-h-11 items-center gap-1.5 rounded-lg pr-3 text-[11px] transition-all cursor-pointer touch-manipulation ${
                     c.liked ? 'text-red-400' : 'text-white/30 hover:text-white/60'
                   }`}
                 >

@@ -1,7 +1,7 @@
 import { startTransition, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Fuse from 'fuse.js';
-import { fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMoviesInSupabase } from '../../services/movieApi';
+import { applyImageElementFallback, fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMoviesInSupabase } from '../../services/movieApi';
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -388,6 +388,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
                           className="w-full h-full object-cover object-top"
                           loading="lazy"
                           decoding="async"
+                          onError={(event) => applyImageElementFallback(event.currentTarget)}
                         />
                       </div>
                       <div className="flex-1 min-w-0">

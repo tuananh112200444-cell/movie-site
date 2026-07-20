@@ -191,6 +191,11 @@ function SkipToContent() {
 
 function App() {
   useEffect(() => {
+    // Source-health data is useful only when an actual player is about to be
+    // mounted. Fetching it on the homepage spent bandwidth and produced a
+    // distracting failed request when the optional diagnostics endpoint was
+    // unavailable.
+    if (!/^\/xem-phim\/[^/]+/.test(window.location.pathname)) return;
     const run = () => void warmPlayerSourceHealth();
     const win = window as Window & {
       requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;

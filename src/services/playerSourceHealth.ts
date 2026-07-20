@@ -40,10 +40,6 @@ function normalizeHost(host: string | undefined): string {
   return String(host || '').trim().toLowerCase().replace(/^www\./, '');
 }
 
-function normalizeCluster(cluster: string | undefined): string {
-  return String(cluster || '').trim().toLowerCase();
-}
-
 function shouldFetchSourceHealth(): boolean {
   if (!canUseBrowserStorage()) return false;
   const lastFetch = Number(window.localStorage.getItem(SOURCE_HEALTH_LAST_FETCH_KEY) || 0);
@@ -75,8 +71,8 @@ export async function warmPlayerSourceHealth(): Promise<void> {
       const host = normalizeHost(item.host);
       if (!host || Number(item.critical || 0) < 2 || Number(item.score || 0) < 5) continue;
       map[host] = now;
-      const cluster = normalizeCluster(item.cluster);
-      if (cluster) map[cluster] = now;
+      // Keep the penalty scoped to the exact host. One failing CDN shard must
+      // not demote every source from the same provider.
     }
     writeJsonMap(BAD_SOURCE_HOSTS_KEY, map);
     window.localStorage.setItem(SOURCE_HEALTH_LAST_FETCH_KEY, String(now));

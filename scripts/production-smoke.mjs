@@ -13,12 +13,19 @@ const checks = [
 
 async function check(item) {
   const started = Date.now();
-  try {
-    const response = await fetch(`${SITE}${item.path}`, { redirect: 'follow', signal: AbortSignal.timeout(TIMEOUT), headers: item.bot ? { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' } : {} });
-    const body = await response.text();
-    const missing = item.has.filter((value) => !body.includes(value));
-    return { name:item.name, ok:response.status===item.status && missing.length===0, status:response.status, missing, elapsed_ms:Date.now()-started };
-  } catch (error) { return { name:item.name, ok:false, error:error.message, elapsed_ms:Date.now()-started }; }
+  let lastError;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await fetch(`${SITE}${item.path}`, { redirect: 'follow', signal: AbortSignal.timeout(TIMEOUT), headers: item.bot ? { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' } : {} });
+      const body = await response.text();
+      const missing = item.has.filter((value) => !body.includes(value));
+      return { name:item.name, ok:response.status===item.status && missing.length===0, status:response.status, missing, attempts:attempt, elapsed_ms:Date.now()-started };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  }
+  return { name:item.name, ok:false, error:lastError?.message || 'network failure', attempts:2, elapsed_ms:Date.now()-started };
 }
 
 const results = [];

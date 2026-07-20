@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const steps = [
-  ['security:secrets'], ['security:supabase'], ['type-check'], ['build'],
+  ['security:secrets'], ['security:supabase'], ['schema:test'], ['type-check'], ['build'],
   ['search:test'], ['movie:data:test'], ['watch:test'], ['diagnostics:test'],
 ];
 const report = { started_at: new Date().toISOString(), status: 'running', steps: [] };

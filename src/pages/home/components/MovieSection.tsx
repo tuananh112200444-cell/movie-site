@@ -339,7 +339,7 @@ export default function MovieSection({
           </div>
           <Link
             to={viewAllLink}
-            className={`group/btn flex flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.09] bg-white/[0.035] px-3.5 py-2 text-xs font-bold text-white/62 transition-all duration-300 hover:bg-white/[0.08] active:scale-95 active:text-white ${t.btnHoverText}`}
+            className={`group/btn flex min-h-11 flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.09] bg-white/[0.035] px-3.5 py-2 text-xs font-bold text-white/62 transition-all duration-300 hover:bg-white/[0.08] active:scale-95 active:text-white touch-manipulation ${t.btnHoverText}`}
           >
             Xem tất cả
             <i className="ri-arrow-right-line text-xs transition-transform duration-300 group-hover/btn:translate-x-1" />
@@ -385,7 +385,7 @@ export default function MovieSection({
         {/* View All â€” ghost pill with theme hover */}
         <Link
           to={viewAllLink}
-          className={`group/btn flex min-h-9 flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.10] bg-white/[0.045] px-3.5 py-2 text-xs font-bold text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 hover:bg-white/[0.09] hover:shadow-[0_12px_30px_-22px_rgba(255,255,255,0.8)] active:scale-95 active:text-white ${t.btnHoverText}`}
+          className={`group/btn flex min-h-11 flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.10] bg-white/[0.045] px-3.5 py-2 text-xs font-bold text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 hover:bg-white/[0.09] hover:shadow-[0_12px_30px_-22px_rgba(255,255,255,0.8)] active:scale-95 active:text-white touch-manipulation ${t.btnHoverText}`}
         >
           Xem tất cả
           <i className="ri-arrow-right-line text-xs transition-transform duration-300 group-hover/btn:translate-x-1" />

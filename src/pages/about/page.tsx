@@ -7,10 +7,10 @@ const aboutSchema = [
   {
     '@context': 'https://schema.org',
     '@type': 'AboutPage',
-    name: 'Giới Thiệu KhoPhim – Trang Xem Phim Online Miễn Phí Hàng Đầu Việt Nam',
+    name: 'Giới Thiệu KhoPhim – Website Khám Phá Và Xem Phim Tiếng Việt',
     url: `${SITE_URL}/about`,
     description:
-      'KhoPhim (khophim.org) là nền tảng xem phim online miễn phí vietsub HD hàng đầu Việt Nam với hơn 50,000 bộ phim. Không quảng cáo, không đăng ký, cập nhật hàng ngày.',
+      'KhoPhim (khophim.org) là website khám phá và xem phim tiếng Việt, tổ chức nội dung theo phim, thể loại, quốc gia và trạng thái cập nhật.',
     inLanguage: 'vi',
     isPartOf: { '@type': 'WebSite', name: 'KhoPhim', url: SITE_URL },
     publisher: {
@@ -35,15 +35,14 @@ const aboutSchema = [
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'KhoPhim',
-    alternateName: ['khophim', 'khophim.org', 'kho phim', 'KhoPhim', 'kho phim', 'kho phim online', 'kho phim miễn phí', 'kho phim vietsub', 'kho phim hd', 'kho phim 2026', 'kho phim lớn nhất', 'kho phim hàng đầu', 'kho phim mới nhất', 'kho phim bom tấn', 'Kho Phim Online'],
+    alternateName: ['khophim', 'khophim.org', 'kho phim', 'Kho Phim Online'],
     url: SITE_URL,
     logo: 'https://khophim.org/brand/khophim-logo-v2.png',
     description:
-      'KhoPhim là nền tảng xem phim online miễn phí vietsub HD hàng đầu Việt Nam. Hơn 50,000 bộ phim lẻ, phim bộ, phim chiếu rạp, anime cập nhật hàng ngày.',
-    foundingDate: '2020',
+      'KhoPhim là website khám phá và xem phim tiếng Việt với metadata phim, danh mục, tìm kiếm và trạng thái cập nhật được chuẩn hóa.',
     areaServed: 'VN',
     knowsLanguage: 'vi',
-    sameAs: ['https://khophim.org'],
+    sameAs: ['https://www.tiktok.com/@khophim.org'],
     contactPoint: {
       '@type': 'ContactPoint',
       name: 'KhoPhim Customer Support',
@@ -55,7 +54,7 @@ const aboutSchema = [
 ];
 
 const STATS = [
-  { value: '50,000+', label: 'Bộ Phim', icon: 'ri-film-line', desc: 'Kho phim khổng lồ' },
+  { value: 'Mỗi ngày', label: 'Cập Nhật', icon: 'ri-film-line', desc: 'Metadata được làm mới' },
   { value: 'HD/4K', label: 'Chất Lượng', icon: 'ri-hd-line', desc: 'Hình ảnh sắc nét' },
   { value: '100%', label: 'Miễn Phí', icon: 'ri-gift-line', desc: 'Không mất phí' },
   { value: '0', label: 'Quảng Cáo', icon: 'ri-shield-check-line', desc: 'Xem không bị gián đoạn' },
@@ -138,9 +137,9 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen kp-cinema-page text-white">
       <SEO
-        title="Giới Thiệu KhoPhim – Xem Phim Online Miễn Phí"
-        description="KhoPhim (khophim.org) là nền tảng xem phim online miễn phí vietsub HD hàng đầu Việt Nam. Hơn 50,000 bộ phim lẻ, phim bộ, phim chiếu rạp, anime. Không quảng cáo, không đăng ký, cập nhật hàng ngày."
-        keywords="giới thiệu KhoPhim, KhoPhim là gì, khophim.org, khophim, xem phim online miễn phí Việt Nam, phim vietsub HD hàng đầu, kho phim online lớn nhất, xem phim không quảng cáo"
+        title="Giới Thiệu KhoPhim – Website Khám Phá Phim Tiếng Việt"
+        description="KhoPhim là website khám phá và xem phim tiếng Việt, có tìm kiếm, danh mục, metadata và trạng thái cập nhật phim rõ ràng."
+        keywords="giới thiệu KhoPhim, KhoPhim là gì, khophim.org, website phim tiếng Việt"
         canonical="/about"
         ogType="website"
         schema={aboutSchema}
@@ -176,10 +175,10 @@ export default function AboutPage() {
             <span className="text-white">Kho</span><span className="text-red-500">Phim</span>
             <span className="text-white/60 font-light"> — Xem Phim Online</span>
             <br />
-            <span className="text-white">Miễn Phí Hàng Đầu Việt Nam</span>
+            <span className="text-white">Nhanh, Rõ Ràng Và Dễ Sử Dụng</span>
           </h1>
           <p className="text-white/50 text-base md:text-lg max-w-2xl mx-auto leading-relaxed mb-10">
-            Nền tảng xem phim vietsub HD lớn nhất Việt Nam với hơn <strong className="text-white/80">50,000 bộ phim</strong> từ khắp nơi trên thế giới. Không quảng cáo, không đăng ký, xem ngay tại <a href="https://khophim.org" className="text-red-400 hover:text-red-300 transition-colors">khophim.org</a>.
+            Website khám phá và xem phim tiếng Việt với metadata, tìm kiếm, danh mục và trạng thái tập được cập nhật thường xuyên tại <a href="https://khophim.org" className="text-red-400 hover:text-red-300 transition-colors">khophim.org</a>.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -221,10 +220,10 @@ export default function AboutPage() {
             </div>
             <div className="space-y-4 text-white/55 text-sm leading-relaxed">
               <p>
-                <strong className="text-white/80">KhoPhim</strong> (tên miền: <a href="https://khophim.org" className="text-red-400 hover:text-red-300 transition-colors" rel="noopener noreferrer nofollow">khophim.org</a>) là nền tảng xem phim online miễn phí hàng đầu Việt Nam, được thành lập với sứ mệnh mang đến trải nghiệm xem phim vietsub chất lượng cao, hoàn toàn miễn phí cho người dùng Việt Nam.
+                <strong className="text-white/80">KhoPhim</strong> (tên miền: <a href="https://khophim.org" className="text-red-400 hover:text-red-300 transition-colors">khophim.org</a>) là website khám phá và xem phim tiếng Việt, tập trung vào tìm kiếm nhanh, metadata rõ ràng và trải nghiệm đa thiết bị.
               </p>
               <p>
-                Với kho phim khổng lồ hơn <strong className="text-white/70">50,000 bộ phim</strong> bao gồm phim lẻ, phim bộ, phim chiếu rạp, hoạt hình và anime từ Hàn Quốc, Trung Quốc, Âu Mỹ, Nhật Bản, Thái Lan và Việt Nam — KhoPhim cập nhật nội dung mới mỗi ngày để đáp ứng nhu cầu giải trí đa dạng của người xem.
+                Thư viện gồm phim lẻ, phim bộ, phim chiếu rạp, hoạt hình và anime từ nhiều quốc gia. Quy mô dữ liệu thay đổi theo quá trình đồng bộ, kiểm tra chất lượng và hợp nhất bản trùng.
               </p>
               <p>
                 Điểm khác biệt của KhoPhim là <strong className="text-white/70">không có quảng cáo</strong>, không yêu cầu đăng ký tài khoản, và tương thích hoàn toàn với mọi thiết bị từ điện thoại đến máy tính. Người dùng có thể xem phim vietsub HD ngay lập tức mà không cần cài đặt bất kỳ phần mềm nào.

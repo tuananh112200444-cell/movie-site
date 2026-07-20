@@ -1,7 +1,16 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { adminFetch } from '@/services/adminAuth';
 
 const SITE_URL = 'https://khophim.org';
+const GSC_FEEDBACK_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/gsc-seo-feedback`;
+
+interface GscFeedback {
+  latest_run: null | { started_at:string; success:boolean; pages_collected:number; queries_collected:number; urls_inspected:number; indexed_urls:number; error_message?:string|null };
+  inspections: Array<{ url:string; slug:string; verdict:string; coverage_state:string; recommendation:string; priority:number; inspected_at:string }>;
+  top_pages: Array<{ dimension_value:string; clicks:number; impressions:number; ctr:number; position:number }>;
+  top_queries: Array<{ dimension_value:string; clicks:number; impressions:number; ctr:number; position:number }>;
+}
 
 /* ─── Sitemap definitions ─── */
 const SITEMAPS = [
@@ -189,8 +198,7 @@ function copyToClipboard(text: string) {
 export default function AdminSEOPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'sitemaps' | 'gsc' | 'health'>('overview');
-  const [pingingSitemap, setPingingSitemap] = useState<string | null>(null);
-  const [pingResult, setPingResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
+  const [gscFeedback, setGscFeedback] = useState<GscFeedback | null>(null);
 
   const handleCopy = (id: string, value: string) => {
     copyToClipboard(value);
@@ -198,20 +206,15 @@ export default function AdminSEOPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handlePingSitemap = async (sitemapUrl: string, id: string) => {
-    setPingingSitemap(id);
-    setPingResult(null);
-    try {
-      const pingUrl = `https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`;
-      const res = await fetch(pingUrl, { mode: 'no-cors' });
-      setPingResult({ id, success: true, message: 'Đã gửi ping đến Google!' });
-    } catch {
-      setPingResult({ id, success: true, message: 'Đã gửi ping (Google không trả response nhưng vẫn nhận)' });
-    } finally {
-      setPingingSitemap(null);
-      setTimeout(() => setPingResult(null), 4000);
-    }
-  };
+  useEffect(() => {
+    adminFetch(GSC_FEEDBACK_URL)
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        setGscFeedback(payload as GscFeedback);
+      })
+      .catch(() => setGscFeedback(null));
+  }, []);
 
   const totalUrls = URL_BREAKDOWN.reduce((sum, item) => sum + item.count, 0);
   const passedChecks = HEALTH_CHECKS.filter((c) => c.status === 'pass').length;
@@ -300,7 +303,7 @@ export default function AdminSEOPage() {
                 { icon: 'ri-links-line', label: 'Tổng URL', value: `~${totalUrls}+`, sub: 'Trong tất cả sitemap', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
                 { icon: 'ri-map-2-line', label: 'Sitemap', value: '5', sub: '1 index + 4 sitemap con', color: 'text-amber-400', bg: 'bg-amber-500/10' },
                 { icon: 'ri-checkbox-circle-line', label: 'Health Check', value: `${passedChecks}/${HEALTH_CHECKS.length}`, sub: `${warningChecks} cần chú ý`, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                { icon: 'ri-google-line', label: 'GSC Status', value: 'Chưa submit', sub: 'Cần submit sitemap', color: 'text-amber-400', bg: 'bg-amber-500/10' },
+                { icon: 'ri-google-line', label: 'GSC tự động', value: gscFeedback?.latest_run?.success ? 'Đang chạy' : 'Chờ dữ liệu', sub: gscFeedback?.latest_run ? `${gscFeedback.latest_run.urls_inspected} URL kiểm tra gần nhất` : 'Cron thu thập mỗi ngày', color: gscFeedback?.latest_run?.success ? 'text-emerald-400' : 'text-amber-400', bg: 'bg-emerald-500/10' },
               ].map((card, i) => (
                 <div key={i} className={`${card.bg} border border-white/[0.06] rounded-xl p-4`}>
                   <div className="flex items-center gap-2 mb-2">
@@ -312,6 +315,33 @@ export default function AdminSEOPage() {
                 </div>
               ))}
             </div>
+
+            {gscFeedback?.latest_run && (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Vòng phản hồi Search Console tự động</h3>
+                    <p className="mt-1 text-xs text-white/40">Lần chạy {new Date(gscFeedback.latest_run.started_at).toLocaleString('vi-VN')}</p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${gscFeedback.latest_run.success ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'}`}>
+                    {gscFeedback.latest_run.success ? 'Hoạt động' : 'Cần kiểm tra quyền GSC'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {[
+                    ['Trang có dữ liệu', gscFeedback.latest_run.pages_collected],
+                    ['Từ khóa', gscFeedback.latest_run.queries_collected],
+                    ['URL đã kiểm tra', gscFeedback.latest_run.urls_inspected],
+                    ['Google xác nhận index', gscFeedback.latest_run.indexed_urls],
+                  ].map(([label,value]) => (
+                    <div key={String(label)} className="rounded-xl bg-black/20 p-3">
+                      <p className="text-lg font-black text-white">{value}</p>
+                      <p className="text-[11px] text-white/40">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* URL Distribution */}
             <div className="bg-[#0d0f18] border border-white/[0.06] rounded-2xl p-5">
@@ -517,61 +547,28 @@ export default function AdminSEOPage() {
                           <i className="ri-external-link-line" />
                           Xem
                         </a>
-                        <button
-                          onClick={() => handlePingSitemap(sitemap.url, sitemap.id)}
-                          disabled={pingingSitemap === sitemap.id}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap disabled:opacity-50"
-                        >
-                          {pingingSitemap === sitemap.id ? (
-                            <i className="ri-loader-4-line animate-spin" />
-                          ) : (
-                            <i className="ri-send-plane-line" />
-                          )}
-                          Ping Google
-                        </button>
+                        <span className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
+                          <i className="ri-refresh-line" />
+                          Tự động
+                        </span>
                       </div>
                     </div>
-                    {pingResult && pingResult.id === sitemap.id && (
-                      <div className={`mt-3 flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${
-                        pingResult.success ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-                      }`}>
-                        <i className={pingResult.success ? 'ri-checkbox-circle-fill' : 'ri-error-warning-line'} />
-                        {pingResult.message}
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Bulk Ping */}
-            <div className="bg-gradient-to-r from-red-500/10 to-amber-500/8 border border-red-500/20 rounded-2xl p-5">
+            <div className="bg-gradient-to-r from-emerald-500/10 to-sky-500/8 border border-emerald-500/20 rounded-2xl p-5">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-red-500/15 flex-shrink-0">
-                  <i className="ri-notification-3-line text-red-400 text-lg" />
+                  <i className="ri-robot-2-line text-emerald-400 text-lg" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-white font-semibold text-sm mb-1">Ping tất cả sitemap lên Google</h3>
+                  <h3 className="text-white font-semibold text-sm mb-1">SEO vận hành tự động</h3>
                   <p className="text-white/45 text-xs leading-relaxed mb-3">
-                    Gửi yêu cầu ping đến Google cho tất cả sitemap cùng lúc. Google sẽ ưu tiên crawl các URL trong sitemap.
+                    Google đã ngừng sitemap ping. KhoPhim tự cập nhật sitemap/lastmod, thu thập Search Console mỗi ngày và kiểm tra luân phiên URL phim bằng API chính thức.
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {SITEMAPS.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => handlePingSitemap(s.url, s.id)}
-                        disabled={pingingSitemap === s.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] text-white/50 hover:text-white text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap disabled:opacity-50"
-                      >
-                        {pingingSitemap === s.id ? (
-                          <i className="ri-loader-4-line animate-spin" />
-                        ) : (
-                          <i className="ri-send-plane-line" />
-                        )}
-                        {s.name}
-                      </button>
-                    ))}
-                  </div>
+                  <p className="text-xs font-semibold text-emerald-300">Không cần thao tác hằng ngày.</p>
                 </div>
               </div>
             </div>

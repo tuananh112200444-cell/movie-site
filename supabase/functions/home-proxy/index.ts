@@ -227,6 +227,7 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
     sub_docquyen: Boolean(m.sub_docquyen ?? false),
     source_site: String(m.source_site ?? sourceSite),
     source_name: String(m.source_name ?? (sourceSite === 'ophim' ? 'OPhim' : sourceSite)),
+    tmdb_popularity: Number(m.tmdb_popularity ?? 0) || 0,
   };
 }
 
@@ -486,31 +487,53 @@ try {
   return overrideMap.size > 0 ? overrideMap : null;
 }
 async function buildTrending(
+  supabase: ReturnType<typeof createClient>,
   limit: number
 ): Promise<Record<string, unknown>[]> {
-  const ophimNew = await fetchOPhim('/v1/api/danh-sach/phim-moi-cap-nhat?page=1&sort_field=modified.time&sort_type=desc', 3000);
-  const extNew = await fetchExternal('/v1/api/danh-sach/phim-moi-cap-nhat?page=1&sort_field=modified.time&sort_type=desc', 3000);
+  const [ophimNew, extNew, popularResult] = await Promise.all([
+    fetchOPhim('/v1/api/danh-sach/phim-moi-cap-nhat?page=1&sort_field=modified.time&sort_type=desc', 3000),
+    fetchExternal('/danh-sach/phim-moi-cap-nhat?page=1&sort_field=modified.time&sort_type=desc', 3000),
+    supabase
+      .from('movies')
+      .select(`${HOME_SUPABASE_SELECT},tmdb_popularity,quality,lang`)
+      .eq('is_published', true)
+      .not('poster_url', 'is', null)
+      .gte('updated_at', new Date(Date.now() - 90 * 86400000).toISOString())
+      .order('tmdb_popularity', { ascending: false, nullsFirst: false })
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(limit * 3)
+      .abortSignal(timeoutSignal(1800)),
+  ]);
 
-  const seen = new Set<string>();
-  const scored: { item: Record<string, unknown>; score: number }[] = [];
+  const scored = new Map<string, { item: Record<string, unknown>; score: number }>();
 
   for (const source of [
     { data: ophimNew, name: 'ophim' },
     { data: extNew, name: 'phimapi' },
+    {
+      data: popularResult.data?.length
+        ? { items: popularResult.data.map((movie) => ({ ...movie, _id: movie.id, modified: { time: movie.updated_at } })) }
+        : null,
+      name: 'supabase-popular',
+    },
   ]) {
     if (!source.data) continue;
     for (const raw of extractItems(source.data)) {
       const m = cleanMovieItem(raw, source.name);
       if (!m) continue;
-      if (seen.has(m.slug as string)) continue;
       if (isTrailerOnly(m.episode_current as string)) continue;
-      seen.add(m.slug as string);
-      scored.push({ item: m, score: hotScore(m, source.name) });
+      const popularity = Math.max(0, Number(m.tmdb_popularity || 0));
+      const score = hotScore(m, source.name) + Math.log1p(popularity) * 18;
+      const key = String(m.slug);
+      const current = scored.get(key);
+      if (!current || score > current.score) scored.set(key, { item: m, score });
     }
   }
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).map((s) => s.item);
+  return [...scored.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((entry) => entry.item);
 }
 
 /* ── Fetch a category / type list ── */
@@ -648,6 +671,9 @@ async function fetchSection(
   const endpoint = isCountry
     ? `/v1/api/danh-sach/phim-moi-cap-nhat?country=${encodeURIComponent(typeOrCategory)}&page=1`
     : `/v1/api/danh-sach/${encodeURIComponent(typeOrCategory)}?page=1`;
+  const externalEndpoint = isCountry
+    ? `/danh-sach/phim-moi-cap-nhat?country=${encodeURIComponent(typeOrCategory)}&page=1`
+    : endpoint;
 
   // OPhim ưu tiên
   const ophimData = await fetchOPhim(endpoint, 3000);
@@ -661,7 +687,7 @@ async function fetchSection(
   }
 
   // Fallback external
-  const extData = await fetchExternal(endpoint, 3000);
+  const extData = await fetchExternal(externalEndpoint, 3000);
   if (extData) {
     return extractItems(extData)
       .map((raw) => cleanMovieItem(raw, 'phimapi'))
@@ -822,7 +848,7 @@ serve(async (req) => {
   const sectionPromises: Record<string, Promise<Record<string, unknown>[]>> = {};
 
   if (requestedSections.includes('trending')) {
-    sectionPromises.trending = buildTrending(limit);
+    sectionPromises.trending = buildTrending(supabase, limit);
   }
   if (requestedSections.includes('phim-chieu-rap')) {
     sectionPromises['phim-chieu-rap'] = fetchSection(supabase, 'phim-chieu-rap', false, limit);
