@@ -46,7 +46,7 @@
     "seo:generate": "node scripts/generate-seo-sitemap.mjs && node scripts/generate-movie-sitemap-chunks.mjs && node scripts/generate-sitemap-index.mjs && node scripts/generate-mhophim-satellite.mjs",
     "watch:test": "node scripts/watch-page-regression.mjs && node scripts/player-ui-regression.mjs && node scripts/player-performance-regression.mjs",
     "home:test": "node scripts/home-experience-regression.mjs",
-    "diagnostics:test": "node scripts/diagnostics-regression.mjs && node scripts/blvietsub-repair-regression.mjs",
+    "diagnostics:test": "node scripts/diagnostics-regression.mjs && node scripts/blvietsub-repair-regression.mjs && node scripts/onlyflix-regression.mjs",
     "schema:test": "node scripts/schema-compatibility-gate.mjs",
     "ui:test": "playwright test tests/ui-quality.spec.ts",
     "ui:test:desktop": "playwright test tests/ui-quality.spec.ts --project=desktop-chrome",
