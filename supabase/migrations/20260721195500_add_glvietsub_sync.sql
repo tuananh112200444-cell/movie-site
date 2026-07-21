@@ -7,7 +7,7 @@ begin
     'sync-glvietsub-feed-every-15-minutes',
     '4,19,34,49 * * * *',
     $cmd$select net.http_get(
-      url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-glvietsub-feed?limit=3',
+      url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-glvietsub-feed?limit=8',
       headers := jsonb_build_object(
         'x-cron-secret',
         (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET' order by created_at desc limit 1)

@@ -250,7 +250,7 @@ function shouldSuppressUnhealthyStream(row: Record<string, unknown> | null): boo
   if (!row) return false;
   const healthStatus = String(row.health_status || '').toLowerCase();
   const failureCount = Number(row.failure_count || 0);
-  return healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 3);
+  return (healthStatus === 'dead' && failureCount >= 2) || (healthStatus === 'failed' && failureCount >= 3);
 }
 
 function attachStreamHealth(epData: Record<string, unknown>, row: Record<string, unknown> | null): Record<string, unknown> {
@@ -348,15 +348,25 @@ async function readCachedDetail(
   slug: string,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const { data } = await supabase
-      .from('movie_api_cache')
-      .select('detail_json, expires_at')
-      .eq('slug', slug)
-      .abortSignal(timeoutSignal(1500))
-      .maybeSingle();
+    const [{ data }, { data: liveMovie }] = await Promise.all([
+      supabase
+        .from('movie_api_cache')
+        .select('detail_json, expires_at')
+        .eq('slug', slug)
+        .abortSignal(timeoutSignal(1500))
+        .maybeSingle(),
+      supabase
+        .from('movies')
+        .select('current_episode,episode_current')
+        .eq('slug', slug)
+        .abortSignal(timeoutSignal(1500))
+        .maybeSingle(),
+    ]);
 
     const row = data as { detail_json?: unknown; expires_at?: string } | null;
     if (!row?.detail_json || !row.expires_at || row.expires_at <= new Date().toISOString()) return null;
+    const cachedMovie = (row.detail_json as Record<string, unknown>).movie as Record<string, unknown> | undefined;
+    if (getExpectedEpisodeNumber(liveMovie as Record<string, unknown> | null) > getExpectedEpisodeNumber(cachedMovie)) return null;
     return row.detail_json as Record<string, unknown>;
   } catch {
     return null;
@@ -715,6 +725,7 @@ async function searchOphimCandidateSlugs(keyword: string, limit = 6): Promise<st
   if (!cleanKeyword) return [];
   const urls = [
     `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
+    `https://phimapi.com/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
     `https://ophim.tv/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
   ];
   const slugs: string[] = [];
@@ -1724,7 +1735,7 @@ serve(async (req) => {
         if (isKnownBlockedEmbedHost(embedUrl || streamUrl)) continue;
         const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
         const failureCount = Number(sm.failure_count || 0);
-        if (healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 5)) continue;
+        if ((healthStatus === 'dead' && failureCount >= 2) || (healthStatus === 'failed' && failureCount >= 5)) continue;
 
         const slugVal = String(sm.episode_slug || 'full');
         const serverName = String(sm.server_name || 'Nguồn');
@@ -1843,6 +1854,16 @@ serve(async (req) => {
     if (shouldFetchExternal) {
       let detailSlug = slug;
       let external = await fetchExternalMovieDetail(detailSlug);
+
+      const initialExternalMax = external ? getMaxEpisodeNumberFromServers(external.episodes) : 0;
+      if (movieData && initialExternalMax < expectedEpisode) {
+        const verifiedAlias = await fetchVerifiedAuxiliaryExternalDetail(movieData as Record<string, unknown>);
+        const verifiedMax = verifiedAlias ? getMaxEpisodeNumberFromServers(verifiedAlias.episodes) : 0;
+        if (verifiedAlias && verifiedMax > initialExternalMax) {
+          external = verifiedAlias;
+          detailSlug = String(verifiedAlias.movie.slug || detailSlug);
+        }
+      }
 
       // If 404, search OPhim for correct slug
       if (!external) {

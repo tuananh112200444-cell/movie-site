@@ -55,6 +55,19 @@ test('player: URL xem phim tải được nguồn phát', async ({ page }) => {
   await expect.poll(async () => page.locator('iframe, video').count(), { timeout: 20_000 }).toBeGreaterThan(0);
 });
 
+test('banner top remains visible after scrolling', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const banner = page.getByTestId('sticky-top-banner');
+  await expect(banner).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, Math.min(1200, document.documentElement.scrollHeight - window.innerHeight)));
+  await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 }).toBeGreaterThan(20);
+  await expect(banner).toBeVisible();
+  const box = await banner.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeLessThan(page.viewportSize()!.height);
+});
+
 const e2eMovie = (episodes: Array<{ server_name: string; server_data: Array<Record<string, unknown>> }>) => ({
   status: true,
   movie: {

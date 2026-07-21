@@ -105,6 +105,7 @@ export default function StickyBanner() {
 
   return (
     <div
+      data-testid="sticky-top-banner"
       className={`relative z-0 w-full overflow-hidden border-t border-white/[0.04] bg-[#0d0f1a]/90 transition-all duration-500 ease-out ${
         visible ? 'max-h-[58px] opacity-100 sm:max-h-[72px] lg:max-h-[56px]' : 'max-h-0 opacity-0'
       }`}

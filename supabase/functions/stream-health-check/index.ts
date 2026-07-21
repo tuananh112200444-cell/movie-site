@@ -152,10 +152,10 @@ async function logHealth(
   });
 }
 
-function healthStatusFor(result: { ok: boolean; status: number | null; error: string }) {
+function healthStatusFor(result: { ok: boolean; status: number | null; error: string }, failureCount: number) {
   if (result.ok) return 'ok';
   if (result.status === 401 || result.status === 403) return 'blocked';
-  if (result.status === 404 || result.status === 410) return 'dead';
+  if (result.status === 404 || result.status === 410) return failureCount >= 2 ? 'dead' : 'failed';
   return 'failed';
 }
 
@@ -192,7 +192,7 @@ async function updateStream(
   }
   const nextFailureCount = result.ok ? 0 : Number(row.failure_count || 0) + 1;
   const update: Record<string, unknown> = {
-    health_status: healthStatusFor(result),
+    health_status: healthStatusFor(result, nextFailureCount),
     last_checked_at: now,
     response_time_ms: result.responseMs,
     failure_count: nextFailureCount,

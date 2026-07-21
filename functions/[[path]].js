@@ -1740,7 +1740,7 @@ async function proxySitemap(pathname, request, context) {
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  const sitemapVersion = '20260720-quality-gated-v4';
+  const sitemapVersion = '20260721-gl-raw-quality-v5';
   let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=5000&v=${sitemapVersion}`;

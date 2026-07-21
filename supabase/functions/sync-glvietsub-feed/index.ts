@@ -29,6 +29,18 @@ const slugify = (value = '') => String(value).normalize('NFD').replace(/[\u0300-
   .toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120);
 const meta = (html: string, key: string) => first(html, new RegExp(`<meta[^>]+(?:property|name)=["']${key}["'][^>]+content=["']([^"']+)`, 'i'));
 
+function titleAliases(...values: unknown[]): string[] {
+  const aliases = new Set<string>();
+  for (const value of values) {
+    const title = plain(String(value || '')).trim();
+    if (!title) continue;
+    aliases.add(title);
+    const prefix = title.split(/\s*[:|–—]\s*/)[0]?.trim();
+    if (prefix && prefix.length >= 3) aliases.add(prefix);
+  }
+  return [...aliases];
+}
+
 async function fetchText(url: string, timeout = 18_000, init: RequestInit = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -66,12 +78,20 @@ function discoverSitemapUrls(xml: string): string[] {
 
 function episodeLinks(html: string): Array<{ url: string; number: number; raw: boolean }> {
   const values: Array<{ url: string; number: number; raw: boolean }> = [];
-  const seen = new Set<string>();
+  const byUrl = new Map<string, { url: string; number: number; raw: boolean }>();
   for (const match of html.matchAll(/<a[^>]+href=["'](https:\/\/www\.glvietsub\.net\/xem-phim\/[^"']+tap-(\d+))[^>]*>([\s\S]*?)<\/a>/gi)) {
     const url = decode(match[1]).replace(/\/$/, '');
-    if (seen.has(url)) continue;
-    seen.add(url);
-    values.push({ url, number: Number(match[2]), raw: /\bRAW\b/i.test(plain(match[3])) });
+    const raw = /\bRAW\b/i.test(plain(match[3]));
+    const existing = byUrl.get(url);
+    if (existing) {
+      // The large "Play" CTA appears before the episode-list label and has no
+      // RAW marker. Aggregate duplicate anchors so the richer label wins.
+      existing.raw = existing.raw || raw;
+      continue;
+    }
+    const episode = { url, number: Number(match[2]), raw };
+    byUrl.set(url, episode);
+    values.push(episode);
   }
   return values.sort((a, b) => a.number - b.number);
 }
@@ -128,7 +148,7 @@ async function parseDetail(sourceUrl: string) {
   const year = Number(first(html, /(?:class=["']year["'][^>]*>|<span>)(20\d{2}|19\d{2})/i)) || 0;
   const expectedEpisodes = Number(first(html, /(?:<span[^>]*>|\b)(\d{1,4})\s*tập(?:\s*<\/span>|\b)/i)) || 0;
   const links = episodeLinks(html);
-  const episodeGroups = await mapWithConcurrency(links.slice(0, 80), 3, async (episode) => {
+  const episodeGroups = await mapWithConcurrency(links.slice(0, 80), 4, async (episode) => {
     const episodeHtml = await fetchText(episode.url);
     const postId = first(episodeHtml, /class=["']dooplay_player_option["'][^>]+data-post=["'](\d+)/i);
     const type = first(episodeHtml, /class=["']dooplay_player_option["'][^>]+data-type=["']([^"']+)/i) || 'tv';
@@ -150,9 +170,14 @@ async function parseDetail(sourceUrl: string) {
   });
   const episodes: Array<Record<string, unknown>> = episodeGroups.flat();
   const translatedNumbers = episodes.filter((row) => !row.raw).map((row) => Number(row.episode_number || 0));
+  const rawNumbers = episodes.filter((row) => row.raw).map((row) => Number(row.episode_number || 0));
+  const playableNumbers = episodes.map((row) => Number(row.episode_number || 0));
   const currentEpisode = Math.max(0, ...translatedNumbers);
+  const rawEpisode = Math.max(0, ...rawNumbers);
+  const playableEpisode = Math.max(0, ...playableNumbers);
   return {
-    sourceUrl, sourceSlug, name, originName, year, expectedEpisodes, currentEpisode, episodes,
+    sourceUrl, sourceSlug, name, originName, year, expectedEpisodes,
+    currentEpisode, rawEpisode, playableEpisode, episodes,
     content: plain(meta(html, 'description') || first(html, /class=["']mota["'][^>]*>([\s\S]*?)<\/span>/i)),
     image: meta(html, 'og:image') || first(html, /<img[^>]+(?:alt=["'][^"']*["'][^>]+)?src=["']([^"']+wp-content\/uploads\/[^"']+)/i),
     category: /phim-bach-hop|Bách Hợp/i.test(html) ? [{ name: 'Bách Hợp', slug: 'bach-hop' }] : [{ name: 'Đam Mỹ / BL', slug: 'dam-my' }],
@@ -167,18 +192,16 @@ async function findMovie(db: ReturnType<typeof createClient>, entry: Record<stri
   // Match through punctuation-safe normalized values. Raw titles can contain
   // commas/parentheses that alter PostgREST .or() syntax and silently prevent
   // GL episodes from attaching to an existing BL canonical movie.
-  const normalizedNames = Array.from(new Set([
-    slugify(String(entry.name || '')),
-    slugify(String(entry.originName || '')),
-  ].filter(Boolean)));
+  const aliases = titleAliases(entry.name, entry.originName);
+  const normalizedNames = Array.from(new Set(aliases.map((value) => slugify(value)).filter(Boolean)));
   return await findCanonicalMovieByIdentity(db, {
-    names: [entry.name, entry.originName],
+    names: aliases,
     normalizedNames,
     year: entry.year,
   });
 }
 
-async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
+async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
   let movie = await findMovie(db, entry);
   let created = false;
   const now = new Date().toISOString();
@@ -247,6 +270,60 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
   return { slug: movie.slug, created, rows, current_episode: entry.currentEpisode, total_episodes: entry.expectedEpisodes };
 }
 
+async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
+  const result = await storeEntryLegacy(db, entry);
+  const movie = await findMovie(db, entry);
+  if (!movie?.id) throw new Error('Stored movie could not be resolved');
+
+  const now = new Date().toISOString();
+  const translatedEpisode = Number(entry.currentEpisode || 0);
+  const rawEpisode = Number(entry.rawEpisode || 0);
+  const playableEpisode = Number(entry.playableEpisode || 0);
+  const hasPlayableEpisode = playableEpisode > 0 && (entry.episodes as Array<Record<string, unknown>>).length > 0;
+  const nextCurrent = Math.max(Number(movie.current_episode || 0), translatedEpisode);
+  const nextPlayable = Math.max(Number(movie.total_episodes || 0), playableEpisode);
+  const displayEpisode = nextCurrent > 0
+    ? `Tập ${nextCurrent}`
+    : rawEpisode > 0 ? `Tập ${rawEpisode} RAW` : 'Đang cập nhật';
+  const displayLanguage = nextCurrent > 0 ? 'Vietsub' : rawEpisode > 0 ? 'RAW · Chưa phụ đề' : 'Đang cập nhật';
+  const aliases = titleAliases(entry.originName);
+  const update: Record<string, unknown> = {
+    last_synced_at: now,
+    title_vi: entry.name,
+    title_en: aliases.at(-1) || entry.originName,
+    content: entry.content,
+    status: hasPlayableEpisode ? 'ongoing' : 'upcoming',
+    episode_current: displayEpisode,
+    current_episode: nextCurrent,
+    total_episodes: Math.max(Number(entry.expectedEpisodes || 0), nextPlayable),
+    episode_total: String(Math.max(Number(entry.expectedEpisodes || 0), nextPlayable)),
+    lang: displayLanguage,
+    is_published: Boolean(movie.is_published) || hasPlayableEpisode,
+  };
+  if (movie.source_site === 'tmdb-catalog') Object.assign(update, {
+    name: entry.name,
+    normalized_name: slugify(String(entry.name)),
+  });
+  if (movie.source_site === SOURCE) Object.assign(update, {
+    name: entry.name,
+    origin_name: entry.originName,
+    normalized_name: slugify(String(entry.name)),
+    thumb_url: entry.image,
+    poster_url: entry.image,
+    category: entry.category,
+    country: entry.country,
+    is_published: hasPlayableEpisode,
+  });
+
+  const { error: updateError } = await db.from('movies').update(update).eq('id', movie.id);
+  if (updateError) throw updateError;
+  const { error: seoError } = await db.rpc('refresh_movie_seo_quality', { p_movie_id: movie.id });
+  if (seoError) throw seoError;
+  await db.from('home_page_cache').update({ expires_at: now }).in('id', ['homepage_v3', 'search_index_v4_rows']);
+  await db.from('movie_api_cache').delete().eq('slug', movie.slug);
+  return { ...result, current_episode: nextCurrent, raw_episode: rawEpisode, playable_episode: playableEpisode };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   const started = Date.now();
@@ -268,41 +345,79 @@ serve(async (req) => {
     backfillOffset = Math.max(0, Number(cursor?.page || 0));
   }
   let discovered: string[];
+  let archiveCount = 0;
+  let archiveBatchSize = 0;
+  let normalizedBackfillOffset = 0;
   if (explicitSlug) {
     discovered = [`${BASE}/phim-bo/${explicitSlug}`];
   } else {
-    const latestHtml = await fetchText(`${BASE}/`);
-    const sitemapNumber = Math.min(2, Math.floor(backfillOffset / 1000) + 1);
-    const sitemapOffset = backfillOffset % 1000;
-    const sitemapXml = await fetchText(`${BASE}/tvshows-sitemap${sitemapNumber}.xml`).catch(() => '');
-    const archiveUrls = discoverSitemapUrls(sitemapXml);
+    const [latestHtml, sitemapOne, sitemapTwo] = await Promise.all([
+      fetchText(`${BASE}/`),
+      fetchText(`${BASE}/tvshows-sitemap1.xml`).catch(() => ''),
+      fetchText(`${BASE}/tvshows-sitemap2.xml`).catch(() => ''),
+    ]);
+    const archiveUrls = Array.from(new Set([
+      ...discoverSitemapUrls(sitemapOne),
+      ...discoverSitemapUrls(sitemapTwo),
+    ]));
+    archiveCount = archiveUrls.length;
+    archiveBatchSize = Math.max(1, limit - 1);
+    normalizedBackfillOffset = archiveCount > 0 ? backfillOffset % archiveCount : 0;
+    const archiveWindow = archiveCount > 0
+      ? Array.from({ length: Math.min(archiveBatchSize, archiveCount) }, (_, index) =>
+        archiveUrls[(normalizedBackfillOffset + index) % archiveCount])
+      : [];
     // Check the newest title on every run, then rotate through the archive so
-    // the catalogue converges instead of re-scanning the same homepage cards.
+    // every sitemap is covered even when each WordPress sitemap contains far
+    // fewer than the nominal 1,000 URLs.
     discovered = Array.from(new Set([
       ...discoverDetailUrls(latestHtml, 1),
-      ...archiveUrls.slice(sitemapOffset, sitemapOffset + Math.max(1, limit - 1)),
+      ...archiveWindow,
     ])).slice(0, limit);
   }
   const stored: unknown[] = [];
   const errors: string[] = [];
+  let skippedUnplayable = 0;
   let consecutiveFailures = 0;
-  for (const sourceUrl of discovered) {
-    if (consecutiveFailures >= 3) break;
+  const parsedEntries = await mapWithConcurrency(discovered, 2, async (sourceUrl) => {
     try {
-      const entry = await parseDetail(sourceUrl);
-      if (!entry.name || !entry.episodes.length) throw new Error('No playable translated episode');
-      stored.push(dryRun ? { name: entry.name, current_episode: entry.currentEpisode, total_episodes: entry.expectedEpisodes, sources: entry.episodes.length } : await storeEntry(db, entry));
+      return { sourceUrl, entry: await parseDetail(sourceUrl), error: '' };
+    } catch (error) {
+      return { sourceUrl, entry: null, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+  for (const parsed of parsedEntries) {
+    try {
+      if (!parsed.entry) throw new Error(parsed.error || 'Unknown parse failure');
+      const entry = parsed.entry;
+      if (!entry.name) throw new Error('Missing movie identity');
+      if (!entry.episodes.length) {
+        // Coming-soon pages are valid catalogue entries, not connector
+        // failures. They must remain unpublished and must not open the circuit
+        // or prevent later playable movies in the same archive window.
+        skippedUnplayable += 1;
+        consecutiveFailures = 0;
+        continue;
+      }
+      stored.push(dryRun ? {
+        name: entry.name,
+        current_episode: entry.currentEpisode,
+        raw_episode: entry.rawEpisode,
+        playable_episode: entry.playableEpisode,
+        total_episodes: entry.expectedEpisodes,
+        sources: entry.episodes.length,
+      } : await storeEntry(db, entry));
       consecutiveFailures = 0;
     } catch (error) {
       consecutiveFailures += 1;
-      errors.push(`${sourceUrl}: ${error instanceof Error ? error.message : String(error)}`);
+      errors.push(`${parsed.sourceUrl}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  const result = { success: errors.length === 0, dry_run: dryRun, scanned: discovered.length, stored, errors, circuit_open: consecutiveFailures >= 3, elapsed_ms: Date.now() - started };
+  const result = { success: errors.length === 0, dry_run: dryRun, scanned: discovered.length, stored, skipped_unplayable: skippedUnplayable, errors, circuit_open: consecutiveFailures >= 3, elapsed_ms: Date.now() - started };
   if (!explicitSlug && !dryRun) {
-    const nextPage = discovered.length < 2 || backfillOffset >= 1999
-      ? 0
-      : backfillOffset + Math.max(1, limit - 1);
+    const nextPage = archiveCount > 0
+      ? (normalizedBackfillOffset + archiveBatchSize) % archiveCount
+      : 0;
     await db.from('sync_cursors').upsert({ key: 'glvietsub-feed-backfill', page: nextPage, updated_at: new Date().toISOString() }, { onConflict: 'key' });
   }
   if (!dryRun) await db.from('sync_logs').insert({
