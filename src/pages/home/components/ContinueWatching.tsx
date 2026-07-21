@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useWatchHistory } from '../../../hooks/useWatchHistory';
+import { useResumeWatch, type ResumeInfo } from '../../../hooks/useResumeWatch';
 import { getThumbUrl, getSmallThumbUrl } from '../../../services/movieApi';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
 
@@ -8,6 +9,8 @@ type HistoryEntry = ReturnType<typeof useWatchHistory>['history'][number];
 
 export default function ContinueWatching() {
   const { history, removeEntry } = useWatchHistory();
+  const { getAllProgress } = useResumeWatch();
+  const resumeByMovie = getAllProgress();
   if (history.length === 0) return null;
 
   return (
@@ -29,7 +32,12 @@ export default function ContinueWatching() {
 
       <div className="continue-watching-grid grid grid-cols-3 gap-x-2.5 gap-y-4 sm:grid-cols-4 md:grid-cols-6 md:gap-3">
         {history.slice(0, 6).map((entry) => (
-          <HistoryCard key={entry._id} entry={entry} onRemove={removeEntry} />
+          <HistoryCard
+            key={entry.slug || entry._id}
+            entry={entry}
+            resume={resumeByMovie[entry.slug]}
+            onRemove={removeEntry}
+          />
         ))}
         {history.length < 6 && (
           <Link
@@ -57,21 +65,40 @@ export default function ContinueWatching() {
 
 interface HistoryCardProps {
   entry: HistoryEntry;
+  resume?: ResumeInfo & { epSlug: string };
   onRemove: (id: string) => void;
 }
 
-function HistoryCard({ entry, onRemove }: HistoryCardProps) {
+function normalizeStoredSegment(value: string): string {
+  let normalized = String(value || '').trim();
+  if (!normalized) return '';
+  try { normalized = decodeURIComponent(normalized); } catch { /* keep raw value */ }
+  normalized = normalized.split(/[?#]/, 1)[0].replace(/^\/+|\/+$/g, '');
+  if (normalized.includes('/')) normalized = normalized.split('/').filter(Boolean).pop() ?? '';
+  if (!normalized || /^(undefined|null)$/i.test(normalized)) return '';
+  return normalized.slice(0, 180);
+}
+
+function HistoryCard({ entry, resume, onRemove }: HistoryCardProps) {
   const imgUrl = getThumbUrl(entry.thumb_url);
   const [imgLoaded, setImgLoaded] = useState(isImagePreloaded(imgUrl));
   const [imgError, setImgError] = useState(false);
 
-  const watchUrl = entry.lastEpSlug
-    ? `/xem-phim/${encodeURIComponent(entry.slug)}/${encodeURIComponent(entry.lastEpSlug)}`
-    : `/xem-phim/${encodeURIComponent(entry.slug)}`;
+  const movieSlug = normalizeStoredSegment(entry.slug);
+  const episodeSlug = normalizeStoredSegment(
+    resume?.shouldResume ? resume.epSlug : entry.lastEpSlug
+  );
+  const watchUrl = !movieSlug
+    ? '/phim-moi-nhat'
+    : episodeSlug
+    ? `/xem-phim/${encodeURIComponent(movieSlug)}/${encodeURIComponent(episodeSlug)}`
+    : `/xem-phim/${encodeURIComponent(movieSlug)}`;
 
-  const progress = entry.watchedDuration && entry.watchedDuration > 0
-    ? Math.min((entry.watchedTime ?? 0) / entry.watchedDuration, 1)
-    : 0;
+  const progress = resume?.shouldResume
+    ? Math.min(Math.max(resume.progress, 0), 1)
+    : entry.watchedDuration && entry.watchedDuration > 0
+      ? Math.min((entry.watchedTime ?? 0) / entry.watchedDuration, 1)
+      : 0;
 
   return (
     <div className="group relative min-w-0">

@@ -25,7 +25,18 @@ export interface WatchEntry {
 }
 
 function load(): WatchEntry[] {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? '[]'); }
+  try {
+    const parsed = JSON.parse(localStorage.getItem(KEY) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    const seen = new Set<string>();
+    return parsed.filter((entry): entry is WatchEntry => {
+      if (!entry || typeof entry !== 'object') return false;
+      const slug = String(entry.slug ?? '').trim();
+      if (!slug || slug === 'undefined' || slug === 'null' || seen.has(slug)) return false;
+      seen.add(slug);
+      return true;
+    }).slice(0, MAX);
+  }
   catch { return []; }
 }
 
@@ -33,12 +44,30 @@ function save(list: WatchEntry[]) {
   try { localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX))); } catch { /* ignore */ }
 }
 
+export function persistWatchHistoryProgress(
+  movieId: string,
+  movieSlug: string,
+  watchedTime: number,
+  watchedDuration: number,
+): void {
+  if (!Number.isFinite(watchedTime) || !Number.isFinite(watchedDuration) || watchedTime < 0 || watchedDuration <= 0) return;
+  const list = load();
+  const idx = list.findIndex((entry) =>
+    (movieSlug && entry.slug === movieSlug) || (movieId && entry._id === movieId)
+  );
+  if (idx < 0) return;
+  list[idx] = { ...list[idx], watchedTime, watchedDuration };
+  save(list);
+}
+
 export function useWatchHistory() {
   const [history, setHistory] = useState<WatchEntry[]>(load);
 
   const addEntry = useCallback((movie: MovieItem, epSlug = '', epName = '') => {
     setHistory((prev) => {
-      const filtered = prev.filter((e) => e._id !== movie._id);
+      const existing = prev.find((entry) => entry.slug === movie.slug || (movie._id && entry._id === movie._id));
+      const sameEpisode = Boolean(existing && existing.lastEpSlug === epSlug);
+      const filtered = prev.filter((entry) => entry.slug !== movie.slug && (!movie._id || entry._id !== movie._id));
       const entry: WatchEntry = {
         _id: movie._id,
         slug: movie.slug,
@@ -53,8 +82,8 @@ export function useWatchHistory() {
         lastEpSlug: epSlug,
         lastEpName: epName,
         watchedAt: Date.now(),
-        watchedTime: 0,
-        watchedDuration: 0,
+        watchedTime: sameEpisode ? existing?.watchedTime ?? 0 : 0,
+        watchedDuration: sameEpisode ? existing?.watchedDuration ?? 0 : 0,
       };
       const next = [entry, ...filtered];
       save(next);
@@ -63,9 +92,11 @@ export function useWatchHistory() {
   }, []);
 
   /** Cập nhật thời gian xem dở mà không thay đổi thứ tự lịch sử */
-  const updateProgress = useCallback((movieId: string, watchedTime: number, watchedDuration: number) => {
+  const updateProgress = useCallback((movieId: string, watchedTime: number, watchedDuration: number, movieSlug = '') => {
     setHistory((prev) => {
-      const idx = prev.findIndex((e) => e._id === movieId);
+      const idx = prev.findIndex((entry) =>
+        (movieSlug && entry.slug === movieSlug) || (movieId && entry._id === movieId)
+      );
       if (idx === -1) return prev;
       const next = [...prev];
       next[idx] = { ...next[idx], watchedTime, watchedDuration };

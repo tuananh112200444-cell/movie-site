@@ -28,7 +28,10 @@ interface ResumeEntry {
 type ResumeStore = Record<string, ResumeEntry>;
 
 function loadStore(): ResumeStore {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'); }
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  }
   catch { return {}; }
 }
 
@@ -118,8 +121,12 @@ export function useResumeWatch() {
       const store = loadStore();
       const result: Record<string, ResumeInfo & { epSlug: string }> = {};
       for (const [key, entry] of Object.entries(store)) {
-        const [movieSlug, epSlug] = key.split('__');
-        if (!movieSlug || !epSlug) continue;
+        const separator = key.lastIndexOf('__');
+        if (separator <= 0) continue;
+        const movieSlug = key.slice(0, separator);
+        const epSlug = key.slice(separator + 2);
+        if (!movieSlug || !epSlug || result[movieSlug]) continue;
+        if (!Number.isFinite(entry.time) || !Number.isFinite(entry.duration) || entry.time < MIN_SECONDS || entry.duration <= 0) continue;
         const pct = entry.duration > 0 ? entry.time / entry.duration : 0;
         result[movieSlug] = {
           time: entry.time,

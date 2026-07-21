@@ -245,11 +245,13 @@ function useInViewOnce(rootMargin = '200px') {
     window.addEventListener('scroll', checkPosition, { passive: true });
     window.addEventListener('resize', checkPosition);
     window.addEventListener('pageshow', checkPosition);
+    window.addEventListener('kp:page-resumed', checkPosition);
     return () => {
       obs.disconnect();
       window.removeEventListener('scroll', checkPosition);
       window.removeEventListener('resize', checkPosition);
       window.removeEventListener('pageshow', checkPosition);
+      window.removeEventListener('kp:page-resumed', checkPosition);
     };
   }, [visible, rootMargin]);
   return { ref, visible };
@@ -401,7 +403,7 @@ const HOME_CACHE_KEY = 'kp_home_proxy_v6_short';
 const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
 const HOME_FALLBACK_URL = '/home-fallback.json';
-const HOME_CACHE_TTL = 5 * 60 * 1000;
+const HOME_CACHE_TTL = 30 * 60 * 1000;
 const HOME_REFRESH_ON_RETURN_MS = 60 * 1000;
 const EMPTY_MOVIES: MovieItem[] = [];
 
@@ -417,8 +419,10 @@ function mergeHomeSections(
   const keys = new Set([...ALL_SECTIONS, ...Object.keys(previous), ...Object.keys(incoming)]);
 
   for (const key of keys) {
-    const nextItems = incoming[key] ?? [];
-    merged[key] = nextItems;
+    const nextItems = incoming[key];
+    merged[key] = Array.isArray(nextItems) && nextItems.length > 0
+      ? nextItems
+      : (previous[key] ?? []);
   }
 
   return normalizeHomeSections(merged);
@@ -552,10 +556,9 @@ export default function Home() {
 
     if (!hasHomeMovies(homeDataRef.current)) {
       fallbackController = new AbortController();
-      const fallbackSections = window.matchMedia('(max-width: 639px)').matches
-        ? MOBILE_HOME_SECTIONS
-        : DESKTOP_HOME_SECTIONS;
-      loadStaticHomeFallback(fallbackController.signal, fallbackSections)
+      // The fallback is one compact local file. Parse every shelf so a fast
+      // mobile scroll never lands on an empty, network-dependent section.
+      loadStaticHomeFallback(fallbackController.signal, DESKTOP_HOME_SECTIONS)
         .then((fallbackSections) => {
           if (cancelled || !hasHomeMovies(fallbackSections)) return;
           setHomeData((current) => {

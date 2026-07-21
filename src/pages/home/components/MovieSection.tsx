@@ -4,6 +4,7 @@ import type { Movie } from '../../../types/movie';
 import { useScrollReveal } from '../../../hooks/useScrollReveal';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
+import { Building2, Film, Flame, Heart, Sparkles, Star, Sun, Tv, type LucideIcon } from 'lucide-react';
 
 interface MovieSectionProps {
   title: string;
@@ -36,7 +37,7 @@ const carouselItemClass = HOME_POSTER_ITEM_CLASS;
 // THEME DEFINITIONS â€” each section gets a unique visual identity
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface ThemeConfig {
-  icon: string;
+  icon: LucideIcon;
   iconBgFrom: string;
   iconBgTo: string;
   iconBorder: string;
@@ -63,7 +64,7 @@ interface ThemeConfig {
 const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
   // 1. PHIM Láºº â€” Cinematic Film
   cinematic: {
-    icon: 'ri-film-line',
+    icon: Film,
     iconBgFrom: 'from-amber-500/20',
     iconBgTo: 'to-orange-500/10',
     iconBorder: 'border-amber-500/20',
@@ -88,7 +89,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
   },
   // 2. PHIM Bá»˜ â€” Trending Fire
   trending: {
-    icon: 'ri-fire-line',
+    icon: Flame,
     iconBgFrom: 'from-fuchsia-500/20',
     iconBgTo: 'to-pink-500/10',
     iconBorder: 'border-fuchsia-500/20',
@@ -113,7 +114,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
   },
   // 3. HOáº T HÃŒNH â€” Soft Anime
   anime: {
-    icon: 'ri-sparkling-line',
+    icon: Sparkles,
     iconBgFrom: 'from-sky-400/20',
     iconBgTo: 'to-cyan-400/10',
     iconBorder: 'border-sky-400/20',
@@ -138,7 +139,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
   },
   // 4. TV SHOWS â€” Broadcast Signal
   broadcast: {
-    icon: 'ri-tv-line',
+    icon: Tv,
     iconBgFrom: 'from-emerald-500/20',
     iconBgTo: 'to-teal-500/10',
     iconBorder: 'border-emerald-500/20',
@@ -163,7 +164,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
   },
   // 5. HÃ€N QUá»C â€” K-Drama Romance
   kdrama: {
-    icon: 'ri-heart-3-line',
+    icon: Heart,
     iconBgFrom: 'from-rose-500/20',
     iconBgTo: 'to-red-400/10',
     iconBorder: 'border-rose-500/20',
@@ -188,7 +189,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
   },
   // 6. TRUNG QUá»C â€” Oriental Classic
   oriental: {
-    icon: 'ri-building-3-line',
+    icon: Building2,
     iconBgFrom: 'from-red-500/20',
     iconBgTo: 'to-amber-500/10',
     iconBorder: 'border-red-500/20',
@@ -213,7 +214,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
   },
   // 7. THÃI LAN â€” Tropical Vibe
   tropical: {
-    icon: 'ri-sun-line',
+    icon: Sun,
     iconBgFrom: 'from-lime-500/20',
     iconBgTo: 'to-green-400/10',
     iconBorder: 'border-lime-500/20',
@@ -238,7 +239,7 @@ const themeMap: Record<NonNullable<MovieSectionProps['theme']>, ThemeConfig> = {
   },
   // 8. Ã‚U Má»¸ â€” Hollywood Glam
   hollywood: {
-    icon: 'ri-star-smile-line',
+    icon: Star,
     iconBgFrom: 'from-yellow-500/20',
     iconBgTo: 'to-amber-500/10',
     iconBorder: 'border-yellow-500/20',
@@ -283,6 +284,7 @@ export default function MovieSection({
   const sectionRef = useScrollReveal<HTMLElement>();
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const t = getTheme(theme);
+  const ThemeIcon = t.icon;
 
   const displayMovies = movies.slice(0, Math.max(cols * rows, 12));
 
@@ -328,8 +330,8 @@ export default function MovieSection({
     return (
       <section ref={sectionRef} className="home-section-surface group/section mb-7 md:mb-10">
         <div className="reveal mb-3 flex items-center gap-2.5 px-1 md:mb-4">
-          <div className={`relative hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder} md:flex`}>
-            <i className={`${t.icon} ${t.iconText} text-sm`} />
+          <div className={`relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder}`}>
+            <ThemeIcon size={15} strokeWidth={2.25} className={t.iconText} aria-hidden="true" />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="truncate text-lg font-black tracking-tight text-white md:text-2xl lg:text-[1.65rem]">
@@ -362,8 +364,8 @@ export default function MovieSection({
       {/* Header */}
       <div className="reveal mb-3.5 flex items-center gap-2.5 px-0.5 md:mb-5 md:px-1">
         {/* Icon box â€” shape varies by theme */}
-        <div className={`relative hidden h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder} shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_14px_32px_-22px_rgba(255,255,255,0.75)] md:flex`}>
-          <i className={`${t.icon} ${t.iconText} text-sm`} />
+        <div className={`relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder} shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_14px_32px_-22px_rgba(255,255,255,0.75)] md:h-9 md:w-9 md:rounded-xl`}>
+          <ThemeIcon size={16} strokeWidth={2.25} className={t.iconText} aria-hidden="true" />
           {/* Subtle pulse dot for trending */}
           {theme === 'trending' && (
             <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-fuchsia-400 animate-pulse" />

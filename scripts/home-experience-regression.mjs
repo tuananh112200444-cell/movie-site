@@ -7,6 +7,11 @@ const proxy = await readFile('supabase/functions/home-proxy/index.ts', 'utf8');
 const movieApi = await readFile('src/services/movieApi.ts', 'utf8');
 const searchSuggestions = await readFile('src/components/feature/SearchSuggestions.tsx', 'utf8');
 const app = await readFile('src/App.tsx', 'utf8');
+const main = await readFile('src/main.tsx', 'utf8');
+const smartCache = await readFile('src/utils/smartCache.ts', 'utf8');
+const discovery = await readFile('src/pages/home/components/HomeDiscoverySection.tsx', 'utf8');
+const portalGateway = await readFile('src/pages/home/components/PortalGateway.tsx', 'utf8');
+const movieSection = await readFile('src/pages/home/components/MovieSection.tsx', 'utf8');
 const failures = [];
 
 if (home.includes('idleFallback') || !home.includes("window.addEventListener('pageshow', checkPosition)")) {
@@ -26,6 +31,21 @@ if (!lazySection.includes('rect.top <= viewportH + marginPx') || lazySection.inc
 }
 if (!lazySection.includes("window.addEventListener('online', retryWhenUsable)")) {
   failures.push('Lazy shelves must retry after a mobile network reconnects.');
+}
+if (!main.includes("new CustomEvent('kp:page-resumed')") || !lazySection.includes("window.addEventListener('kp:page-resumed'")) {
+  failures.push('Mobile tab restore must wake deferred homepage shelves.');
+}
+if (!smartCache.includes("prefix: 'kp_home_proxy_', ttl: 30 * MINUTE")) {
+  failures.push('Homepage warm cache must survive normal mobile app switching.');
+}
+if (!home.includes('loadStaticHomeFallback(fallbackController.signal, DESKTOP_HOME_SECTIONS)')) {
+  failures.push('Mobile static fallback must include every shelf for fast scrolling.');
+}
+if (discovery.includes("icon: 'ri-") || portalGateway.includes('ri-movie-2-line') || portalGateway.includes('ri-heart-3-line')) {
+  failures.push('Primary mobile portal icons must not depend on the external icon font.');
+}
+if (movieSection.includes('relative hidden h-9 w-9') || !movieSection.includes('type LucideIcon')) {
+  failures.push('Movie shelf icons must be local and visible on mobile.');
 }
 const listSelect = movieApi.match(/const SUPABASE_LIST_SELECT = '([^']+)'/)?.[1] ?? '';
 if (!listSelect || listSelect.split(/,\s*/).includes('chieurap')) {

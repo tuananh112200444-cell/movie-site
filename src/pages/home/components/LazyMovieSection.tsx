@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react';
 import type { Movie } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
 import { fetchMoviesByCategory, fetchMoviesByType } from '../../../services/movieApi';
+import { Film } from 'lucide-react';
 
 const carouselItemClass = HOME_POSTER_ITEM_CLASS;
 const HOME_FALLBACK_URL = '/home-fallback.json';
@@ -124,11 +125,15 @@ export default function LazyMovieSection({
     window.addEventListener('scroll', checkPosition, { passive: true });
     window.addEventListener('resize', checkPosition);
     window.addEventListener('focus', checkPosition);
+    window.addEventListener('pageshow', checkPosition);
+    window.addEventListener('kp:page-resumed', checkPosition);
     return () => {
       observer.disconnect();
       window.removeEventListener('scroll', checkPosition);
       window.removeEventListener('resize', checkPosition);
       window.removeEventListener('focus', checkPosition);
+      window.removeEventListener('pageshow', checkPosition);
+      window.removeEventListener('kp:page-resumed', checkPosition);
     };
   }, [triggered, rootMargin]);
 
@@ -200,9 +205,11 @@ export default function LazyMovieSection({
     const retryWhenUsable = () => setFallbackAttempted(false);
     window.addEventListener('online', retryWhenUsable);
     window.addEventListener('pageshow', retryWhenUsable);
+    window.addEventListener('kp:page-resumed', retryWhenUsable);
     return () => {
       window.removeEventListener('online', retryWhenUsable);
       window.removeEventListener('pageshow', retryWhenUsable);
+      window.removeEventListener('kp:page-resumed', retryWhenUsable);
     };
   }, [fallbackMovies.length, hasData, triggered]);
 
@@ -228,7 +235,7 @@ export default function LazyMovieSection({
 }
 
 function SectionPlaceholder({
-  title: _title,
+  title,
   cols = 6,
   rows = 1,
   theme,
@@ -251,14 +258,17 @@ function SectionPlaceholder({
   const t = themeColors[theme ?? 'cinematic'] ?? themeColors.cinematic;
 
   return (
-    <div className="mb-10 md:mb-14">
+    <section className="mb-10 md:mb-14" aria-label={`${title} đang chuẩn bị`}>
       <div className={`relative border-t ${t.border} pt-1`}>
         <div className={`pointer-events-none absolute -top-px left-0 right-0 h-px bg-gradient-to-r from-transparent ${t.glow} to-transparent`} />
 
-        <div className="mb-4 flex items-center gap-3">
-          <div className="h-7 w-7 flex-shrink-0 rounded-md skeleton" />
+        <div className="mb-4 flex items-center gap-2.5 pt-3">
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/[0.10] bg-white/[0.045] text-white/70">
+            <Film size={15} strokeWidth={2.25} aria-hidden="true" />
+          </span>
           <div className="min-w-0 flex-1">
-            <div className="mb-2 h-5 w-48 rounded skeleton" />
+            <h3 className="truncate text-[1.08rem] font-black tracking-tight text-white md:text-2xl">{title}</h3>
+            <p className="mt-0.5 text-[10px] font-semibold text-white/35 md:text-xs">Đang chuẩn bị danh sách phim</p>
           </div>
           <div className="h-8 w-20 flex-shrink-0 rounded-md skeleton" />
         </div>
@@ -283,6 +293,6 @@ function SectionPlaceholder({
           ))}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

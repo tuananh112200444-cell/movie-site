@@ -1,5 +1,6 @@
 ﻿import { Link } from 'react-router-dom';
 import { useCallback, type CSSProperties } from 'react';
+import { ArrowRight, Film, Heart } from 'lucide-react';
 import { GENRE_LIST } from './GenreCards';
 import { useScrollReveal } from '../../../hooks/useScrollReveal';
 
@@ -12,7 +13,7 @@ const PORTALS = [
     key: 'movies' as const,
     title: 'Kho Phim',
     subtitle: 'Phim lẻ, phim bộ, chiếu rạp, anime',
-    icon: 'ri-movie-2-line',
+    Icon: Film,
     tone: 'amber',
     bg: 'linear-gradient(135deg, rgba(120,72,25,0.34), rgba(40,24,14,0.86) 45%, rgba(16,18,27,0.92))',
     grain: 'radial-gradient(circle at 18% 16%, rgba(255,221,150,0.16), transparent 34%), linear-gradient(90deg, rgba(255,255,255,0.06), transparent 18%, rgba(0,0,0,0.18) 52%, transparent)',
@@ -21,7 +22,7 @@ const PORTALS = [
     key: 'queer' as const,
     title: 'Vũ Trụ Đam Mỹ',
     subtitle: 'BL, GL, bách hợp, phim mới cập nhật',
-    icon: 'ri-heart-3-line',
+    Icon: Heart,
     tone: 'cyan',
     bg: 'linear-gradient(135deg, rgba(80,49,37,0.34), rgba(22,35,38,0.88) 50%, rgba(11,16,25,0.94))',
     grain: 'radial-gradient(circle at 82% 10%, rgba(34,211,238,0.16), transparent 36%), linear-gradient(90deg, rgba(255,255,255,0.05), transparent 22%, rgba(0,0,0,0.2) 58%, transparent)',
@@ -62,7 +63,7 @@ export default function HomeDiscoverySection({ onSelect }: HomeDiscoverySectionP
                     ? 'border-cyan-300/20 text-cyan-200'
                     : 'border-amber-300/20 text-amber-200'
                 }`}>
-                  <i className={portal.icon} />
+                  <portal.Icon size={18} strokeWidth={2.25} aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[12px] font-black tracking-tight text-white sm:text-sm xl:text-base">{portal.title}</p>
@@ -71,7 +72,7 @@ export default function HomeDiscoverySection({ onSelect }: HomeDiscoverySectionP
                     portal.tone === 'cyan' ? 'text-cyan-200' : 'text-amber-200'
                   }`}>
                     Mở không gian
-                    <i className="ri-arrow-right-line transition-transform group-hover:translate-x-1" />
+                    <ArrowRight size={13} strokeWidth={2.4} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
                   </span>
                 </div>
               </div>

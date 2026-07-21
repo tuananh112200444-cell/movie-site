@@ -68,6 +68,22 @@ test('banner top remains visible after scrolling', async ({ page }) => {
   expect(box!.y).toBeLessThan(page.viewportSize()!.height);
 });
 
+test('trang chủ mobile: icon nội bộ và section thức dậy sau khi quay lại tab', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chrome', 'Chỉ áp dụng cho điện thoại');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  const discovery = page.locator('.home-discovery-band');
+  await expect(discovery).toBeVisible();
+  await expect(discovery.getByText('Vũ Trụ Đam Mỹ', { exact: true })).toBeVisible();
+  await expect(discovery.locator('button svg')).toHaveCount(4);
+
+  const shelfTitle = page.getByRole('heading', { level: 3, name: 'Phim Lẻ Hay' });
+  await shelfTitle.scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('kp:page-resumed')));
+  await expect(shelfTitle).toBeVisible({ timeout: 10_000 });
+  await expect(shelfTitle.locator('xpath=ancestor::section[1]').locator('svg').first()).toBeVisible();
+});
+
 const e2eMovie = (episodes: Array<{ server_name: string; server_data: Array<Record<string, unknown>> }>) => ({
   status: true,
   movie: {
@@ -106,6 +122,59 @@ test('player: khôi phục tiến độ xem sau khi mở lại trang', async ({ 
   await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
   await expect(page.getByText('Tiếp tục xem dở')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('2:05', { exact: false })).toBeVisible();
+});
+
+test('xem tiếp mobile: giữ đúng trang khi fullscreen, phát và lưu tiến độ', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chrome', 'Chỉ áp dụng cho điện thoại');
+  await page.addInitScript(() => {
+    localStorage.setItem('kp_watch_history', JSON.stringify([{
+      _id: 'e2e-player-movie', slug: 'e2e-player', name: 'Phim kiểm thử trình phát',
+      origin_name: 'Player E2E', thumb_url: '/brand/khophim-logo-v2-512.png',
+      poster_url: '/brand/khophim-logo-v2-512.png', year: 2026, quality: 'HD', lang: 'Vietsub',
+      episode_current: 'Tập 1', lastEpSlug: 'tap-1', lastEpName: 'Tập 1', watchedAt: Date.now(),
+      watchedTime: 125, watchedDuration: 500,
+    }]));
+    localStorage.setItem('kp_resume_v1', JSON.stringify({
+      'e2e-player__tap-1': { time: 125, duration: 500, savedAt: Date.now() },
+    }));
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: async function () {
+        (window as Window & { __kpFullscreenRequested?: boolean }).__kpFullscreenRequested = true;
+        Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: this });
+        document.dispatchEvent(new Event('fullscreenchange'));
+      },
+    });
+  });
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'KhoPhim', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media.example.test/good.mp4' }] },
+  ]));
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const continueLink = page.locator('.continue-watching-panel a[href="/xem-phim/e2e-player/tap-1"]');
+  await expect(continueLink).toBeVisible();
+  await continueLink.click();
+  await expect(page).toHaveURL(/\/xem-phim\/e2e-player\/tap-1$/);
+  const video = page.locator('video').first();
+  await expect(video).toBeVisible({ timeout: 20_000 });
+
+  await page.locator('[data-kp-fullscreen="true"]').first().click();
+  await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __kpFullscreenRequested?: boolean }).__kpFullscreenRequested))).toBe(true);
+  await video.evaluate((element) => {
+    const media = element as HTMLVideoElement;
+    Object.defineProperty(media, 'duration', { configurable: true, value: 500 });
+    media.currentTime = 180;
+    media.dispatchEvent(new Event('timeupdate'));
+    void media.play().catch(() => {});
+  });
+
+  await expect(page).toHaveURL(/\/xem-phim\/e2e-player\/tap-1$/);
+  await expect.poll(() => page.evaluate(() => {
+    const history = JSON.parse(localStorage.getItem('kp_watch_history') || '[]');
+    const resume = JSON.parse(localStorage.getItem('kp_resume_v1') || '{}');
+    return { historyTime: history[0]?.watchedTime, resumeTime: resume['e2e-player__tap-1']?.time };
+  })).toEqual({ historyTime: 180, resumeTime: 180 });
 });
 
 test('player mobile: fullscreen gọi API và khóa xoay ngang', async ({ page }, testInfo) => {

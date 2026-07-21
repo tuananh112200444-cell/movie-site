@@ -67,6 +67,10 @@ function isChunkLikeError(message: string): boolean {
   return CHUNK_ERROR_RE.test(message);
 }
 
+function notifyPageResumed(): void {
+  window.dispatchEvent(new CustomEvent('kp:page-resumed'));
+}
+
 async function clearLegacyKhophimCaches(): Promise<void> {
   try {
     if (!('caches' in window)) return;
@@ -124,10 +128,12 @@ if (typeof document !== 'undefined') {
       pruneSmartClientCaches();
     }
     hiddenAt = 0;
+    notifyPageResumed();
   });
 
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) pruneSmartClientCaches();
+    notifyPageResumed();
   });
 
   window.addEventListener('unhandledrejection', (event) => {
