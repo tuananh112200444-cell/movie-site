@@ -86,7 +86,8 @@ function headersFor(url: string) {
     Accept: '*/*',
   };
   if (/blvietsub\.com/i.test(url)) headers.Referer = 'https://blvietsub.com/';
-  if (/phimapi|kkphim|ophim/i.test(url)) headers.Referer = 'https://khophim.org/';
+  if (/opstream|ophim/i.test(url)) headers.Referer = 'https://ophim1.com/';
+  else if (/phimapi|kkphim|phim1280/i.test(url)) headers.Referer = 'https://khophim.org/';
   return headers;
 }
 
@@ -117,6 +118,16 @@ async function probe(url: string): Promise<{ ok: boolean; status: number | null;
       };
     }
 
+    if (/text\/html/i.test(contentType)) {
+      const text = (await response.text()).slice(0, 120_000);
+      if (/\b404\s+not\s+found\b|video\s+(?:was\s+)?(?:not\s+found|deleted|removed)|file\s+(?:was\s+)?(?:not\s+found|deleted|removed)/i.test(text)) {
+        return { ok: false, status: 404, responseMs, error: 'Embed returned an HTML 404/deleted-video page' };
+      }
+      if (/\b502\s+bad\s+gateway\b|\b503\s+service\s+unavailable\b|upstream\s+(?:connect\s+)?error/i.test(text)) {
+        return { ok: false, status: 502, responseMs, error: 'Embed returned an upstream gateway error page' };
+      }
+    }
+
     const embeddable = /text\/html|video\/|application\/octet-stream|application\/vnd\.apple\.mpegurl/i.test(contentType) || !contentType;
     return {
       ok: embeddable,
@@ -134,6 +145,24 @@ async function probe(url: string): Promise<{ ok: boolean; status: number | null;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function probeStreamRow(row: StreamRow): Promise<{ ok: boolean; status: number | null; responseMs: number; error: string }> {
+  const candidates = unique([
+    String(row.stream_url || '').trim(),
+    String(row.embed_url || '').trim(),
+  ].filter(Boolean));
+  const failures: Array<{ ok: boolean; status: number | null; responseMs: number; error: string }> = [];
+  for (const candidate of candidates) {
+    const result = await probe(candidate);
+    if (result.ok) return result;
+    failures.push(result);
+  }
+  return failures.sort((a, b) => {
+    const severity = (status: number | null) =>
+      status === 404 || status === 410 ? 4 : status !== null && status >= 500 ? 3 : status === 401 || status === 403 ? 2 : 1;
+    return severity(b.status) - severity(a.status);
+  })[0] ?? { ok: false, status: null, responseMs: 0, error: 'No stream or embed URL' };
 }
 
 async function logHealth(
@@ -319,7 +348,7 @@ serve(async (req) => {
     const batchResults = await Promise.all(batch.map(async (row) => {
       const playableUrl = streamUrl(row);
       if (!playableUrl) return null;
-      const result = await probe(playableUrl);
+      const result = await probeStreamRow(row);
       if (!dryRun) {
         await logHealth(supabase, row, result);
         await updateStream(supabase, row, result, deactivateAfter);

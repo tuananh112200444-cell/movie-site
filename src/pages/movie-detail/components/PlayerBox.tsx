@@ -180,6 +180,10 @@ function isSingleVariantProviderHls(url: string): boolean {
 function shouldPreferEmbedOverDirectHls(ep: EpisodeData): boolean {
   if (!ep.link_m3u8 || !ep.link_embed || !isIframeSource(ep.link_embed)) return false;
   if (!isHlsUrl(ep.link_m3u8)) return false;
+  // OPhim/opstream embeds can successfully load an HTML 404 page. Prefer HLS
+  // first so the media engine can emit a real fatal error and move to an
+  // independent server instead of treating iframe onLoad as playback success.
+  if (/opstream|ophim/i.test(ep.link_m3u8) || /opstream|ophim/i.test(ep.link_embed)) return false;
   return isSingleVariantProviderHls(ep.link_m3u8);
 }
 
@@ -698,7 +702,14 @@ export default function PlayerBox({
       error_message: 'HLS fatal callback reached PlayerBox',
     });
     const embedUrl = episode?.link_embed;
-    if (embedUrl && !isBlvietsubWatchPageUrl(embedUrl) && effectivePlayerMode === 'hls') {
+    const hlsCluster = getSourceFailureClusterFromUrl(episode?.link_m3u8 || '');
+    const embedCluster = getSourceFailureClusterFromUrl(embedUrl || '');
+    if (
+      embedUrl &&
+      !isBlvietsubWatchPageUrl(embedUrl) &&
+      effectivePlayerMode === 'hls' &&
+      hlsCluster !== embedCluster
+    ) {
       setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
       return;
     }

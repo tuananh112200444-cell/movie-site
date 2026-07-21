@@ -41,12 +41,14 @@ const checks = [
   [playerSection.includes('const activeMatch = activeServerData.find') && playerSection.includes('onSelectEp(activeMatch);'), 'Episode switching must preserve the source explicitly selected by the viewer'],
   [playerSection.includes('`${selectableServerOptions.length - 1} nguồn dự phòng cho tập này`'), 'Source summary must count only backups that contain the active episode'],
   [playerSection.includes('supportsActiveEpisode') && playerSection.includes('selectableServerOptions'), 'Source picker must hide servers that cannot play the active episode'],
+  [playerSection.includes('activeSourceHasWarning') && playerSection.includes('hệ thống đang tìm dự phòng'), 'Source status must not claim readiness for a known unhealthy source'],
   [router.includes("path: '/xem-phim/:slug'") && router.includes("path: '/xem-phim/:slug/:episode'"), 'Dedicated watch routes must support movie and episode URLs'],
   [moviePage.includes("location.pathname.startsWith('/xem-phim/')"), 'Movie page must distinguish information and watch modes'],
   [moviePage.includes('noIndex={true}') && moviePage.includes('canonical={`/phim/${slug'), 'Watch pages must be noindex and canonicalize to movie information'],
   [moviePage.includes('const MovieDetailPlayerSection = lazy('), 'Player UI must be lazy-loaded away from the information page'],
   [continueWatching.includes('`/xem-phim/${encodeURIComponent(movieSlug)}'), 'Continue-watching links must open the dedicated player with a validated slug'],
   [moviePage.includes('requestedEpisodeNumber') && moviePage.includes('epSortKey(episode) === requestedEpisodeNumber'), 'Episode URLs must match equivalent slugs such as 3 and tap-03 across sources'],
+  [moviePage.includes('pickBestEpisodeByPriority(filteredEpisodes, requestedEpisode)'), 'Direct episode URLs must score every matching provider instead of selecting the first stored URL'],
 ];
 
 const failures = checks.filter(([ok]) => !ok).map(([, message]) => message);

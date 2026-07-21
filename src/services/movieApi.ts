@@ -4129,9 +4129,9 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
 
   if (healthStatus === 'ok') score += 120;
   else if (healthStatus === 'unchecked') score += 8;
-  else if (healthStatus === 'blocked') score -= failureCount >= 3 ? 180 : 55;
-  else if (healthStatus === 'failed') score -= 220 + failureCount * 35;
-  else if (healthStatus === 'dead') score -= 1000;
+  else if (healthStatus === 'blocked') score -= failureCount >= 2 ? 2400 : 900;
+  else if (healthStatus === 'failed') score -= 2800 + failureCount * 120;
+  else if (healthStatus === 'dead') score -= 10000;
 
   if (Number.isFinite(responseMs) && responseMs > 0) {
     if (responseMs <= 1200) score += 55;
@@ -4288,7 +4288,13 @@ export function findHighestQualityEpisodeBySlug(
 /** Kiểm tra episode có ít nhất một URL phát được không */
 export function hasPlayableUrl(ep: EpisodeData): boolean {
   const embed = String(ep.link_embed || '').trim();
-  return !!(ep.link_m3u8?.trim() || (embed && !isBlvietsubWatchPageUrl(embed)));
+  const hasUrl = !!(ep.link_m3u8?.trim() || (embed && !isBlvietsubWatchPageUrl(embed)));
+  if (!hasUrl) return false;
+  const healthStatus = String(ep.source_health_status || '').trim().toLowerCase();
+  const failureCount = Number(ep.source_failure_count || 0);
+  if (healthStatus === 'dead') return false;
+  if (healthStatus === 'failed' && failureCount >= 3) return false;
+  return true;
 }
 
 /** Kiểm tra server có ít nhất một episode phát được không */
