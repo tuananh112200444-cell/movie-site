@@ -35,6 +35,10 @@ function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, 
     },
   });
 }
+
+function homeCacheControl(maxAge = 60): string {
+  return `public, max-age=${maxAge}, stale-while-revalidate=600, stale-if-error=86400`;
+}
 function timeoutSignal(ms: number): AbortSignal {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), ms);
@@ -506,6 +510,7 @@ async function buildTrending(
   ]);
 
   const scored = new Map<string, { item: Record<string, unknown>; score: number }>();
+  const freshUpstream: Record<string, unknown>[] = [];
 
   for (const source of [
     { data: ophimNew, name: 'ophim' },
@@ -522,6 +527,7 @@ async function buildTrending(
       const m = cleanMovieItem(raw, source.name);
       if (!m) continue;
       if (isTrailerOnly(m.episode_current as string)) continue;
+      if (source.name === 'ophim' || source.name === 'phimapi') freshUpstream.push(m);
       const popularity = Math.max(0, Number(m.tmdb_popularity || 0));
       const score = hotScore(m, source.name) + Math.log1p(popularity) * 18;
       const key = String(m.slug);
@@ -530,10 +536,37 @@ async function buildTrending(
     }
   }
 
-  return [...scored.values()]
+  const hot = [...scored.values()]
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
     .map((entry) => entry.item);
+
+  // A purely popularity-based hero can remain visually unchanged for weeks.
+  // Reserve alternating slots for genuinely recent upstream releases, while
+  // retaining popular/playable titles in the other slots.
+  const recent = freshUpstream
+    .sort((a, b) => new Date((b.modified as { time?: string })?.time ?? 0).getTime()
+      - new Date((a.modified as { time?: string })?.time ?? 0).getTime());
+  const result: Record<string, unknown>[] = [];
+  const used = new Set<string>();
+  const add = (movie: Record<string, unknown> | undefined) => {
+    if (!movie) return;
+    const key = String(movie.slug || movie._id || movie.name || '');
+    if (!key || used.has(key)) return;
+    used.add(key);
+    result.push(movie);
+  };
+  let recentIndex = 0;
+  let hotIndex = 0;
+  let turn = 0;
+  while (result.length < limit && (recentIndex < recent.length || hotIndex < hot.length)) {
+    const preferRecent = turn++ % 2 === 0;
+    if (preferRecent && recentIndex < recent.length) add(recent[recentIndex++]);
+    else if (hotIndex < hot.length) add(hot[hotIndex++]);
+    else if (recentIndex < recent.length) add(recent[recentIndex++]);
+  }
+  while (result.length < limit && hotIndex < hot.length) add(hot[hotIndex++]);
+  while (result.length < limit && recentIndex < recent.length) add(recent[recentIndex++]);
+  return result.slice(0, limit);
 }
 
 /* ── Fetch a category / type list ── */
@@ -796,7 +829,7 @@ serve(async (req) => {
   if (cacheValid && cacheCompleteForRequest && !forceRefresh) {
     const payload = buildPayloadFromSections(cachedSections, requestedSections);
     return jsonResponse({ status: true, source: 'cache', sections: payload }, 200, {
-      'Cache-Control': 'public, max-age=60',
+      'Cache-Control': homeCacheControl(60),
       'X-Cache': 'HIT',
     });
   }
@@ -837,7 +870,7 @@ serve(async (req) => {
 
     const payload = buildPayloadFromSections(cachedSections, requestedSections);
     return jsonResponse({ status: true, source: 'stale', sections: payload }, 200, {
-      'Cache-Control': 'public, max-age=60',
+      'Cache-Control': homeCacheControl(60),
       'X-Cache': 'STALE',
     });
   }
@@ -958,7 +991,7 @@ serve(async (req) => {
   if (!hasAnyFresh && cacheRow && cacheCompleteForRequest) {
     const payload = buildPayloadFromSections(cachedSections, requestedSections);
     return jsonResponse({ status: true, source: 'stale', sections: payload }, 200, {
-      'Cache-Control': 'public, max-age=30',
+      'Cache-Control': homeCacheControl(30),
       'X-Cache': 'STALE',
     });
   }
@@ -967,7 +1000,7 @@ serve(async (req) => {
     const staticFallback = await readStaticHomeFallback(requestedSections);
     if (staticFallback) {
       return jsonResponse({ status: true, source: 'static-fallback', sections: staticFallback }, 200, {
-        'Cache-Control': 'public, max-age=45',
+        'Cache-Control': homeCacheControl(45),
         'X-Cache': 'STATIC-FALLBACK',
       });
     }
@@ -1009,7 +1042,7 @@ serve(async (req) => {
   }
 
   return jsonResponse({ status: true, source: 'fresh', sections: payload }, 200, {
-    'Cache-Control': 'public, max-age=60',
+    'Cache-Control': homeCacheControl(60),
     'X-Cache': 'MISS',
   });
 });

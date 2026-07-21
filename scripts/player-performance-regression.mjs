@@ -13,6 +13,8 @@ const comments = fs.readFileSync('src/pages/movie-detail/components/UserComments
 const imageFallback = fs.readFileSync('src/hooks/useImageFallback.ts', 'utf8');
 const homeHero = fs.readFileSync('src/pages/home/components/HeroBanner.tsx', 'utf8');
 const lazyHomeSection = fs.readFileSync('src/pages/home/components/LazyMovieSection.tsx', 'utf8');
+const autoRepair = fs.readFileSync('supabase/functions/auto-repair-player-issues/index.ts', 'utf8');
+const streamHealth = fs.readFileSync('supabase/functions/stream-health-check/index.ts', 'utf8');
 
 const checks = [
   [!vite.includes('appendAssetVersion'), 'Hashed Vite assets must not receive a second query-string identity'],
@@ -25,6 +27,13 @@ const checks = [
   [movieApi.includes("new URL('/api/movie-detail'"), 'Movie detail must use the same-origin edge cache'],
   [movieApi.includes('External enrichment must never delay first render/player startup') && movieApi.includes('void mergeExternalDetailIfFast'), 'External detail enrichment must remain outside the critical render path'],
   [movieApi.includes('BLVIETSUB_DETAIL_DEDUPE_MS') && movieApi.includes('blvietsubDetailInflight'), 'Repeated BLVietsub detail failures must be deduplicated on the client'],
+  [movieApi.includes('OPSTREAM_IFRAME_BLOCK_PENALTY') && movieApi.includes("!m3u8 && embed && host.includes('opstream')"), 'Telemetry-confirmed blocked OPhim iframes must not outrank healthy independent sources'],
+  [autoRepair.includes('penalizeTelemetryFailedStreams') && autoRepair.includes("health_status: 'failed'"), 'Fatal viewer telemetry must lower the matching stored stream before repair'],
+  [autoRepair.includes('host_counts') && autoRepair.includes('>= threshold'), 'A hostname must independently reach the evidence threshold before persistent penalty'],
+  [autoRepair.includes('player-repair:') && autoRepair.includes('repair_cooldown') && autoRepair.includes('cooldown_minutes'), 'Automatic repairs must be idempotent within a bounded cooldown window'],
+  [autoRepair.includes("refresh_global') === '1'") && autoRepair.includes('75000'), 'Repair requests must not block on global cache warming or outlive the parent Edge request'],
+  [autoRepair.includes('AbortSignal.timeout(15_000)') && autoRepair.includes('AbortSignal.timeout(10_000)'), 'Repair database reads must fail fast under pool pressure'],
+  [streamHealth.includes('telemetryEmbedCooldown') && streamHealth.includes("startsWith('Viewer telemetry:')") && streamHealth.includes('30 * 60 * 1000'), 'Server reachability must not immediately erase browser-confirmed iframe failures'],
   [worker.includes("pathname === '/api/movie-detail'") && worker.includes('X-KhoPhim-Detail-Cache'), 'Cloudflare must cache complete movie-detail JSON'],
   [worker.includes('/__circuit/blvietsub/') && worker.includes('/__circuit/movie-detail/') && worker.includes('X-KhoPhim-Circuit'), 'Cloudflare POP circuit breakers must protect detail upstreams'],
   [playerSection.includes("aria-label={cinemaMode ? 'Thoát chế độ Cinema' : 'Bật chế độ Cinema'}"), 'Cinema control must have an accessible name on mobile'],

@@ -101,6 +101,7 @@ function getHighestEpisodeFromServers(episodes: EpisodeServer[]): number {
   return episodes.reduce((highest, server) => {
     const serverHighest = (server.server_data ?? []).reduce((max, ep) => {
       if (!hasPlayableUrl(ep) || ep.is_scheduled) return max;
+      if (String(ep.audio_type || '').toLowerCase() === 'raw' || /\braw\b/i.test(String(ep.name || ''))) return max;
       return Math.max(max, getEpisodeNumber(ep));
     }, 0);
     return Math.max(highest, serverHighest);
@@ -132,9 +133,13 @@ function shouldRefreshEpisodeDetail(detail: MovieDetailResponse): boolean {
 }
 
 function getLatestPlayableEpisodeSlug(episodes: EpisodeServer[]): string | undefined {
-  const latest = episodes
+  const playable = episodes
     .flatMap((server) => server.server_data ?? [])
-    .filter((ep) => hasPlayableUrl(ep) && !ep.is_scheduled)
+    .filter((ep) => hasPlayableUrl(ep) && !ep.is_scheduled);
+  const translated = playable.filter((ep) =>
+    String(ep.audio_type || '').toLowerCase() !== 'raw' && !/\braw\b/i.test(String(ep.name || ''))
+  );
+  const latest = [...(translated.length > 0 ? translated : playable)]
     .sort((a, b) => epSortKey(b) - epSortKey(a))[0];
   return latest?.slug || latest?.name;
 }

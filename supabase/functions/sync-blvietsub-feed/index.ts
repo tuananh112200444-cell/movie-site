@@ -74,6 +74,8 @@ interface MovieRow {
   origin_name?: string | null;
   title_vi?: string | null;
   title_en?: string | null;
+  title_original?: string | null;
+  normalized_name?: string | null;
   source_site?: string | null;
   source_name?: string | null;
   showtimes?: string | null;
@@ -1397,7 +1399,7 @@ async function createMovieFromEntry(
   };
 
   const selectExistingMovieAfterDuplicate = async (): Promise<MovieRow | null> => {
-    const selectFields = 'id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year';
+    const selectFields = 'id, slug, name, origin_name, title_vi, title_en, title_original, normalized_name, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year';
     const directChecks: Array<[string, string]> = [
       ['slug', slug],
       ['showtimes', entry.sourceUrl],
@@ -1550,18 +1552,26 @@ async function updateMovieMetadata(
   const parsedMaxEpisode = Math.max(1, maxPlayableEpisodeNumber(entry.episodes) || playableEpisodeCount(entry.episodes));
   const episodeCount = Math.max(parsedMaxEpisode, 1);
   const current = getMovieCurrentEpisode(movie);
-  const update: Record<string, unknown> = {
-    showtimes: entry.sourceUrl || `https://www.blvietsub.top/?p=${entry.postId}`,
-    source_url: entry.sourceUrl || `https://www.blvietsub.top/?p=${entry.postId}`,
-    source_site: movie.slug.startsWith('blvietsub-') ? SOURCE_SITE : undefined,
-    source_name: movie.slug.startsWith('blvietsub-') ? SOURCE_NAME : undefined,
+  const update: Record<string, unknown> = {};
+  const assignChanged = (key: string, nextValue: unknown, currentValue: unknown) => {
+    if (nextValue === undefined) return;
+    const comparableNext = typeof nextValue === 'string' ? nextValue.trim() : nextValue;
+    const comparableCurrent = typeof currentValue === 'string' ? currentValue.trim() : currentValue;
+    if (comparableNext !== comparableCurrent) update[key] = nextValue;
   };
+  const canonicalSourceUrl = entry.sourceUrl || `https://www.blvietsub.top/?p=${entry.postId}`;
+  assignChanged('showtimes', canonicalSourceUrl, movie.showtimes);
+  assignChanged('source_url', canonicalSourceUrl, movie.source_url);
+  if (movie.slug.startsWith('blvietsub-')) {
+    assignChanged('source_site', SOURCE_SITE, movie.source_site);
+    assignChanged('source_name', SOURCE_NAME, movie.source_name);
+  }
 
   const originName = String(entry.originName || '').trim();
   if (originName) {
     if (!String(movie.origin_name || '').trim()) update.origin_name = originName;
     if (!String(movie.title_en || '').trim() && originName !== entry.title) update.title_en = originName;
-    update.title_original = originName;
+    assignChanged('title_original', originName, movie.title_original);
   }
 
   const normalizedName = slugify(uniqueTextValues([
@@ -1570,7 +1580,7 @@ async function updateMovieMetadata(
     originName,
     ...(entry.aliasNames || []),
   ]).join(' '));
-  if (normalizedName) update.normalized_name = normalizedName;
+  if (normalizedName) assignChanged('normalized_name', normalizedName, movie.normalized_name);
 
   const existingTotal = Math.max(Number(movie.total_episodes || 0), current);
   const mergedCurrent = Math.max(current, episodeCount);
@@ -1586,8 +1596,8 @@ async function updateMovieMetadata(
     // The source frequently replaces expired third-party image URLs. Refresh
     // both fields even when the old value is non-empty, otherwise a dead URL
     // survives forever and every frontend fallback starts from bad data.
-    update.thumb_url = entry.image;
-    update.poster_url = entry.image;
+    assignChanged('thumb_url', entry.image, movie.thumb_url);
+    assignChanged('poster_url', entry.image, movie.poster_url);
   }
 
   Object.keys(update).forEach((key) => update[key] === undefined && delete update[key]);
@@ -1703,7 +1713,7 @@ async function repairExistingBlvietsubMovies(
   const queryLimit = includeCompleted ? 800 : 1000;
   const { data, error } = await supabase
     .from('movies')
-    .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, episode_total, current_episode, total_episodes, status, year, last_synced_at, updated_at')
+    .select('id, slug, name, origin_name, title_vi, title_en, title_original, normalized_name, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, episode_total, current_episode, total_episodes, status, year, last_synced_at, updated_at')
     .eq('is_published', true)
     .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub.com%,source_url.ilike.%blvietsub.com%')
     .order('last_synced_at', { ascending: true, nullsFirst: true })
@@ -1880,38 +1890,14 @@ async function pingChangedMovieUrls(
 ): Promise<{ attempted: boolean; ok: boolean; status: number; urls: number; message: string }> {
   const urls = movieUrlsFromSlugs(slugs);
   if (urls.length === 0) return { attempted: false, ok: true, status: 0, urls: 0, message: 'no changed urls' };
-
-  try {
-    const endpoint = new URL(`${supabaseUrl}/functions/v1/auto-ping-new-movies`);
-    if (cronSecret) endpoint.searchParams.set('secret', cronSecret);
-    const response = await fetch(endpoint.toString(), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        apikey: serviceKey,
-        'Content-Type': 'application/json',
-        'x-triggered-by': 'cron-seo-sync-blvietsub',
-      },
-      body: JSON.stringify({ urls, type: 'URL_UPDATED' }),
-      signal: AbortSignal.timeout(90000),
-    });
-    const body = await response.json().catch(() => ({})) as { message?: string; status?: string; error?: string };
-    return {
-      attempted: true,
-      ok: response.ok && body.status !== 'credentials_missing',
-      status: response.status,
-      urls: urls.length,
-      message: body.message || body.status || body.error || '',
-    };
-  } catch (error) {
-    return {
-      attempted: true,
-      ok: false,
-      status: 0,
-      urls: urls.length,
-      message: error instanceof Error ? error.message : String(error),
-    };
-  }
+  void supabaseUrl; void serviceKey; void cronSecret;
+  return {
+    attempted: false,
+    ok: true,
+    status: 0,
+    urls: urls.length,
+    message: 'Ordinary movie URLs use sitemap, RSS/WebSub and internal links; Google Indexing API is intentionally skipped.',
+  };
 }
 
 async function runSeoAutomation(

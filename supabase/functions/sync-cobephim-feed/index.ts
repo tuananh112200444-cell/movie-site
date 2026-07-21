@@ -452,7 +452,7 @@ async function upsertPlayableRows(supabase: SupabaseClient, movie: Record<string
 
     const { data: streamRow, error: streamLookupError } = await supabase
       .from('streams')
-      .select('id')
+      .select('id,stream_url,embed_url')
       .eq('movie_id', movie.id)
       .eq('source', SOURCE_SITE)
       .eq('is_active', true)
@@ -478,7 +478,12 @@ async function upsertPlayableRows(supabase: SupabaseClient, movie: Record<string
       last_error: '',
     };
     if (streamRow?.id) {
-      const { error } = await supabase.from('streams').update(streamPayload).eq('id', streamRow.id);
+      const urlChanged = String(streamRow.stream_url || '') !== String(streamPayload.stream_url || '')
+        || String(streamRow.embed_url || '') !== String(streamPayload.embed_url || '');
+      const updatePayload = urlChanged
+        ? streamPayload
+        : Object.fromEntries(Object.entries(streamPayload).filter(([key]) => !['health_status', 'failure_count', 'last_error'].includes(key)));
+      const { error } = await supabase.from('streams').update(updatePayload).eq('id', streamRow.id);
       if (error) throw error;
       streamsUpdated += 1;
     } else {

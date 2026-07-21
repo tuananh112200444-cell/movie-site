@@ -22,6 +22,7 @@ interface StreamRow {
   health_status: string | null;
   failure_count: number | null;
   last_checked_at: string | null;
+  last_error: string | null;
   response_time_ms: number | null;
 }
 
@@ -173,6 +174,22 @@ async function updateStream(
   deactivateAfter: number,
 ) {
   const now = new Date().toISOString();
+  const telemetryFailureAge = Date.now() - Date.parse(String(row.last_checked_at || ''));
+  const telemetryEmbedCooldown = result.ok
+    && !String(row.stream_url || '').trim()
+    && String(row.embed_url || '').trim()
+    && String(row.last_error || '').startsWith('Viewer telemetry:')
+    && Number.isFinite(telemetryFailureAge)
+    && telemetryFailureAge >= 0
+    && telemetryFailureAge < 30 * 60 * 1000;
+  if (telemetryEmbedCooldown) {
+    await supabase.from('streams').update({
+      response_time_ms: result.responseMs,
+      priority: Math.min(Number(row.priority || 100), 20),
+      updated_at: now,
+    }).eq('id', row.id);
+    return;
+  }
   const nextFailureCount = result.ok ? 0 : Number(row.failure_count || 0) + 1;
   const update: Record<string, unknown> = {
     health_status: healthStatusFor(result),
@@ -227,7 +244,7 @@ serve(async (req) => {
   const dryRun = url.searchParams.get('dry_run') === '1';
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-  const streamSelect = 'id,movie_id,episode_slug,source,server_name,stream_url,embed_url,quality,priority,health_status,failure_count,last_checked_at,response_time_ms,movies!inner(slug)';
+  const streamSelect = 'id,movie_id,episode_slug,source,server_name,stream_url,embed_url,quality,priority,health_status,failure_count,last_checked_at,last_error,response_time_ms,movies!inner(slug)';
   let query = supabase
     .from('streams')
     .select(streamSelect)

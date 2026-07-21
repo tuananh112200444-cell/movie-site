@@ -19,8 +19,11 @@ function loadEnv() {
 const env = { ...loadEnv(), ...process.env };
 const SUPABASE_URL = env.VITE_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = env.VITE_PUBLIC_SUPABASE_ANON_KEY;
-const LIMIT = Math.max(1, Math.min(Number(process.env.SOURCE_BRAIN_LIMIT || 10_000), 20_000));
-const QUERY_CONCURRENCY = Math.max(1, Math.min(Number(process.env.SOURCE_BRAIN_CONCURRENCY || 4), 8));
+const FULL_AUDIT = process.argv.includes('--full');
+// Keep the deploy gate bounded and deterministic. Full catalog analysis remains
+// available for scheduled operations without making every deployment time out.
+const LIMIT = Math.max(1, Math.min(Number(process.env.SOURCE_BRAIN_LIMIT || (FULL_AUDIT ? 20_000 : 500)), 20_000));
+const QUERY_CONCURRENCY = Math.max(1, Math.min(Number(process.env.SOURCE_BRAIN_CONCURRENCY || (FULL_AUDIT ? 4 : 2)), 8));
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error('Missing VITE_PUBLIC_SUPABASE_URL or VITE_PUBLIC_SUPABASE_ANON_KEY in .env');
@@ -115,7 +118,7 @@ async function fetchPublishedMovies() {
 }
 
 async function queryRows(table, select, movieIds) {
-  const idChunks = chunk(movieIds, 200);
+  const idChunks = chunk(movieIds, 100);
   const chunkResults = new Array(idChunks.length);
   let cursor = 0;
 
@@ -125,12 +128,20 @@ async function queryRows(table, select, movieIds) {
       const ids = idChunks[index];
       const rows = [];
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await supabase
-        .from(table)
-        .select(select)
-        .in('movie_id', ids)
-        .range(from, from + 999)
-        .abortSignal(AbortSignal.timeout(60_000));
+      let data;
+      let error;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const result = await supabase
+          .from(table)
+          .select(select)
+          .in('movie_id', ids)
+          .range(from, from + 999)
+          .abortSignal(AbortSignal.timeout(45_000));
+        data = result.data;
+        error = result.error;
+        if (!error || !/timeout|canceling statement/i.test(String(error.message || ''))) break;
+        if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 350));
+      }
       if (error) throw new Error(`${table}: ${error.message}`);
       rows.push(...(data || []));
       if (!data || data.length < 1000) break;
@@ -233,6 +244,7 @@ if (needsRepair.length > 0) failures.push(`Found ${needsRepair.length} movies ad
 if (unhealthyOnly.length > 0) failures.push(`Found ${unhealthyOnly.length} movies where every playable row is marked unhealthy.`);
 
 console.log(JSON.stringify({
+  auditMode: FULL_AUDIT ? 'full' : 'deploy-gate',
   checkedMovies: movies.length,
   checkedRows: movieEpisodes.length + episodes.length + streams.length,
   backupCoverage,

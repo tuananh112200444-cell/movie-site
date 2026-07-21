@@ -48,6 +48,7 @@ interface RepairCandidate {
   score: number;
   critical: number;
   hosts: string[];
+  host_counts: Record<string, number>;
   servers: string[];
   episodes: string[];
   last_seen_at: string;
@@ -128,6 +129,37 @@ function getOphimRepairSlug(movie: MovieRow): string {
   return String(movie.ophim_slug || movie.slug || movie.ophim_id || '').trim();
 }
 
+function urlHost(value: unknown): string {
+  try { return new URL(String(value || '')).hostname.toLowerCase().replace(/^www\./, ''); }
+  catch { return ''; }
+}
+
+async function penalizeTelemetryFailedStreams(
+  supabase: SupabaseClient,
+  movieId: string,
+  hosts: string[],
+): Promise<number> {
+  const normalizedHosts = new Set(hosts.map((host) => host.toLowerCase().replace(/^www\./, '')).filter(Boolean));
+  if (!movieId || normalizedHosts.size === 0) return 0;
+  const { data } = await supabase.from('streams')
+    .select('id,stream_url,embed_url,failure_count')
+    .eq('movie_id', movieId).eq('is_active', true)
+    .abortSignal(AbortSignal.timeout(12_000));
+  let penalized = 0;
+  for (const row of data || []) {
+    const host = urlHost(row.stream_url || row.embed_url);
+    if (!normalizedHosts.has(host)) continue;
+    const { error } = await supabase.from('streams').update({
+      health_status: 'failed',
+      failure_count: Math.min(20, Number(row.failure_count || 0) + 3),
+      last_error: 'Viewer telemetry: repeated fatal playback failure',
+      last_checked_at: new Date().toISOString(),
+    }).eq('id', row.id);
+    if (!error) penalized += 1;
+  }
+  return penalized;
+}
+
 function summarizeCandidates(events: PlayerErrorEvent[], threshold: number, limit: number): RepairCandidate[] {
   const map = new Map<string, RepairCandidate>();
 
@@ -141,6 +173,7 @@ function summarizeCandidates(events: PlayerErrorEvent[], threshold: number, limi
       score: 0,
       critical: 0,
       hosts: [],
+      host_counts: {},
       servers: [],
       episodes: [],
       last_seen_at: event.created_at,
@@ -149,7 +182,9 @@ function summarizeCandidates(events: PlayerErrorEvent[], threshold: number, limi
     current.critical += 1;
     current.score += event.event_type === 'stall_fatal' ? 5 : 4;
     if (event.created_at > current.last_seen_at) current.last_seen_at = event.created_at;
-    addUnique(current.hosts, event.source_host, 6);
+    const eventHost = String(event.source_host || '').toLowerCase().replace(/^www\./, '').trim();
+    if (eventHost) current.host_counts[eventHost] = Number(current.host_counts[eventHost] || 0) + 1;
+    addUnique(current.hosts, eventHost, 6);
     addUnique(current.servers, event.server_name, 6);
     addUnique(current.episodes, event.episode_name || event.episode_slug, 6);
     if (!current.title || current.title === slug) current.title = String(event.movie_title || slug);
@@ -158,6 +193,10 @@ function summarizeCandidates(events: PlayerErrorEvent[], threshold: number, limi
 
   return [...map.values()]
     .filter((item) => item.critical >= threshold)
+    .map((item) => ({
+      ...item,
+      hosts: item.hosts.filter((host) => Number(item.host_counts[host] || 0) >= threshold),
+    }))
     .sort((a, b) => b.score - a.score || b.critical - a.critical || b.last_seen_at.localeCompare(a.last_seen_at))
     .slice(0, limit);
 }
@@ -178,7 +217,9 @@ async function callFunction(
   if (secret) endpoint.searchParams.set('secret', secret);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 150000);
+  // The parent Edge request has a 150s idle ceiling. A child must fail fast so
+  // the repair can record its result/cooldown instead of being killed mid-run.
+  const timeout = setTimeout(() => controller.abort(), 75000);
   try {
     const response = await fetch(endpoint.toString(), {
       method: 'POST',
@@ -288,6 +329,8 @@ serve(async (req) => {
   const eventLimit = clampNumber(url.searchParams.get('event_limit'), 1200, 100, 5000);
   const limit = clampNumber(url.searchParams.get('limit'), 6, 1, 12);
   const threshold = clampNumber(url.searchParams.get('threshold'), 2, 1, 10);
+  const cooldownMinutes = clampNumber(url.searchParams.get('cooldown_minutes'), 45, 15, 360);
+  const refreshGlobal = url.searchParams.get('refresh_global') === '1';
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
   const secret = internalSecret(providedSecret);
 
@@ -299,11 +342,20 @@ serve(async (req) => {
     .gte('created_at', since)
     .in('event_type', [...CRITICAL_EVENTS])
     .order('created_at', { ascending: false })
-    .limit(eventLimit);
+    .limit(eventLimit)
+    .abortSignal(AbortSignal.timeout(15_000));
 
   if (eventsError) return json({ success: false, error: eventsError.message }, 500);
 
   const candidates = summarizeCandidates((eventRows || []) as PlayerErrorEvent[], threshold, limit);
+  const repairKeys = candidates.map((candidate) => `player-repair:${candidate.slug}`);
+  const { data: repairCursorRows } = repairKeys.length
+    ? await supabase.from('sync_cursors').select('key,updated_at').in('key', repairKeys).abortSignal(AbortSignal.timeout(8_000))
+    : { data: [] as Array<{ key: string; updated_at: string }> };
+  const cooldownCutoff = Date.now() - cooldownMinutes * 60 * 1000;
+  const recentRepairKeys = new Set((repairCursorRows || [])
+    .filter((row) => Date.parse(String(row.updated_at || '')) >= cooldownCutoff)
+    .map((row) => String(row.key || '')));
   const slugs = candidates.map((candidate) => candidate.slug);
   if (slugs.length === 0) {
     return json({
@@ -319,7 +371,8 @@ serve(async (req) => {
   const { data: movieRows, error: moviesError } = await supabase
     .from('movies')
     .select('id,slug,name,origin_name,source_site,source_name,source_url,showtimes,ophim_id,ophim_slug')
-    .in('slug', slugs);
+    .in('slug', slugs)
+    .abortSignal(AbortSignal.timeout(10_000));
 
   if (moviesError) return json({ success: false, error: moviesError.message }, 500);
 
@@ -330,6 +383,12 @@ serve(async (req) => {
   let skipped = 0;
 
   for (const candidate of candidates) {
+    const repairKey = `player-repair:${candidate.slug}`;
+    if (recentRepairKeys.has(repairKey)) {
+      skipped += 1;
+      repairs.push({ candidate, action: 'skip', reason: 'repair_cooldown', cooldown_minutes: cooldownMinutes });
+      continue;
+    }
     const movie = moviesBySlug.get(candidate.slug);
     if (!movie) {
       skipped += 1;
@@ -348,6 +407,7 @@ serve(async (req) => {
     }
 
     const calls: FunctionCallResult[] = [];
+    const penalizedStreams = await penalizeTelemetryFailedStreams(supabase, movie.id, candidate.hosts);
     if (isBlvietsubMovie(movie)) {
       const movieUrl = getBlvietsubMovieUrl(movie);
       if (movieUrl) {
@@ -397,17 +457,22 @@ serve(async (req) => {
       errors.push(`${movie.slug}: ${failed.map((call) => `${call.name}:${call.status}`).join(', ')}`);
     } else {
       repaired += 1;
+      await supabase.from('sync_cursors').upsert({ key: repairKey, page: 0, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     }
 
     repairs.push({
       candidate,
       action: isBlvietsubMovie(movie) ? 'repair_blvietsub' : 'repair_ophim_like',
+      penalized_streams: penalizedStreams,
       calls: calls.map(compactCall),
     });
   }
 
   let cacheRefresh: FunctionCallResult[] = [];
-  if (!dryRun && repaired > 0) {
+  // Detail caches are invalidated per movie above. Global search/home refreshes
+  // are intentionally delegated to their warmers unless explicitly requested;
+  // doing both here made repairs exceed the Edge idle timeout.
+  if (!dryRun && repaired > 0 && refreshGlobal) {
     cacheRefresh = [
       await callFunction(supabaseUrl, serviceKey, secret, 'search-index-proxy', {
         refresh: '1',

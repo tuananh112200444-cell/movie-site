@@ -27,7 +27,7 @@ function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, 
 function cacheHeaders(state: 'HIT' | 'STALE' | 'MISS' | 'ERROR') {
   const maxAge = state === 'HIT' ? 120 : state === 'STALE' ? 60 : 30;
   return {
-    'Cache-Control': `public, max-age=${maxAge}, stale-while-revalidate=900`,
+    'Cache-Control': `public, max-age=${maxAge}, stale-while-revalidate=900, stale-if-error=86400`,
     'X-Cache': state,
   };
 }

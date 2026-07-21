@@ -917,10 +917,15 @@ async function writeLog(supabase: SupabaseClient, stats: SyncStats, elapsedMs: n
   }
 }
 
-async function clearCaches(supabase: SupabaseClient): Promise<void> {
+async function clearCaches(supabase: SupabaseClient, slugs: string[]): Promise<void> {
+  const targets = uniqueSlugs(slugs);
   await Promise.allSettled([
-    supabase.from('home_page_cache').delete().neq('id', '__never__'),
-    supabase.from('movie_api_cache').delete().neq('slug', '__never__'),
+    // Preserve the last known-good homepage payload for stale fallback. Marking
+    // it expired lets the warmer refresh it without creating a cold-cache gap.
+    supabase.from('home_page_cache').update({ expires_at: new Date(0).toISOString() }).eq('id', 'homepage_v3'),
+    targets.length
+      ? supabase.from('movie_api_cache').delete().in('slug', targets)
+      : Promise.resolve(),
   ]);
 }
 
@@ -939,7 +944,7 @@ async function refreshSearchIndex(supabaseUrl: string, serviceKey: string): Prom
         Authorization: `Bearer ${serviceKey}`,
         apikey: serviceKey,
       },
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(30000),
     });
     return response.ok;
   } catch {
@@ -955,38 +960,14 @@ async function pingChangedMovieUrls(
 ): Promise<{ attempted: boolean; ok: boolean; status: number; urls: number; message: string }> {
   const urls = movieUrlsFromSlugs(slugs);
   if (urls.length === 0) return { attempted: false, ok: true, status: 0, urls: 0, message: 'no changed urls' };
-
-  try {
-    const endpoint = new URL(`${supabaseUrl}/functions/v1/auto-ping-new-movies`);
-    if (cronSecret) endpoint.searchParams.set('secret', cronSecret);
-    const response = await fetch(endpoint.toString(), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        apikey: serviceKey,
-        'Content-Type': 'application/json',
-        'x-triggered-by': 'cron-seo-sync-ophim',
-      },
-      body: JSON.stringify({ urls, type: 'URL_UPDATED' }),
-      signal: AbortSignal.timeout(90000),
-    });
-    const body = await response.json().catch(() => ({})) as { message?: string; status?: string; error?: string };
-    return {
-      attempted: true,
-      ok: response.ok && body.status !== 'credentials_missing',
-      status: response.status,
-      urls: urls.length,
-      message: body.message || body.status || body.error || '',
-    };
-  } catch (error) {
-    return {
-      attempted: true,
-      ok: false,
-      status: 0,
-      urls: urls.length,
-      message: error instanceof Error ? error.message : String(error),
-    };
-  }
+  void supabaseUrl; void serviceKey; void cronSecret;
+  return {
+    attempted: false,
+    ok: true,
+    status: 0,
+    urls: urls.length,
+    message: 'Ordinary movie URLs use sitemap, RSS/WebSub and internal links; Google Indexing API is intentionally skipped.',
+  };
 }
 
 async function runSeoAutomation(
@@ -1006,7 +987,7 @@ async function runSeoAutomation(
     };
   }
 
-  await clearCaches(supabase);
+  await clearCaches(supabase, slugs);
   const [searchIndexRefreshed, googlePing] = await Promise.all([
     refreshSearchIndex(supabaseUrl, serviceKey),
     pingChangedMovieUrls(supabaseUrl, serviceKey, cronSecret, slugs),
