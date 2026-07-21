@@ -22,6 +22,10 @@ interface MergedEpisode {
   key: string;
 }
 
+function isRawEpisode(ep?: EpisodeData | null): boolean {
+  return String(ep?.audio_type || '').toLowerCase() === 'raw' || /\braw\b/i.test(String(ep?.name || ''));
+}
+
 function getEpisodeMergeKey(ep: EpisodeData): string {
   if (ep.is_scheduled) return ep.slug || ep.name || 'scheduled';
   const sortKey = epSortKey(ep);
@@ -163,10 +167,12 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     }, [episodes, scheduledEpisode]);
 
     const epList = useMemo(() => mergedEpisodes.map((m) => m.ep), [mergedEpisodes]);
-    const availableEpisodeLabel = useMemo(
-      () => getAvailableEpisodeLabel(mergedEpisodes.length || episodes.length, activeEp),
-      [activeEp, episodes.length, mergedEpisodes.length],
-    );
+    const availableEpisodeLabel = useMemo(() => {
+      const rawCount = mergedEpisodes.filter((item) => isRawEpisode(item.ep)).length;
+      const translatedCount = mergedEpisodes.length - rawCount;
+      if (rawCount > 0) return `${translatedCount} tập Vietsub · ${rawCount} tập RAW`;
+      return getAvailableEpisodeLabel(mergedEpisodes.length || episodes.length, activeEp);
+    }, [activeEp, episodes.length, mergedEpisodes]);
     const singleLateEpisodeNumber = useMemo(() => {
       if (mergedEpisodes.length !== 1) return 0;
       const episodeNumber = epSortKey(mergedEpisodes[0].ep);
@@ -362,8 +368,10 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
         return;
       }
       if (mergedEpisodes.length === 0) return;
-      const latestPlayableEpisode = [...mergedEpisodes]
-        .filter((item) => !item.ep.is_scheduled)
+      const playableEpisodes = mergedEpisodes
+        .filter((item) => !item.ep.is_scheduled);
+      const translatedEpisodes = playableEpisodes.filter((item) => !isRawEpisode(item.ep));
+      const latestPlayableEpisode = [...(translatedEpisodes.length > 0 ? translatedEpisodes : playableEpisodes)]
         .sort((a, b) => epSortKey(b.ep) - epSortKey(a.ep))[0];
       handleSelectMergedEp(latestPlayableEpisode ?? mergedEpisodes[0]);
       (forwardedRef as React.RefObject<HTMLDivElement | null>)?.current?.scrollIntoView({
@@ -667,7 +675,12 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       const isActive = idx === activeServer;
                       const sourceName = getServerDisplayName(srv, idx);
                       const movieLanguages = getAudioLanguageLabels(movie.lang);
-                      const audioLabel = typeKey === 'vietsub' || typeKey === 'thuyetminh' || typeKey === 'longtieng'
+                      const activeSourceEpisode = activeEp
+                        ? srv.server_data?.find((episode) => getEpisodeMergeKey(episode) === getEpisodeMergeKey(activeEp))
+                        : srv.server_data?.[0];
+                      const audioLabel = isRawEpisode(activeSourceEpisode)
+                        ? 'RAW · Chưa phụ đề'
+                        : typeKey === 'vietsub' || typeKey === 'thuyetminh' || typeKey === 'longtieng'
                         ? type.label
                         : movieLanguages.length === 1 ? movieLanguages[0].label : 'Chưa xác định';
                       const friendlyName = isActive ? 'Đang phát' : `Dự phòng ${idx + 1}`;
@@ -778,14 +791,19 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                           activeEpisodeKey === item.key
                             ? item.ep.is_scheduled
                               ? 'bg-amber-500 text-black shadow-lg shadow-amber-950/25'
+                              : isRawEpisode(item.ep)
+                                ? 'bg-violet-500 text-white shadow-lg shadow-violet-950/25'
                               : 'bg-red-500 text-white shadow-lg shadow-red-950/25'
                             : item.ep.is_scheduled
                               ? 'bg-amber-500/10 text-amber-300 border border-amber-500/25 hover:bg-amber-500/20'
+                            : isRawEpisode(item.ep)
+                              ? 'bg-violet-500/12 text-violet-200 border border-violet-400/30 hover:bg-violet-500/22'
                             : 'bg-black/24 text-white/62 hover:text-white border border-white/[0.07] hover:bg-white/[0.08]'
                         }`}
                       >
                         {item.ep.is_scheduled && <i className="ri-timer-flash-line shrink-0" />}
                         <span className="truncate">{item.ep.name}</span>
+                        {isRawEpisode(item.ep) && <span className="rounded bg-violet-300/20 px-1 py-0.5 text-[9px] font-black">RAW</span>}
                       </button>
                     ))}
                   </div>

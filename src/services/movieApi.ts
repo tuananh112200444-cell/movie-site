@@ -2091,7 +2091,7 @@ const QUEER_UNIVERSE_TERMS = [
   'yuri',
   'lesbian',
 ];
-const QUEER_SOURCE_TERMS = ['blvietsub', 'bl vietsub', 'bl-vietsub', 'vu tru dam my'];
+const QUEER_SOURCE_TERMS = ['blvietsub', 'bl vietsub', 'bl-vietsub', 'glvietsub', 'gl vietsub', 'vu tru dam my'];
 const BLVIETSUB_SLUG_PREFIX = 'blvietsub-';
 const QUEER_FALLBACK_URL = '/queer-fallback.json?v=202607041605';
 const SUPABASE_QUEER_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
@@ -2220,6 +2220,7 @@ function getMaxEpisodeNumberFromServerData(serverData: unknown): number {
       : [];
   return rows.reduce((max, item) => {
     const ep = item as Partial<EpisodeData> & { episode_number?: number | string };
+    if (String(ep.audio_type || '').toLowerCase() === 'raw' || /\braw\b/i.test(String(ep.name || ''))) return max;
     return Math.max(
       max,
       Number(ep.episode_number || 0) || 0,
@@ -2258,7 +2259,7 @@ function isQueerMovieDetail(movie?: Partial<MovieDetail> | Partial<MovieItem> | 
     ...(movie.category ?? []).map((item) => item.name),
     ...(movie.category ?? []).map((item) => item.slug),
   ].filter(Boolean).join(' '));
-  return haystack.includes('admin-queer') || haystack.includes('blvietsub') || haystack.includes('bl vietsub') || haystack.includes('vu tru dam my');
+  return haystack.includes('admin-queer') || haystack.includes('blvietsub') || haystack.includes('bl vietsub') || haystack.includes('glvietsub') || haystack.includes('gl vietsub') || haystack.includes('vu tru dam my');
 }
 
 function isBlvietsubMovie(movie?: Partial<MovieDetail> | Partial<MovieItem> | null): boolean {
@@ -3082,7 +3083,7 @@ export async function searchQueerUniverseMovies(
         .from('movies')
         .select(SUPABASE_QUEER_LIST_SELECT)
         .eq('is_published', true)
-        .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%')
+        .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%,source_site.ilike.%glvietsub%,source_name.ilike.%glvietsub%')
         .or(searchFilters)
         .order('updated_at', { ascending: false })
         .limit(limit)
@@ -3105,7 +3106,7 @@ export async function searchQueerUniverseMovies(
       .from('movies')
       .select(SUPABASE_QUEER_LIST_SELECT)
       .eq('is_published', true)
-      .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%')
+      .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%,source_site.ilike.%glvietsub%,source_name.ilike.%glvietsub%')
       .or(searchFilters)
       .order('updated_at', { ascending: false })
       .limit(limit)
@@ -3157,15 +3158,38 @@ function movieMatchesQueerUniverse(movie: MovieItem, raw?: Record<string, unknow
   );
 }
 
+function getQueerCatalogIdentity(movie: MovieItem): string {
+  const title = normalizeMatchText(movie.origin_name || movie.title_en || movie.name || movie.slug)
+    .replace(/\b(?:vietsub|thuyet minh|long tieng|full hd|hd)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return `${title}|${movie.year || 0}`;
+}
+
+function getQueerSourceFitScore(movie: MovieItem): number {
+  const source = normalizeQueerSearchText(`${movie.source_site || ''} ${movie.source_name || ''} ${movie.slug || ''}`);
+  const taxonomy = normalizeQueerSearchText((movie.category ?? []).map((item) => `${item.name} ${item.slug}`).join(' '));
+  const isGl = /bach hop|girls? love|\bgl\b|yuri/.test(taxonomy);
+  const isBl = /dam my|boys? love|\bbl\b/.test(taxonomy);
+  let score = 0;
+  if (source.includes('admin-queer')) score += 1000;
+  if (source.includes('glvietsub')) score += isGl ? 220 : 70;
+  if (source.includes('blvietsub')) score += isBl ? 220 : 70;
+  score += Math.min(getEpisodeNumberFromText(movie.episode_current), 100) * 2;
+  if (movie.poster_url || movie.thumb_url) score += 30;
+  score += Math.max(0, Math.min(30, (getMovieUpdateTime(movie) - Date.now() + 30 * 86400000) / 86400000));
+  return score;
+}
+
 function uniqueMoviesBySlug(items: MovieItem[]): MovieItem[] {
-  const seen = new Set<string>();
-  const result: MovieItem[] = [];
+  const selected = new Map<string, MovieItem>();
   for (const item of items) {
-    if (!item.slug || seen.has(item.slug)) continue;
-    seen.add(item.slug);
-    result.push(item);
+    if (!item.slug) continue;
+    const identity = getQueerCatalogIdentity(item);
+    const current = selected.get(identity);
+    if (!current || getQueerSourceFitScore(item) > getQueerSourceFitScore(current)) selected.set(identity, item);
   }
-  return result;
+  return Array.from(selected.values());
 }
 
 async function loadStaticQueerFallback(signal?: AbortSignal): Promise<MovieItem[]> {
@@ -3209,7 +3233,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
       .from('movies')
       .select(SUPABASE_QUEER_LIST_SELECT)
       .eq('is_published', true)
-      .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
+      .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%glvietsub%,source_name.ilike.%glvietsub%')
       .order('updated_at', { ascending: false })
       .limit(poolLimit)
       .abortSignal(controller.signal);
@@ -3758,6 +3782,7 @@ export const STREAM_SERVER_PRIORITY = ['OPHIM', 'KKPHIM', 'KHOPHIM', 'DM', 'SUPA
 const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
 const SERVER_RECENT_BAD_HOST_PENALTY = 1800;
 const OPHIM_PREFERRED_SOURCE_BONUS = 380;
+const OPSTREAM_IFRAME_BLOCK_PENALTY = 1050;
 const KKPHIM_PREFERRED_SOURCE_BONUS = 360;
 const RESILIENT_DIRECT_SOURCE_BONUS = 620;
 const TRUSTED_PLATFORM_SOURCE_BONUS = 460;
@@ -4123,6 +4148,11 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (/\.(mp4|webm|mov)(?:[?#].*)?$/i.test(embed)) score += 110;
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) score += 120;
   if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) score += OPHIM_PREFERRED_SOURCE_BONUS;
+  // Production telemetry shows opstream iframe endpoints frequently refuse
+  // third-party embedding even though their health probe returns a response.
+  // Keep them available when they are the only source, but prefer any healthy
+  // independent source. Direct OPhim HLS is not affected by this penalty.
+  if (!m3u8 && embed && host.includes('opstream')) score -= OPSTREAM_IFRAME_BLOCK_PENALTY;
   if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) score += KKPHIM_PREFERRED_SOURCE_BONUS;
   if (lower.includes('.m3u8')) score += 70;
   if (host.includes('versondd.top') || host.includes('short.icu')) score -= 1200;
@@ -4347,9 +4377,19 @@ export function pickBestEpisodeByPriority(
   });
 
   if (!candidates.length) return null;
-  const hasIndependentSource = candidates.some((candidate) => candidate.failureCluster !== 'ssplay_abyss');
+  // RAW is a useful early-access choice, but must never silently replace a
+  // translated episode when the viewer did not explicitly request an episode.
+  const selectableCandidates = !targetText && candidates.some((candidate) =>
+    String(candidate.episode.audio_type || '').toLowerCase() !== 'raw' &&
+    !/\braw\b/i.test(String(candidate.episode.name || ''))
+  )
+    ? candidates.filter((candidate) =>
+        String(candidate.episode.audio_type || '').toLowerCase() !== 'raw' &&
+        !/\braw\b/i.test(String(candidate.episode.name || '')))
+    : candidates;
+  const hasIndependentSource = selectableCandidates.some((candidate) => candidate.failureCluster !== 'ssplay_abyss');
 
-  candidates.sort((a, b) => {
+  selectableCandidates.sort((a, b) => {
     const aDirect = a.episode.link_m3u8 || /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(a.episode.link_embed || '');
     const bDirect = b.episode.link_m3u8 || /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(b.episode.link_embed || '');
     const aSsplayOnly = hasIndependentSource && a.failureCluster === 'ssplay_abyss';
@@ -4360,7 +4400,7 @@ export function pickBestEpisodeByPriority(
     return a.priorityRank - b.priorityRank;
   });
 
-  const best = candidates[0];
+  const best = selectableCandidates[0];
   const priorityLabel = best.priorityRank < STREAM_SERVER_PRIORITY.length
     ? STREAM_SERVER_PRIORITY[best.priorityRank]
     : null;

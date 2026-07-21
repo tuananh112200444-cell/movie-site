@@ -1950,7 +1950,7 @@ async function proxyMovieDetail(request, context) {
     const headers = new Headers(upstream.headers);
     headers.delete('Set-Cookie');
     headers.set('Content-Type', 'application/json; charset=utf-8');
-    headers.set('Cache-Control', refresh ? 'no-store' : 'public, max-age=300, s-maxage=300, stale-while-revalidate=1800');
+    headers.set('Cache-Control', refresh ? 'no-store' : 'public, max-age=300, s-maxage=300, stale-while-revalidate=1800, stale-if-error=86400');
     headers.set('X-KhoPhim-Detail-Cache', refresh ? 'REFRESH' : 'MISS');
     for (const [key, value] of Object.entries(SECURITY_HEADERS)) headers.set(key, value);
     const response = new Response(upstream.body, { status: upstream.status, headers });

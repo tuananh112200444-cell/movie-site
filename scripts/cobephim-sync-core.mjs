@@ -469,7 +469,12 @@ async function upsertPlayableRows(supabase, movie, entry) {
       .maybeSingle();
     if (lookupError) throw new Error(`streams lookup ${movie.slug}: ${lookupError.message}`);
     if (existing?.id) {
-      const { error } = await supabase.from('streams').update(payload).eq('id', existing.id);
+      const urlChanged = String(existing.stream_url || '') !== String(payload.stream_url || '')
+        || String(existing.embed_url || '') !== String(payload.embed_url || '');
+      const updatePayload = urlChanged
+        ? payload
+        : Object.fromEntries(Object.entries(payload).filter(([key]) => !['health_status', 'failure_count', 'last_error'].includes(key)));
+      const { error } = await supabase.from('streams').update(updatePayload).eq('id', existing.id);
       if (error) throw new Error(`streams update ${movie.slug}: ${error.message}`);
       streamsUpdated += 1;
       continue;

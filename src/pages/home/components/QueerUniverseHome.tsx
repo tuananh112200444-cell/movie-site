@@ -86,10 +86,37 @@ function isCompleted(movie: MovieItem): boolean {
 }
 
 function rankScore(movie: MovieItem): number {
-  const freshness = Math.max(0, 60 - (Date.now() - getMovieTime(movie)) / 86400000);
-  const yearScore = Math.max(0, (movie.year || 0) - 2020) * 4;
-  const statusScore = isOngoing(movie) ? 25 : isCompleted(movie) ? 8 : 0;
-  return freshness + yearScore + statusScore + Math.min(getEpisodeNumber(movie), 20);
+  const ageDays = Math.max(0, (Date.now() - getMovieTime(movie)) / 86400000);
+  const freshness = Math.max(0, 100 - ageDays * 4);
+  const yearScore = Math.max(0, (movie.year || 0) - 2020) * 5;
+  const statusScore = isOngoing(movie) ? 24 : isCompleted(movie) ? 6 : 0;
+  const playableScore = getEpisodeNumber(movie) > 0 ? 12 : 0;
+  const artworkScore = movie.poster_url || movie.thumb_url ? 8 : -30;
+  // Episode count is only a completeness signal. Giving it too much weight
+  // caused very long, old shows to occupy recommendations indefinitely.
+  return freshness + yearScore + statusScore + playableScore + artworkScore
+    + Math.min(getEpisodeNumber(movie), 8);
+}
+
+function buildRecommendations(newest: MovieItem[], ranked: MovieItem[], limit = 12): MovieItem[] {
+  const output: MovieItem[] = [];
+  const seen = new Set<string>();
+  const add = (movie?: MovieItem) => {
+    if (!movie?.slug || seen.has(movie.slug)) return;
+    seen.add(movie.slug);
+    output.push(movie);
+  };
+  // Half of the shelf is guaranteed fresh; the other half balances quality,
+  // playability and ongoing status. This prevents a stale or chaotic shelf.
+  for (let index = 0; output.length < limit && index < Math.max(newest.length, ranked.length); index += 1) {
+    if (output.length % 2 === 0) add(newest[index]);
+    else add(ranked[index]);
+  }
+  for (const movie of [...newest, ...ranked]) {
+    if (output.length >= limit) break;
+    add(movie);
+  }
+  return output;
 }
 
 function matchesSearch(movie: MovieItem, query: string): boolean {
@@ -185,8 +212,8 @@ function MoviePosterCard({ movie, priority }: { movie: MovieItem; priority?: boo
         <div className="relative aspect-[2/3] overflow-hidden bg-white/[0.04]">
           <QueerMovieImage
             movie={movie}
-            width={420}
-            quality={84}
+            width={260}
+            quality={82}
             priority={priority}
             className="h-full w-full object-cover object-center transition-[opacity,transform] duration-500 group-hover:scale-105"
           />
@@ -258,8 +285,11 @@ function MovieGrid({ movies, loading, skeletonCount = 12 }: { movies: MovieItem[
 
   return (
     <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-6">
-      {movies.map((movie, index) => (
-        <MoviePosterCard key={movie.slug} movie={movie} priority={index < 6} />
+      {movies.map((movie) => (
+        // The queer page has two grids plus a hero. Marking the first six
+        // cards of every grid as high priority created 12 competing image
+        // downloads and delayed the actual LCP hero, especially on mobile.
+        <MoviePosterCard key={movie.slug} movie={movie} priority={false} />
       ))}
     </div>
   );
@@ -371,7 +401,10 @@ export default function QueerUniverseHome({ onBack, onSelectPortal }: QueerUnive
 
   const allMovies = useMemo(() => sortNewestFirst(sections.newUpdates), [sections.newUpdates]);
   const rankedMovies = useMemo(() => [...allMovies].sort((a, b) => rankScore(b) - rankScore(a)), [allMovies]);
-  const recommendedMovies = useMemo(() => rankedMovies.slice(0, 12), [rankedMovies]);
+  const recommendedMovies = useMemo(
+    () => buildRecommendations(allMovies, rankedMovies, 12),
+    [allMovies, rankedMovies],
+  );
   const normalizedQuery = query.trim();
   const shouldRemoteSearch = normalizedQuery.length >= 2;
 

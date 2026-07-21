@@ -40,8 +40,6 @@ export async function saveReview(review: MovieReview): Promise<void> {
   const data = await res.json().catch(() => ({ error: undefined })) as { error?: string };
   if (!res.ok || data.error) throw new Error(data.error ?? `Save failed: ${res.status}`);
 
-  // Ping Google Indexing API after saving (fire and forget)
-  pingGoogleIndex(review.slug).catch(() => { /* silent fail */ });
 }
 
 export async function deleteReview(slug: string): Promise<void> {
@@ -53,20 +51,6 @@ export async function deleteReview(slug: string): Promise<void> {
 
   const data = await res.json().catch(() => ({ error: undefined })) as { error?: string };
   if (!res.ok || data.error) throw new Error(data.error ?? `Delete failed: ${res.status}`);
-}
-
-// Ping Google Indexing API to request immediate indexing
-async function pingGoogleIndex(slug: string): Promise<void> {
-  try {
-    await fetch(
-      `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/google-index-ping`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slugs: [slug] }),
-      }
-    );
-  } catch { /* silent fail */ }
 }
 
 // ─── Public Supabase reads (SELECT still allowed) ────────────────────────────

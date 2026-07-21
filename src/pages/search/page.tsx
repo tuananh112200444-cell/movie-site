@@ -348,7 +348,9 @@ export default function SearchPage() {
 
   const ensureSearchIndexLoaded = useCallback(() => {
     if (searchIndexLoadRef.current) return searchIndexLoadRef.current;
-    searchIndexLoadRef.current = fetchSupabaseSearchIndex({ limit: 5000 })
+    // RPC handles exact/long-tail queries. This local index is only an offline
+    // relevance fallback, so 3k recent rows avoid a multi-megabyte first load.
+    searchIndexLoadRef.current = fetchSupabaseSearchIndex({ limit: 3000 })
       .then((items) => {
         if (items.length > 0) {
           setLocalPool((prev) => {

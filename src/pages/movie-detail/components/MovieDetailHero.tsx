@@ -149,7 +149,9 @@ function getDisplayEpisodeTotal(movie: MovieDetail): string {
   const total = parseEpisodeNumber(movie.episode_total);
   const current = parseEpisodeNumber(movie.episode_current);
   if (!total || (current && current > total)) return '';
-  return String(movie.episode_total).trim();
+  // The UI appends its localized unit. Returning the raw source string (for
+  // example "11 Tập") produced "11 Tập tập" on imported catalogues.
+  return String(total);
 }
 
 function toIsoDate(movie: MovieDetail): string {

@@ -1,4 +1,4 @@
-export type AudioLanguageKind = 'vietsub' | 'thuyetminh' | 'longtieng' | 'english' | 'unknown';
+export type AudioLanguageKind = 'vietsub' | 'thuyetminh' | 'longtieng' | 'english' | 'raw' | 'unknown';
 
 export interface AudioLanguageLabel {
   kind: AudioLanguageKind;
@@ -18,6 +18,7 @@ export function getAudioLanguageLabels(value?: string | null): AudioLanguageLabe
   if (!raw) return [];
   const text = normalize(raw);
   const labels: AudioLanguageLabel[] = [];
+  if (/\braw\b|chua\s*sub|khong\s*sub/.test(text)) labels.push({ kind: 'raw', label: 'RAW · Chưa phụ đề' });
   if (/viet\s*sub|\bsub\b|phu\s*de/.test(text)) labels.push({ kind: 'vietsub', label: 'Vietsub' });
   if (/thuyet\s*minh|\btm\b|voice\s*over/.test(text)) labels.push({ kind: 'thuyetminh', label: 'Thuyết minh' });
   if (/long\s*tieng|\blt\b|dubbed|\bdub\b/.test(text)) labels.push({ kind: 'longtieng', label: 'Lồng tiếng' });
@@ -27,6 +28,7 @@ export function getAudioLanguageLabels(value?: string | null): AudioLanguageLabe
 }
 
 export function getAudioLanguageClass(kind: AudioLanguageKind): string {
+  if (kind === 'raw') return 'border-violet-300/40 bg-violet-500/20 text-violet-100';
   if (kind === 'vietsub') return 'border-emerald-400/35 bg-emerald-500/20 text-emerald-200';
   if (kind === 'thuyetminh') return 'border-orange-400/35 bg-orange-500/20 text-orange-200';
   if (kind === 'longtieng') return 'border-amber-300/40 bg-amber-400/20 text-amber-100';

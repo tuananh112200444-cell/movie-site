@@ -123,6 +123,7 @@ function getMaxEpisodeNumberFromServers(servers: Array<{ server_data?: unknown[]
   return servers.reduce((max, server) => {
     const serverMax = (server.server_data ?? []).reduce((innerMax, raw) => {
       const ep = raw as Record<string, unknown>;
+      if (String(ep.audio_type || '').toLowerCase() === 'raw' || /\braw\b/i.test(String(ep.name || ''))) return innerMax;
       return Math.max(innerMax, extractEpNumber(String(ep.slug || ep.name || '')));
     }, 0);
     return Math.max(max, serverMax);
@@ -408,7 +409,7 @@ function edgeWaitUntil(promise: Promise<unknown>): void {
 
 function isBlvietsubMovieRecord(movie: Record<string, unknown> | null | undefined): boolean {
   const text = `${movie?.source_site || ''} ${movie?.source_name || ''} ${movie?.showtimes || ''} ${movie?.source_url || ''}`.toLowerCase();
-  return text.includes('blvietsub') || text.includes('admin-queer');
+  return text.includes('blvietsub') || text.includes('glvietsub') || text.includes('admin-queer');
 }
 
 function getBlvietsubMovieUrl(movie: Record<string, unknown> | null | undefined): string {
@@ -444,6 +445,7 @@ function isTrustedQueerEpisodeSource(source: unknown, serverName: unknown): bool
   }
   return (
     text.includes('blvietsub') ||
+    text.includes('glvietsub') ||
     text.includes('admin-queer') ||
     text.includes('verified') ||
     text.includes('manual') ||
@@ -1499,7 +1501,7 @@ serve(async (req) => {
         !hasUntrustedQueerEpisodeServer(cachedDetail)
       ) {
         return jsonResponse(cachedDetail, 200, {
-          'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800',
+          'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800, stale-if-error=86400',
           'X-Cache': 'DB-HIT',
         });
       }
@@ -1587,7 +1589,7 @@ serve(async (req) => {
       ] = await Promise.all([
         supabase
           .from('movie_episodes')
-          .select('server_name, source, episode_number, slug, episode_name, link_embed, link_m3u8, subtitle_url')
+          .select('server_name, source, episode_number, slug, episode_name, link_embed, link_m3u8, subtitle_url, audio_type')
           .eq('movie_id', movieId)
           .order('episode_number', { ascending: true }),
         supabase
@@ -1597,7 +1599,7 @@ serve(async (req) => {
           .order('episode_number', { ascending: true }),
         supabase
           .from('streams')
-          .select('server_name, source, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count')
+          .select('server_name, source, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count, audio_type')
           .eq('movie_id', movieId)
           .eq('is_active', true)
           .order('priority', { ascending: false })
@@ -1636,6 +1638,7 @@ serve(async (req) => {
           link_embed: normalizeDailymotionUrl(String(em.link_embed || '')),
           link_m3u8: String(em.link_m3u8 || ''),
           subtitle_url: String(em.subtitle_url || ''),
+          audio_type: String(em.audio_type || '') || undefined,
         };
         const healthRow = getEpisodeHealthRow(streamHealthIndex, serverName, slugVal, num, epData);
         if (shouldSuppressUnhealthyStream(healthRow)) continue;
@@ -2050,7 +2053,7 @@ serve(async (req) => {
     const isIncomplete = responseExpectedEpisode > 1 && responseMaxEpisode > 0 && responseMaxEpisode < responseExpectedEpisode;
     const hasEpisodes = episodeServers.length > 0;
     const cacheControl = hasEpisodes
-      ? (isIncomplete ? 'no-store' : 'public, max-age=300, stale-while-revalidate=1800')
+      ? (isIncomplete ? 'no-store' : 'public, max-age=300, stale-while-revalidate=1800, stale-if-error=86400')
       : 'no-store';
 
     if (hasEpisodes && !isIncomplete) {

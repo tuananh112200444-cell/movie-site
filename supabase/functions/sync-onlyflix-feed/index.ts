@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { findCanonicalMovieByIdentity } from '../_shared/movie-identity.ts';
 
 const BASE = 'https://onlyflix.to';
 const SOURCE = 'onlyflix';
@@ -27,6 +28,18 @@ const match = (value: string, pattern: RegExp) => decode(String(value || '').mat
 const slugify = (value = '') => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120);
 const meta = (html: string, key: string) => match(html, new RegExp(`<meta[^>]+(?:property|name)=["']${key}["'][^>]+content=["']([^"']+)`, 'i'));
+const errorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>;
+    return String(value.message || value.details || value.hint || JSON.stringify(value));
+  }
+  return String(error);
+};
+const nullableInteger = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+};
 
 async function fetchText(url: string, timeout = 20_000, init: RequestInit = {}) {
   const controller = new AbortController();
@@ -122,7 +135,7 @@ async function parsePage(item: Record<string, unknown>) {
 }
 
 async function findMovie(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
-  const fields = 'id,slug,name,origin_name,year,source_site,source_name,current_episode,total_episodes,is_published';
+  const fields = 'id,slug,name,origin_name,normalized_name,year,source_site,source_name,current_episode,total_episodes,is_published';
   if (!entry.season) {
     for (const [column, value] of [['imdb_id', entry.imdbId], ['tmdb_id', entry.tmdbId]]) {
       if (!value) continue;
@@ -132,8 +145,11 @@ async function findMovie(db: ReturnType<typeof createClient>, entry: Record<stri
   }
   const { data: bySource } = await db.from('movies').select(fields).eq('source_url', entry.sourceUrl).eq('slug', `onlyflix-${entry.sourceSlug}`).limit(1).maybeSingle();
   if (bySource?.id) return bySource;
-  const { data: byTitle } = await db.from('movies').select(fields).or(`name.eq.${entry.name},origin_name.eq.${entry.name}`).eq('year', entry.year).limit(1).maybeSingle();
-  return byTitle?.id ? byTitle : null;
+  return await findCanonicalMovieByIdentity(db, {
+    names: [entry.name, entry.originName],
+    normalizedNames: [slugify(String(entry.name || '')), slugify(String(entry.originName || ''))],
+    year: entry.year,
+  });
 }
 
 async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
@@ -149,7 +165,11 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
       episode_total: String(entry.currentEpisode), current_episode: entry.currentEpisode,
       total_episodes: entry.currentEpisode, year: entry.year || null, actor: [], director: [], category: [], country: [],
       source_url: entry.sourceUrl, showtimes: entry.sourceUrl, source_site: SOURCE,
-      source_name: 'OnlyFlix', imdb_id: entry.imdbId || '', tmdb_id: entry.tmdbId || '',
+      source_name: 'OnlyFlix',
+      // IMDb/TMDB identify the whole series, not an individual season. Keeping
+      // them on season rows would violate the catalog's global unique keys.
+      imdb_id: entry.season ? '' : (entry.imdbId || ''),
+      tmdb_id: entry.season ? null : nullableInteger(entry.tmdbId),
       is_published: true, last_synced_at: new Date().toISOString(), schedule_timezone: 'Asia/Ho_Chi_Minh',
     };
     const { data, error } = await db.from('movies').insert(payload).select('id,slug,source_site').single();
@@ -182,9 +202,16 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
       stream_url: '', embed_url: episode.link_embed, source: SOURCE, quality: episode.quality || 'HD',
       priority: 15, is_active: true, health_status: 'unchecked', failure_count: 0, last_error: '', audio_type: null,
     };
-    const { data: stream } = await db.from('streams').select('id').eq('movie_id', movie.id).eq('source', SOURCE)
+    const { data: stream } = await db.from('streams').select('id,stream_url,embed_url').eq('movie_id', movie.id).eq('source', SOURCE)
       .eq('server_name', episode.server_name).eq('episode_slug', episode.slug).limit(1).maybeSingle();
-    if (stream?.id) await db.from('streams').update(streamPayload).eq('id', stream.id);
+    if (stream?.id) {
+      const urlChanged = String(stream.stream_url || '') !== String(streamPayload.stream_url || '')
+        || String(stream.embed_url || '') !== String(streamPayload.embed_url || '');
+      const updatePayload = urlChanged
+        ? streamPayload
+        : Object.fromEntries(Object.entries(streamPayload).filter(([key]) => !['health_status', 'failure_count', 'last_error'].includes(key)));
+      await db.from('streams').update(updatePayload).eq('id', stream.id);
+    }
     else { const { error } = await db.from('streams').insert(streamPayload); if (error) throw error; }
     rows += 1;
   }
@@ -227,7 +254,7 @@ serve(async (req) => {
       consecutiveFailures = 0;
     } catch (error) {
       consecutiveFailures += 1;
-      errors.push(`${String(item.link)}: ${error instanceof Error ? error.message : String(error)}`);
+      errors.push(`${String(item.link)}: ${errorMessage(error)}`);
     }
   }
   const result = { success: errors.length === 0, dry_run: dryRun, scanned: discovered.length, parsed, stored, errors, circuit_open: consecutiveFailures >= 3, elapsed_ms: Date.now() - started };

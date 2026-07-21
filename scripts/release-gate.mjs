@@ -2,9 +2,13 @@ import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+// Production-wide source:brain audits are deliberately operational checks, not
+// release blockers: large live queries can be throttled by Supabase and make an
+// otherwise valid artifact nondeterministically fail. Deterministic source
+// contracts remain covered by system:contracts, watch:test and diagnostics:test.
 const steps = [
-  ['security:secrets'], ['security:supabase'], ['schema:test'], ['type-check'], ['build'],
-  ['search:test'], ['movie:data:test'], ['watch:test'], ['diagnostics:test'],
+  ['security:secrets'], ['security:supabase'], ['schema:test'], ['system:contracts'], ['type-check'], ['build'],
+  ['home:test'], ['search:test'], ['movie:data:test'], ['watch:test'], ['diagnostics:test'],
 ];
 const report = { started_at: new Date().toISOString(), status: 'running', steps: [] };
 

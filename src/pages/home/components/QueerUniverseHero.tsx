@@ -57,7 +57,8 @@ function QueerUniverseHero({ movies, loading }: QueerUniverseHeroProps) {
   }
   const active = featured[activeIndex];
   const activeHref = getDetailHref(active);
-  const background = getOptimizedImageUrl(active.thumb_url || active.poster_url, 1500, 86);
+  const heroRequestWidth = typeof window !== 'undefined' && window.innerWidth < 768 ? 560 : 1120;
+  const background = getOptimizedImageUrl(active.thumb_url || active.poster_url, heroRequestWidth, 82);
   const poster = getOptimizedImageUrl(active.poster_url || active.thumb_url, 520, 86);
 
   return (
@@ -134,7 +135,15 @@ function QueerUniverseHero({ movies, loading }: QueerUniverseHeroProps) {
 
           <Link to={activeHref} className="hidden lg:block relative w-[150px] xl:w-[180px] flex-shrink-0 group" style={{ aspectRatio: '2/3' }}>
             <div className="relative h-full w-full overflow-hidden rounded-2xl border border-white/14 bg-white/[0.06] shadow-[0_26px_70px_-32px_rgba(34,211,238,0.75)]">
-              <img src={poster} alt={active.name} onError={(event) => applyImageElementFallback(event.currentTarget)} className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105" />
+              <img
+                src={poster}
+                alt={active.name}
+                loading="lazy"
+                decoding="async"
+                fetchPriority="low"
+                onError={(event) => applyImageElementFallback(event.currentTarget)}
+                className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
               <div className="absolute bottom-0 left-0 right-0 p-3">
                 <p className="line-clamp-2 text-xs font-black text-white">{active.name}</p>
