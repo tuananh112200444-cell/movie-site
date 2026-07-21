@@ -426,9 +426,7 @@ export default function MovieDetailPage() {
       matchesRequestedEpisode(activeEp));
     if (activeEp && (!requestedEpisode || activeMatchesRequest)) return;
     const requested = requestedEpisode
-      ? filteredEpisodes.flatMap((server, serverIndex) =>
-          (server.server_data ?? []).map((episode) => ({ episode, serverIndex })))
-          .find(({ episode }) => hasPlayableUrl(episode) && matchesRequestedEpisode(episode))
+      ? pickBestEpisodeByPriority(filteredEpisodes, requestedEpisode)
       : null;
     const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
     const best = requested ?? pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);

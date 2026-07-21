@@ -253,6 +253,38 @@ function shouldSuppressUnhealthyStream(row: Record<string, unknown> | null): boo
   return (healthStatus === 'dead' && failureCount >= 2) || (healthStatus === 'failed' && failureCount >= 3);
 }
 
+function episodeHealthIsUsable(ep: Record<string, unknown>): boolean {
+  const status = String(ep.source_health_status || '').trim().toLowerCase();
+  const failures = Number(ep.source_failure_count || 0);
+  if (status === 'dead') return false;
+  if (status === 'failed' && failures >= 2) return false;
+  if (status === 'blocked' && failures >= 2) return false;
+  return true;
+}
+
+function hasUnhealthyExpectedCoverage(
+  serverMap: Map<string, unknown[]>,
+  expectedEpisode: number,
+): boolean {
+  if (expectedEpisode <= 0 || expectedEpisode > 300) return false;
+  const usable = new Set<number>();
+  const present = new Set<number>();
+  for (const rows of serverMap.values()) {
+    for (const raw of rows) {
+      const ep = raw as Record<string, unknown>;
+      const number = extractEpNumber(String(ep.slug || ep.name || ''));
+      if (number <= 0 || number > expectedEpisode) continue;
+      present.add(number);
+      if (episodeHealthIsUsable(ep)) usable.add(number);
+    }
+  }
+  if (present.size === 0) return false;
+  for (let number = 1; number <= expectedEpisode; number += 1) {
+    if (present.has(number) && !usable.has(number)) return true;
+  }
+  return false;
+}
+
 function attachStreamHealth(epData: Record<string, unknown>, row: Record<string, unknown> | null): Record<string, unknown> {
   if (!row) return epData;
   return {
@@ -942,9 +974,9 @@ async function fetchExternalMovieDetail(
   episodes: Array<{ server_name: string; server_data: unknown[] }>;
 } | null> {
   const urls = [
-    `https://ophim1.com/v1/api/phim/${encodeURIComponent(slug)}`,
-    `https://phimapi.com/phim/${encodeURIComponent(slug)}`,
-    `https://ophim.tv/v1/api/phim/${encodeURIComponent(slug)}`,
+    { url: `https://ophim1.com/v1/api/phim/${encodeURIComponent(slug)}`, provider: 'ophim' },
+    { url: `https://phimapi.com/phim/${encodeURIComponent(slug)}`, provider: 'phimapi' },
+    { url: `https://ophim.tv/v1/api/phim/${encodeURIComponent(slug)}`, provider: 'ophim' },
   ];
 
   const controllers: AbortController[] = [];
@@ -952,7 +984,7 @@ async function fetchExternalMovieDetail(
   const promises: Array<Promise<{
     movie: Record<string, unknown>;
     episodes: Array<{ server_name: string; server_data: unknown[] }>;
-  } | null>> = urls.map((url) => {
+  } | null>> = urls.map(({ url, provider }) => {
     const ctrl = new AbortController();
     controllers.push(ctrl);
     const t = setTimeout(() => { try { ctrl.abort(); } catch { /* noop */ } }, 5000);
@@ -997,7 +1029,14 @@ async function fetchExternalMovieDetail(
 
         if (!movieData || !movieData.name) throw new Error('No movie data');
 
-        return { movie: movieData, episodes: episodesData ?? [] };
+        return {
+          movie: {
+            ...movieData,
+            source_site: provider,
+            source_name: provider === 'phimapi' ? 'PhimAPI' : 'OPhim',
+          },
+          episodes: episodesData ?? [],
+        };
       })
       .catch((err) => {
         clearTimeout(t);
@@ -1022,7 +1061,13 @@ async function fetchExternalMovieDetail(
     const aExpected = getExpectedEpisodeNumber(a.movie);
     const bExpected = getExpectedEpisodeNumber(b.movie);
     if (bExpected !== aExpected) return bExpected - aExpected;
-    return (b.episodes?.length ?? 0) - (a.episodes?.length ?? 0);
+    const serverCountDiff = (b.episodes?.length ?? 0) - (a.episodes?.length ?? 0);
+    if (serverCountDiff !== 0) return serverCountDiff;
+    const providerRank = (detail: { movie: Record<string, unknown> }) => {
+      const provider = externalProviderFromMovie(detail.movie);
+      return provider === 'phimapi' || provider === 'kkphim' ? 2 : provider === 'ophim' ? 1 : 0;
+    };
+    return providerRank(b) - providerRank(a);
   })[0] ?? null;
   if (winner) {
     controllers.forEach((c) => { try { c.abort(); } catch { /* noop */ } });
@@ -1782,6 +1827,12 @@ serve(async (req) => {
       normalizedSlug((movieData as Record<string, unknown>).slug) !== normalizedSlug(slug) &&
       isOphimLikeMovieRecord((movieData || movie) as Record<string, unknown>);
     const shouldRepairOnDemand = expectedEpisode > 1 && (dbMaxEpisode === 0 || dbMaxEpisode < expectedEpisode);
+    // Episode count alone is not playback readiness. If the database contains
+    // the advertised episode numbers but every candidate for one of those
+    // numbers is repeatedly blocked/failed, fetch an independent provider and
+    // persist it as a backup instead of returning a superficially complete set.
+    const shouldRepairUnhealthyCoverage =
+      expectedEpisode > 0 && hasUnhealthyExpectedCoverage(serverMap, expectedEpisode);
     // A manual refresh is an explicit request to re-check the known BLVietsub
     // source. It lets a completed series catch its final episode even when
     // its old database badge was internally consistent.
@@ -1847,6 +1898,7 @@ serve(async (req) => {
         serverMap.size === 0 ||
         !useSupabase ||
         shouldRepairOnDemand ||
+        shouldRepairUnhealthyCoverage ||
         shouldCheckFreshOngoingExternal ||
         shouldCheckRequestedSlugAlias
       );

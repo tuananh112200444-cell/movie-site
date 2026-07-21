@@ -11,6 +11,8 @@ const identityPolicy = read('supabase/functions/_shared/movie-identity.ts');
 const cronStagger = read('supabase/migrations/20260721162000_stagger_heavy_system_crons.sql');
 const searchCronTuning = read('supabase/migrations/20260721164500_reduce_search_cache_rebuild_pressure.sql');
 const indexingCronCleanup = read('supabase/migrations/20260721171000_remove_deprecated_google_indexing_cron.sql');
+const viewerSourceRecovery = read('supabase/migrations/20260722213000_prioritize_viewer_source_recovery.sql');
+const streamHealth = read('supabase/functions/stream-health-check/index.ts');
 const ophimSync = read('supabase/functions/sync-ophim-movies/index.ts');
 const blvietsubSync = read('supabase/functions/sync-blvietsub-feed/index.ts');
 const reviewService = read('src/services/reviewService.ts');
@@ -60,6 +62,18 @@ if (reviewService.includes('/google-index-ping') || reviewService.includes('ping
 
 if (!detailProxy.includes("from('streams')") || !detailProxy.includes('source_health_status')) {
   failures.push('movie-detail-proxy does not expose the stored stream-health contract');
+}
+if (!detailProxy.includes('hasUnhealthyExpectedCoverage') || !detailProxy.includes('shouldRepairUnhealthyCoverage')) {
+  failures.push('complete episode counts can still hide unhealthy playback coverage');
+}
+if (!detailProxy.includes("provider === 'phimapi'") || !detailProxy.includes('providerRank')) {
+  failures.push('external repair does not preserve and prefer an independent PhimAPI backup on equal coverage');
+}
+if (!streamHealth.includes('probeStreamRow') || !streamHealth.includes('HTML 404/deleted-video page')) {
+  failures.push('stream health does not validate both stored playback URLs and HTML error pages');
+}
+if (!viewerSourceRecovery.includes('stream-health-problem-every-15-minutes') || !viewerSourceRecovery.includes('auto-repair-player-issues-every-10-minutes')) {
+  failures.push('viewer-facing health and telemetry recovery are not prioritized by cron');
 }
 if (!detailProxy.includes("healthStatus === 'dead' && failureCount >= 2") || !detailProxy.includes('getExpectedEpisodeNumber(liveMovie')) {
   failures.push('detail cache or source filtering can hide new episodes after one transient probe failure');

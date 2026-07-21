@@ -390,6 +390,19 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     }, [cinemaMode, setCinemaMode, forwardedRef]);
 
     const hasTrailer = Boolean(trailerEmbedUrl);
+    const activeHealthStatus = String(activeEp?.source_health_status || '').trim().toLowerCase();
+    const activeFailureCount = Number(activeEp?.source_failure_count || 0);
+    const activeSourceHasWarning =
+      activeHealthStatus === 'dead' ||
+      activeHealthStatus === 'failed' ||
+      (activeHealthStatus === 'blocked' && activeFailureCount >= 2);
+    const sourceHealthMessage = selectableServerOptions.length > 1
+      ? `${selectableServerOptions.length - 1} nguồn dự phòng cho tập này`
+      : activeSourceHasWarning
+        ? 'Nguồn hiện tại có dấu hiệu lỗi · hệ thống đang tìm dự phòng'
+        : activeHealthStatus === 'ok'
+          ? 'Nguồn đã được kiểm tra và sẵn sàng'
+          : 'Đã chọn nguồn phát · sẽ tự chuyển khi phát hiện lỗi';
 
     return (
       <div
@@ -590,11 +603,11 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                 <div className="movie-watch-panel mt-4 sm:mt-5 rounded-2xl border border-white/[0.08] overflow-hidden">
                   <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-3 py-3 sm:px-4 lg:px-5 lg:py-4">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,.65)]" />
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${activeSourceHasWarning ? 'bg-amber-400 shadow-[0_0_14px_rgba(251,191,36,.55)]' : 'bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,.65)]'}`} />
                       <div className="min-w-0">
                         <p className="truncate text-xs font-bold text-white/85">Đang tự động chọn nguồn tốt nhất</p>
                         <p className="mt-0.5 text-[10px] text-white/40">
-                          {selectableServerOptions.length > 1 ? `${selectableServerOptions.length - 1} nguồn dự phòng cho tập này` : 'Nguồn phát đã sẵn sàng'}
+                          {sourceHealthMessage}
                         </p>
                       </div>
                     </div>
