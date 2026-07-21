@@ -9,6 +9,9 @@ const movieApi = fs.readFileSync('src/services/movieApi.ts', 'utf8');
 const worker = fs.readFileSync('functions/[[path]].js', 'utf8');
 const navbar = fs.readFileSync('src/components/feature/Navbar.tsx', 'utf8');
 const playerSection = fs.readFileSync('src/pages/movie-detail/components/MovieDetailPlayerSection.tsx', 'utf8');
+const playerBox = fs.readFileSync('src/pages/movie-detail/components/PlayerBox.tsx', 'utf8');
+const watchHistory = fs.readFileSync('src/hooks/useWatchHistory.ts', 'utf8');
+const continueWatching = fs.readFileSync('src/pages/home/components/ContinueWatching.tsx', 'utf8');
 const comments = fs.readFileSync('src/pages/movie-detail/components/UserComments.tsx', 'utf8');
 const imageFallback = fs.readFileSync('src/hooks/useImageFallback.ts', 'utf8');
 const homeHero = fs.readFileSync('src/pages/home/components/HeroBanner.tsx', 'utf8');
@@ -41,6 +44,10 @@ const checks = [
   [!imageFallback.includes('new Image()'), 'Lazy movie posters must not be eagerly downloaded by a duplicate JavaScript image loader'],
   [/backgroundWidth\s*=\s*isMobileHero\s*\?\s*(?:[1-3]\d{2}|4[0-8]0)\s*:\s*1360/.test(homeHero), 'Mobile hero must request an image rendition no wider than 480px before DPR scaling'],
   [lazyHomeSection.includes('return !isMobileViewport() && hasData && sectionIndex === 0;'), 'Offscreen mobile category shelves must not render eagerly'],
+  [page.includes("window.addEventListener('pagehide', flushBeforePageLeaves)") && page.includes('pendingProgressRef.current'), 'Playback progress must flush periodically and when the mobile tab leaves'],
+  [playerBox.includes('onLoadedMetadata={(event) =>') && playerBox.includes('onTimeUpdate={(event) =>') && playerBox.includes('onVideoEnded?.();'), 'Direct MP4 playback must restore, save and complete progress like HLS playback'],
+  [watchHistory.includes('persistWatchHistoryProgress') && watchHistory.includes('entry.slug === movieSlug'), 'Watch history progress must survive canonical movie ID changes by matching slug'],
+  [continueWatching.includes('normalizeStoredSegment') && continueWatching.includes('resume?.shouldResume ? resume.epSlug'), 'Continue-watching links must use the newest validated resume episode'],
 ];
 
 const failures = checks.filter(([ok]) => !ok).map(([, message]) => message);

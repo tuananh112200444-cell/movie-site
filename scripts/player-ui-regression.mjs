@@ -45,7 +45,7 @@ const checks = [
   [moviePage.includes("location.pathname.startsWith('/xem-phim/')"), 'Movie page must distinguish information and watch modes'],
   [moviePage.includes('noIndex={true}') && moviePage.includes('canonical={`/phim/${slug'), 'Watch pages must be noindex and canonicalize to movie information'],
   [moviePage.includes('const MovieDetailPlayerSection = lazy('), 'Player UI must be lazy-loaded away from the information page'],
-  [continueWatching.includes('`/xem-phim/${encodeURIComponent(entry.slug)}'), 'Continue-watching links must open the dedicated player'],
+  [continueWatching.includes('`/xem-phim/${encodeURIComponent(movieSlug)}'), 'Continue-watching links must open the dedicated player with a validated slug'],
   [moviePage.includes('requestedEpisodeNumber') && moviePage.includes('epSortKey(episode) === requestedEpisodeNumber'), 'Episode URLs must match equivalent slugs such as 3 and tap-03 across sources'],
 ];
 

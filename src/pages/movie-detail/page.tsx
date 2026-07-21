@@ -4,7 +4,7 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import { useToast } from '@/components/base/Toast';
-import { useWatchHistory } from '@/hooks/useWatchHistory';
+import { persistWatchHistoryProgress, useWatchHistory } from '@/hooks/useWatchHistory';
 import { useResumeWatch } from '@/hooks/useResumeWatch';
 import { useFavorites } from '@/hooks/useFavorites';
 import MovieDetailHero from './components/MovieDetailHero';
@@ -157,7 +157,7 @@ export default function MovieDetailPage() {
   const navigate = useNavigate();
   const isWatchPage = location.pathname.startsWith('/xem-phim/');
   const { showToast } = useToast();
-  const { addEntry, updateProgress } = useWatchHistory();
+  const { addEntry } = useWatchHistory();
   const { getResume, saveProgress, clearProgress } = useResumeWatch();
   const { isFav, toggle } = useFavorites();
 
@@ -176,15 +176,11 @@ export default function MovieDetailPage() {
   const playerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingProgressRef = useRef<{ time: number; duration: number } | null>(null);
+  const lastProgressSavedAtRef = useRef(0);
   const activeEpRef = useRef<string | null>(null);
   const relatedFetchedRef = useRef(false);
   const resumeCheckedKeyRef = useRef('');
-
-  useEffect(() => {
-    return () => {
-      if (saveProgressTimer.current) clearTimeout(saveProgressTimer.current);
-    };
-  }, []);
 
   // Preserve old shared/resume links that used /phim/:slug?tap=:episode.
   useEffect(() => {
@@ -448,11 +444,33 @@ export default function MovieDetailPage() {
     [detail?.movie?.trailer_url]
   );
 
+  const flushProgress = useCallback(() => {
+    const pending = pendingProgressRef.current;
+    const epSlug = activeEpRef.current;
+    if (!pending || !slug || !epSlug) return;
+    saveProgress(slug, epSlug, pending.time, pending.duration);
+    if (detail?.movie) {
+      persistWatchHistoryProgress(
+        detail.movie._id,
+        detail.movie.slug || slug,
+        pending.time,
+        pending.duration,
+      );
+    }
+    pendingProgressRef.current = null;
+    lastProgressSavedAtRef.current = Date.now();
+    if (saveProgressTimer.current) {
+      clearTimeout(saveProgressTimer.current);
+      saveProgressTimer.current = null;
+    }
+  }, [detail?.movie, saveProgress, slug]);
+
   const handleSelectEp = useCallback((ep: EpisodeData, seekTime = 0) => {
     if (!hasPlayableUrl(ep)) {
       showToast('Tập này chưa có liên kết phát. Vui lòng thử tập khác.', 'error');
       return;
     }
+    flushProgress();
     setActiveEp(ep);
     setInitialSeekTime(seekTime);
     setShowResumeBanner(false);
@@ -467,7 +485,7 @@ export default function MovieDetailPage() {
       navigate(`/xem-phim/${slug}/${episodePath}`, { replace: true });
     }
     setTimeout(() => playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-  }, [detail, slug, addEntry, getResume, isWatchPage, navigate, showToast]);
+  }, [detail, slug, addEntry, flushProgress, getResume, isWatchPage, navigate, showToast]);
 
   const handleSwitchServer = useCallback((filteredIdx: number) => {
     const targetServer = filteredEpisodes[filteredIdx];
@@ -496,14 +514,32 @@ export default function MovieDetailPage() {
 
   const handleTimeUpdate = useCallback((time: number, duration: number) => {
     if (!slug || !activeEpRef.current) return;
-    if (saveProgressTimer.current) clearTimeout(saveProgressTimer.current);
-    saveProgressTimer.current = setTimeout(() => {
-      const epSlug = activeEpRef.current;
-      if (!epSlug) return;
-      saveProgress(slug, epSlug, time, duration);
-      if (detail?.movie) updateProgress(detail.movie._id, time, duration);
-    }, 5000);
-  }, [slug, saveProgress, detail, updateProgress]);
+    if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) return;
+    pendingProgressRef.current = { time, duration };
+    const elapsed = Date.now() - lastProgressSavedAtRef.current;
+    if (elapsed >= 5000) {
+      flushProgress();
+      return;
+    }
+    if (!saveProgressTimer.current) {
+      saveProgressTimer.current = setTimeout(flushProgress, Math.max(250, 5000 - elapsed));
+    }
+  }, [flushProgress, slug]);
+
+  useEffect(() => {
+    const flushWhenHidden = () => {
+      if (document.visibilityState === 'hidden') flushProgress();
+    };
+    const flushBeforePageLeaves = () => flushProgress();
+    document.addEventListener('visibilitychange', flushWhenHidden);
+    window.addEventListener('pagehide', flushBeforePageLeaves);
+    return () => {
+      document.removeEventListener('visibilitychange', flushWhenHidden);
+      window.removeEventListener('pagehide', flushBeforePageLeaves);
+      flushProgress();
+      if (saveProgressTimer.current) clearTimeout(saveProgressTimer.current);
+    };
+  }, [flushProgress]);
 
   const handleResume = useCallback(() => {
     if (!resumeInfo) return;

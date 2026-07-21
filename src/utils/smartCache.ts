@@ -13,7 +13,8 @@ type StoredEntry = {
 const MINUTE = 60 * 1000;
 
 const SESSION_CACHE_RULES: CacheRule[] = [
-  { prefix: 'kp_home_proxy_', ttl: 2 * MINUTE, maxEntries: 2 },
+  // Warm, stale-while-revalidate snapshot for instant mobile tab restores.
+  { prefix: 'kp_home_proxy_', ttl: 30 * MINUTE, maxEntries: 2 },
   { prefix: 'kp_suggest_', ttl: 2 * MINUTE, maxEntries: 30 },
   { prefix: 'search_v', ttl: 2 * MINUTE, maxEntries: 30 },
   { prefix: 'kp_supabase_search_index_', ttl: 30 * MINUTE, maxEntries: 2 },

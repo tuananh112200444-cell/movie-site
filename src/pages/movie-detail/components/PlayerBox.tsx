@@ -1047,6 +1047,20 @@ export default function PlayerBox({
               playsInline
               preload="metadata"
               onError={handleDirectVideoError}
+              onLoadedMetadata={(event) => {
+                const video = event.currentTarget;
+                if (initialTime > 0 && Number.isFinite(video.duration) && initialTime < video.duration - 2) {
+                  video.currentTime = initialTime;
+                }
+              }}
+              onTimeUpdate={(event) => {
+                const video = event.currentTarget;
+                onTimeUpdate?.(video.currentTime, video.duration || 0);
+              }}
+              onEnded={() => {
+                onVideoEnded?.();
+                handleEnded();
+              }}
             >
               {episode?.subtitle_url && (
                 <track
