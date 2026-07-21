@@ -1,6 +1,7 @@
 // No StrictMode in production: saves one full re-render cycle.
 import './i18n'
 import { createRoot, type Root } from 'react-dom/client'
+import './styles/remixicon-local.css'
 import './index.css'
 import App from './App.tsx'
 import { pruneSmartClientCaches } from './utils/smartCache'

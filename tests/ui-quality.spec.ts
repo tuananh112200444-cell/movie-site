@@ -84,6 +84,38 @@ test('trang chủ mobile: icon nội bộ và section thức dậy sau khi quay 
   await expect(shelfTitle.locator('xpath=ancestor::section[1]').locator('svg').first()).toBeVisible();
 });
 
+test('mobile icons are self-hosted and survive a blocked icon CDN', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chrome', 'mobile only');
+  await page.route('https://cdnjs.cloudflare.com/**', route => route.abort());
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  const menuButton = page.locator('button[aria-controls="mobile-navigation-drawer"]');
+  await expect(menuButton).toBeVisible();
+  const menuIcon = menuButton.locator('i.ri-menu-3-line');
+  await expect(menuIcon).toBeVisible();
+
+  await expect.poll(() => page.evaluate(async () => {
+    await document.fonts.load('22px remixicon');
+    return document.fonts.check('22px remixicon');
+  })).toBe(true);
+
+  const iconAudit = await menuIcon.evaluate((icon) => {
+    const rect = icon.getBoundingClientRect();
+    const before = getComputedStyle(icon, '::before');
+    return {
+      width: rect.width,
+      height: rect.height,
+      content: before.content,
+      fontFamily: before.fontFamily,
+    };
+  });
+  expect(iconAudit.width).toBeGreaterThan(0);
+  expect(iconAudit.height).toBeGreaterThan(0);
+  expect(iconAudit.content).not.toBe('none');
+  expect(iconAudit.fontFamily.toLowerCase()).toContain('remixicon');
+  expect(await page.locator('link[href*="cdnjs.cloudflare.com"]').count()).toBe(0);
+});
+
 const e2eMovie = (episodes: Array<{ server_name: string; server_data: Array<Record<string, unknown>> }>) => ({
   status: true,
   movie: {

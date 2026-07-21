@@ -122,7 +122,7 @@ export default function StickyBanner() {
             <div className="aspect-[728/90] max-h-[46px] w-full bg-white/[0.025] sm:max-h-[62px] lg:max-h-[48px]">
               {bannerReady ? (
                 <img
-                  src="/banners/winaz-728x90-20260715.gif"
+                  src="/banners/winaz-top-20260722.gif?v=20260722"
                   alt="WinAZ banner"
                   className="h-full w-full object-contain object-center"
                   loading="lazy"
