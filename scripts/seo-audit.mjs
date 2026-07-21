@@ -300,7 +300,7 @@ if (/google\.com\/ping\?sitemap=/i.test(adminSeoPage)) {
 }
 
 const stickyBanner = await read('src/components/feature/StickyBanner.tsx').catch(() => '');
-if (!stickyBanner.includes('/banners/winaz-728x90-20260715.gif')) {
+if (!stickyBanner.includes('/banners/winaz-top-20260722.gif')) {
   addError('Top banner asset is missing from StickyBanner.');
 }
 if (/setTimeout\([^)]*setImageReady|12_000/.test(stickyBanner)) {
