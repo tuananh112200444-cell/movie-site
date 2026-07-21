@@ -8,6 +8,7 @@ import { ToastProvider } from "./components/base/Toast";
 import AnalyticsProvider from "./components/feature/AnalyticsProvider";
 import { ThemeProvider } from "./context/ThemeContext";
 import AppErrorBoundary from "./components/base/AppErrorBoundary";
+import UpdateCoordinator from "./components/base/UpdateCoordinator";
 import { warmPlayerSourceHealth } from "./services/playerSourceHealth";
 
 const BackToTop = lazy(() => import("./components/base/BackToTop"));
@@ -217,6 +218,7 @@ function App() {
             <ToastProvider>
               <AnalyticsProvider>
                 <OfflineIndicator />
+                <UpdateCoordinator />
                 <ScrollProgressBar />
                 <AnimatedContent />
                 <NonCriticalEnhancements />

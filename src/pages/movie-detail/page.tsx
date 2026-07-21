@@ -533,9 +533,11 @@ export default function MovieDetailPage() {
     const flushBeforePageLeaves = () => flushProgress();
     document.addEventListener('visibilitychange', flushWhenHidden);
     window.addEventListener('pagehide', flushBeforePageLeaves);
+    window.addEventListener('kp:before-release-reload', flushBeforePageLeaves);
     return () => {
       document.removeEventListener('visibilitychange', flushWhenHidden);
       window.removeEventListener('pagehide', flushBeforePageLeaves);
+      window.removeEventListener('kp:before-release-reload', flushBeforePageLeaves);
       flushProgress();
       if (saveProgressTimer.current) clearTimeout(saveProgressTimer.current);
     };

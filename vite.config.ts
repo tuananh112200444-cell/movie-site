@@ -8,6 +8,17 @@ import { compression } from "vite-plugin-compression2";
 const base = process.env.BASE_PATH || "/";
 const isPreview = process.env.IS_PREVIEW ? true : false;
 
+function readReleaseId() {
+  try {
+    const manifest = JSON.parse(readFileSync(resolve(__dirname, 'public/release.json'), 'utf8')) as { release_id?: string };
+    return String(manifest.release_id || 'development');
+  } catch {
+    return 'development';
+  }
+}
+
+const releaseId = readReleaseId();
+
 function homeHeroPreloadPlugin() {
   return {
     name: 'khophim-home-hero-preload',
@@ -41,6 +52,7 @@ export default defineConfig({
     __READDY_PROJECT_ID__: JSON.stringify(process.env.PROJECT_ID || ""),
     __READDY_VERSION_ID__: JSON.stringify(process.env.VERSION_ID || ""),
     __READDY_AI_DOMAIN__: JSON.stringify(process.env.READDY_AI_DOMAIN || ""),
+    __KP_RELEASE_ID__: JSON.stringify(releaseId),
   },
   plugins: [
     homeHeroPreloadPlugin(),

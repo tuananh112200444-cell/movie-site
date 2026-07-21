@@ -116,6 +116,34 @@ test('mobile icons are self-hosted and survive a blocked icon CDN', async ({ pag
   expect(await page.locator('link[href*="cdnjs.cloudflare.com"]').count()).toBe(0);
 });
 
+test('release coordinator updates a safe stale tab once without a reload loop', async ({ page }) => {
+  let documentLoads = 0;
+  page.on('request', request => {
+    if (request.resourceType() === 'document') documentLoads += 1;
+  });
+  await page.route('**/release.json*', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ release_id: 'e2e-new-release', generated_at: new Date().toISOString() }),
+  }));
+  await page.addInitScript(() => {
+    window.addEventListener('kp:before-release-reload', () => {
+      sessionStorage.setItem('e2e_release_flush_seen', '1');
+    });
+  });
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('kp:page-resumed')));
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('kp_release_reload_target_v1'))).toBe('e2e-new-release');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('e2e_release_flush_seen'))).toBe('1');
+  await expect.poll(() => documentLoads).toBeGreaterThanOrEqual(2);
+
+  const loadsAfterUpdate = documentLoads;
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('kp:page-resumed')));
+  await page.waitForTimeout(1800);
+  expect(documentLoads).toBe(loadsAfterUpdate);
+});
+
 const e2eMovie = (episodes: Array<{ server_name: string; server_data: Array<Record<string, unknown>> }>) => ({
   status: true,
   movie: {
@@ -133,6 +161,25 @@ async function mockMovieDetail(page: Page, payload: ReturnType<typeof e2eMovie>)
     status: 200, contentType: 'application/json', body: JSON.stringify(payload),
   }));
 }
+
+test('release coordinator never interrupts an iframe player automatically', async ({ page }) => {
+  await page.route('**/release.json*', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ release_id: 'e2e-player-release', generated_at: new Date().toISOString() }),
+  }));
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'Embed', server_data: [{ name: 'Tap 1', slug: 'tap-1', link_embed: 'https://example.com/embed/player' }] },
+  ]));
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+  await expect.poll(async () => page.locator('iframe').count(), { timeout: 20_000 }).toBeGreaterThan(0);
+
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('kp:page-resumed')));
+  await expect(page.getByTestId('release-update-notice')).toBeVisible();
+  await page.waitForTimeout(1800);
+  expect(await page.evaluate(() => sessionStorage.getItem('kp_release_reload_target_v1'))).toBeNull();
+  await expect(page).toHaveURL(/\/xem-phim\/e2e-player\/tap-1/);
+});
 
 test('player: nguồn trang bị chặn tự chuyển sang nguồn phát được', async ({ page }) => {
   await mockMovieDetail(page, e2eMovie([

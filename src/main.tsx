@@ -6,7 +6,7 @@ import './index.css'
 import App from './App.tsx'
 import { pruneSmartClientCaches } from './utils/smartCache'
 
-const CLIENT_RELEASE_MARKER = '2026-07-05-cache-routes-v2';
+const CLIENT_RELEASE_MARKER = __KP_RELEASE_ID__;
 const rootElement = document.getElementById('root');
 
 declare global {
