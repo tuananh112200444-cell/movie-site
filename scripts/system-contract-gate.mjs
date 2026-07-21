@@ -5,6 +5,7 @@ const failures = [];
 const releaseGate = read('scripts/release-gate.mjs');
 const movieApi = read('src/services/movieApi.ts');
 const detailProxy = read('supabase/functions/movie-detail-proxy/index.ts');
+const navbar = read('src/components/feature/Navbar.tsx');
 const autoRepair = read('supabase/functions/auto-repair-player-issues/index.ts');
 const identityPolicy = read('supabase/functions/_shared/movie-identity.ts');
 const cronStagger = read('supabase/migrations/20260721162000_stagger_heavy_system_crons.sql');
@@ -60,11 +61,20 @@ if (reviewService.includes('/google-index-ping') || reviewService.includes('ping
 if (!detailProxy.includes("from('streams')") || !detailProxy.includes('source_health_status')) {
   failures.push('movie-detail-proxy does not expose the stored stream-health contract');
 }
+if (!detailProxy.includes("healthStatus === 'dead' && failureCount >= 2") || !detailProxy.includes('getExpectedEpisodeNumber(liveMovie')) {
+  failures.push('detail cache or source filtering can hide new episodes after one transient probe failure');
+}
+if (!detailProxy.includes('phimapi.com/v1/api/tim-kiem') || !detailProxy.includes('initialExternalMax < expectedEpisode')) {
+  failures.push('detail repair cannot resolve renamed PhimAPI slugs safely');
+}
 if (!movieApi.includes('source_health_status') || !movieApi.includes('source_failure_count')) {
   failures.push('frontend source selection does not consume the backend health contract');
 }
 if (!autoRepair.includes('penalizeTelemetryFailedStreams') || !autoRepair.includes("health_status: 'failed'")) {
   failures.push('viewer telemetry is not connected to persistent source health');
+}
+if (!navbar.includes('<StickyBanner />') || navbar.includes('!scrolled && <StickyBanner />')) {
+  failures.push('top campaign banner disappears when the fixed header enters its scrolled state');
 }
 
 console.log(JSON.stringify({ status: failures.length ? 'failed' : 'passed', contracts: 5, connectors: connectors.length, failures }, null, 2));
