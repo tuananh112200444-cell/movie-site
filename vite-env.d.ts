@@ -8,6 +8,7 @@ declare global {
   const __READDY_PROJECT_ID__: string;
   const __READDY_VERSION_ID__: string;
   const __READDY_AI_DOMAIN__: string;
+  const __KP_RELEASE_ID__: string;
 }
 
 // Extend React img props to support fetchPriority (HTML spec)
