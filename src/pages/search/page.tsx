@@ -9,7 +9,7 @@ import SEO, { SITE_URL } from '@/components/base/SEO';
 import SearchResultItem from './components/SearchResultItem';
 import SearchFilterBar from './components/SearchFilterBar';
 import type { MovieItem } from '@/types/movie';
-import { applyImageElementFallback, searchMovies, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, fetchSupabaseSearchIndex, searchMoviesInSupabase } from '@/services/movieApi';
+import { applyImageElementFallback, searchMoviesMultiSource, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, searchMoviesInSupabase } from '@/services/movieApi';
 import {
   mergeMoviesUnique,
   parseMovieYear,
@@ -320,7 +320,6 @@ export default function SearchPage() {
   const abortRef = useRef<AbortController | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchRunRef = useRef(0);
-  const searchIndexLoadRef = useRef<Promise<MovieItem[]> | null>(null);
 
   useEffect(() => {
     localPoolRef.current = localPool;
@@ -344,31 +343,6 @@ export default function SearchPage() {
         setLocalPool(mergeMoviesUnique([...newItems, ...trendItems]));
       })
       .catch(() => { /* silently fail */ });
-  }, []);
-
-  const ensureSearchIndexLoaded = useCallback(() => {
-    if (searchIndexLoadRef.current) return searchIndexLoadRef.current;
-    // RPC handles exact/long-tail queries. This local index is only an offline
-    // relevance fallback, so 3k recent rows avoid a multi-megabyte first load.
-    searchIndexLoadRef.current = fetchSupabaseSearchIndex({ limit: 3000 })
-      .then((items) => {
-        if (items.length > 0) {
-          setLocalPool((prev) => {
-            const merged = mergeMoviesUnique([...items, ...prev]);
-            const prevKeys = new Set(prev.map((movie) => String(movie._id || movie.slug || '')));
-            const hasCatalogChange = merged.length !== prev.length || merged.some((movie) => !prevKeys.has(String(movie._id || movie.slug || '')));
-            // Returning the previous reference is important: doSearch depends
-            // on localPool, so an equivalent new array would restart the
-            // search, clear its results and create an index-load loop.
-            return hasCatalogChange ? merged : prev;
-          });
-        }
-        return items;
-      })
-      .finally(() => {
-        searchIndexLoadRef.current = null;
-      });
-    return searchIndexLoadRef.current;
   }, []);
 
   useEffect(() => {
@@ -427,18 +401,6 @@ export default function SearchPage() {
     const instantItems = pg === 1 && currentPool.length > 0
       ? getInstantLocalHits(currentPool, normalizedKeyword, 16)
       : [];
-    const indexPromise = pg === 1
-      ? ensureSearchIndexLoaded()
-          .then((indexedItems) => {
-            if (runId !== searchRunRef.current || searchCtrl.signal.aborted) return;
-            const localItems = getInstantLocalHits(indexedItems, normalizedKeyword, 16);
-            if (localItems.length === 0) return;
-            setError('');
-            setResults((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...localItems]), normalizedKeyword, 'relevance'));
-          })
-          .catch(() => {})
-      : Promise.resolve();
-
     const firstPaintItems = pg === 1
       ? sortMoviesForSearch(mergeMoviesUnique([...knownAliasItems, ...instantItems]), normalizedKeyword, 'relevance')
       : instantItems;
@@ -450,61 +412,42 @@ export default function SearchPage() {
     }
 
     try {
-      // Run the direct indexed query beside the multi-source search. The old
-      // sequential path could make mobile wait for slow external mirrors
-      // before asking Supabase for a result it already had.
-      const directSearchPromise = pg === 1
-        ? searchMoviesInSupabase(normalizedKeyword, {
+      const directSupabaseItems = pg === 1
+        ? await searchMoviesInSupabase(normalizedKeyword, {
             limit: 24,
-            timeoutMs: 6000,
+            timeoutMs: 7500,
             minLength: 2,
             signal: searchCtrl.signal,
           }).catch(() => [])
-        : Promise.resolve([]);
-      void directSearchPromise.then((directItems) => {
-        if (directItems.length === 0 || runId !== searchRunRef.current || searchCtrl.signal.aborted) return;
-        setError('');
-        setResults((prev) => sortMoviesForSearch(
-          mergeMoviesUnique([...(pg === 1 ? knownAliasItems : []), ...prev, ...directItems]),
-          normalizedKeyword,
-          'relevance',
-        ));
-      });
-
-      const [apiResult, directSupabaseItems] = await Promise.all([
-        searchMovies(normalizedKeyword, pg, searchCtrl.signal)
-          .then((value) => ({ status: 'fulfilled' as const, value }))
-          .catch((reason) => ({ status: 'rejected' as const, reason })),
-        directSearchPromise,
-      ]);
+        : [];
       if (runId !== searchRunRef.current) return;
 
-      const apiData = apiResult.status === 'fulfilled'
-        ? apiResult.value
-        : { items: [], pagination: { currentPage: pg, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
-      let items = pg === 1 ? mergeMoviesUnique([...knownAliasItems, ...(apiData.items ?? [])]) : (apiData.items ?? []);
+      let items = pg === 1
+        ? mergeMoviesUnique([...knownAliasItems, ...instantItems, ...directSupabaseItems])
+        : [];
+      let totalP = 1;
 
-      if (pg === 1 && directSupabaseItems.length > 0) {
-        items = mergeMoviesUnique([...items, ...directSupabaseItems]);
+      // The canonical indexed catalogue is the first paint and the source of
+      // truth. External mirrors run only when Supabase has no answer (or for
+      // explicit pagination), so common searches never wait 2.8s for them.
+      if (items.length === 0 || pg > 1) {
+        const external = await searchMoviesMultiSource(normalizedKeyword, pg, searchCtrl.signal)
+          .catch(() => ({ status: false, items: [], pagination: { currentPage: pg, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } }));
+        items = pg === 1
+          ? mergeMoviesUnique([...knownAliasItems, ...(external.items ?? [])])
+          : (external.items ?? []);
+        totalP = external.pagination?.totalPages ?? 1;
       }
 
-      if (pg === 1) {
+      if (pg === 1 && items.length === 0) {
         const directAliasItems = await fetchDirectAliasResults(normalizedKeyword).catch(() => []);
         if (directAliasItems.length > 0) {
           items = mergeMoviesUnique([...items, ...directAliasItems]);
         }
       }
 
-      if (pg === 1 && items.length < 6) {
-        const indexedItems = await ensureSearchIndexLoaded().catch(() => []);
-        const indexedHits = getInstantLocalHits(indexedItems, normalizedKeyword, 16);
-        if (indexedHits.length > 0) {
-          items = mergeMoviesUnique([...items, ...indexedHits]);
-        }
-      }
-
-      // STEP 2: Merge local index results (searchMovies already includes API, Supabase, and special sources)
-      // STEP 3: Fuzzy fallback — only if very few results AND pool loaded
+      // Lightweight new/trending lists remain an offline fuzzy fallback; the
+      // multi-megabyte full search index is never on the interaction path.
       if (pg === 1 && items.length < 6 && currentPool.length > 0) {
         const fuse = new Fuse(currentPool, {
           keys: ['name', 'origin_name'],
@@ -519,7 +462,6 @@ export default function SearchPage() {
       items = sortMoviesForSearch(mergeMoviesUnique(items), normalizedKeyword, 'relevance');
       // Cache result
       try {
-        const totalP = apiData.pagination?.totalPages ?? 1;
         if (items.length > 0) {
           setSmartSessionCache(cacheKey, JSON.stringify({ data: items, totalPages: totalP, ts: Date.now() }));
         }
@@ -529,9 +471,8 @@ export default function SearchPage() {
         if (pg === 1) return items;
         return mergeMoviesUnique([...prev, ...items]);
       });
-      setTotalPages(apiData.pagination?.totalPages ?? 1);
-      setAllLoaded(pg >= (apiData.pagination?.totalPages ?? 1));
-      void indexPromise;
+      setTotalPages(totalP);
+      setAllLoaded(pg >= totalP);
       if (pg === 1 && items.length === 0) setError('Không tìm thấy phim nào cho từ khoá này.');
     } catch {
       if (runId === searchRunRef.current && !searchCtrl.signal.aborted) {
@@ -543,7 +484,7 @@ export default function SearchPage() {
         if (searchAbortRef.current === searchCtrl) searchAbortRef.current = null;
       }
     }
-  }, [ensureSearchIndexLoaded]);
+  }, []);
 
   useEffect(() => {
     if (q) {
@@ -578,7 +519,7 @@ export default function SearchPage() {
     setLoadingSug(instantItems.length === 0);
     try {
       let items = instantItems;
-      const apiItems = await searchMoviesInSupabase(kw.trim(), { limit: 12, timeoutMs: 1300, minLength: 2, signal: ctrl.signal });
+      const apiItems = await searchMoviesInSupabase(kw.trim(), { limit: 12, timeoutMs: 7000, minLength: 2, signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       items = mergeMoviesUnique([...items, ...apiItems]);
 
@@ -587,20 +528,12 @@ export default function SearchPage() {
         setSuggestions(items);
         setHighlightIndex(-1);
       }
-      ensureSearchIndexLoaded()
-        .then((indexedItems) => {
-          if (ctrl.signal.aborted || indexedItems.length === 0) return;
-          const indexedHits = getInstantLocalHits(indexedItems, kw, 8);
-          if (indexedHits.length === 0) return;
-          setSuggestions((prev) => sortMoviesForSearch(mergeMoviesUnique([...prev, ...indexedHits]), kw.trim(), 'relevance').slice(0, 8));
-        })
-        .catch(() => {});
     } catch {
       if (!ctrl.signal.aborted) setSuggestions([]);
     } finally {
       if (!ctrl.signal.aborted) setLoadingSug(false);
     }
-  }, [ensureSearchIndexLoaded, localPool]);
+  }, [localPool]);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;

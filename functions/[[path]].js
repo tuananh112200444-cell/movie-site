@@ -2,6 +2,9 @@
 const MHOPHIM_URL = 'https://mhophim.com';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1';
+const SUPABASE_REST_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/rest/v1';
+// This is Supabase's public browser key (RLS still applies), not a service key.
+const SUPABASE_PUBLIC_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
 const SEO_PRERENDER_VERSION = '20260719-index-quality-v2';
 
 const SECURITY_HEADERS = {
@@ -1977,6 +1980,79 @@ async function proxyMovieDetail(request, context) {
   }
 }
 
+async function proxySearch(request, context) {
+  const url = new URL(request.url);
+  const query = String(url.searchParams.get('q') || '').trim().slice(0, 120);
+  const parsedLimit = Number(url.searchParams.get('limit') || 16);
+  const limit = Math.min(Math.max(Number.isFinite(parsedLimit) ? Math.floor(parsedLimit) : 16, 1), 50);
+  if (query.length < 2) {
+    return new Response(JSON.stringify({ status: true, items: [], query, count: 0 }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+
+  const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v8/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
+  if (request.method === 'GET' && typeof caches !== 'undefined') {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set('X-KhoPhim-Search-Cache', 'HIT');
+      return new Response(cached.body, { status: cached.status, headers });
+    }
+  }
+
+  const fetchSearchRpc = (timeoutMs) => fetch(`${SUPABASE_REST_BASE}/rpc/search_movies_fast`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_PUBLIC_KEY,
+      Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
+    },
+    body: JSON.stringify({ search_query: query, result_limit: limit }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  try {
+    // Call PostgREST directly to avoid a second serverless cold start. The
+    // response is still cached at the Cloudflare POP below.
+    let attempt = 1;
+    let upstream;
+    try {
+      upstream = await fetchSearchRpc(3500);
+    } catch {
+      // Supabase/PostgREST occasionally stalls on the first pooled connection.
+      // One bounded retry is faster and safer than returning an empty search.
+      attempt = 2;
+      upstream = await fetchSearchRpc(2500);
+    }
+    const upstreamPayload = await upstream.json().catch(() => null);
+    if (!upstream.ok) {
+      throw new Error(upstreamPayload?.message || `Search RPC returned ${upstream.status}`);
+    }
+    const items = Array.isArray(upstreamPayload) ? upstreamPayload : [];
+    const headers = new Headers(upstream.headers);
+    headers.delete('Set-Cookie');
+    headers.set('Content-Type', 'application/json; charset=utf-8');
+    headers.set('Cache-Control', 'public, max-age=120, s-maxage=900, stale-while-revalidate=3600, stale-if-error=86400');
+    headers.set('X-KhoPhim-Search-Cache', 'MISS');
+    headers.set('X-KhoPhim-Search-Attempt', String(attempt));
+    for (const [key, value] of Object.entries(SECURITY_HEADERS)) headers.set(key, value);
+    const response = new Response(JSON.stringify({ status: true, query, count: items.length, items }), { status: 200, headers });
+    if (upstream.ok && request.method === 'GET' && typeof caches !== 'undefined') {
+      contextWaitUntil(context, caches.default.put(cacheKey, response.clone()));
+    }
+    return response;
+  } catch (error) {
+    return new Response(JSON.stringify({ status: false, items: [], message: error instanceof Error ? error.message : 'Search unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+}
+
 function isAllowedSsplayResolveUrl(target) {
   try {
     const parsed = new URL(target);
@@ -2195,6 +2271,10 @@ export async function onRequest(context) {
 
   if (pathname === '/api/movie-detail') {
     return proxyMovieDetail(request, context);
+  }
+
+  if (pathname === '/api/search') {
+    return proxySearch(request, context);
   }
 
   if (pathname === '/internal/ssplay-resolve') {

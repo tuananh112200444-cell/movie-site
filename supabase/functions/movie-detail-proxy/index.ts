@@ -285,6 +285,47 @@ function hasUnhealthyExpectedCoverage(
   return false;
 }
 
+function episodeProviderKey(ep: Record<string, unknown>): string {
+  const source = String(ep.source_provider || '').trim().toLowerCase();
+  if (/phimapi|kkphim/.test(source)) return 'phimapi';
+  if (/ophim/.test(source)) return 'ophim';
+  if (/motchill/.test(source)) return 'motchill';
+  if (source) return source;
+  try {
+    return new URL(String(ep.link_m3u8 || ep.link_embed || '')).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+// Old catalogues can look complete while every URL comes from one provider and
+// has never been checked. Request one independent provider before promising
+// playback; once either a healthy URL or a second provider exists, normal cache
+// behavior resumes and the external API is not called on every page view.
+function hasUnverifiedSingleProviderCoverage(
+  serverMap: Map<string, unknown[]>,
+  expectedEpisode: number,
+): boolean {
+  if (expectedEpisode <= 0 || expectedEpisode > 300) return false;
+  const episodes = new Map<number, Array<Record<string, unknown>>>();
+  for (const rows of serverMap.values()) {
+    for (const raw of rows) {
+      const ep = raw as Record<string, unknown>;
+      const number = extractEpNumber(String(ep.slug || ep.name || ''));
+      if (number <= 0 || number > expectedEpisode) continue;
+      const bucket = episodes.get(number) || [];
+      bucket.push(ep);
+      episodes.set(number, bucket);
+    }
+  }
+  for (const candidates of episodes.values()) {
+    if (candidates.some((ep) => String(ep.source_health_status || '').toLowerCase() === 'ok')) continue;
+    const providers = new Set(candidates.map(episodeProviderKey).filter(Boolean));
+    if (providers.size < 2) return true;
+  }
+  return false;
+}
+
 function attachStreamHealth(epData: Record<string, unknown>, row: Record<string, unknown> | null): Record<string, unknown> {
   if (!row) return epData;
   return {
@@ -293,6 +334,7 @@ function attachStreamHealth(epData: Record<string, unknown>, row: Record<string,
     source_response_time_ms: Number(row.response_time_ms || 0) || undefined,
     source_failure_count: Number(row.failure_count || 0) || undefined,
     source_priority: Number(row.priority || 0) || undefined,
+    source_provider: String(row.source || epData.source_provider || '') || undefined,
   };
 }
 
@@ -533,7 +575,7 @@ function parseMotchillEpisodeLinks(html: string, slug: string): Array<{ episodeN
     const episodeNumber = Number(match[2] || 0);
     if (!episodeNumber) continue;
     const rawUrl = match[1].replace(/&amp;/g, '&');
-    const url = rawUrl.startsWith('http') ? rawUrl : `https://www.motchillzn.org${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
+    const url = rawUrl.startsWith('http') ? rawUrl : `https://www.motchillkz.org${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
     links.set(episodeNumber, url);
   }
   return [...links.entries()]
@@ -566,11 +608,11 @@ async function fetchMotchillPlayer(option: { post: string; nume: string; type: s
     nume: option.nume,
     type: option.type,
   });
-  const text = await fetchTextWithTimeout('https://www.motchillzn.org/wp-admin/admin-ajax.php', 4500, {
+  const text = await fetchTextWithTimeout('https://www.motchillkz.org/wp-admin/admin-ajax.php', 4500, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-      'Referer': 'https://www.motchillzn.org/',
+      'Referer': 'https://www.motchillkz.org/',
       'X-Requested-With': 'XMLHttpRequest',
     },
     body,
@@ -578,7 +620,9 @@ async function fetchMotchillPlayer(option: { post: string; nume: string; type: s
   if (!text) return '';
   try {
     const payload = JSON.parse(text) as Record<string, unknown>;
-    return String(payload.embed_url || '').replace(/\\\//g, '/').trim();
+    const value = String(payload.embed_url || '').replace(/\\\//g, '/').trim();
+    if (/^https?:\/\//i.test(value)) return value;
+    return value.match(/<iframe[^>]+src=["'](https?:\/\/[^"']+)/i)?.[1] || '';
   } catch {
     return '';
   }
@@ -590,7 +634,7 @@ async function fetchMotchillMovieDetail(
   movie: Record<string, unknown>;
   episodes: Array<{ server_name: string; server_data: unknown[] }>;
 } | null> {
-  const seriesUrl = `https://www.motchillzn.org/phim-bo/${encodeURIComponent(slug)}`;
+  const seriesUrl = `https://www.motchillkz.org/phim-bo/${encodeURIComponent(slug)}`;
   const html = await fetchTextWithTimeout(seriesUrl, 5500);
   if (!html || !html.includes('/tap-phim/')) return null;
 
@@ -1695,6 +1739,7 @@ serve(async (req) => {
           link_m3u8: String(em.link_m3u8 || ''),
           subtitle_url: String(em.subtitle_url || ''),
           audio_type: String(em.audio_type || '') || undefined,
+          source_provider: source,
         };
         const healthRow = getEpisodeHealthRow(streamHealthIndex, serverName, slugVal, num, epData);
         if (shouldSuppressUnhealthyStream(healthRow)) continue;
@@ -1799,6 +1844,7 @@ serve(async (req) => {
           source_response_time_ms: Number(sm.response_time_ms || 0) || undefined,
           source_failure_count: failureCount || undefined,
           source_priority: Number(sm.priority || 0) || undefined,
+          source_provider: String(sm.source || '') || undefined,
         };
 
         pushEpisode(serverMap, serverName, epData);
@@ -1833,6 +1879,8 @@ serve(async (req) => {
     // persist it as a backup instead of returning a superficially complete set.
     const shouldRepairUnhealthyCoverage =
       expectedEpisode > 0 && hasUnhealthyExpectedCoverage(serverMap, expectedEpisode);
+    const shouldRepairUnverifiedCoverage =
+      expectedEpisode > 0 && hasUnverifiedSingleProviderCoverage(serverMap, expectedEpisode);
     // A manual refresh is an explicit request to re-check the known BLVietsub
     // source. It lets a completed series catch its final episode even when
     // its old database badge was internally consistent.
@@ -1899,6 +1947,7 @@ serve(async (req) => {
         !useSupabase ||
         shouldRepairOnDemand ||
         shouldRepairUnhealthyCoverage ||
+        shouldRepairUnverifiedCoverage ||
         shouldCheckFreshOngoingExternal ||
         shouldCheckRequestedSlugAlias
       );

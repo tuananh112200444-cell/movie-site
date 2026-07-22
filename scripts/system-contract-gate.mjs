@@ -66,6 +66,12 @@ if (!detailProxy.includes("from('streams')") || !detailProxy.includes('source_he
 if (!detailProxy.includes('hasUnhealthyExpectedCoverage') || !detailProxy.includes('shouldRepairUnhealthyCoverage')) {
   failures.push('complete episode counts can still hide unhealthy playback coverage');
 }
+if (!detailProxy.includes('hasUnverifiedSingleProviderCoverage') || !detailProxy.includes('shouldRepairUnverifiedCoverage')) {
+  failures.push('unchecked single-provider catalogues cannot request an independent playback backup');
+}
+if (!streamHealth.includes('streamc\\.xyz') || !streamHealth.includes("Referer = 'https://khophim.org/'")) {
+  failures.push('StreamC health probes do not use the production playback referer');
+}
 if (!detailProxy.includes("provider === 'phimapi'") || !detailProxy.includes('providerRank')) {
   failures.push('external repair does not preserve and prefer an independent PhimAPI backup on equal coverage');
 }

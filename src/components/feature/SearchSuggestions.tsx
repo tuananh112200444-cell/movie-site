@@ -1,7 +1,6 @@
-import { startTransition, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Fuse from 'fuse.js';
-import { applyImageElementFallback, fetchSupabaseSearchIndex, getOptimizedImageUrl, searchMoviesInSupabase } from '../../services/movieApi';
+import { applyImageElementFallback, getOptimizedImageUrl, searchMoviesInSupabase } from '../../services/movieApi';
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -45,79 +44,6 @@ function addToHistory(term: string): void {
   } catch { /* quota */ }
 }
 
-function normalizeSearchText(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/\u0111/g, 'd')
-    .replace(/\u0110/g, 'd')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
-
-function getMovieSearchText(movie: Movie): string {
-  return normalizeSearchText([
-    movie.name,
-    movie.origin_name,
-    movie.title_vi,
-    movie.title_en,
-    movie.title_zh,
-    movie.slug,
-    movie.episode_current,
-    movie.episode_total,
-    movie.current_episode ? `tap ${movie.current_episode}` : '',
-    movie.total_episodes ? `season ${movie.total_episodes}` : '',
-    movie.category?.map((c) => c.name).join(' '),
-  ].filter(Boolean).join(' '));
-}
-
-const movieSearchTextCache = new WeakMap<Movie, string>();
-
-function getCachedMovieSearchText(movie: Movie): string {
-  const cached = movieSearchTextCache.get(movie);
-  if (cached) return cached;
-  const text = getMovieSearchText(movie);
-  movieSearchTextCache.set(movie, text);
-  return text;
-}
-
-const suggestionFuseOptions = {
-  keys: ['name', 'origin_name', 'title_vi', 'title_en', 'title_zh', 'slug', 'episode_current', 'episode_total'],
-  threshold: 0.34,
-  distance: 90,
-  ignoreLocation: true,
-  minMatchCharLength: 2,
-};
-
-function runWhenIdle(callback: () => void, timeout = 1800): () => void {
-  const idle = (globalThis as typeof globalThis & {
-    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-    cancelIdleCallback?: (id: number) => void;
-  }).requestIdleCallback;
-  const cancelIdle = (globalThis as typeof globalThis & {
-    cancelIdleCallback?: (id: number) => void;
-  }).cancelIdleCallback;
-
-  if (typeof idle === 'function') {
-    const id = idle(callback, { timeout });
-    return () => cancelIdle?.(id);
-  }
-
-  const id = window.setTimeout(callback, Math.min(timeout, 700));
-  return () => window.clearTimeout(id);
-}
-
-function getInstantLocalHits(pool: Movie[], keyword: string, limit = 8, fuse?: Fuse<Movie> | null): Movie[] {
-  const query = normalizeSearchText(keyword.trim());
-  if (!query || pool.length === 0) return [];
-  const tokens = query.split(/\s+/).filter((token) => token.length >= 2);
-  const hits = pool.filter((movie) => {
-    const text = getCachedMovieSearchText(movie);
-    return text.includes(query) || tokens.every((token) => text.includes(token));
-  });
-  const fuzzy = (fuse ?? new Fuse(pool, suggestionFuseOptions)).search(keyword.trim(), { limit: Math.max(limit * 3, 16) }).map((result) => result.item);
-  return sortMoviesForSearch(mergeMoviesUnique([...hits, ...fuzzy]), keyword, 'relevance').slice(0, limit);
-}
-
 function getMovieHref(movie: Movie): string {
   const href = movieDetailUrl(movie.slug);
   const isOphimSource = movie.source_site === 'ophim' || movie.source_name === 'OPhim';
@@ -141,47 +67,16 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
   const [loading, setLoading] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const [localPool, setLocalPool] = useState<Movie[]>([]);
-  const debouncedQuery = useDebounce(query, 300);
+  const debouncedQuery = useDebounce(query, 180);
   const navigate = useNavigate();
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLElement | null>(null);
-  const indexLoadRef = useRef<Promise<Movie[]> | null>(null);
   const isTyping = query.trim().length >= 2;
-  const localFuse = useMemo(
-    () => (localPool.length > 0 ? new Fuse(localPool, suggestionFuseOptions) : null),
-    [localPool],
-  );
 
   // Load history on mount — NO API calls
   useEffect(() => {
     setSearchHistory(getSearchHistory());
   }, []);
-
-  const ensureSearchIndexLoaded = useCallback(() => {
-    if (indexLoadRef.current) return indexLoadRef.current;
-    indexLoadRef.current = fetchSupabaseSearchIndex({ limit: 1200, persistentCache: false })
-      .then((items) => {
-        const movies = items as unknown as Movie[];
-        if (movies.length > 0) {
-          startTransition(() => {
-            setLocalPool((prev) => mergeMoviesUnique([...movies, ...prev]));
-          });
-        }
-        return movies;
-      })
-      .finally(() => {
-        indexLoadRef.current = null;
-      });
-    return indexLoadRef.current;
-  }, []);
-
-  useEffect(() => {
-    if (localPool.length > 0) return undefined;
-    return runWhenIdle(() => {
-      void ensureSearchIndexLoaded();
-    }, 2200);
-  }, [ensureSearchIndexLoaded, localPool.length]);
 
   const fetchSuggestions = useCallback(async (q: string) => {
     if (q.trim().length < 2) {
@@ -193,7 +88,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    const instantItems = getInstantLocalHits(localPool, q, 8, localFuse);
+    const instantItems: Movie[] = [];
     setSuggestions(instantItems);
     setHighlightIndex(-1);
     setLoading(instantItems.length === 0);
@@ -213,7 +108,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
 
     try {
       let items = instantItems;
-      const apiItems = await searchMoviesInSupabase(q.trim(), { limit: 16, timeoutMs: 1400, minLength: 2, signal: ctrl.signal });
+      const apiItems = await searchMoviesInSupabase(q.trim(), { limit: 16, timeoutMs: 7000, minLength: 2, signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       items = mergeMoviesUnique([...items, ...apiItems]);
 
@@ -241,7 +136,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
         setLoading(false);
       }
     }
-  }, [localFuse, localPool]);
+  }, []);
 
   useEffect(() => {
     fetchSuggestions(debouncedQuery);

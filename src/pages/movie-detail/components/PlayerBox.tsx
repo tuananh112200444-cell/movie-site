@@ -147,6 +147,14 @@ function isDailymotion(url: string): boolean {
   return u.includes('dailymotion.com') || u.includes('dai.ly');
 }
 
+function shouldUseProviderNativeFullscreenOnApple(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const userAgent = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  return /iPhone|iPad|iPod/i.test(userAgent)
+    || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 function isKnownCorsBlockedHls(url: string): boolean {
   const u = url.toLowerCase();
   return (
@@ -395,6 +403,7 @@ export default function PlayerBox({
   const [isEmbedPseudoFullscreen, setIsEmbedPseudoFullscreen] = useState(false);
   const isEmbedPseudoFullscreenRef = useRef(false);
   const [isEmbedLandscapeFallback, setIsEmbedLandscapeFallback] = useState(false);
+  const preferProviderNativeFullscreen = useMemo(shouldUseProviderNativeFullscreenOnApple, []);
   const embedScrollPositionRef = useRef(0);
   const nativeFullscreenIntentUntilRef = useRef(0);
   const enterEmbedPseudoFullscreenRef = useRef<() => void>(() => {});
@@ -483,6 +492,22 @@ export default function PlayerBox({
       return;
     }
 
+    // iPhone Safari supports native fullscreen most reliably on the actual
+    // video element. Cross-origin iframe players keep their own native button.
+    const appleVideo = directVideoRef.current as (HTMLVideoElement & {
+      webkitDisplayingFullscreen?: boolean;
+      webkitEnterFullscreen?: () => void;
+    }) | null;
+    if (shouldUseProviderNativeFullscreenOnApple() && appleVideo?.webkitEnterFullscreen) {
+      try {
+        appleVideo.webkitEnterFullscreen();
+        setIsEmbedFullscreen(true);
+        return;
+      } catch {
+        // Continue to standards fullscreen and then the viewport fallback.
+      }
+    }
+
     if (document.fullscreenEnabled === true && el.requestFullscreen) {
       try {
         const enteredFromPortrait = isPortraitPhoneViewport();
@@ -548,6 +573,23 @@ export default function PlayerBox({
     if (!embedUrl || isBlvietsubWatchPageUrl(embedUrl) || !isDirectVideo(embedUrl)) return '';
     return normalizeVideoCdnUrl(embedUrl);
   }, [episode?.link_m3u8, episode?.link_embed]);
+
+  useEffect(() => {
+    const video = directVideoRef.current;
+    if (!video) return;
+    const onBegin = () => setIsEmbedFullscreen(true);
+    const onEnd = () => {
+      setIsEmbedFullscreen(false);
+      setIsEmbedLandscapeFallback(false);
+      unlockPlayerOrientation();
+    };
+    video.addEventListener('webkitbeginfullscreen', onBegin);
+    video.addEventListener('webkitendfullscreen', onEnd);
+    return () => {
+      video.removeEventListener('webkitbeginfullscreen', onBegin);
+      video.removeEventListener('webkitendfullscreen', onEnd);
+    };
+  }, [directVideoSrc]);
   const hlsSrc = useMemo(() => getHlsProxyUrl(episode?.link_m3u8 ?? ''), [episode?.link_m3u8]);
   const streamIsHls = Boolean(episode?.link_m3u8 && isHlsUrl(episode.link_m3u8));
   const effectivePlayerMode = useMemo<'hls' | 'embed' | 'video'>(() => {
@@ -943,19 +985,22 @@ export default function PlayerBox({
                 ))}
               </div>
             )}
-            {/* Keep the source player's bottom-right fullscreen affordance
-                visible, but handle the click in the parent so it also works
-                in WebViews that deny fullscreen to cross-origin iframes. */}
-            <button
-              type="button"
-              data-kp-source-fullscreen-proxy="true"
-              aria-label={isEmbedFullscreen ? 'Thu nhỏ từ nút nguồn phát' : 'Phóng to từ nút nguồn phát'}
-              title={isEmbedFullscreen ? 'Thu nhỏ' : 'Phóng to'}
-              onClick={() => void toggleEmbedFullscreen()}
-              className="absolute bottom-0 right-0 z-30 h-16 w-16 cursor-pointer border-0 bg-transparent p-0 opacity-0 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-white"
-            />
+            {/* Apple mobile must receive the provider's real video control:
+                an overlay here would replace native fullscreen with a CSS-only
+                viewport fallback that cannot hide Safari chrome. */}
+            {!preferProviderNativeFullscreen && (
+              <button
+                type="button"
+                data-kp-source-fullscreen-proxy="true"
+                aria-label={isEmbedFullscreen ? 'Thu nhỏ từ nút nguồn phát' : 'Phóng to từ nút nguồn phát'}
+                title={isEmbedFullscreen ? 'Thu nhỏ' : 'Phóng to'}
+                onClick={() => void toggleEmbedFullscreen()}
+                className="absolute bottom-0 right-0 z-30 h-16 w-16 cursor-pointer border-0 bg-transparent p-0 opacity-0 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-white"
+              />
+            )}
             {/* Overlay fullscreen button on embed video */}
-            <button
+            {!preferProviderNativeFullscreen && (
+              <button
                 type="button"
                 aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
                 onClick={() => void toggleEmbedFullscreen()}
@@ -964,7 +1009,8 @@ export default function PlayerBox({
                 className={`absolute z-40 flex items-center justify-center rounded-xl bg-black/20 text-white border border-white/35 shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[2px] transition-all hover:bg-black/55 hover:border-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100 ${isEmbedFullscreen ? 'top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] h-14 w-14' : 'top-3 right-3 h-12 w-12'}`}
               >
                 <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl drop-shadow-[0_1px_3px_rgba(0,0,0,1)]`} />
-            </button>
+              </button>
+            )}
           </div>
         )}
 

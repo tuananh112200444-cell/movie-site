@@ -16,7 +16,7 @@ const query = getArg('query', '');
 const limit = Math.max(1, Math.min(Number(getArg('limit', '10')) || 10, 50));
 
 if (!movieUrl && !query) {
-  throw new Error('Use --movie-url=https://motchilltv.uno/tvshows/.../ or --query="movie title"');
+  throw new Error('Use --movie-url=https://www.motchillkz.org/phim-bo/... or --query="movie title"');
 }
 
 const supabase = dryRun ? null : makeSupabaseClient({ supabaseUrl, serviceRoleKey });
