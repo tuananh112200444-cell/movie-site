@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const BASE_URL = 'https://motchilltv.uno';
+const BASE_URL = 'https://www.motchillkz.org';
+const ALLOWED_HOSTS = new Set(['motchillkz.org', 'www.motchillkz.org', 'motchills.us', 'www.motchills.us']);
 const SOURCE_SITE = 'motchill';
 const SOURCE_NAME = 'Motchill / StreamC';
 const SERVER_NAME = 'Motchill StreamC';
@@ -67,15 +68,15 @@ function normalizeMotchillUrl(rawUrl = '') {
   if (!value) return '';
   const parsed = new URL(value, BASE_URL);
   const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-  if (host !== 'motchilltv.uno') return '';
+  if (!ALLOWED_HOSTS.has(host) && !ALLOWED_HOSTS.has(`www.${host}`)) return '';
   parsed.protocol = 'https:';
   parsed.hash = '';
   parsed.search = '';
   const parts = parsed.pathname.split('/').filter(Boolean);
   const kind = parts[0] || '';
   const slug = parts[1] || '';
-  if (!slug || !['tvshows', 'movies'].includes(kind)) return '';
-  return `${BASE_URL}/${kind}/${slug}/`;
+  if (!slug || !['phim-bo', 'phim-le', 'tvshows', 'movies'].includes(kind)) return '';
+  return `${BASE_URL}/${kind}/${slug}`;
 }
 
 function parseEpisodeNumber(label = '') {
@@ -131,13 +132,16 @@ function parseListByLabel(html = '', label = '') {
 function parseEpisodeLinks(movieHtml = '') {
   const links = [];
   const seen = new Set();
-  const pattern = /<a\b([^>]*?)href=["'](https?:\/\/(?:www\.)?motchilltv\.uno\/episodes\/[^"']+)["']([^>]*)>([\s\S]*?)<\/a>/gi;
+  const pattern = /<a\b([^>]*?)href=["']((?:https?:\/\/(?:www\.)?(?:motchillkz\.org|motchills\.us))?\/tap-phim\/[^"']+)["']([^>]*)>([\s\S]*?)<\/a>/gi;
   for (const match of movieHtml.matchAll(pattern)) {
     const attrs = `${match[1] || ''} ${match[3] || ''}`;
     if (/\bnonex\b/i.test(attrs)) continue;
     const label = stripTags(match[4]);
-    const episodeNumber = parseEpisodeNumber(label);
-    const url = decodeHtml(match[2]).replace(/^https:\/\/www\./i, 'https://');
+    const url = new URL(decodeHtml(match[2]), BASE_URL).toString().replace(/\/$/, '');
+    const urlNumber = Number(url.match(/(?:tap|episode)-(\d+)(?:\D|$)/i)?.[1] || 0);
+    const labelNumber = /\d/.test(label) ? parseEpisodeNumber(label) : 0;
+    if (!urlNumber || (labelNumber && labelNumber !== urlNumber)) continue;
+    const episodeNumber = urlNumber;
     const key = `${episodeNumber}|${url}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -185,8 +189,11 @@ async function fetchPlayerEmbed(episodeUrl, episodeHtml) {
           body,
         });
         const payload = JSON.parse(text);
-        const embedUrl = decodeHtml(payload.embed_url || '').trim();
-        if (/^https?:\/\//i.test(embedUrl)) return embedUrl;
+        const embedValue = decodeHtml(payload.embed_url || '').trim();
+        const embedUrl = /^https?:\/\//i.test(embedValue)
+          ? embedValue
+          : firstMatch(embedValue, /<iframe[^>]+src=["'](https?:\/\/[^"']+)/i);
+        if (/^https?:\/\//i.test(embedUrl) && !/youtube\.com|youtu\.be/i.test(embedUrl)) return embedUrl;
       } catch {
         // Try the next available player option.
       }
@@ -271,17 +278,14 @@ export async function fetchMotchillEntry(movieUrl) {
 }
 
 export async function searchMotchill(query, limit = 10) {
-  const home = await fetchText(BASE_URL, 25000);
-  const nonce = firstMatch(home, /var\s+dtGonza\s*=\s*\{[\s\S]*?"nonce"\s*:\s*"([^"]+)"/i) || firstMatch(home, /"nonce"\s*:\s*"([^"]+)"/i);
-  if (!nonce) throw new Error('Motchill search nonce not found');
-  const url = `${BASE_URL}/wp-json/dooplay/search/?keyword=${encodeURIComponent(query)}&nonce=${encodeURIComponent(nonce)}`;
+  const url = `${BASE_URL}/wp-json/wp/v2/search?search=${encodeURIComponent(query)}&per_page=${Math.max(1, Math.min(limit, 50))}`;
   const text = await fetchText(url, 15000, { headers: { Accept: 'application/json,*/*' } });
   const payload = JSON.parse(text);
-  return Object.entries(payload || {})
+  return (Array.isArray(payload) ? payload : Object.values(payload || {}))
     .slice(0, limit)
-    .map(([, item]) => ({
+    .map((item) => ({
       title: stripTags(item.title || ''),
-      url: normalizeMotchillUrl(item.url || ''),
+      url: normalizeMotchillUrl(item.url || item.link || ''),
       image: item.img || '',
       year: item.extra?.date || '',
     }))

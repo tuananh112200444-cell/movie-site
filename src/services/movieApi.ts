@@ -1868,6 +1868,29 @@ export async function searchMoviesInSupabase(
     });
   };
   try {
+    // Browser traffic uses the same-origin Cloudflare search endpoint first.
+    // Popular queries are answered at the POP and cold queries still use the
+    // same canonical RPC. Node/maintenance scripts retain the direct path.
+    if (typeof window !== 'undefined') {
+      const edgeUrl = new URL('/api/search', window.location.origin);
+      edgeUrl.searchParams.set('q', kw);
+      edgeUrl.searchParams.set('limit', String(limit));
+      const edgeResponse = await fetch(edgeUrl.toString(), {
+        signal: controller.signal,
+        cache: 'force-cache',
+        headers: { Accept: 'application/json' },
+      });
+      if (edgeResponse.ok) {
+        const edgePayload = await edgeResponse.json() as { items?: Record<string, unknown>[] };
+        const edgeMovies = sortMoviesForSearch(
+          mergeMoviesUnique(((edgePayload.items ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem)),
+          kw,
+          'relevance',
+        ).slice(0, limit);
+        if (edgeMovies.length > 0 && hasStrongSearchHit(edgeMovies)) return edgeMovies;
+      }
+    }
+
     if (ENABLE_SUPABASE_SEARCH_RPC && !supabaseSearchRpcUnavailable) {
       const { data: rpcData, error: rpcError } = await supabase
         .rpc('search_movies_fast', {
@@ -3779,7 +3802,6 @@ interface ServerQualityInfo {
   hasEmbed: boolean;
 }
 export const STREAM_SERVER_PRIORITY = ['OPHIM', 'KKPHIM', 'KHOPHIM', 'DM', 'SUPABASE', 'SS', 'OK', 'ABYSS', 'VK'] as const;
-const FALLBACK_SERVER_AUTO_PICK_PENALTY = 500;
 const SERVER_RECENT_BAD_HOST_PENALTY = 1800;
 const OPHIM_PREFERRED_SOURCE_BONUS = 380;
 const OPSTREAM_IFRAME_BLOCK_PENALTY = 1050;
@@ -4126,10 +4148,22 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   const failureCount = Number(ep.source_failure_count || 0);
   const responseMs = Number(ep.source_response_time_ms || 0);
   const sourcePriority = Number(ep.source_priority || 0);
+  const hasBrowserManagedPhimApiEmbed = /https?:\/\/player\.phimapi\.com\/player\//i.test(embed);
+  const hasBrowserManagedStreamcEmbed = /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
 
   if (healthStatus === 'ok') score += 120;
   else if (healthStatus === 'unchecked') score += 8;
+  // StreamC rejects repeated cloud/Edge probes with 403 while the same embed
+  // remains playable in a real browser. A blocked server probe is therefore
+  // not viewer-failure evidence; viewer telemetry still marks a genuinely
+  // broken embed as `failed` and takes the normal hard penalty below.
+  else if (healthStatus === 'blocked' && hasBrowserManagedStreamcEmbed) score += 420;
   else if (healthStatus === 'blocked') score -= failureCount >= 2 ? 2400 : 900;
+  // PhimAPI's public HLS endpoint can reject server-side probes while its
+  // browser-managed iframe still loads and plays the same episode. Keep a
+  // modest penalty for the failed direct URL, but do not discard the verified
+  // iframe and fall back to a known-broken OPhim source.
+  else if (healthStatus === 'failed' && hasBrowserManagedPhimApiEmbed) score -= 250;
   else if (healthStatus === 'failed') score -= 2800 + failureCount * 120;
   else if (healthStatus === 'dead') score -= 10000;
 
@@ -4376,8 +4410,7 @@ export function pickBestEpisodeByPriority(
         qualityScore:
           getServerQualityScore(server) +
           getEpisodeReliabilityScore(episode) +
-          getEpisodeQualityScore(episode) -
-          (serverIndex === 0 ? FALLBACK_SERVER_AUTO_PICK_PENALTY : 0),
+          getEpisodeQualityScore(episode),
       });
     }
   });

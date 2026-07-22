@@ -1,7 +1,7 @@
 {
-  "release_id": "20260721202409-43c2a0a58a1f-dirty",
-  "generated_at": "2026-07-21T20:24:09.570Z",
-  "commit": "43c2a0a58a1f",
+  "release_id": "20260722152155-6e4b1aedafd1-dirty",
+  "generated_at": "2026-07-22T15:21:55.911Z",
+  "commit": "6e4b1aedafd1",
   "dirty": true,
   "schema_contract": "20260719-ops-seo-v1",
   "components": {

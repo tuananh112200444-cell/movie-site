@@ -82,11 +82,14 @@ function scoreStream(row: StreamRow, responseMs: number) {
 
 function headersFor(url: string) {
   const headers: Record<string, string> = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 KhoPhim-StreamHealth/1.0',
+    // Several video CDNs reject otherwise valid requests when the UA contains
+    // an automation suffix. Probe with the same shape as a real mobile viewer.
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
     Accept: '*/*',
   };
   if (/blvietsub\.com/i.test(url)) headers.Referer = 'https://blvietsub.com/';
   if (/opstream|ophim/i.test(url)) headers.Referer = 'https://ophim1.com/';
+  else if (/streamc\.xyz/i.test(url)) headers.Referer = 'https://khophim.org/';
   else if (/phimapi|kkphim|phim1280/i.test(url)) headers.Referer = 'https://khophim.org/';
   return headers;
 }
@@ -203,6 +206,25 @@ async function updateStream(
   deactivateAfter: number,
 ) {
   const now = new Date().toISOString();
+  const embedUrl = String(row.embed_url || '').trim();
+  const browserManagedProbeBlocked =
+    !String(row.stream_url || '').trim()
+    && /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl)
+    && (result.status === 401 || result.status === 403);
+  if (browserManagedProbeBlocked) {
+    const viewerReportedFailure = String(row.last_error || '').startsWith('Viewer telemetry:');
+    await supabase.from('streams').update({
+      last_checked_at: now,
+      response_time_ms: result.responseMs,
+      updated_at: now,
+      ...(!viewerReportedFailure ? {
+        health_status: 'unchecked',
+        failure_count: 0,
+        last_error: 'Server probe blocked; browser validation required',
+      } : {}),
+    }).eq('id', row.id);
+    return;
+  }
   const telemetryFailureAge = Date.now() - Date.parse(String(row.last_checked_at || ''));
   const telemetryEmbedCooldown = result.ok
     && !String(row.stream_url || '').trim()
