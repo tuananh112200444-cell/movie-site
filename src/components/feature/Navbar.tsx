@@ -54,10 +54,10 @@ const NAV_LINKS = [
   { label: 'Chiếu Rạp', to: '/phim-chieu-rap' },
 ];
 const SOCIAL_LINKS = [
-  { href: 'https://www.facebook.com/', icon: 'ri-facebook-circle-fill', color: 'hover:text-[#1877F2]', mobileColor: 'text-[#1877F2]', title: 'Facebook KhoPhim' },
-  { href: 'https://m.me/j/AbY6361ilp6YeUsu/?send_source=gc:copy_invite_link_c', icon: 'ri-messenger-fill', color: 'hover:text-[#00B2FF]', mobileColor: 'text-[#00B2FF]', title: 'Messenger KhoPhim' },
-  { href: 'https://www.tiktok.com/@khophim.org?_r=1&_t=ZS-979Na9uVNWE', icon: 'ri-tiktok-fill', color: 'hover:text-white', mobileColor: 'text-white', title: 'TikTok KhoPhim' },
-  { href: 'https://t.me/davisjohn_1', icon: 'ri-telegram-fill', color: 'hover:text-[#29A8E8]', mobileColor: 'text-[#29A8E8]', title: 'Telegram KhoPhim' },
+  { href: 'https://www.facebook.com/', icon: 'ri-facebook-circle-fill', desktopColor: 'text-[#4799ff] border-[#1877F2]/35 bg-[#1877F2]/15 shadow-[0_0_16px_rgba(24,119,242,0.22)] hover:bg-[#1877F2]/28 hover:border-[#4799ff]/65 hover:shadow-[0_0_22px_rgba(24,119,242,0.42)]', mobileColor: 'text-[#1877F2]', title: 'Facebook KhoPhim' },
+  { href: 'https://m.me/j/AbY6361ilp6YeUsu/?send_source=gc:copy_invite_link_c', icon: 'ri-messenger-fill', desktopColor: 'text-[#35c8ff] border-[#00B2FF]/35 bg-[#00B2FF]/15 shadow-[0_0_16px_rgba(0,178,255,0.22)] hover:bg-[#00B2FF]/28 hover:border-[#56d3ff]/65 hover:shadow-[0_0_22px_rgba(0,178,255,0.42)]', mobileColor: 'text-[#00B2FF]', title: 'Messenger KhoPhim' },
+  { href: 'https://www.tiktok.com/@khophim.org?_r=1&_t=ZS-979Na9uVNWE', icon: 'ri-tiktok-fill', desktopColor: 'text-white border-[#25F4EE]/30 bg-gradient-to-br from-[#25F4EE]/15 via-white/[0.08] to-[#FE2C55]/15 shadow-[4px_0_16px_rgba(254,44,85,0.18),-4px_0_16px_rgba(37,244,238,0.18)] hover:border-[#FE2C55]/55 hover:from-[#25F4EE]/25 hover:to-[#FE2C55]/25 hover:shadow-[5px_0_22px_rgba(254,44,85,0.32),-5px_0_22px_rgba(37,244,238,0.32)]', mobileColor: 'text-white', title: 'TikTok KhoPhim' },
+  { href: 'https://t.me/davisjohn_1', icon: 'ri-telegram-fill', desktopColor: 'text-[#54c8ff] border-[#29A8E8]/35 bg-[#29A8E8]/15 shadow-[0_0_16px_rgba(41,168,232,0.22)] hover:bg-[#29A8E8]/28 hover:border-[#69d0ff]/65 hover:shadow-[0_0_22px_rgba(41,168,232,0.42)]', mobileColor: 'text-[#29A8E8]', title: 'Telegram KhoPhim' },
 ];
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -394,10 +394,10 @@ export default function Navbar() {
           <div className="flex items-center gap-1">
             {/* Social links */}
             <div className="hidden lg:flex items-center gap-0.5 mr-1">
-              {SOCIAL_LINKS.map(({ href, icon, color, title }) => (
+              {SOCIAL_LINKS.map(({ href, icon, desktopColor, title }) => (
                 <a key={href} href={href} target="_blank" rel="noopener noreferrer nofollow" title={title} aria-label={title}
-                  className={`w-8 h-8 flex items-center justify-center text-white/30 ${color} transition-colors cursor-pointer rounded-lg hover:bg-white/[0.06]`}>
-                  <i className={`${icon} text-sm`} aria-hidden="true" />
+                  className={`w-8 h-8 flex items-center justify-center border ${desktopColor} transition-all duration-200 cursor-pointer rounded-lg hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}>
+                  <i className={`${icon} text-base drop-shadow-[0_0_5px_currentColor]`} aria-hidden="true" />
                   <span className="sr-only">{title}</span>
                 </a>
               ))}
