@@ -20,6 +20,7 @@ const glvietsubSync = read('supabase/functions/sync-glvietsub-feed/index.ts');
 const motchillSync = read('supabase/functions/sync-motchill-feed/index.ts');
 const catalogIntegrity = read('supabase/migrations/20260723073000_add_catalog_integrity_brain.sql');
 const catalogRepairDispatcher = read('supabase/migrations/20260723074000_add_catalog_source_repair_dispatcher.sql');
+const episodeSequenceRepair = read('supabase/migrations/20260724143000_repair_episode_sequence_gaps.sql');
 const viewerReadCapacity = read('supabase/migrations/20260723077000_prioritize_viewer_reads_over_repair_backlog.sql');
 const reviewService = read('src/services/reviewService.ts');
 const homeProxy = read('supabase/functions/home-proxy/index.ts');
@@ -30,6 +31,13 @@ const connectors = [
   'supabase/functions/sync-onlyflix-feed/index.ts',
   'supabase/functions/sync-cobephim-feed/index.ts',
 ];
+
+for (const brandColor of ['text-[#4799ff]', 'text-[#35c8ff]', 'from-[#25F4EE]/15', 'text-[#54c8ff]']) {
+  if (!navbar.includes(brandColor)) failures.push(`desktop social icon is missing persistent brand color: ${brandColor}`);
+}
+if (!navbar.includes('drop-shadow-[0_0_5px_currentColor]') || navbar.includes('text-white/30 ${color}')) {
+  failures.push('desktop social icons can still render dim before hover');
+}
 
 for (const step of ['schema:test', 'seo:upcoming:test', 'seo:ongoing:test', 'system:contracts', 'home:test', 'search:test', 'movie:data:test', 'watch:test', 'diagnostics:test']) {
   if (!releaseGate.includes(`['${step}']`)) failures.push(`release gate is missing ${step}`);
@@ -158,6 +166,16 @@ if (
   !catalogRepairDispatcher.includes('&episodes=1&strict_missing_detail=1')
 ) {
   failures.push('catalog source repair is not bounded, isolated, retry-limited, or trailer-catalog safe');
+}
+if (
+  !episodeSequenceRepair.includes("'episode_sequence_gap'") ||
+  !episodeSequenceRepair.includes('generate_series(1, m.current_episode)') ||
+  !episodeSequenceRepair.includes("'?movie_id=' || item.movie_id") ||
+  !ophimSync.includes('fetchDetailForTarget') ||
+  !ophimSync.includes('provider.searchPath(query)') ||
+  !ophimSync.includes(".ilike('last_error', 'Viewer telemetry:%')")
+) {
+  failures.push('episode sequence gaps or telemetry-only source recovery are not repaired through stable cross-provider movie identity');
 }
 if (!navbar.includes('<StickyBanner />') || navbar.includes('!scrolled && <StickyBanner />')) {
   failures.push('top campaign banner disappears when the fixed header enters its scrolled state');

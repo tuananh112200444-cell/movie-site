@@ -13,6 +13,7 @@ const PROVIDERS = {
     sourceName: 'OPhim',
     bases: ['https://ophim1.com', 'https://ophim.tv', 'https://ophim9.cc', 'https://ophim8.cc'],
     listPath: (page: number) => `/v1/api/danh-sach/phim-moi-cap-nhat?page=${page}&sort_field=modified.time&sort_type=desc`,
+    searchPath: (query: string) => `/v1/api/tim-kiem?keyword=${encodeURIComponent(query)}&limit=10`,
     detailPath: (slug: string) => `/v1/api/phim/${encodeURIComponent(slug)}`,
     trackOphimIdentity: true,
   },
@@ -21,6 +22,7 @@ const PROVIDERS = {
     sourceName: 'KKPhim',
     bases: ['https://phimapi.com', 'https://phimapi.net'],
     listPath: (page: number) => `/danh-sach/phim-moi-cap-nhat?page=${page}`,
+    searchPath: (query: string) => `/v1/api/tim-kiem?keyword=${encodeURIComponent(query)}&limit=10`,
     detailPath: (slug: string) => `/phim/${encodeURIComponent(slug)}`,
     trackOphimIdentity: false,
   },
@@ -53,6 +55,7 @@ interface OPhimMovie {
   id?: string;
   name?: string;
   origin_name?: string;
+  alternative_names?: string[];
   slug?: string;
   content?: string;
   type?: string;
@@ -68,6 +71,7 @@ interface OPhimMovie {
   notify?: string;
   showtimes?: string;
   year?: number;
+  tmdb?: { id?: string | number; type?: string; season?: number };
   actor?: string[];
   director?: string[];
   category?: Array<{ id?: string; name?: string; slug?: string }>;
@@ -458,6 +462,84 @@ function parseDetail(payload: DetailPayload | null, fallbackSlug: string): Parse
 async function fetchDetail(provider: ProviderConfig, slug: string): Promise<ParsedDetail | null> {
   const payload = await fetchJsonFromMirrors(provider, provider.detailPath(slug));
   return parseDetail(payload as DetailPayload | null, slug);
+}
+
+interface TargetMovieIdentity {
+  id: string;
+  slug: string;
+  name?: string | null;
+  origin_name?: string | null;
+  title_vi?: string | null;
+  title_en?: string | null;
+  title_original?: string | null;
+  year?: number | null;
+  tmdb_id?: number | string | null;
+  ophim_slug?: string | null;
+}
+
+function sourceCandidateScore(item: OPhimMovie, target: TargetMovieIdentity): number {
+  const targetNames = [target.name, target.origin_name, target.title_vi, target.title_en, target.title_original]
+    .map((value) => slugify(String(value || '')))
+    .filter(Boolean);
+  const itemNames = [item.name, item.origin_name, ...(Array.isArray(item.alternative_names) ? item.alternative_names : [])]
+    .map((value) => slugify(String(value || '')))
+    .filter(Boolean);
+  const exactName = itemNames.some((name) => targetNames.includes(name));
+  const partialName = itemNames.some((name) => targetNames.some((targetName) =>
+    name.length >= 5 && targetName.length >= 5 && (name.includes(targetName) || targetName.includes(name))
+  ));
+  if (!exactName && !partialName) return 0;
+
+  let score = exactName ? 120 : 70;
+  const itemYear = Number(item.year || 0);
+  const targetYear = Number(target.year || 0);
+  if (itemYear && targetYear) score += itemYear === targetYear ? 35 : -100;
+
+  const itemTmdbId = String((item.tmdb as Record<string, unknown> | undefined)?.id || '');
+  if (itemTmdbId && target.tmdb_id && itemTmdbId === String(target.tmdb_id)) score += 250;
+  return score;
+}
+
+async function fetchDetailForTarget(
+  provider: ProviderConfig,
+  target: TargetMovieIdentity,
+): Promise<ParsedDetail | null> {
+  const directSlugs = [...new Set([target.ophim_slug, target.slug].map((value) => String(value || '').trim()).filter(Boolean))];
+  for (const slug of directSlugs) {
+    const detail = await fetchDetail(provider, slug);
+    if (detail) return detail;
+  }
+
+  const queries = [...new Set([
+    target.origin_name,
+    target.title_original,
+    target.title_en,
+    target.name,
+    target.title_vi,
+  ].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 3);
+
+  const ranked = new Map<string, { item: OPhimMovie; score: number }>();
+  for (const query of queries) {
+    try {
+      const payload = await fetchJsonFromMirrors(provider, provider.searchPath(query));
+      for (const item of listItems(payload)) {
+        const score = sourceCandidateScore(item, target);
+        const previous = ranked.get(String(item.slug || ''));
+        if (item.slug && score >= 100 && (!previous || score > previous.score)) {
+          ranked.set(item.slug, { item, score });
+        }
+      }
+    } catch {
+      // Another title alias or provider mirror may still resolve the movie.
+    }
+  }
+
+  const candidates = [...ranked.values()].sort((a, b) => b.score - a.score).slice(0, 3);
+  for (const candidate of candidates) {
+    const detail = await fetchDetail(provider, String(candidate.item.slug || ''));
+    if (detail) return detail;
+  }
+  return null;
 }
 
 function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<string, unknown> {
@@ -1191,13 +1273,25 @@ serve(async (req) => {
     const useCursor = url.searchParams.get('cursor') === '1' || url.searchParams.get('backfill') === '1';
     const cursorKey = String(url.searchParams.get('cursor_key') || `sync-ophim-movies:${provider.sourceSite}:backfill`);
     const targetSlug = String(url.searchParams.get('slug') || '').trim();
+    const targetMovieId = String(url.searchParams.get('movie_id') || '').trim();
+    let targetMovie: TargetMovieIdentity | null = null;
+    if (targetMovieId) {
+      const { data, error } = await supabase
+        .from('movies')
+        .select('id,slug,name,origin_name,title_vi,title_en,title_original,year,tmdb_id,ophim_slug')
+        .eq('id', targetMovieId)
+        .maybeSingle();
+      if (error) throw new Error(`target movie lookup ${targetMovieId}: ${error.message}`);
+      targetMovie = data as TargetMovieIdentity | null;
+      if (!targetMovie) throw new Error(`target movie ${targetMovieId} not found`);
+    }
     const startPage = useCursor ? await readCursorPage(supabase, cursorKey, requestedStartPage) : requestedStartPage;
     const candidates = new Map<string, OPhimMovie>();
     let pagesWithItems = 0;
     let slugs: string[] = [];
 
-    if (targetSlug) {
-      slugs = [targetSlug];
+    if (targetSlug || targetMovie) {
+      slugs = [targetSlug || String(targetMovie?.slug || '')].filter(Boolean);
       pagesWithItems = 1;
     } else {
       for (let page = startPage; page < startPage + pages; page += 1) {
@@ -1217,10 +1311,12 @@ serve(async (req) => {
     for (const slug of slugs) {
       stats.scanned += 1;
       try {
-        const detail = await fetchDetail(provider, slug);
+        const detail = targetMovie
+          ? await fetchDetailForTarget(provider, targetMovie)
+          : await fetchDetail(provider, slug);
         if (!detail) {
           stats.skipped += 1;
-          if (targetSlug && strictMissingDetail) stats.errors.push(`[${slug}] detail not found`);
+          if ((targetSlug || targetMovie) && strictMissingDetail) stats.errors.push(`[${slug}] detail not found`);
           continue;
         }
         if (dryRun) continue;
@@ -1234,6 +1330,25 @@ serve(async (req) => {
         const beforeEpisodesInserted = stats.episodesInserted;
         if (includeEpisodes) {
           stats.episodesInserted += await insertEpisodes(supabase, provider, result.id, detail);
+          // Viewer telemetry is a useful repair signal, but it is not an
+          // independent network probe. A targeted identity repair has just
+          // re-resolved the provider movie and its current URLs; release rows
+          // stuck solely behind telemetry so the health checker can verify
+          // them again. Independently confirmed dead/blocked rows are kept.
+          if (targetMovie) {
+            await supabase
+              .from('streams')
+              .update({
+                is_active: true,
+                health_status: 'unchecked',
+                failure_count: 0,
+                last_error: 'Targeted provider identity refresh; independent probe pending',
+                last_checked_at: null,
+              })
+              .eq('movie_id', result.id)
+              .eq('source', provider.sourceSite)
+              .ilike('last_error', 'Viewer telemetry:%');
+          }
         }
         if (result.created || result.updated || stats.episodesInserted > beforeEpisodesInserted) {
           changedSlugs.push(String(detail.movie.slug || slug));
@@ -1253,13 +1368,14 @@ serve(async (req) => {
           google_ping: { attempted: false, ok: true, status: 0, urls: 0, message: 'dry run' },
         };
 
-    const nextPage = targetSlug || pagesWithItems === 0 || startPage + pages > maxPage ? 1 : startPage + pages;
-    if (useCursor && !dryRun && !targetSlug) await writeCursorPage(supabase, cursorKey, nextPage);
+    const nextPage = targetSlug || targetMovie || pagesWithItems === 0 || startPage + pages > maxPage ? 1 : startPage + pages;
+    if (useCursor && !dryRun && !targetSlug && !targetMovie) await writeCursorPage(supabase, cursorKey, nextPage);
 
     const elapsedMs = Date.now() - started;
     const metadata = {
       provider: provider.sourceSite,
       target_slug: targetSlug || null,
+      target_movie_id: targetMovieId || null,
       pages,
       limit,
       start_page: startPage,
@@ -1277,6 +1393,7 @@ serve(async (req) => {
       start_page: startPage,
       next_page: nextPage,
       target_slug: targetSlug || null,
+      target_movie_id: targetMovieId || null,
       scanned: stats.scanned,
       created: stats.created,
       updated: stats.updated,
