@@ -1,4 +1,5 @@
 // No StrictMode in production: saves one full re-render cycle.
+import './polyfills'
 import './i18n'
 import { createRoot, type Root } from 'react-dom/client'
 import './styles/remixicon-local.css'

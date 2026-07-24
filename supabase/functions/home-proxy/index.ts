@@ -3,6 +3,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY') ?? '';
+const TMDB_READ_ACCESS_TOKEN = Deno.env.get('TMDB_READ_ACCESS_TOKEN') ?? '';
+const TMDB_BASE = 'https://api.themoviedb.org/3';
 
 const OPHIM_BASES = [
   'https://ophim1.com',
@@ -24,6 +27,7 @@ const CORS_HEADERS = {
 };
 const INTERNAL_REFRESH_HEADER = 'x-home-proxy-refresh';
 const HOME_MIN_SECTION_ITEMS = 6;
+const HOME_FRESH_EPISODE_DAYS = 14;
 const STATIC_HOME_FALLBACK_URL = 'https://khophim.org/home-fallback.json';
 function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -131,6 +135,84 @@ function hotScore(
   return yearScore + freshnessScore + (isFull ? 25 : 0) + (isCinema ? 15 : 0);
 }
 
+function movieModifiedAt(item: Record<string, unknown>): number {
+  const raw = (item.modified as { time?: string } | undefined)?.time
+    ?? item.updated_at
+    ?? item.last_episode_change_at
+    ?? 0;
+  const value = new Date(String(raw)).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+async function fetchFreshEpisodeMovies(
+  supabase: ReturnType<typeof createClient>,
+  limit: number,
+): Promise<Record<string, unknown>[]> {
+  try {
+    const { data: changes, error: changesError } = await supabase
+      .from('movie_seo_quality_status')
+      .select('movie_id,last_episode_change_at')
+      .not('last_episode_change_at', 'is', null)
+      .gte('last_episode_change_at', new Date(Date.now() - HOME_FRESH_EPISODE_DAYS * 86400000).toISOString())
+      .order('last_episode_change_at', { ascending: false, nullsFirst: false })
+      .limit(limit)
+      .abortSignal(timeoutSignal(1200));
+
+    if (changesError || !changes?.length) return [];
+    const changedAtById = new Map<string, string>();
+    for (const row of changes as Record<string, unknown>[]) {
+      const movieId = String(row.movie_id || '');
+      const changedAt = String(row.last_episode_change_at || '');
+      if (movieId && changedAt) changedAtById.set(movieId, changedAt);
+    }
+
+    const ids = Array.from(changedAtById.keys());
+    const { data: movies, error: moviesError } = await supabase
+      .from('movies')
+      .select(`${HOME_SUPABASE_SELECT},tmdb_popularity,quality,lang`)
+      .in('id', ids)
+      .eq('is_published', true)
+      .not('poster_url', 'is', null)
+      .abortSignal(timeoutSignal(1400));
+
+    if (moviesError || !movies?.length) return [];
+    const currentYear = new Date().getFullYear();
+    return (movies as Record<string, unknown>[])
+      .filter((movie) => {
+        const currentEpisode = Math.max(
+          Number(movie.current_episode || 0) || 0,
+          extractEpisodeNumber(movie.episode_current),
+        );
+        const totalEpisodes = Math.max(
+          Number(movie.total_episodes || 0) || 0,
+          extractEpisodeNumber(movie.episode_total),
+        );
+        const label = String(movie.episode_current || '').toLowerCase();
+        const explicitlyCompleted = label.includes('hoàn tất') || label === 'full' || label === 'full hd';
+        const stillAiring = currentEpisode > 0 && (!totalEpisodes || currentEpisode < totalEpisodes) && !explicitlyCompleted;
+        const recentRelease = Number(movie.year || 0) >= currentYear - 1;
+        return stillAiring || recentRelease;
+      })
+      .map((movie) => {
+        const changedAt = changedAtById.get(String(movie.id || '')) || String(movie.updated_at || '');
+        return cleanMovieItem({
+          ...movie,
+          _id: movie.id,
+          last_episode_change_at: changedAt,
+          modified: { time: changedAt },
+        }, 'supabase-episode');
+      })
+      .filter(Boolean)
+      .filter((movie) => !isTrailerOnly((movie as Record<string, unknown>).episode_current as string))
+      .sort((a, b) => movieModifiedAt(b as Record<string, unknown>) - movieModifiedAt(a as Record<string, unknown>))
+      .slice(0, limit) as Record<string, unknown>[];
+  } catch {
+    // Older schemas may not have the episode-freshness table yet. Upstream
+    // feeds remain a safe compatibility fallback.
+    return [];
+  }
+}
+
 /* ── Fetch with short timeout ── */
 async function fetchOPhim(
   endpoint: string,
@@ -231,13 +313,16 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
     sub_docquyen: Boolean(m.sub_docquyen ?? false),
     source_site: String(m.source_site ?? sourceSite),
     source_name: String(m.source_name ?? (sourceSite === 'ophim' ? 'OPhim' : sourceSite)),
+    tmdb_id: String(m.tmdb_id ?? ((m.tmdb as Record<string, unknown> | undefined)?.id ?? '')),
+    hero_backdrop_url: String(m.hero_backdrop_url ?? ''),
+    hero_poster_url: String(m.hero_poster_url ?? ''),
     tmdb_popularity: Number(m.tmdb_popularity ?? 0) || 0,
   };
 }
 
 /* ── Build trending list from new-movies ── */
 const HOME_OVERRIDE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,status,source_site,source_name,year,type,tmdb_id,ophim_id,ophim_slug,is_published';
-const HOME_SUPABASE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,source_site,source_name,year,type,category,country,updated_at,is_published';
+const HOME_SUPABASE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,hero_backdrop_url,hero_poster_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,source_site,source_name,year,type,category,country,updated_at,is_published,tmdb_id';
 
 function normalizeTitle(value: unknown): string {
   return String(value || '')
@@ -249,6 +334,109 @@ function normalizeTitle(value: unknown): string {
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+function tmdbMediaType(item: Record<string, unknown>): 'movie' | 'tv' {
+  const type = String(item.type || '').toLowerCase();
+  return ['series', 'tvshows', 'hoathinh'].includes(type) ? 'tv' : 'movie';
+}
+
+async function fetchVerifiedTmdbHeroArtwork(
+  item: Record<string, unknown>,
+): Promise<{ tmdbId: string; backdropUrl: string; posterUrl: string } | null> {
+  if (!TMDB_API_KEY && !TMDB_READ_ACCESS_TOKEN) return null;
+
+  const mediaType = tmdbMediaType(item);
+  const existingId = String(item.tmdb_id || '').trim();
+  const queryTitle = String(item.origin_name || item.name || '').trim();
+  const expectedYear = Number(item.year || 0);
+  const headers = TMDB_READ_ACCESS_TOKEN
+    ? { Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}` }
+    : undefined;
+  const addAuth = (url: URL) => {
+    if (TMDB_API_KEY) url.searchParams.set('api_key', TMDB_API_KEY);
+    url.searchParams.set('language', 'en-US');
+  };
+
+  try {
+    let selected: Record<string, unknown> | null = null;
+    if (existingId) {
+      const detailUrl = new URL(`${TMDB_BASE}/${mediaType}/${existingId}`);
+      addAuth(detailUrl);
+      const response = await fetch(detailUrl, { headers, signal: timeoutSignal(1400) });
+      if (response.ok) selected = await response.json() as Record<string, unknown>;
+    } else if (queryTitle) {
+      const searchUrl = new URL(`${TMDB_BASE}/search/${mediaType}`);
+      addAuth(searchUrl);
+      searchUrl.searchParams.set('query', queryTitle);
+      if (expectedYear > 0) {
+        searchUrl.searchParams.set(mediaType === 'tv' ? 'first_air_date_year' : 'year', String(expectedYear));
+      }
+      const response = await fetch(searchUrl, { headers, signal: timeoutSignal(1400) });
+      if (!response.ok) return null;
+      const payload = await response.json() as { results?: Record<string, unknown>[] };
+      const expectedTitles = new Set([
+        normalizeTitle(item.name),
+        normalizeTitle(item.origin_name),
+        normalizeTitle(item.title_original),
+        normalizeTitle(item.title_en),
+      ].filter(Boolean));
+      selected = (payload.results ?? []).find((candidate) => {
+        const candidateTitle = normalizeTitle(candidate.title || candidate.name || candidate.original_title || candidate.original_name);
+        const candidateYear = Number(String(candidate.release_date || candidate.first_air_date || '').slice(0, 4)) || 0;
+        const titleMatches = expectedTitles.has(candidateTitle);
+        const yearMatches = !expectedYear || !candidateYear || Math.abs(expectedYear - candidateYear) <= 1;
+        return titleMatches && yearMatches;
+      }) ?? null;
+    }
+
+    const tmdbId = String(selected?.id || existingId || '').trim();
+    const backdropPath = String(selected?.backdrop_path || '').trim();
+    const posterPath = String(selected?.poster_path || '').trim();
+    if (!tmdbId || !backdropPath) return null;
+    return {
+      tmdbId,
+      backdropUrl: `https://image.tmdb.org/t/p/w1280${backdropPath}`,
+      posterUrl: posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function enrichTrendingHeroArtwork(
+  supabase: ReturnType<typeof createClient>,
+  items: Record<string, unknown>[],
+): Promise<Record<string, unknown>[]> {
+  const heroWindow = items.slice(0, 8);
+  const enriched = await Promise.all(heroWindow.map(async (item) => {
+    if (String(item.hero_backdrop_url || '').trim()) return item;
+    const artwork = await fetchVerifiedTmdbHeroArtwork(item);
+    if (!artwork) return item;
+
+    const next = {
+      ...item,
+      tmdb_id: artwork.tmdbId,
+      hero_backdrop_url: artwork.backdropUrl,
+      hero_poster_url: artwork.posterUrl,
+    };
+    const slug = String(item.slug || '').trim();
+    if (slug) {
+      await supabase
+        .from('movies')
+        .update({
+          tmdb_id: artwork.tmdbId,
+          hero_backdrop_url: artwork.backdropUrl,
+          hero_poster_url: artwork.posterUrl || null,
+        })
+        .eq('slug', slug)
+        .abortSignal(timeoutSignal(900))
+        .then(() => undefined)
+        .catch(() => undefined);
+    }
+    return next;
+  }));
+  return [...enriched, ...items.slice(heroWindow.length)];
 }
 
 function movieMatchKeys(movie: Record<string, unknown>): string[] {
@@ -494,7 +682,7 @@ async function buildTrending(
   supabase: ReturnType<typeof createClient>,
   limit: number
 ): Promise<Record<string, unknown>[]> {
-  const [ophimNew, extNew, popularResult] = await Promise.all([
+  const [ophimNew, extNew, popularResult, freshEpisodeMovies] = await Promise.all([
     fetchOPhim('/v1/api/danh-sach/phim-moi-cap-nhat?page=1&sort_field=modified.time&sort_type=desc', 3000),
     fetchExternal('/danh-sach/phim-moi-cap-nhat?page=1&sort_field=modified.time&sort_type=desc', 3000),
     supabase
@@ -507,6 +695,7 @@ async function buildTrending(
       .order('updated_at', { ascending: false, nullsFirst: false })
       .limit(limit * 3)
       .abortSignal(timeoutSignal(1800)),
+    fetchFreshEpisodeMovies(supabase, limit * 2),
   ]);
 
   const scored = new Map<string, { item: Record<string, unknown>; score: number }>();
@@ -521,13 +710,19 @@ async function buildTrending(
         : null,
       name: 'supabase-popular',
     },
+    {
+      data: freshEpisodeMovies.length ? { items: freshEpisodeMovies } : null,
+      name: 'supabase-episode',
+    },
   ]) {
     if (!source.data) continue;
     for (const raw of extractItems(source.data)) {
       const m = cleanMovieItem(raw, source.name);
       if (!m) continue;
       if (isTrailerOnly(m.episode_current as string)) continue;
-      if (source.name === 'ophim' || source.name === 'phimapi') freshUpstream.push(m);
+      if (source.name === 'ophim' || source.name === 'phimapi' || source.name === 'supabase-episode') {
+        freshUpstream.push(m);
+      }
       const popularity = Math.max(0, Number(m.tmdb_popularity || 0));
       const score = hotScore(m, source.name) + Math.log1p(popularity) * 18;
       const key = String(m.slug);
@@ -540,12 +735,11 @@ async function buildTrending(
     .sort((a, b) => b.score - a.score)
     .map((entry) => entry.item);
 
-  // A purely popularity-based hero can remain visually unchanged for weeks.
-  // Reserve alternating slots for genuinely recent upstream releases, while
-  // retaining popular/playable titles in the other slots.
+  // The first viewport must visibly change when real releases or playable
+  // episodes arrive. Keep popularity as a second-stage signal; alternating
+  // old and new items hid today's releases below stale titles.
   const recent = freshUpstream
-    .sort((a, b) => new Date((b.modified as { time?: string })?.time ?? 0).getTime()
-      - new Date((a.modified as { time?: string })?.time ?? 0).getTime());
+    .sort((a, b) => movieModifiedAt(b) - movieModifiedAt(a));
   const result: Record<string, unknown>[] = [];
   const used = new Set<string>();
   const add = (movie: Record<string, unknown> | undefined) => {
@@ -557,16 +751,236 @@ async function buildTrending(
   };
   let recentIndex = 0;
   let hotIndex = 0;
-  let turn = 0;
+  const freshFirstViewport = Math.min(8, limit);
+  while (result.length < freshFirstViewport && recentIndex < recent.length) add(recent[recentIndex++]);
+
+  // Beyond the first viewport, blend two hot titles with one recent title.
+  // Dedupe means a genuinely fresh and popular movie is never repeated.
+  let blendTurn = 0;
   while (result.length < limit && (recentIndex < recent.length || hotIndex < hot.length)) {
-    const preferRecent = turn++ % 2 === 0;
+    const preferRecent = blendTurn++ % 3 === 2;
     if (preferRecent && recentIndex < recent.length) add(recent[recentIndex++]);
     else if (hotIndex < hot.length) add(hot[hotIndex++]);
     else if (recentIndex < recent.length) add(recent[recentIndex++]);
   }
   while (result.length < limit && hotIndex < hot.length) add(hot[hotIndex++]);
   while (result.length < limit && recentIndex < recent.length) add(recent[recentIndex++]);
-  return result.slice(0, limit);
+  return enrichTrendingHeroArtwork(supabase, result.slice(0, limit));
+}
+
+function isAdultTop10Candidate(item: Record<string, unknown>): boolean {
+  const categoryText = ((item.category as unknown[]) ?? [])
+    .map((value) => {
+      if (value && typeof value === 'object') {
+        const row = value as Record<string, unknown>;
+        return `${row.slug || ''} ${row.name || ''}`;
+      }
+      return String(value || '');
+    })
+    .join(' ');
+  const haystack = normalizeTitle([
+    item.name,
+    item.origin_name,
+    item.slug,
+    categoryText,
+  ].filter(Boolean).join(' '));
+  return /\b(phim 18|18 plus|adult|sex|erotic|tinh duc|loan luan)\b/.test(haystack);
+}
+
+function top10CountryKey(item: Record<string, unknown>): string {
+  const countries = Array.isArray(item.country) ? item.country : [];
+  const first = countries[0];
+  if (first && typeof first === 'object') {
+    const row = first as Record<string, unknown>;
+    return normalizeTitle(row.slug || row.name || 'unknown') || 'unknown';
+  }
+  return normalizeTitle(first || 'unknown') || 'unknown';
+}
+
+function top10FranchiseKey(item: Record<string, unknown>): string {
+  return normalizeTitle(item.origin_name || item.name || item.slug || '')
+    .replace(/\b(phan|season|movie|chapter|part)\s*\d+\b/g, '')
+    .replace(/\b\d{4}\b/g, '')
+    .trim()
+    .slice(0, 48);
+}
+
+async function fetchPlayableCandidateIds(
+  supabase: ReturnType<typeof createClient>,
+  ids: string[],
+): Promise<Set<string>> {
+  const playable = new Set<string>();
+  const addRows = (rows: Record<string, unknown>[] | null | undefined, streamTable = false) => {
+    for (const row of rows ?? []) {
+      const hasLink = streamTable
+        ? Boolean(String(row.stream_url || row.embed_url || '').trim())
+        : Boolean(String(row.link_m3u8 || row.link_embed || '').trim());
+      if (hasLink) playable.add(String(row.movie_id || ''));
+    }
+  };
+
+  for (let index = 0; index < ids.length; index += 80) {
+    const chunk = ids.slice(index, index + 80);
+    const [movieEpisodes, episodes, streams] = await Promise.all([
+      supabase
+        .from('movie_episodes')
+        .select('movie_id,link_m3u8,link_embed,source')
+        .in('movie_id', chunk)
+        .abortSignal(timeoutSignal(1000)),
+      supabase
+        .from('episodes')
+        .select('movie_id,link_m3u8,link_embed')
+        .in('movie_id', chunk)
+        .abortSignal(timeoutSignal(1000)),
+      supabase
+        .from('streams')
+        .select('movie_id,stream_url,embed_url,is_active')
+        .in('movie_id', chunk)
+        .eq('is_active', true)
+        .abortSignal(timeoutSignal(1000)),
+    ]);
+    addRows(
+      ((movieEpisodes.data ?? []) as Record<string, unknown>[])
+        .filter((row) => String(row.source || '').toLowerCase() !== 'hidden'),
+    );
+    addRows((episodes.data ?? []) as Record<string, unknown>[]);
+    addRows((streams.data ?? []) as Record<string, unknown>[], true);
+  }
+  return playable;
+}
+
+async function buildTop10Singles(
+  supabase: ReturnType<typeof createClient>,
+  limit = 10,
+  movieTypes: string[] = ['single', 'phim-le'],
+): Promise<Record<string, unknown>[]> {
+  const currentYear = new Date().getFullYear();
+  const select = `${HOME_SUPABASE_SELECT},view,tmdb_popularity,quality,lang,status`;
+  try {
+    const baseQuery = () => supabase
+      .from('movies')
+      .select(select)
+      .eq('is_published', true)
+      .in('type', movieTypes)
+      .not('poster_url', 'is', null);
+
+    const [popularResult, viewedResult, recentResult] = await Promise.all([
+      baseQuery()
+        .order('tmdb_popularity', { ascending: false, nullsFirst: false })
+        .limit(60)
+        .abortSignal(timeoutSignal(1600)),
+      baseQuery()
+        .gt('view', 0)
+        .order('view', { ascending: false, nullsFirst: false })
+        .limit(60)
+        .abortSignal(timeoutSignal(1600)),
+      baseQuery()
+        .gte('year', currentYear - 1)
+        .order('year', { ascending: false, nullsFirst: false })
+        .order('tmdb_popularity', { ascending: false, nullsFirst: false })
+        .limit(60)
+        .abortSignal(timeoutSignal(1600)),
+    ]);
+
+    const candidatesById = new Map<string, Record<string, unknown>>();
+    for (const row of [
+      ...(popularResult.data ?? []),
+      ...(viewedResult.data ?? []),
+      ...(recentResult.data ?? []),
+    ] as Record<string, unknown>[]) {
+      const id = String(row.id || '');
+      if (!id || isAdultTop10Candidate(row)) continue;
+      candidatesById.set(id, row);
+    }
+    const ids = Array.from(candidatesById.keys());
+    if (ids.length === 0) return [];
+
+    const [{ data: qualityRows }, directlyPlayableIds] = await Promise.all([
+      supabase
+        .from('movie_seo_quality_status')
+        .select('movie_id,quality_score,has_playable_episode,eligible_for_index,index_tier')
+        .in('movie_id', ids)
+        .eq('has_playable_episode', true)
+        .eq('eligible_for_index', true)
+        .abortSignal(timeoutSignal(1400)),
+      // Candidate insertion order is popularity, views, then recency, so this
+      // bounded probe covers the most valuable rows without multiplying reads.
+      fetchPlayableCandidateIds(supabase, ids.slice(0, 80)),
+    ]);
+
+    const qualityById = new Map<string, Record<string, unknown>>();
+    for (const row of (qualityRows ?? []) as Record<string, unknown>[]) {
+      qualityById.set(String(row.movie_id || ''), row);
+    }
+    const playableIds = new Set([...qualityById.keys(), ...directlyPlayableIds]);
+    const enforcePlayableGate = playableIds.size >= limit;
+
+    const scored = Array.from(candidatesById.values())
+      .filter((movie) => !enforcePlayableGate || playableIds.has(String(movie.id || '')))
+      .map((movie) => {
+        const qualityRow = qualityById.get(String(movie.id || ''));
+        const popularity = Math.max(0, Number(movie.tmdb_popularity || 0));
+        const legacyViews = Math.min(10000, Math.max(0, Number(movie.view || 0)));
+        const year = Number(movie.year || 0);
+        const recency =
+          year >= currentYear ? 24 :
+          year === currentYear - 1 ? 20 :
+          year >= currentYear - 3 ? 15 :
+          year >= currentYear - 8 ? 9 : 4;
+        const metadataQuality = Math.max(0, Math.min(100, Number(qualityRow?.quality_score || 0)));
+        const language = normalizeTitle(movie.lang || '');
+        const videoQuality = normalizeTitle(movie.quality || '');
+        const score =
+          Math.log1p(popularity) * 15
+          + Math.log1p(legacyViews) * 7.5
+          + recency
+          + metadataQuality * 0.45
+          + (/(vietsub|thuyet minh|long tieng)/.test(language) ? 8 : 0)
+          + (/(4k|fhd|hd)/.test(videoQuality) ? 5 : 0);
+        return { movie, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const result: Record<string, unknown>[] = [];
+    const selectedIds = new Set<string>();
+    const countryCounts = new Map<string, number>();
+    const franchiseCounts = new Map<string, number>();
+    const add = (movie: Record<string, unknown>, enforceDiversity: boolean) => {
+      const id = String(movie.id || '');
+      if (!id || selectedIds.has(id)) return;
+      const country = top10CountryKey(movie);
+      const franchise = top10FranchiseKey(movie);
+      if (enforceDiversity && (countryCounts.get(country) || 0) >= 4) return;
+      if (enforceDiversity && franchise && (franchiseCounts.get(franchise) || 0) >= 2) return;
+      selectedIds.add(id);
+      countryCounts.set(country, (countryCounts.get(country) || 0) + 1);
+      if (franchise) franchiseCounts.set(franchise, (franchiseCounts.get(franchise) || 0) + 1);
+      result.push(cleanMovieItem({
+        ...movie,
+        _id: movie.id,
+        modified: { time: movie.updated_at || new Date().toISOString() },
+      }, String(movie.source_site || 'supabase-top10')) as Record<string, unknown>);
+    };
+
+    for (const entry of scored) {
+      if (result.length >= limit) break;
+      add(entry.movie, true);
+    }
+    for (const entry of scored) {
+      if (result.length >= limit) break;
+      add(entry.movie, false);
+    }
+    return result.filter(Boolean).slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+async function buildTop10Series(
+  supabase: ReturnType<typeof createClient>,
+  limit = 10,
+): Promise<Record<string, unknown>[]> {
+  return buildTop10Singles(supabase, limit, ['series', 'phim-bo']);
 }
 
 /* ── Fetch a category / type list ── */
@@ -638,6 +1052,64 @@ function mergeSectionWithPriority(
   }
 
   return merged;
+}
+
+function mergeSectionWithReservedTail(
+  sectionItems: Record<string, unknown>[],
+  supplementalItems: Record<string, unknown>[],
+  limit: number,
+  supplementalSlots = 4,
+): Record<string, unknown>[] {
+  if (supplementalItems.length === 0) return sectionItems.slice(0, limit);
+  const primarySlots = Math.max(HOME_MIN_SECTION_ITEMS, limit - supplementalSlots);
+  return mergeSectionWithPriority(
+    [
+      ...sectionItems.slice(0, primarySlots),
+      ...supplementalItems,
+      ...sectionItems.slice(primarySlots),
+    ],
+    [],
+    limit,
+  );
+}
+
+function mergeTrendingWithSourceDiversity(
+  trendingItems: Record<string, unknown>[],
+  supplementalItems: Record<string, unknown>[],
+  limit: number,
+): Record<string, unknown>[] {
+  if (supplementalItems.length === 0) return trendingItems.slice(0, limit);
+
+  const seen = new Set<string>();
+  const result: Record<string, unknown>[] = [];
+  const add = (item: Record<string, unknown> | undefined) => {
+    if (!item || isTrailerOnly(item.episode_current as string)) return;
+    const key = String(item.slug || item._id || item.name || '');
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    result.push(item);
+  };
+
+  // Protect the hero and the first mobile shelf for real latest-feed results.
+  let primaryIndex = 0;
+  let supplementalIndex = 0;
+  while (result.length < Math.min(8, limit) && primaryIndex < trendingItems.length) {
+    add(trendingItems[primaryIndex++]);
+  }
+
+  // Supplemental playable sources improve resilience, but may occupy at most
+  // one of every four remaining positions instead of taking over the shelf.
+  let turn = 0;
+  while (
+    result.length < limit
+    && (primaryIndex < trendingItems.length || supplementalIndex < supplementalItems.length)
+  ) {
+    const useSupplemental = turn++ % 4 === 3;
+    if (useSupplemental && supplementalIndex < supplementalItems.length) add(supplementalItems[supplementalIndex++]);
+    else if (primaryIndex < trendingItems.length) add(trendingItems[primaryIndex++]);
+    else if (supplementalIndex < supplementalItems.length) add(supplementalItems[supplementalIndex++]);
+  }
+  return result.slice(0, limit);
 }
 
 function movieLooksAnimated(item: Record<string, unknown>): boolean {
@@ -883,6 +1355,12 @@ serve(async (req) => {
   if (requestedSections.includes('trending')) {
     sectionPromises.trending = buildTrending(supabase, limit);
   }
+  if (requestedSections.includes('top10-single')) {
+    sectionPromises['top10-single'] = buildTop10Singles(supabase, 10);
+  }
+  if (requestedSections.includes('top10-series')) {
+    sectionPromises['top10-series'] = buildTop10Series(supabase, 10);
+  }
   if (requestedSections.includes('phim-chieu-rap')) {
     sectionPromises['phim-chieu-rap'] = fetchSection(supabase, 'phim-chieu-rap', false, limit);
   }
@@ -951,33 +1429,33 @@ serve(async (req) => {
   const playableCobephimMovies = await fetchPlayableCobephimMovies(supabase, 12);
   if (playableCobephimMovies.length > 0) {
     if (requestedSections.includes('trending')) {
-      freshSections.trending = mergeSectionWithPriority(
-        playableCobephimMovies,
+      freshSections.trending = mergeTrendingWithSourceDiversity(
         freshSections.trending ?? [],
+        playableCobephimMovies,
         limit,
       );
     }
 
     if (requestedSections.includes('phim-le')) {
-      freshSections['phim-le'] = mergeSectionWithPriority(
-        playableCobephimMovies.filter((movie) => ['single', 'phim-le'].includes(String(movie.type || '').toLowerCase())),
+      freshSections['phim-le'] = mergeSectionWithReservedTail(
         freshSections['phim-le'] ?? [],
+        playableCobephimMovies.filter((movie) => ['single', 'phim-le'].includes(String(movie.type || '').toLowerCase())),
         limit,
       );
     }
 
     if (requestedSections.includes('phim-bo')) {
-      freshSections['phim-bo'] = mergeSectionWithPriority(
-        playableCobephimMovies.filter((movie) => ['series', 'phim-bo'].includes(String(movie.type || '').toLowerCase())),
+      freshSections['phim-bo'] = mergeSectionWithReservedTail(
         freshSections['phim-bo'] ?? [],
+        playableCobephimMovies.filter((movie) => ['series', 'phim-bo'].includes(String(movie.type || '').toLowerCase())),
         limit,
       );
     }
 
     if (requestedSections.includes('hoat-hinh')) {
-      freshSections['hoat-hinh'] = mergeSectionWithPriority(
-        playableCobephimMovies.filter(movieLooksAnimated),
+      freshSections['hoat-hinh'] = mergeSectionWithReservedTail(
         freshSections['hoat-hinh'] ?? [],
+        playableCobephimMovies.filter(movieLooksAnimated),
         limit,
       );
     }

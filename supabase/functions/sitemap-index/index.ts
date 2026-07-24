@@ -16,6 +16,14 @@ Deno.serve(() => {
     <lastmod>${now}</lastmod>
   </sitemap>
   <sitemap>
+    <loc>https://khophim.org/sitemap-movies-upcoming.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://khophim.org/sitemap-movies-ongoing.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
     <loc>https://khophim.org/feed.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>

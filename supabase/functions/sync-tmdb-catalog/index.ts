@@ -244,10 +244,19 @@ async function tmdbFetch<T>(path: string, params: Record<string, string | number
 
 async function fetchDetail(item: TmdbListItem, mediaType: MediaType): Promise<TmdbDetail | null> {
   const append = mediaType === 'movie' ? 'credits,videos,release_dates' : 'credits,videos,content_ratings';
-  return await tmdbFetch<TmdbDetail>(`/${mediaType}/${item.id}`, {
-    language: 'en-US',
+  const detail = await tmdbFetch<TmdbDetail>(`/${mediaType}/${item.id}`, {
+    language: 'vi-VN',
+    include_video_language: 'vi,en,null',
     append_to_response: append,
   });
+  if (!detail) return null;
+  return {
+    ...item,
+    ...detail,
+    overview: detail.overview || item.overview || '',
+    title: detail.title || item.title || item.original_title,
+    name: detail.name || item.name || item.original_name,
+  };
 }
 
 async function collectCandidates(pages: number, windowStart: string, windowEnd: string): Promise<Array<{ item: TmdbListItem; mediaType: MediaType }>> {
@@ -422,9 +431,9 @@ serve(async (req) => {
 
   const startedAt = Date.now();
   const body = await req.json().catch(() => ({})) as Record<string, unknown>;
-  const pages = Math.max(1, Math.min(Number(body.pages ?? url.searchParams.get('pages') ?? 3), 8));
-  const limit = Math.max(20, Math.min(Number(body.limit ?? url.searchParams.get('limit') ?? 180), 500));
-  const windowMonths = Math.max(1, Math.min(Number(body.months ?? url.searchParams.get('months') ?? 6), 12));
+  const pages = Math.max(1, Math.min(Number(body.pages ?? url.searchParams.get('pages') ?? 4), 8));
+  const limit = Math.max(20, Math.min(Number(body.limit ?? url.searchParams.get('limit') ?? 220), 500));
+  const windowMonths = Math.max(1, Math.min(Number(body.months ?? url.searchParams.get('months') ?? 8), 12));
   const now = new Date();
   const windowStart = isoDate(addMonths(now, -windowMonths));
   const windowEnd = isoDate(addMonths(now, 6));

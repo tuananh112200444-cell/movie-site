@@ -14,6 +14,8 @@ type HostHealth = {
   score: number;
   critical: number;
   recovery: number;
+  success: number;
+  failure_rate: number;
   total: number;
   server_names: string[];
   player_modes: string[];
@@ -33,16 +35,9 @@ const SOURCE_RECOVERY_EVENTS = new Set([
   'hls_fatal_retry',
   'hls_media_retry',
 ]);
+const SOURCE_SUCCESS_EVENTS = new Set(['playback_started']);
 
 const DB_HEALTH_TIMEOUT_MS = 2800;
-
-const FALLBACK_DEGRADED_HOSTS: HostHealth[] = [
-  { host: 'vip.opstream90.com', cluster: 'ophim', score: 120, critical: 24, recovery: 0, total: 24, server_names: ['Vietsub #1'], player_modes: ['hls'] },
-  { host: 'v7.kkphimplayer7.com', cluster: 'kkphim', score: 110, critical: 22, recovery: 0, total: 22, server_names: ['Vietsub'], player_modes: ['hls'] },
-  { host: 's6.kkphimplayer6.com', cluster: 'kkphim', score: 80, critical: 16, recovery: 0, total: 16, server_names: ['Vietsub'], player_modes: ['hls'] },
-  { host: 'vip.opstream11.com', cluster: 'ophim', score: 55, critical: 11, recovery: 0, total: 11, server_names: ['Vietsub #1'], player_modes: ['hls'] },
-  { host: 'vip.opstream15.com', cluster: 'ophim', score: 50, critical: 10, recovery: 0, total: 10, server_names: ['Vietsub #1'], player_modes: ['hls'] },
-];
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowed = [
@@ -115,7 +110,9 @@ function fallbackHealth(reason: string, corsHeaders: Record<string, string>): Re
     generated_at: new Date().toISOString(),
     window_hours: 6,
     penalty_minutes: 30,
-    bad_hosts: FALLBACK_DEGRADED_HOSTS,
+    // Never inject a hard-coded provider outage when live telemetry is
+    // unavailable. Existing client penalties expire naturally after 30m.
+    bad_hosts: [],
   }, 200, corsHeaders, 'public, max-age=120');
 }
 
@@ -139,6 +136,8 @@ function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
       score: 0,
       critical: 0,
       recovery: 0,
+      success: 0,
+      failure_rate: 0,
       total: 0,
       server_names: [],
       player_modes: [],
@@ -154,7 +153,7 @@ function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
       // does not undo a fatal failure emitted by another viewer. Previously a
       // busy, unstable host could accumulate enough retries to cancel every
       // critical event and incorrectly look healthy.
-    }
+    } else if (SOURCE_SUCCESS_EVENTS.has(eventType)) current.success += 1;
 
     addUnique(current.server_names, event.server_name);
     addUnique(current.player_modes, event.player_mode);
@@ -162,7 +161,13 @@ function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
   }
 
   return [...map.values()]
-    .filter((item) => item.critical >= 2 && item.score >= 5)
+    .map((item) => {
+      // Bayesian smoothing avoids condemning a busy host for a handful of
+      // failures while still reacting quickly when no successful starts exist.
+      const failureRate = (item.critical + 2) / (item.critical + item.success + 10);
+      return { ...item, failure_rate: Number(failureRate.toFixed(4)) };
+    })
+    .filter((item) => item.critical >= 3 && item.score >= 9 && item.failure_rate >= 0.18)
     .sort((a, b) => b.score - a.score || b.critical - a.critical || a.host.localeCompare(b.host))
     .slice(0, 20);
 }
@@ -176,7 +181,7 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const hours = clampNumber(url.searchParams.get('hours'), 6, 1, 24);
-    const limit = clampNumber(url.searchParams.get('limit'), 600, 100, 2000);
+    const limit = clampNumber(url.searchParams.get('limit'), 2000, 100, 5000);
     const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
     const supabase = createClient(
@@ -189,7 +194,7 @@ Deno.serve(async (req) => {
       .from('player_error_events')
       .select('event_type, source_host, server_name, player_mode, created_at')
       .gte('created_at', since)
-      .in('event_type', [...SOURCE_CRITICAL_EVENTS, ...SOURCE_RECOVERY_EVENTS])
+      .in('event_type', [...SOURCE_CRITICAL_EVENTS, ...SOURCE_RECOVERY_EVENTS, ...SOURCE_SUCCESS_EVENTS])
       .order('created_at', { ascending: false })
       .limit(limit)
       .abortSignal(AbortSignal.timeout(DB_HEALTH_TIMEOUT_MS));

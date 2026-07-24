@@ -6,13 +6,20 @@ const unique = (values: unknown[]) => [...new Set(values.map((value) => String(v
 
 function canonicalPriority(movie: Record<string, unknown>): number {
   const source = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
-  let score = movie.is_published ? 100 : 0;
-  if (source.includes('admin') || source.includes('supabase')) score += 500;
-  else if (source.includes('blvietsub')) score += 450;
-  else if (source.includes('ophim')) score += 400;
-  else if (source.includes('kkphim') || source.includes('phimapi')) score += 350;
-  else if (source.includes('glvietsub')) score += 200;
-  else if (source.includes('onlyflix')) score += 100;
+  const currentEpisode = Math.max(0, Number(movie.current_episode || 0) || 0);
+  const totalEpisodes = Math.max(currentEpisode, Number(movie.total_episodes || 0) || 0);
+  // Publication and real episode coverage outweigh provider branding. This
+  // prevents an exact-title shell with one episode from becoming canonical
+  // while a same-year record already contains the complete playable series.
+  let score = movie.is_published ? 1_000 : 0;
+  score += Math.min(currentEpisode, 200) * 20;
+  score += Math.min(totalEpisodes, 200) * 2;
+  if (source.includes('admin') || source.includes('supabase')) score += 180;
+  else if (source.includes('blvietsub')) score += 160;
+  else if (source.includes('ophim')) score += 140;
+  else if (source.includes('kkphim') || source.includes('phimapi')) score += 130;
+  else if (source.includes('glvietsub')) score += 120;
+  else if (source.includes('onlyflix')) score += 80;
   return score;
 }
 

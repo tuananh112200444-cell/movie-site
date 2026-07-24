@@ -394,8 +394,33 @@ export default function MovieSection({
         </Link>
       </div>
 
-      {/* Grid â€” stagger delays tá»« CSS nth-child, khÃ´ng cáº§n inline style */}
-      {!isDesktop ? (
+      {/* Anime gets an editorial mosaic instead of another identical poster shelf. */}
+      {theme === 'anime' ? (
+        <div className="relative overflow-hidden rounded-2xl border border-sky-400/15 bg-[radial-gradient(circle_at_10%_0%,rgba(56,189,248,0.13),transparent_34%),linear-gradient(135deg,rgba(14,24,43,0.96),rgba(8,10,16,0.96))] p-2.5 shadow-[0_28px_80px_-60px_rgba(56,189,248,0.9)] md:p-4">
+          <div className="pointer-events-none absolute right-3 top-1 text-[44px] font-black tracking-[-0.08em] text-white/[0.025] md:text-[84px]">
+            ANIME
+          </div>
+          <div className="relative grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-4">
+            {displayMovies.slice(0, 5).map((movie, index) => (
+              <div
+                key={`${movie._id}-anime-${index}`}
+                className={index === 0 ? 'col-span-2 md:row-span-2' : 'min-w-0'}
+              >
+                <MovieCard movie={movie} variant="wide" priority={prioritizeFirstRow && index === 0} />
+              </div>
+            ))}
+          </div>
+          {displayMovies.length > 5 && (
+            <div className="home-rail-scroll mt-3 flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-1 scrollbar-hide md:mt-4 md:gap-4">
+              {displayMovies.slice(5).map((movie, index) => (
+                <div key={`${movie._id}-anime-rail-${index}`} className={`shrink-0 snap-start ${carouselItemClass}`}>
+                  <MovieCard movie={movie} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : !isDesktop ? (
         <div className="grid grid-cols-3 gap-x-2.5 gap-y-[1.125rem] pb-2 md:hidden">
           {displayMovies.slice(0, 6).map((movie, index) => (
             <div

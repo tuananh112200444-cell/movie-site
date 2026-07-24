@@ -21,6 +21,11 @@ import {
   getPosterUrl,
 } from '@/services/movieApi';
 import { runWhenIdle } from '@/utils/performance';
+import {
+  isRecentlyBadSourceHost,
+  SOURCE_HEALTH_UPDATED_EVENT,
+  warmPlayerSourceHealth,
+} from '@/services/playerSourceHealth';
 
 const UserComments = lazy(() => import('./components/UserComments'));
 const MovieReviewSection = lazy(() => import('@/components/feature/MovieReview'));
@@ -29,6 +34,13 @@ const MovieDetailPlayerSection = lazy(() => import('./components/MovieDetailPlay
 
 function getPlayableSourceUrl(ep: EpisodeData): string {
   return ep.link_m3u8?.trim() || ep.link_embed?.trim() || '';
+}
+
+function areAllPlaybackPathsDegraded(ep: EpisodeData): boolean {
+  const paths = Array.from(new Set([ep.link_m3u8, ep.link_embed]
+    .map((url) => String(url || '').trim())
+    .filter(Boolean)));
+  return paths.length > 0 && paths.every((path) => isRecentlyBadSourceHost(path));
 }
 
 function resolveOriginalServerIndex(targetServer: EpisodeServer, originalServers: EpisodeServer[]): number {
@@ -172,6 +184,7 @@ export default function MovieDetailPage() {
   const [initialSeekTime, setInitialSeekTime] = useState(0);
   const [cinemaMode, setCinemaMode] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
+  const [sourceHealthVersion, setSourceHealthVersion] = useState(0);
 
   const playerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -181,6 +194,17 @@ export default function MovieDetailPage() {
   const activeEpRef = useRef<string | null>(null);
   const relatedFetchedRef = useRef(false);
   const resumeCheckedKeyRef = useRef('');
+
+  // Warm the shared viewer-health map as soon as the watch route opens. The
+  // former app-level idle task ran only on a hard refresh and could start 15s
+  // after playback, so SPA navigation routinely selected a globally bad host.
+  useEffect(() => {
+    if (!isWatchPage) return;
+    const handleHealthUpdate = () => setSourceHealthVersion((version) => version + 1);
+    window.addEventListener(SOURCE_HEALTH_UPDATED_EVENT, handleHealthUpdate);
+    void warmPlayerSourceHealth();
+    return () => window.removeEventListener(SOURCE_HEALTH_UPDATED_EVENT, handleHealthUpdate);
+  }, [isWatchPage, slug]);
 
   // Preserve old shared/resume links that used /phim/:slug?tap=:episode.
   useEffect(() => {
@@ -330,7 +354,7 @@ export default function MovieDetailPage() {
 
   const filteredEpisodes = useMemo(
     () => deduplicateAndLimitServers(detail?.episodes ?? []),
-    [detail?.episodes]
+    [detail?.episodes, sourceHealthVersion]
   );
 
   const displayMovie = useMemo(() => {
@@ -436,6 +460,20 @@ export default function MovieDetailPage() {
     setActiveEp(best.episode);
     setInitialSeekTime(0);
   }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly, isWatchPage, routeEpisode]);
+
+  // If the cross-viewer health response arrives after the detail JSON, move
+  // away from the now-confirmed bad host while keeping the exact same episode.
+  useEffect(() => {
+    if (!isWatchPage || sourceHealthVersion === 0 || !activeEp || !detail?.episodes) return;
+    const currentUrl = getPlayableSourceUrl(activeEp);
+    if (!areAllPlaybackPathsDegraded(activeEp)) return;
+    const best = pickBestEpisodeByPriority(filteredEpisodes, activeEp.slug || activeEp.name);
+    if (!best || getPlayableSourceUrl(best.episode) === currentUrl) return;
+    const originalIdx = resolveOriginalServerIndex(filteredEpisodes[best.serverIndex], detail.episodes);
+    setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
+    setActiveEp(best.episode);
+    setInitialSeekTime(0);
+  }, [activeEp, detail?.episodes, filteredEpisodes, isWatchPage, sourceHealthVersion]);
 
   const trailerEmbedUrl = useMemo(
     () => (detail?.movie?.trailer_url ? getTrailerEmbedUrl(detail.movie.trailer_url) : null),

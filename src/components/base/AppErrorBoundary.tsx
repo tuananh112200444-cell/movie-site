@@ -107,7 +107,8 @@ export default class AppErrorBoundary extends Component<Props, State> {
     const canRecoverChunk = !Number.isFinite(lastRecoveryAt) || Date.now() - lastRecoveryAt > 15_000;
     if (isChunkLoadError(error) && canRecoverChunk) {
       safeSessionSet(RECOVERY_KEY, String(Date.now()));
-      Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()]).catch(() => {});
+      Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()])
+        .finally(() => recoverWithFreshUrl());
     }
   }
 

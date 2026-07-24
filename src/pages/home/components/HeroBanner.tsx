@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo, useTransition, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useTransition, memo, type SyntheticEvent } from 'react';
 import type { MovieItem } from '../../../types/movie';
-import { getOptimizedImageUrl } from '../../../services/movieApi';
+import { getOptimizedImageFallbacks } from '../../../services/movieApi';
 import { useFavorites } from '../../../hooks/useFavorites';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
@@ -9,18 +9,6 @@ import { Link } from 'react-router-dom';
 interface HeroBannerProps {
   movies: MovieItem[];
   loading?: boolean;
-}
-
-function getStableRating(name: string): string {
-  const code = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return (7.5 + (code % 25) / 10).toFixed(1);
-}
-
-function getViewCount(name: string): string {
-  const code = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const base = 50000 + (code % 950000);
-  if (base >= 1000000) return `${(base / 1000000).toFixed(1)}M`;
-  return `${Math.round(base / 1000)}K`;
 }
 
 function getDisplayTime(value?: string): string | null {
@@ -49,10 +37,14 @@ function getMovieDetailHref(movie: MovieItem): string {
 function HeroBanner({ movies, loading }: HeroBannerProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [contentKey, setContentKey] = useState(0);
+  const [failedHeroIds, setFailedHeroIds] = useState<Set<string>>(() => new Set());
   const [, startTransition] = useTransition();
   const { isFav, toggle } = useFavorites();
 
-  const featured = useMemo(() => movies.slice(0, 5), [movies]);
+  const featured = useMemo(
+    () => movies.slice(0, 12).filter((movie) => !failedHeroIds.has(movie._id)).slice(0, 5),
+    [failedHeroIds, movies],
+  );
 
   const next = useCallback(() => {
     setActiveIndex((i) => (i + 1) % featured.length);
@@ -70,6 +62,11 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
     return () => clearInterval(timer);
   }, [next, featured.length]);
 
+  useEffect(() => {
+    if (activeIndex < featured.length) return;
+    setActiveIndex(0);
+  }, [activeIndex, featured.length]);
+
   const handleSelectSlide = (i: number) => {
     setActiveIndex(i);
     setContentKey(k => k + 1);
@@ -77,7 +74,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
 
   if (loading) {
     return (
-      <div className="relative w-full bg-[#0a0c14]" style={{ aspectRatio: '16/5.7', minHeight: 'clamp(188px, 48vw, 460px)' }}>
+      <div className="relative w-full bg-[#0a0c14]" style={{ aspectRatio: '16/6.35', minHeight: 'clamp(218px, 52vw, 560px)' }}>
         <div className="absolute inset-0 skeleton" />
         <div className="absolute inset-0 flex items-center justify-center">
           <i className="ri-loader-4-line animate-spin text-2xl text-red-500/40" />
@@ -95,23 +92,50 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
   const isMobileHero = typeof window !== 'undefined' && window.innerWidth < 640;
   const backgroundWidth = isMobileHero ? 420 : 1360;
   const backgroundQuality = isMobileHero ? 78 : 82;
-  const activePosterUrl = getOptimizedImageUrl(active?.thumb_url || active?.poster_url, 620, 86);
-  const rating = getStableRating(active.name ?? '');
-  const viewCount = getViewCount(active.name ?? '');
+  const fallbackMarker = '/images/movie-poster-fallback.svg';
+  const backgroundSources = Array.from(new Set([
+    ...getOptimizedImageFallbacks(
+      active.hero_backdrop_url,
+      active.poster_url,
+      backgroundWidth,
+      backgroundQuality,
+    ).filter((url) => !url.includes(fallbackMarker)),
+    ...getOptimizedImageFallbacks(
+      active.thumb_url,
+      undefined,
+      backgroundWidth,
+      backgroundQuality,
+    ).filter((url) => !url.includes(fallbackMarker)),
+    fallbackMarker,
+  ]));
+  const posterSources = getOptimizedImageFallbacks(
+    active.hero_poster_url || active.thumb_url,
+    active.poster_url,
+    620,
+    86,
+  );
   const displayTime = getDisplayTime(active.time);
   const activeDetailHref = getMovieDetailHref(active);
   const favored = isFav(active._id);
 
   return (
-    <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/5.7', minHeight: 'clamp(188px, 48vw, 460px)' }}>
+    <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/6.35', minHeight: 'clamp(218px, 52vw, 560px)' }}>
 
       {/* Only render active + next slides to reduce initial DOM & image count */}
       <MemoSlideBackground
         key={active._id}
-        src={getOptimizedImageUrl(active.poster_url || active.thumb_url, backgroundWidth, backgroundQuality)}
+        sources={backgroundSources}
         alt={active.name}
         active={true}
         priority={true}
+        onUnavailable={() => {
+          setFailedHeroIds((current) => {
+            const nextFailed = new Set(current);
+            nextFailed.add(active._id);
+            return nextFailed;
+          });
+          setActiveIndex(0);
+        }}
       />
 
       {/* Overlays — stronger gradients for more drama */}
@@ -149,9 +173,11 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
                 </Link>
               ))}
               {active.year && <span className="text-[9px] md:text-xs text-white/40 font-medium">{active.year}</span>}
-              <span className="flex items-center gap-1 text-[9px] md:text-xs text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                <i className="ri-star-fill text-[9px]" />{rating}
-              </span>
+              {active.quality && (
+                <span className="flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold text-amber-300 md:text-xs">
+                  {active.quality}
+                </span>
+              )}
             </div>
 
             <h2 className="hero-title-enter mb-1 text-[1.35rem] font-black leading-tight tracking-tight text-white line-clamp-2 sm:mb-1.5 sm:text-2xl sm:leading-tight md:text-4xl lg:text-5xl 2xl:text-[3.6rem]">
@@ -165,9 +191,6 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
             )}
 
             <div className="hero-badges-enter hidden items-center gap-1.5 md:mb-3 md:flex md:gap-2">
-              <span className="flex items-center gap-1 text-[9px] md:text-xs text-white/50">
-                <i className="ri-eye-line text-white/30 text-[10px]" />{viewCount} lượt xem
-              </span>
               {displayTime && (
                 <span className="flex items-center gap-1 text-[9px] md:text-xs text-white/50">
                   <span className="text-white/20">·</span>
@@ -228,7 +251,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
           {/* Right: Poster card */}
           <div className="hidden flex-shrink-0 lg:block">
             <MemoHeroPosterCard
-              src={activePosterUrl}
+              sources={posterSources}
               alt={active.name ?? ''}
               href={activeDetailHref}
               quality={active.quality}
@@ -273,7 +296,11 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
                 ? 'w-[72px] h-12 ring-2 ring-red-500 ring-offset-1 ring-offset-black/50 opacity-100'
                 : 'w-16 h-10 opacity-40 hover:opacity-70 hover:w-[72px] hover:h-12'
             }`}>
-            <MemoThumbImage src={getOptimizedImageUrl(m.thumb_url, 220, 76)} alt={m.name} priority={i === 0} />
+            <MemoThumbImage
+              sources={getOptimizedImageFallbacks(m.thumb_url, m.poster_url, 220, 76)}
+              alt={m.name}
+              priority={i === 0}
+            />
             {i === activeIndex && <div className="absolute inset-0 bg-red-500/10" />}
           </button>
         ))}
@@ -295,31 +322,75 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
 export default memo(HeroBanner);
 
 /* ── Slide background — chỉ render active + next ── */
-const MemoSlideBackground = memo(function SlideBackground({ src, alt, active, priority }: { src: string; alt: string; active: boolean; priority: boolean }) {
+const MemoSlideBackground = memo(function SlideBackground({
+  sources,
+  alt,
+  active,
+  priority,
+  onUnavailable,
+}: {
+  sources: string[];
+  alt: string;
+  active: boolean;
+  priority: boolean;
+  onUnavailable: () => void;
+}) {
   const [loaded, setLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const sourcesKey = sources.join('|');
+  const currentSrc = sources[Math.min(sourceIndex, sources.length - 1)] || '';
+
   useEffect(() => {
-    if (!active) return;
-    const img = new Image();
-    img.src = src;
-    img.onload = () => setLoaded(true);
-    img.onerror = () => { setLoaded(true); setImgError(true); };
-  }, [active, src]);
+    setSourceIndex(0);
+    setLoaded(false);
+    setImgError(false);
+  }, [sourcesKey]);
+
+  const tryNextLandscapeSource = useCallback(() => {
+    const nextIndex = sourceIndex + 1;
+    const nextSrc = sources[nextIndex] || '';
+    if (nextSrc && !nextSrc.includes('/images/movie-poster-fallback.svg')) {
+      setSourceIndex(nextIndex);
+      setLoaded(false);
+      return true;
+    }
+    setImgError(true);
+    setLoaded(true);
+    onUnavailable();
+    return false;
+  }, [onUnavailable, sourceIndex, sources]);
+
+  const handleLoad = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
+    const img = event.currentTarget;
+    const ratio = img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+
+    // The large hero is a landscape-only surface. Portrait posters belong to
+    // the card on the right and must never be enlarged or blurred into a fake
+    // backdrop. Try every independent source, then remove the slide if none is
+    // a real landscape image.
+    if (ratio < 1.2) {
+      tryNextLandscapeSource();
+      return;
+    }
+    setLoaded(true);
+    setImgError(false);
+  }, [tryNextLandscapeSource]);
 
   return (
     <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${active ? 'opacity-100' : 'opacity-0'}`}>
       <div className="absolute inset-0 w-full h-full bg-[#13151f]" />
       {active && (
         <img
-          src={src}
+          src={currentSrc}
           alt={alt}
           loading={priority ? 'eager' : 'lazy'}
           decoding="async"
           {...(priority ? { fetchPriority: 'high' } : {})}
-          className="absolute inset-0 w-full h-full object-cover object-top"
+          className="absolute inset-0 h-full w-full object-cover object-center"
           style={{ filter: imgError ? undefined : 'contrast(1.05) saturate(1.1)' }}
-          onLoad={() => setLoaded(true)}
-          onError={() => { setImgError(true); setLoaded(true); }}
+          onLoad={handleLoad}
+          onError={tryNextLandscapeSource}
         />
       )}
       {active && !loaded && (
@@ -330,9 +401,17 @@ const MemoSlideBackground = memo(function SlideBackground({ src, alt, active, pr
 });
 
 /* ── Poster card bên phải ── */
-const MemoHeroPosterCard = memo(function HeroPosterCard({ src, alt, href, quality }: { src: string; alt: string; href: string; quality?: string }) {
+const MemoHeroPosterCard = memo(function HeroPosterCard({ sources, alt, href, quality }: { sources: string[]; alt: string; href: string; quality?: string }) {
+  const sourcesKey = sources.join('|');
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const src = sources[Math.min(sourceIndex, sources.length - 1)] || '';
   const [loaded, setLoaded] = useState(isImagePreloaded(src));
   const [imgError, setImgError] = useState(false);
+  useEffect(() => {
+    setSourceIndex(0);
+    setLoaded(isImagePreloaded(sources[0] || ''));
+    setImgError(false);
+  }, [sourcesKey]);
   return (
     <Link to={href} className="group relative block w-[188px] xl:w-[224px] 2xl:w-[252px]" style={{ aspectRatio: '2/3' }}>
       <div className="relative h-full w-full overflow-hidden rounded-[1.35rem] bg-[#16192a] ring-1 ring-white/12 transition-[transform,box-shadow,ring-color] duration-500 group-hover:-translate-y-1 group-hover:ring-white/25" style={{ boxShadow: '0 26px 72px rgba(0,0,0,0.62), 0 10px 28px rgba(0,0,0,0.45)' }}>
@@ -352,8 +431,28 @@ const MemoHeroPosterCard = memo(function HeroPosterCard({ src, alt, href, qualit
           decoding="async"
           className={`w-full h-full object-cover object-center transition-all duration-700 group-hover:scale-[1.035] ${loaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
           style={{ filter: imgError ? undefined : 'contrast(1.04) saturate(1.08)' }}
-          onLoad={() => { setLoaded(true); markImagePreloaded(src); }}
-          onError={() => { setImgError(true); setLoaded(true); }}
+          onLoad={(event) => {
+            const img = event.currentTarget;
+            const ratio = img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+            // Keep this card a real portrait. If the first feed field is a
+            // backdrop, continue to the poster candidate instead of cropping it.
+            if (ratio > 1.05 && sourceIndex < sources.length - 1) {
+              setSourceIndex((index) => index + 1);
+              setLoaded(false);
+              return;
+            }
+            setLoaded(true);
+            markImagePreloaded(src);
+          }}
+          onError={() => {
+            if (sourceIndex < sources.length - 1) {
+              setSourceIndex((index) => index + 1);
+              setLoaded(false);
+              return;
+            }
+            setImgError(true);
+            setLoaded(true);
+          }}
         />
         <div className="absolute inset-x-0 bottom-0 z-[2] bg-gradient-to-t from-black/92 via-black/45 to-transparent px-3.5 pb-3.5 pt-12">
           <p className="text-sm font-extrabold leading-snug text-white line-clamp-2 drop-shadow">{alt}</p>
@@ -375,9 +474,17 @@ const MemoHeroPosterCard = memo(function HeroPosterCard({ src, alt, href, qualit
 });
 
 /* ── Thumbnail nhỏ ── */
-const MemoThumbImage = memo(function ThumbImage({ src, alt, priority = false }: { src: string; alt: string; priority?: boolean }) {
+const MemoThumbImage = memo(function ThumbImage({ sources, alt, priority = false }: { sources: string[]; alt: string; priority?: boolean }) {
+  const sourcesKey = sources.join('|');
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const src = sources[Math.min(sourceIndex, sources.length - 1)] || '';
   const [loaded, setLoaded] = useState(isImagePreloaded(src));
   const [imgError, setImgError] = useState(false);
+  useEffect(() => {
+    setSourceIndex(0);
+    setLoaded(isImagePreloaded(sources[0] || ''));
+    setImgError(false);
+  }, [sourcesKey]);
   return (
     <>
       {/* BLUR PLACEHOLDER — hiển thị NGAY LẬP TỨC */}
@@ -395,8 +502,26 @@ const MemoThumbImage = memo(function ThumbImage({ src, alt, priority = false }: 
         loading={priority ? 'eager' : 'lazy'}
         decoding={priority ? 'sync' : 'async'}
         className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-500 ${loaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-        onLoad={() => { setLoaded(true); markImagePreloaded(src); }}
-        onError={() => { setImgError(true); setLoaded(true); }}
+        onLoad={(event) => {
+          const img = event.currentTarget;
+          const ratio = img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+          if (ratio < 1.2 && sourceIndex < sources.length - 1) {
+            setSourceIndex((index) => index + 1);
+            setLoaded(false);
+            return;
+          }
+          setLoaded(true);
+          markImagePreloaded(src);
+        }}
+        onError={() => {
+          if (sourceIndex < sources.length - 1) {
+            setSourceIndex((index) => index + 1);
+            setLoaded(false);
+            return;
+          }
+          setImgError(true);
+          setLoaded(true);
+        }}
       />
     </>
   );

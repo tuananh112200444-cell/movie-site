@@ -64,6 +64,7 @@ export default [
         __READDY_PROJECT_ID__: 'readonly',
         __READDY_VERSION_ID__: 'readonly',
         __READDY_AI_DOMAIN__: 'readonly',
+        __KP_RELEASE_ID__: 'readonly',
       },
     },
     plugins: {

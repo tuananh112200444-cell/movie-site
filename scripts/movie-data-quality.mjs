@@ -24,12 +24,25 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error('Missing VITE_PUBLIC_SUPABASE_URL or VITE_PUBLIC_SUPABASE_ANON_KEY in .env');
 }
 
-const MOVIE_LIMIT = Number(env.MOVIE_DATA_QUALITY_LIMIT || 10_000);
+const FULL_AUDIT = process.argv.includes('--full');
+// Deployment checks must stay bounded. The previous 10k default downloaded
+// hundreds of thousands of episode/source rows and could exceed the release
+// timeout even while Supabase was healthy.
+const MOVIE_LIMIT = Math.max(
+  1,
+  Math.min(Number(env.MOVIE_DATA_QUALITY_LIMIT || (FULL_AUDIT ? 10_000 : 500)), 20_000),
+);
+const QUERY_CONCURRENCY = Math.max(
+  1,
+  Math.min(Number(env.MOVIE_DATA_QUALITY_CONCURRENCY || (FULL_AUDIT ? 4 : 2)), 8),
+);
 const STRICT = env.MOVIE_DATA_QUALITY_STRICT === '1';
 const FAIL_LIMIT = Number(env.MOVIE_DATA_QUALITY_MAX_SEVERE || (STRICT ? 0 : Number.POSITIVE_INFINITY));
 const HOME_MIN_SECTION_ITEMS = Number(env.MOVIE_DATA_HOME_MIN_SECTION_ITEMS || 6);
 const HOME_SECTIONS = [
   'trending',
+  'top10-single',
+  'top10-series',
   'phim-chieu-rap',
   'phim-le',
   'phim-bo',
@@ -89,6 +102,17 @@ function isExternalQueerEpisodeRow(row) {
     row.stream_url,
     row.server_data && JSON.stringify(row.server_data),
   ].map((value) => String(value || '').toLowerCase()).join(' ');
+  // BLVietsub/admin-queer catalog entries may legitimately use the configured
+  // GLVietsub successor feed. Do not infer "pollution" from a downstream CDN
+  // hostname (for example kkphimplayer) when the row is explicitly attributed
+  // to either curated queer source.
+  if (
+    haystack.includes('blvietsub')
+    || haystack.includes('glvietsub')
+    || haystack.includes('admin-queer')
+  ) {
+    return false;
+  }
   if (
     haystack.includes('verified') &&
     (haystack.includes('ophim') || haystack.includes('kkphim') || haystack.includes('phimapi'))
@@ -205,31 +229,52 @@ async function auditCountryCoverage() {
   return { ok: failures.length === 0, results, failures };
 }
 
-async function queryByMovieIds(table, select, movieIds, orderColumns = []) {
-  const rows = [];
-  for (const ids of chunk(movieIds, 200)) {
+async function queryByMovieIds(table, select, movieIds, { activeOnly = false } = {}) {
+  const idChunks = chunk(movieIds, 100);
+  const results = new Array(idChunks.length);
+  let cursor = 0;
+  let firstError = null;
+
+  async function worker() {
+    while (cursor < idChunks.length && !firstError) {
+      const index = cursor++;
+      const ids = idChunks[index];
+      const rows = [];
     for (let from = 0; ; from += 1000) {
-      let query = supabase
-        .from(table)
-        .select(select)
-        .in('movie_id', ids)
-        .order('movie_id', { ascending: true });
-
-      for (const column of orderColumns) {
-        query = query.order(column, { ascending: true, nullsFirst: true });
+      let data = null;
+      let error = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        let query = supabase
+          .from(table)
+          .select(select)
+          .in('movie_id', ids);
+        if (activeOnly) query = query.eq('is_active', true);
+        const response = await query
+          .order('movie_id', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + 999)
+          .abortSignal(AbortSignal.timeout(40_000));
+        data = response.data;
+        error = response.error;
+        if (!error || !/timeout|canceling statement/i.test(String(error.message || ''))) break;
+        if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 350));
       }
-
-      const { data, error } = await query
-        .range(from, from + 999)
-        .abortSignal(AbortSignal.timeout(60_000));
       if (error) {
-        return { rows, error: `${table}: ${error.message}` };
+        firstError = `${table}: ${error.message}`;
+        break;
       }
       rows.push(...(data || []));
       if (!data || data.length < 1000) break;
     }
+      results[index] = rows;
+    }
   }
-  return { rows, error: null };
+
+  await Promise.all(Array.from(
+    { length: Math.min(QUERY_CONCURRENCY, Math.max(1, idChunks.length)) },
+    () => worker(),
+  ));
+  return { rows: results.filter(Boolean).flat(), error: firstError };
 }
 
 async function fetchPublishedMovies(limit) {
@@ -242,7 +287,7 @@ async function fetchPublishedMovies(limit) {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const result = await supabase
         .from('movies')
-        .select('id, slug, name, origin_name, source_site, source_name, episode_current, current_episode, total_episodes, updated_at')
+        .select('id, slug, name, origin_name, source_site, source_name, episode_current, current_episode, total_episodes, episode_total, updated_at')
         .eq('is_published', true)
         .order('updated_at', { ascending: false })
         .range(from, to)
@@ -284,9 +329,14 @@ const movies = await fetchPublishedMovies(MOVIE_LIMIT);
 const movieIds = (movies || []).map((movie) => movie.id).filter(Boolean);
 
 const [movieEpisodes, episodes, streams] = await Promise.all([
-  queryByMovieIds('movie_episodes', 'movie_id, episode_number, slug, episode_name, server_name, link_m3u8, link_embed, source', movieIds, ['episode_number', 'server_name']),
-  queryByMovieIds('episodes', 'movie_id, episode_number, episode_slug, episode_name, server_name, link_m3u8, link_embed, server_data', movieIds, ['episode_number', 'server_name']),
-  queryByMovieIds('streams', 'movie_id, episode_slug, server_name, source, stream_url, embed_url, is_active', movieIds, ['episode_slug', 'server_name']),
+  queryByMovieIds('movie_episodes', 'id, movie_id, episode_number, slug, episode_name, server_name, link_m3u8, link_embed, source', movieIds),
+  queryByMovieIds('episodes', 'id, movie_id, episode_number, episode_slug, episode_name, server_name, link_m3u8, link_embed, server_data', movieIds),
+  queryByMovieIds(
+    'streams',
+    'id, movie_id, episode_slug, server_name, source, stream_url, embed_url, is_active',
+    movieIds,
+    { activeOnly: true },
+  ),
 ]);
 
 for (const result of [movieEpisodes, episodes, streams]) {
@@ -325,6 +375,7 @@ for (const row of [
 const severe = [];
 const severeBlvietsub = [];
 const staleLabels = [];
+const invalidCompletionLabels = [];
 const noPlayable = [];
 const catalogNoPlayable = [];
 const queerExternalRows = [];
@@ -332,6 +383,21 @@ const legacySingleEpisodeRechecks = [];
 const checked = [];
 
 for (const movie of movies || []) {
+  const completionMatch = String(movie.episode_current || '').match(/\((\d+)\s*\/\s*(\d+)\)/);
+  if (
+    /(?:hoàn\s*tất|hoan\s*tat)/i.test(String(movie.episode_current || '')) &&
+    completionMatch &&
+    Number(completionMatch[1]) > Number(completionMatch[2])
+  ) {
+    invalidCompletionLabels.push({
+      slug: movie.slug,
+      name: movie.name,
+      episode_current: movie.episode_current,
+      current_episode: movie.current_episode,
+      total_episodes: movie.total_episodes,
+      episode_total: movie.episode_total,
+    });
+  }
   const advertised = advertisedEpisode(movie);
   const labelEpisode = episodeNumberFromText(movie.episode_current);
   const currentEpisode = Number(movie.current_episode || 0) || 0;
@@ -421,6 +487,10 @@ if (staleLabels.length > 0) {
   failures.push(`Found ${staleLabels.length} movies where current_episode matches playable data but episode_current label is stale.`);
 }
 
+if (invalidCompletionLabels.length > 0) {
+  failures.push(`Found ${invalidCompletionLabels.length} impossible completion labels where current episode exceeds total episodes.`);
+}
+
 if (queerExternalRows.length > 0) {
   failures.push(`Found ${queerExternalRows.length} BLVietsub/admin-queer playable rows polluted by external OPhim/KKPhim/PhimAPI sources.`);
 }
@@ -430,6 +500,7 @@ if (legacySingleEpisodeRechecks.length > 0) {
 }
 
 console.log(JSON.stringify({
+  auditMode: FULL_AUDIT ? 'full' : 'deploy-gate',
   checkedMovies: movies?.length || 0,
   checkedEpisodeMovies: checked.length,
   homeProxy: {
@@ -441,6 +512,7 @@ console.log(JSON.stringify({
   severeCount: severe.length,
   severeBlvietsubCount: severeBlvietsub.length,
   staleLabelCount: staleLabels.length,
+  invalidCompletionLabelCount: invalidCompletionLabels.length,
   noPlayableCount: noPlayable.length,
   catalogNoPlayableCount: catalogNoPlayable.length,
   queerExternalRowCount: queerExternalRows.length,
@@ -448,6 +520,7 @@ console.log(JSON.stringify({
   samples: severe.slice(0, 12),
   blvietsubSamples: severeBlvietsub.slice(0, 8),
   staleLabelSamples: staleLabels.slice(0, 8),
+  invalidCompletionLabelSamples: invalidCompletionLabels.slice(0, 8),
   legacySingleEpisodeRecheckSamples: legacySingleEpisodeRechecks.slice(0, 12),
   noPlayableSamples: noPlayable.slice(0, 8),
   catalogNoPlayableSamples: catalogNoPlayable.slice(0, 8),

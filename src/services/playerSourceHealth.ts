@@ -2,12 +2,16 @@ const BAD_SOURCE_HOSTS_KEY = 'khophim.bad-source-hosts.v1';
 const SOURCE_HEALTH_LAST_FETCH_KEY = 'khophim.source-health.last-fetch.v1';
 const SOURCE_HEALTH_FETCH_TTL_MS = 10 * 60 * 1000;
 const SOURCE_HEALTH_TIMEOUT_MS = 3500;
+const SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000;
+export const SOURCE_HEALTH_UPDATED_EVENT = 'kp:source-health-updated';
 
 type SourceHealthHost = {
   host?: string;
   cluster?: string;
   score?: number;
   critical?: number;
+  success?: number;
+  failure_rate?: number;
 };
 
 type SourceHealthResponse = {
@@ -16,7 +20,12 @@ type SourceHealthResponse = {
 };
 
 function canUseBrowserStorage(): boolean {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  if (typeof window === 'undefined') return false;
+  try {
+    return typeof window.localStorage !== 'undefined';
+  } catch {
+    return false;
+  }
 }
 
 function readJsonMap(key: string): Record<string, number> {
@@ -55,7 +64,7 @@ export async function warmPlayerSourceHealth(): Promise<void> {
   const timeout = window.setTimeout(() => controller.abort(), SOURCE_HEALTH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/player-source-health?hours=6&limit=600`, {
+    const response = await fetch(`${supabaseUrl}/functions/v1/player-source-health?hours=6&limit=2000`, {
       method: 'GET',
       signal: controller.signal,
       headers: { Accept: 'application/json' },
@@ -67,6 +76,9 @@ export async function warmPlayerSourceHealth(): Promise<void> {
 
     const now = Date.now();
     const map = readJsonMap(BAD_SOURCE_HOSTS_KEY);
+    for (const [host, timestamp] of Object.entries(map)) {
+      if (!Number.isFinite(timestamp) || now - timestamp >= SOURCE_HEALTH_PENALTY_TTL_MS) delete map[host];
+    }
     for (const item of payload.bad_hosts) {
       const host = normalizeHost(item.host);
       if (!host || Number(item.critical || 0) < 2 || Number(item.score || 0) < 5) continue;
@@ -76,9 +88,37 @@ export async function warmPlayerSourceHealth(): Promise<void> {
     }
     writeJsonMap(BAD_SOURCE_HOSTS_KEY, map);
     window.localStorage.setItem(SOURCE_HEALTH_LAST_FETCH_KEY, String(now));
+    window.dispatchEvent(new CustomEvent(SOURCE_HEALTH_UPDATED_EVENT));
   } catch {
     // Silent by design: source health is only a hint, never a startup dependency.
   } finally {
     window.clearTimeout(timeout);
   }
+}
+
+export function isRecentlyBadSourceHost(urlOrHost?: string): boolean {
+  if (!canUseBrowserStorage() || !urlOrHost) return false;
+  let host = normalizeHost(urlOrHost);
+  try {
+    host = normalizeHost(new URL(urlOrHost).hostname);
+  } catch {
+    // The caller may already provide a hostname.
+  }
+  const markedAt = Number(readJsonMap(BAD_SOURCE_HOSTS_KEY)[host] || 0);
+  return markedAt > 0 && Date.now() - markedAt < SOURCE_HEALTH_PENALTY_TTL_MS;
+}
+
+export function markSourcePlaybackHealthy(urlOrHost?: string): void {
+  if (!canUseBrowserStorage() || !urlOrHost) return;
+  let host = normalizeHost(urlOrHost);
+  try {
+    host = normalizeHost(new URL(urlOrHost).hostname);
+  } catch {
+    // The caller may already provide a hostname.
+  }
+  if (!host) return;
+  const map = readJsonMap(BAD_SOURCE_HOSTS_KEY);
+  if (!(host in map)) return;
+  delete map[host];
+  writeJsonMap(BAD_SOURCE_HOSTS_KEY, map);
 }

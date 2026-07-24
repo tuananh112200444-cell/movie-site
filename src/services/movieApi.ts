@@ -1875,6 +1875,7 @@ export async function searchMoviesInSupabase(
       const edgeUrl = new URL('/api/search', window.location.origin);
       edgeUrl.searchParams.set('q', kw);
       edgeUrl.searchParams.set('limit', String(limit));
+      edgeUrl.searchParams.set('v', 'canonical-v2');
       const edgeResponse = await fetch(edgeUrl.toString(), {
         signal: controller.signal,
         cache: 'force-cache',
@@ -2026,7 +2027,7 @@ export async function searchMoviesInSupabase(
 
 // Bump when the canonical catalog changes materially so open tabs do not keep
 // serving a 30-minute index that still contains an unpublished duplicate.
-const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v6';
+const SUPABASE_SEARCH_INDEX_KEY = 'kp_supabase_search_index_v8';
 const SUPABASE_SEARCH_INDEX_TTL = 30 * 60 * 1000;
 let supabaseSearchIndexInflight: Promise<MovieItem[]> | null = null;
 const supabaseSearchIndexMemory = new Map<string, { items: MovieItem[]; ts: number }>();
@@ -3803,6 +3804,7 @@ interface ServerQualityInfo {
 }
 export const STREAM_SERVER_PRIORITY = ['OPHIM', 'KKPHIM', 'KHOPHIM', 'DM', 'SUPABASE', 'SS', 'OK', 'ABYSS', 'VK'] as const;
 const SERVER_RECENT_BAD_HOST_PENALTY = 1800;
+const SERVER_RECENT_BAD_HOST_TTL_MS = 30 * 60 * 1000;
 const OPHIM_PREFERRED_SOURCE_BONUS = 380;
 const OPSTREAM_IFRAME_BLOCK_PENALTY = 1050;
 const KKPHIM_PREFERRED_SOURCE_BONUS = 360;
@@ -4096,19 +4098,25 @@ function getSourceResilienceScore(ep: EpisodeData): number {
 
 function getRecentBadHostPenalty(ep: EpisodeData): number {
   if (typeof window === 'undefined') return 0;
-  const url = ep.link_m3u8 || ep.link_embed || '';
-  const host = getUrlHost(url);
-  if (!host) return 0;
   try {
     const raw = window.localStorage.getItem('khophim.bad-source-hosts.v1');
     const map = raw ? JSON.parse(raw) as Record<string, number> : {};
     // A transient mobile/background failure must only affect the exact host.
     // Penalising an entire provider cluster can make every movie look broken
     // after the browser suspends one stream while the user leaves the page.
-    const lastBadAt = Number(map[host] || 0);
-    if (!lastBadAt) return 0;
-    const ageMs = Date.now() - lastBadAt;
-    if (ageMs >= 5 * 60 * 1000) return 0;
+    const hosts = Array.from(new Set([ep.link_m3u8, ep.link_embed]
+      .map((url) => getUrlHost(String(url || '')))
+      .filter(Boolean)));
+    if (!hosts.length) return 0;
+    const badPaths = hosts.filter((host) => {
+      const lastBadAt = Number(map[host] || 0);
+      return lastBadAt > 0 && Date.now() - lastBadAt < SERVER_RECENT_BAD_HOST_TTL_MS;
+    });
+    if (!badPaths.length) return 0;
+    // An episode can expose both a provider iframe and direct media. One bad
+    // path is a small startup cost; only penalize the entire episode heavily
+    // after every available playback path has recent viewer failures.
+    if (badPaths.length < hosts.length) return 220;
     const sourceKind = getEpisodeSourceKind(ep);
     const multiplier = sourceKind === 'ophim' || sourceKind === 'kkphim' ? 1.35 : 1;
     return Math.round(SERVER_RECENT_BAD_HOST_PENALTY * multiplier);
@@ -5177,6 +5185,8 @@ function parseMovieItem(raw: unknown): Movie | null {
     type: String(m.type ?? 'single'),
     thumb_url: String(m.thumb_url ?? ''),
     poster_url: String(m.poster_url ?? ''),
+    hero_backdrop_url: String(m.hero_backdrop_url ?? '') || undefined,
+    hero_poster_url: String(m.hero_poster_url ?? '') || undefined,
     quality: String(m.quality ?? 'HD'),
     lang: String(m.lang ?? ''),
     year: Number(m.year ?? 0),

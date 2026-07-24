@@ -1680,6 +1680,7 @@ serve(async (req) => {
     /* ── 2. Load episodes from DB ── */
     const serverMap = new Map<string, unknown[]>();
     const seen = new Set<string>();
+    const knownUnhealthyUrls = new Set<string>();
 
     if (useSupabase && movieId) {
       const [
@@ -1701,7 +1702,6 @@ serve(async (req) => {
           .from('streams')
           .select('server_name, source, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count, audio_type')
           .eq('movie_id', movieId)
-          .eq('is_active', true)
           .order('priority', { ascending: false })
           .order('response_time_ms', { ascending: true, nullsFirst: false }),
       ]);
@@ -1710,7 +1710,17 @@ serve(async (req) => {
         console.log('[movie-detail-proxy] movie_episodes error:', meErr.message);
       }
 
-      const streamHealthIndex = buildStreamHealthIndex(streams ?? []);
+      const allStreams = streams ?? [];
+      const activeStreams = allStreams.filter((row) => Boolean((row as Record<string, unknown>).is_active));
+      const streamHealthIndex = buildStreamHealthIndex(allStreams);
+      for (const raw of allStreams) {
+        const row = raw as Record<string, unknown>;
+        if (!shouldSuppressUnhealthyStream(row)) continue;
+        for (const value of [row.stream_url, row.embed_url]) {
+          const normalized = normalizePlayableUrl(String(value || ''));
+          if (normalized) knownUnhealthyUrls.add(normalized);
+        }
+      }
       const movieEpisodeRows = [...(meRows ?? [])].sort((a, b) => {
         const am = a as Record<string, unknown>;
         const bm = b as Record<string, unknown>;
@@ -1816,7 +1826,7 @@ serve(async (req) => {
       }
 
       // 2c. Streams table — skip dead streams
-      for (const s of streams ?? []) {
+      for (const s of activeStreams) {
         const sm = s as Record<string, unknown>;
         if (isQueerSourceMovie && !isTrustedQueerEpisodeSource(sm.source, sm.server_name)) continue;
         const streamUrl = String(sm.stream_url || '').trim();
@@ -1825,7 +1835,11 @@ serve(async (req) => {
         if (isKnownBlockedEmbedHost(embedUrl || streamUrl)) continue;
         const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
         const failureCount = Number(sm.failure_count || 0);
-        if ((healthStatus === 'dead' && failureCount >= 2) || (healthStatus === 'failed' && failureCount >= 5)) continue;
+        // Keep the API contract aligned with the frontend. Viewer telemetry
+        // raises failure_count by three after repeated fatal playback reports;
+        // returning those rows until five failures made a known-bad source
+        // eligible for one more viewer session and left stale edge responses.
+        if ((healthStatus === 'dead' && failureCount >= 2) || (healthStatus === 'failed' && failureCount >= 3)) continue;
 
         const slugVal = String(sm.episode_slug || 'full');
         const serverName = String(sm.server_name || 'Nguồn');
@@ -1897,48 +1911,48 @@ serve(async (req) => {
       );
     }
 
-    if (isQueerSourceMovie && movieData) {
-      const verifiedAuxiliary = await fetchVerifiedAuxiliaryExternalDetail(movieData as Record<string, unknown>);
-      if (verifiedAuxiliary) {
-        for (const srv of verifiedAuxiliary.episodes) {
-          const serverName = String(srv.server_name || 'OPhim verified');
-          const sds = (srv.server_data ?? []) as Array<Record<string, unknown>>;
-          for (const ep of sds) {
-            const slugVal = String(ep.slug || ep.name || '');
-            const epName = String(ep.name || '');
-            const epNum = extractEpNumber(slugVal || epName);
-            if (hasSeenEpisode(seen, serverName, slugVal, epNum, epName)) continue;
-            markSeenEpisode(seen, serverName, slugVal, epNum, epName);
-            pushEpisode(serverMap, serverName, {
-              name: epName,
-              slug: slugVal,
-              filename: String(ep.filename || ''),
-              link_embed: normalizeDailymotionUrl(String(ep.link_embed || '')),
-              link_m3u8: String(ep.link_m3u8 || ''),
-              subtitle_url: String(ep.subtitle_url || ep.subtitle || ''),
-            });
-          }
-        }
-        edgeWaitUntil(
-          persistVerifiedAuxiliaryEpisodes(supabase, String(movieId || ''), verifiedAuxiliary)
-            .then((result) => {
-              if (result.inserted || result.updated) {
-                return clearDetailCaches(supabase, [
-                  slug,
-                  String((movieData as Record<string, unknown>).slug || ''),
-                  String((movieData as Record<string, unknown>).ophim_slug || ''),
-                ]);
-              }
-              return null;
-            })
-            .catch((error) => {
-              console.warn('verified_auxiliary_persist_failed', {
+    // A complete, playable BLVietsub record must stay on the fast database
+    // path. Searching OPhim/PhimAPI is network-bound and previously delayed
+    // every detail request by up to several upstream timeouts, even when no
+    // repair was needed. Only block for an auxiliary source when coverage is
+    // genuinely missing or all candidates for the advertised episode failed.
+    const shouldFetchQueerAuxiliary =
+      isQueerSourceMovie &&
+      !!movieData &&
+      (
+        serverMap.size === 0 ||
+        shouldRepairOnDemand
+      );
+
+    if (shouldFetchQueerAuxiliary && movieData) {
+      const queerMovieData = movieData as Record<string, unknown>;
+      // Auxiliary discovery is a repair job, not a viewer request dependency.
+      // Persist a verified match for the next open without holding this
+      // response behind several third-party searches and detail fetches.
+      edgeWaitUntil(
+        fetchVerifiedAuxiliaryExternalDetail(queerMovieData)
+          .then(async (verifiedAuxiliary) => {
+            if (!verifiedAuxiliary) return;
+            const result = await persistVerifiedAuxiliaryEpisodes(
+              supabase,
+              String(movieId || ''),
+              verifiedAuxiliary,
+            );
+            if (result.inserted || result.updated) {
+              await clearDetailCaches(supabase, [
                 slug,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }),
-        );
-      }
+                String(queerMovieData.slug || ''),
+                String(queerMovieData.ophim_slug || ''),
+              ]);
+            }
+          })
+          .catch((error) => {
+            console.warn('verified_auxiliary_persist_failed', {
+              slug,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }),
+      );
     }
 
     const shouldFetchExternal =
@@ -2007,6 +2021,12 @@ serve(async (req) => {
             const slugVal = String(ep.slug || ep.name || '');
             const epName = String(ep.name || '');
             const epNum = extractEpNumber(slugVal || epName);
+            const externalStreamUrl = normalizePlayableUrl(String(ep.link_m3u8 || ''));
+            const externalEmbedUrl = normalizePlayableUrl(String(ep.link_embed || ''));
+            if (
+              (externalStreamUrl && knownUnhealthyUrls.has(externalStreamUrl)) ||
+              (externalEmbedUrl && knownUnhealthyUrls.has(externalEmbedUrl))
+            ) continue;
             if (hasSeenEpisode(seen, serverName, slugVal, epNum, epName)) continue;
             markSeenEpisode(seen, serverName, slugVal, epNum, epName);
             pushEpisode(serverMap, serverName, {

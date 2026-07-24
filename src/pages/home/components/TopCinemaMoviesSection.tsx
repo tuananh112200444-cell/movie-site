@@ -395,9 +395,9 @@ function SectionHeader({ count = 0 }: { count?: number }) {
         </div>
         <div className="flex flex-col">
           <h3 className="text-lg md:text-2xl lg:text-[1.55rem] font-black text-white flex items-center gap-2">
-            Top Phim Chiếu Rạp
+            Mãn Nhãn Với Phim Chiếu Rạp
           </h3>
-          <span className="text-[10px] text-white/30 -mt-0.5">BXH phim chiếu rạp được xem nhiều nhất</span>
+          <span className="text-[10px] text-white/30 -mt-0.5">Bom tấn màn ảnh lớn, hình ảnh đẹp và nguồn phát đã kiểm tra</span>
         </div>
         <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full uppercase tracking-wide">
           Top {count}

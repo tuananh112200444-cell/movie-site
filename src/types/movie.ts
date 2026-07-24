@@ -42,6 +42,8 @@ export interface MovieItem {
   normalized_name?: string;
   ophim_id?: string;
   tmdb_id?: string;
+  hero_backdrop_url?: string;
+  hero_poster_url?: string;
   source_site?: string;
   source_name?: string;
   is_copyright?: boolean;

@@ -18,6 +18,13 @@ const homeHero = fs.readFileSync('src/pages/home/components/HeroBanner.tsx', 'ut
 const lazyHomeSection = fs.readFileSync('src/pages/home/components/LazyMovieSection.tsx', 'utf8');
 const autoRepair = fs.readFileSync('supabase/functions/auto-repair-player-issues/index.ts', 'utf8');
 const streamHealth = fs.readFileSync('supabase/functions/stream-health-check/index.ts', 'utf8');
+const detailProxy = fs.readFileSync('supabase/functions/movie-detail-proxy/index.ts', 'utf8');
+const sourceHealth = fs.readFileSync('src/services/playerSourceHealth.ts', 'utf8');
+const main = fs.readFileSync('src/main.tsx', 'utf8');
+const polyfills = fs.readFileSync('src/polyfills.ts', 'utf8');
+const lightweightPlayer = fs.readFileSync('src/pages/movie-detail/components/LightweightHlsPlayer.tsx', 'utf8');
+const diagnostics = fs.readFileSync('src/services/playerDiagnostics.ts', 'utf8');
+const sourceHealthBrain = fs.readFileSync('supabase/functions/player-source-health/index.ts', 'utf8');
 
 const checks = [
   [!vite.includes('appendAssetVersion'), 'Hashed Vite assets must not receive a second query-string identity'],
@@ -35,15 +42,29 @@ const checks = [
   [movieApi.includes('hasBrowserManagedPhimApiEmbed') && movieApi.includes("healthStatus === 'failed' && hasBrowserManagedPhimApiEmbed"), 'A server-blocked PhimAPI HLS probe must not discard its working browser-managed iframe'],
   [movieApi.includes('hasBrowserManagedStreamcEmbed') && movieApi.includes("healthStatus === 'blocked' && hasBrowserManagedStreamcEmbed) score += 420"), 'Server-side StreamC 403s must not force viewers onto a slower VK iframe'],
   [!movieApi.includes('FALLBACK_SERVER_AUTO_PICK_PENALTY'), 'The best pre-ranked server must not receive an arbitrary index penalty'],
-  [autoRepair.includes('penalizeTelemetryFailedStreams') && autoRepair.includes("health_status: 'failed'"), 'Fatal viewer telemetry must lower the matching stored stream before repair'],
+  [autoRepair.includes('penalizeTelemetryFailedStreams') && autoRepair.includes('independent probe required') && !autoRepair.includes("last_error: 'Viewer telemetry: repeated fatal playback failure'"), 'Viewer telemetry may request repair but must not disable a stream without an independent probe'],
+  [autoRepair.includes("'hls_fatal_retry'") && lightweightPlayer.includes('isManifestStartupFailure ? 1 : 3') && lightweightPlayer.includes('startup watchdog exceeded 18 seconds'), 'Manifest startup failures must enter repair telemetry and terminate instead of retrying forever'],
+  [detailProxy.includes('knownUnhealthyUrls') && detailProxy.includes('const activeStreams = allStreams.filter'), 'Inactive failed URLs must suppress legacy and freshly fetched copies without hiding unrelated healthy streams'],
   [autoRepair.includes('host_counts') && autoRepair.includes('>= threshold'), 'A hostname must independently reach the evidence threshold before persistent penalty'],
+  [autoRepair.includes("'sync-motchill-feed'") && autoRepair.includes('candidate.critical >= 3'), 'A repeatedly dead primary source must search one identity-guarded independent provider'],
   [autoRepair.includes('player-repair:') && autoRepair.includes('repair_cooldown') && autoRepair.includes('cooldown_minutes'), 'Automatic repairs must be idempotent within a bounded cooldown window'],
+  [autoRepair.includes('{ key: repairKey, page: 1') && autoRepair.includes('repair cooldown cursor:'), 'Player repair cooldown must satisfy the sync_cursors page > 0 contract and expose persistence failures'],
   [autoRepair.includes("refresh_global') === '1'") && autoRepair.includes('75000'), 'Repair requests must not block on global cache warming or outlive the parent Edge request'],
   [autoRepair.includes('AbortSignal.timeout(15_000)') && autoRepair.includes('AbortSignal.timeout(10_000)'), 'Repair database reads must fail fast under pool pressure'],
   [streamHealth.includes('telemetryEmbedCooldown') && streamHealth.includes("startsWith('Viewer telemetry:')") && streamHealth.includes('30 * 60 * 1000'), 'Server reachability must not immediately erase browser-confirmed iframe failures'],
   [streamHealth.includes('browserManagedProbeBlocked') && streamHealth.includes('Server probe blocked; browser validation required'), 'Cloud-only StreamC 403s must remain unverified instead of accumulating false failures'],
   [streamHealth.includes('probeStreamRow') && streamHealth.includes('Embed returned an HTML 404/deleted-video page'), 'Health checks must validate both HLS and embed error pages'],
+  [detailProxy.includes("healthStatus === 'failed' && failureCount >= 3"), 'The detail API and frontend must suppress a telemetry-failed stream at the same threshold'],
+  [sourceHealth.includes('SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000') && sourceHealth.includes('SOURCE_HEALTH_UPDATED_EVENT'), 'Cross-viewer source penalties must remain active for the advertised window and notify an open player'],
+  [main.indexOf("import './polyfills'") >= 0 && main.indexOf("import './polyfills'") < main.indexOf("react-dom/client") && polyfills.includes('Array.prototype.at'), 'The player compatibility shim must run before React and lazy HLS chunks on Safari 14'],
   [playerBox.includes('hlsCluster !== embedCluster'), 'A fatal HLS source must not fall through to a broken embed from the same provider cluster'],
+  [playerBox.includes('prevSourceIdentityRef') && playerBox.includes('failedSourceKeysRef.current.has(key)'), 'Same-episode fallback must reset player mode and must not loop to an already failed source'],
+  [playerBox.includes("effectivePlayerMode === 'embed'") && playerBox.includes('? embedSrc') && playerBox.includes("setPlayerMode(isHlsUrl(episode.link_m3u8) ? 'hls' : 'video')"), 'Telemetry must attribute the active playback path and a blocked iframe must try its direct media path before changing servers'],
+  [diagnostics.includes("| 'playback_started'") && lightweightPlayer.includes('onPlaybackStarted?.()') && playerBox.includes("event_type: 'playback_started'"), 'Player telemetry must record one real playing-state success for source health rate calculations'],
+  [sourceHealthBrain.includes('failure_rate') && sourceHealthBrain.includes('(item.critical + 2) / (item.critical + item.success + 10)') && sourceHealthBrain.includes("SOURCE_SUCCESS_EVENTS = new Set(['playback_started'])"), 'Global source health must use a smoothed failure rate with successful starts, not raw failure volume'],
+  [sourceHealthBrain.includes('bad_hosts: []') && !sourceHealthBrain.includes('FALLBACK_DEGRADED_HOSTS'), 'A telemetry outage must not inject stale hard-coded provider failures'],
+  [lightweightPlayer.includes('navigator.onLine === false') && playerBox.includes("window.addEventListener('online', onOnline)"), 'Offline mobile transitions must pause failure attribution and retry the same source when connectivity returns'],
+  [movieApi.includes('badPaths.length < hosts.length') && page.includes('areAllPlaybackPathsDegraded') && playerBox.includes('getEpisodeSourceKeys(candidate)'), 'An episode with iframe and direct media must remain eligible until every playback path fails, while fallback avoids the exact failed path'],
   [worker.includes("pathname === '/api/movie-detail'") && worker.includes('X-KhoPhim-Detail-Cache'), 'Cloudflare must cache complete movie-detail JSON'],
   [worker.includes('/__circuit/blvietsub/') && worker.includes('/__circuit/movie-detail/') && worker.includes('X-KhoPhim-Circuit'), 'Cloudflare POP circuit breakers must protect detail upstreams'],
   [playerSection.includes("aria-label={cinemaMode ? 'Thoát chế độ Cinema' : 'Bật chế độ Cinema'}"), 'Cinema control must have an accessible name on mobile'],

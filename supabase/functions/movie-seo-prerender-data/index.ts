@@ -81,17 +81,45 @@ function hasPlayableLink(row: Record<string, unknown>): boolean {
 
 async function enrichSeoMovie(supabase: ReturnType<typeof createClient>, movie: Record<string, unknown>) {
   const movieId = String(movie.id || '');
-  if (!movieId) return { ...movie, seo_has_playable_episode: false };
+  if (!movieId) {
+    return {
+      ...movie,
+      seo_has_playable_episode: false,
+      seo_eligible_for_index: false,
+      seo_index_tier: 'blocked',
+      seo_quality_score: 0,
+    };
+  }
 
-  const [adminEpisodes, episodes] = await Promise.all([
+  const [adminEpisodes, episodes, quality] = await Promise.all([
     supabase.from('movie_episodes').select('link_m3u8,link_embed').eq('movie_id', movieId).limit(20),
     supabase.from('episodes').select('link_m3u8,link_embed').eq('movie_id', movieId).limit(20),
+    supabase
+      .from('movie_seo_quality_status')
+      .select('eligible_for_index,index_tier,quality_score,reasons,signals,checked_at,latest_episode_number,declared_total_episodes,episode_progress_percent,freshness_score,last_episode_change_at,next_episode_at')
+      .eq('movie_id', movieId)
+      .maybeSingle(),
   ]);
   const rows = [
     ...(adminEpisodes.data || []),
     ...(episodes.data || []),
   ] as Array<Record<string, unknown>>;
-  return { ...movie, seo_has_playable_episode: rows.some(hasPlayableLink) };
+  return {
+    ...movie,
+    seo_has_playable_episode: rows.some(hasPlayableLink),
+    seo_eligible_for_index: quality.data ? quality.data.eligible_for_index === true : null,
+    seo_index_tier: quality.data ? String(quality.data.index_tier || 'blocked') : 'unreviewed',
+    seo_quality_score: Number(quality.data?.quality_score || 0),
+    seo_quality_reasons: quality.data?.reasons || [],
+    seo_quality_signals: quality.data?.signals || [],
+    seo_latest_episode_number: Number(quality.data?.latest_episode_number || 0),
+    seo_declared_total_episodes: Number(quality.data?.declared_total_episodes || 0),
+    seo_episode_progress_percent: Number(quality.data?.episode_progress_percent || 0),
+    seo_freshness_score: Number(quality.data?.freshness_score || 0),
+    seo_last_episode_change_at: quality.data?.last_episode_change_at || null,
+    seo_next_episode_at: quality.data?.next_episode_at || null,
+    seo_quality_checked_at: quality.data?.checked_at || null,
+  };
 }
 
 Deno.serve(async (req) => {
