@@ -42,6 +42,12 @@ interface MovieItem {
   trailer_url?: string;
   status?: string;
   year?: number;
+  total_episodes?: number;
+  next_episode_at?: string;
+  seo_index_tier?: string;
+  seo_quality_score?: number;
+  seo_freshness_score?: number;
+  seo_last_episode_change_at?: string;
 }
 
 interface ApiResponse {
@@ -107,6 +113,10 @@ function getChangeFreq(modifiedTime?: string): string {
   return 'monthly';
 }
 
+function isOngoingTier(movie: MovieItem): boolean {
+  return movie.seo_index_tier === 'ongoing';
+}
+
 function normalize(value?: string): string {
   return String(value || '').toLowerCase().trim();
 }
@@ -137,20 +147,47 @@ function isLikelyPlayable(movie: MovieItem): boolean {
   return episode === 'full' || episode.includes('hoan tat') || /\d/.test(episode) || Number(movie.current_episode || 0) > 0;
 }
 
-function isIndexableMovie(movie: MovieItem): boolean {
+function hasHttpsTrailer(movie: MovieItem): boolean {
+  return /^https:\/\//i.test(String(movie.trailer_url || '').trim());
+}
+
+function hasSeoBase(movie: MovieItem, minimumContentLength: number): boolean {
   const name = String(movie.name || '').trim();
   const image = String(movie.poster_url || movie.thumb_url || '').trim();
   const description = String(movie.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   const year = getSeoYear(movie);
   return movie.is_published !== false
-    && !isUpcoming(movie)
-    && !isTrailer(movie)
-    && isLikelyPlayable(movie)
     && name.length >= 2
     && image.length > 0
-    && description.length >= 80
+    && description.length >= minimumContentLength
     && year >= 1900
-    && year <= new Date().getUTCFullYear() + 1;
+    && year <= new Date().getUTCFullYear() + 2;
+}
+
+function isIndexableMovie(movie: MovieItem): boolean {
+  if (isUpcoming(movie) || isTrailer(movie)) {
+    return hasSeoBase(movie, 120) && hasHttpsTrailer(movie);
+  }
+  return hasSeoBase(movie, 80) && isLikelyPlayable(movie);
+}
+
+function toTrailerPlayerUrl(value?: string): string {
+  const raw = String(value || '').trim();
+  if (!/^https:\/\//i.test(raw)) return '';
+  try {
+    const url = new URL(raw);
+    if (url.hostname === 'youtu.be') {
+      const id = url.pathname.split('/').filter(Boolean)[0] || '';
+      return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : raw;
+    }
+    if (/(^|\.)youtube\.com$/i.test(url.hostname)) {
+      const id = url.searchParams.get('v') || (/^\/(?:embed|shorts)\/([^/?#]+)/.exec(url.pathname)?.[1] ?? '');
+      return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : raw;
+    }
+    return raw;
+  } catch {
+    return '';
+  }
 }
 
 function getFreshnessScore(movie: MovieItem): number {
@@ -164,12 +201,15 @@ function getFreshnessScore(movie: MovieItem): number {
 }
 
 function getRecentUpdateScore(movie: MovieItem): number {
-  const updatedTime = timestampValue(movie.updated_at || movie.modified?.time);
+  const updatedTime = timestampValue(movie.seo_last_episode_change_at || movie.updated_at || movie.modified?.time);
   const releaseTime = timestampValue(movie.release_at);
   const freshness = updatedTime || Math.floor(releaseTime * 0.5);
   const popularity = Math.min(1000, Number(movie.tmdb_popularity || 0));
   const episodeBoost = isTrailer(movie) ? 0 : 5000;
-  return freshness + popularity + episodeBoost;
+  const ongoingBoost = isOngoingTier(movie)
+    ? 10000 + Number(movie.seo_freshness_score || 0) * 100 + Number(movie.seo_quality_score || 0)
+    : 0;
+  return freshness + popularity + episodeBoost + ongoingBoost;
 }
 
 function timestampValue(value?: string): number {
@@ -207,6 +247,10 @@ function compareMovieSeoOrder(a: MovieItem, b: MovieItem): number {
 function getPriority(movie: MovieItem): string {
   const ep = (movie.episode_current ?? '').toLowerCase();
   const catalogStatus = String(movie.seo_catalog_status || '').toLowerCase();
+  if (isOngoingTier(movie)) {
+    if (Number(movie.seo_freshness_score || 0) >= 70) return '0.98';
+    return '0.90';
+  }
   if (catalogStatus === 'upcoming' || isUpcoming(movie)) return '0.94';
   if (isTrailer(movie) || movie.trailer_url) return '0.92';
   if (catalogStatus === 'catalog') return '0.82';
@@ -235,7 +279,7 @@ async function fetchMoviePage(type: string, page: number): Promise<MovieItem[]> 
   }
 }
 
-async function fetchSupabaseMovies(offset = 0, limit = 50000, mode: 'all' | 'recent' | 'upcoming' = 'all'): Promise<MovieItem[]> {
+async function fetchSupabaseMovies(offset = 0, limit = 50000, mode: 'all' | 'recent' | 'upcoming' | 'ongoing' = 'all'): Promise<MovieItem[]> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -255,7 +299,7 @@ async function fetchSupabaseMovies(offset = 0, limit = 50000, mode: 'all' | 'rec
         if (from >= endExclusive) return [] as MovieItem[];
         let query = supabase
           .from('movies')
-          .select('id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,content,is_published,seo_catalog_status,catalog_source,release_at,tmdb_popularity,trailer_url,status,year')
+          .select('id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,release_at,tmdb_popularity,trailer_url,status,year')
           .eq('is_published', true)
           .not('slug', 'is', null);
 
@@ -269,6 +313,10 @@ async function fetchSupabaseMovies(offset = 0, limit = 50000, mode: 'all' | 'rec
             .order('release_at', { ascending: false, nullsFirst: false })
             .order('updated_at', { ascending: false, nullsFirst: false })
             .order('year', { ascending: false, nullsFirst: false });
+        } else if (mode === 'ongoing') {
+          query = query
+            .order('updated_at', { ascending: false, nullsFirst: false })
+            .order('next_episode_at', { ascending: true, nullsFirst: false });
         } else {
           query = query
             .order('year', { ascending: false, nullsFirst: false })
@@ -289,15 +337,85 @@ async function fetchSupabaseMovies(offset = 0, limit = 50000, mode: 'all' | 'rec
   return rows;
 }
 
-function getSitemapOptions(req: Request): { offset: number; limit: number; outputLimit: number; includeOphim: boolean; mode: 'all' | 'recent' | 'upcoming' } {
+async function fetchEligibleUpcomingMovies(limit = 5000): Promise<MovieItem[]> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+  const { data, error } = await supabase
+    .from('movie_seo_quality_status')
+    .select(`
+      movie_id,
+      quality_score,
+      movies!inner(
+        id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,
+        content,is_published,seo_catalog_status,catalog_source,release_at,
+        tmdb_popularity,trailer_url,status,year
+      )
+    `)
+    .eq('eligible_for_index', true)
+    .eq('index_tier', 'upcoming')
+    .order('quality_score', { ascending: false })
+    .order('checked_at', { ascending: false })
+    .limit(Math.min(5000, Math.max(1, limit)));
+  if (error) throw error;
+  return (data || [])
+    .flatMap((row) => Array.isArray(row.movies) ? row.movies : [row.movies])
+    .filter(Boolean) as unknown as MovieItem[];
+}
+
+async function fetchEligibleOngoingMovies(limit = 5000): Promise<MovieItem[]> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+  const { data, error } = await supabase
+    .from('movie_seo_quality_status')
+    .select(`
+      movie_id,
+      quality_score,
+      freshness_score,
+      last_episode_change_at,
+      movies!inner(
+        id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,
+        total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,
+        release_at,tmdb_popularity,trailer_url,status,year
+      )
+    `)
+    .eq('eligible_for_index', true)
+    .eq('index_tier', 'ongoing')
+    .order('freshness_score', { ascending: false })
+    .order('last_episode_change_at', { ascending: false, nullsFirst: false })
+    .order('quality_score', { ascending: false })
+    .limit(Math.min(5000, Math.max(1, limit)));
+  if (error) throw error;
+  return (data || [])
+    .flatMap((row) => {
+      const movies = Array.isArray(row.movies) ? row.movies : [row.movies];
+      return movies.filter(Boolean).map((movie) => ({
+        ...(movie as unknown as MovieItem),
+        seo_index_tier: 'ongoing',
+        seo_quality_score: Number(row.quality_score || 0),
+        seo_freshness_score: Number(row.freshness_score || 0),
+        seo_last_episode_change_at: String(row.last_episode_change_at || ''),
+      }));
+    });
+}
+
+function getSitemapOptions(req: Request): { offset: number; limit: number; outputLimit: number; includeOphim: boolean; mode: 'all' | 'recent' | 'upcoming' | 'ongoing' } {
   const url = new URL(req.url);
   const page = Number(url.searchParams.get('page') || '0');
   const pageSize = Math.min(10000, Math.max(100, Number(url.searchParams.get('page_size') || '10000')));
   const recent = url.searchParams.get('recent') === '1';
   const upcoming = url.searchParams.get('upcoming') === '1';
+  const ongoing = url.searchParams.get('ongoing') === '1';
 
   if (upcoming) {
     return { offset: 0, limit: 50000, outputLimit: Math.min(5000, pageSize), includeOphim: false, mode: 'upcoming' };
+  }
+
+  if (ongoing) {
+    return { offset: 0, limit: 50000, outputLimit: Math.min(5000, pageSize), includeOphim: false, mode: 'ongoing' };
   }
 
   if (recent) {
@@ -315,7 +433,11 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
   const options = getSitemapOptions(req);
   const pages = [1, 2, 3, 4, 5, 6];
   const [supabaseMovies, ...lists] = await Promise.all([
-    fetchSupabaseMovies(options.offset, options.limit, options.mode),
+    options.mode === 'upcoming'
+      ? fetchEligibleUpcomingMovies(options.outputLimit)
+      : options.mode === 'ongoing'
+        ? fetchEligibleOngoingMovies(options.outputLimit)
+        : fetchSupabaseMovies(options.offset, options.limit, options.mode),
     ...(options.includeOphim ? LIST_TYPES.flatMap((type) => pages.map((page) => fetchMoviePage(type, page))) : []),
   ]);
 
@@ -344,11 +466,19 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       // of thousands of "Discovered - currently not indexed" URLs. OPhim
       // fallback rows have no local id; local rows must explicitly pass the
       // materialized SEO quality view before entering any sitemap.
-      return !movie.id || !qualityByMovieId.has(movie.id) || qualityByMovieId.get(movie.id) === true;
+      if (!movie.id) return true;
+      if (isUpcoming(movie) || isTrailer(movie)) return qualityByMovieId.get(movie.id) === true;
+      return !qualityByMovieId.has(movie.id) || qualityByMovieId.get(movie.id) === true;
     });
 
   if (options.mode === 'upcoming') {
-    movies = [];
+    movies = movies
+      .filter((movie) => isUpcoming(movie) || isTrailer(movie))
+      .sort((a, b) => getFreshnessScore(b) - getFreshnessScore(a));
+  } else if (options.mode === 'ongoing') {
+    movies = movies
+      .filter((movie) => isOngoingTier(movie))
+      .sort((a, b) => getRecentUpdateScore(b) - getRecentUpdateScore(a));
   } else if (options.mode === 'recent') {
     movies = movies
       .filter((movie) => !isUpcoming(movie))
@@ -364,24 +494,38 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     const loc = `${SITE_URL}/phim/${encodeURIComponent(slug)}`;
     const image = toImageUrl(movie.thumb_url || movie.poster_url || '');
     const title = cleanImageTitle(movie.name || slug, slug);
-    const modifiedTime = movie.updated_at || movie.release_at || movie.modified?.time;
+    const modifiedTime = movie.seo_last_episode_change_at || movie.updated_at || movie.release_at || movie.modified?.time;
+    const trailerPlayer = toTrailerPlayerUrl(movie.trailer_url);
+    const description = String(movie.content || '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1900);
 
     return `  <url>
     <loc>${escapeXml(loc)}</loc>
     <lastmod>${toLastMod(modifiedTime)}</lastmod>
-    <changefreq>${getChangeFreq(modifiedTime)}</changefreq>
+    <changefreq>${isOngoingTier(movie) ? 'daily' : getChangeFreq(modifiedTime)}</changefreq>
     <priority>${getPriority(movie)}</priority>${image ? `
     <image:image>
       <image:loc>${escapeXml(image)}</image:loc>
       <image:title>${escapeXml(title)}</image:title>
-    </image:image>` : ''}
+    </image:image>` : ''}${trailerPlayer && image && description ? `
+    <video:video>
+      <video:thumbnail_loc>${escapeXml(image)}</video:thumbnail_loc>
+      <video:title>${escapeXml(`Trailer ${title}`)}</video:title>
+      <video:description>${escapeXml(description)}</video:description>
+      <video:player_loc allow_embed="yes">${escapeXml(trailerPlayer)}</video:player_loc>
+    </video:video>` : ''}
   </url>`;
   }).join('\n');
 
   return {
     count: movies.length,
     xml: `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+  xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
 ${urls}
 </urlset>`,
   };
@@ -397,8 +541,12 @@ Deno.serve(async (req) => {
   }
 
   const { xml, count } = await buildMovieSitemap(req);
+  const isOngoingRequest = new URL(req.url).searchParams.get('ongoing') === '1';
   const headers = {
     ...XML_HEADERS,
+    ...(isOngoingRequest
+      ? { 'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=1800' }
+      : {}),
     'X-Movie-Count': String(count),
   };
 

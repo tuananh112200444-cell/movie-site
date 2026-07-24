@@ -137,7 +137,17 @@ Deno.serve(async (req) => {
     const input = await req.json().catch(()=>({})) as {inspection_limit?:number};
     const inspectionLimit = Math.max(1,Math.min(Number(input.inspection_limit || 25),50));
     const token = await googleAccessToken();
-    const [pageData,queryData] = await Promise.all([searchAnalytics(token,'page'),searchAnalytics(token,'query')]);
+    const [pageResult,queryResult] = await Promise.allSettled([
+      searchAnalytics(token,'page'),
+      searchAnalytics(token,'query'),
+    ]);
+    const analyticsErrors = [
+      ...(pageResult.status === 'rejected' ? [`page: ${pageResult.reason instanceof Error ? pageResult.reason.message : String(pageResult.reason)}`] : []),
+      ...(queryResult.status === 'rejected' ? [`query: ${queryResult.reason instanceof Error ? queryResult.reason.message : String(queryResult.reason)}`] : []),
+    ];
+    const fallbackRange = {startDate:isoDate(31),endDate:isoDate(3),rows:[] as Record<string,unknown>[]};
+    const pageData = pageResult.status === 'fulfilled' ? pageResult.value : fallbackRange;
+    const queryData = queryResult.status === 'fulfilled' ? queryResult.value : fallbackRange;
     const metrics = [
       ...pageData.rows.map((row:Record<string,unknown>)=>({run_id:run.id,dimension_type:'page',dimension_value:String((row.keys as string[])?.[0] || ''),date_start:pageData.startDate,date_end:pageData.endDate,clicks:Number(row.clicks||0),impressions:Number(row.impressions||0),ctr:Number(row.ctr||0),position:Number(row.position||0)})),
       ...queryData.rows.map((row:Record<string,unknown>)=>({run_id:run.id,dimension_type:'query',dimension_value:String((row.keys as string[])?.[0] || ''),date_start:queryData.startDate,date_end:queryData.endDate,clicks:Number(row.clicks||0),impressions:Number(row.impressions||0),ctr:Number(row.ctr||0),position:Number(row.position||0)})),
@@ -148,30 +158,84 @@ Deno.serve(async (req) => {
     }
     const staleBefore = Date.now()-72*3600000;
     const [{data:eligible,error:candidateError},{data:known,error:knownError}] = await Promise.all([
-      supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at').eq('eligible_for_index',true).order('movie_updated_at',{ascending:false}).limit(500),
+      supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at,index_tier,quality_score,freshness_score,last_episode_change_at').eq('eligible_for_index',true).order('quality_score',{ascending:false}).order('movie_updated_at',{ascending:false}).limit(1500),
       supabase.from('seo_url_inspections').select('url,inspected_at').order('inspected_at',{ascending:true}).limit(5000),
     ]);
     if (candidateError) throw candidateError;
     if (knownError) throw knownError;
     const inspectedAt = new Map((known || []).map(item=>[String(item.url),Date.parse(String(item.inspected_at || '')) || 0]));
     const candidateRows = (eligible || [])
-      .map(item=>({id:String(item.movie_id),slug:String(item.slug)}))
-      .filter(item=>(inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(item.slug)}`) || 0)<staleBefore)
-      .sort((a,b)=>(inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(a.slug)}`) || 0)-(inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(b.slug)}`) || 0))
+      .map(item=>({
+        id:String(item.movie_id),
+        slug:String(item.slug),
+        tier:String(item.index_tier || ''),
+        score:Number(item.quality_score || 0),
+        freshness:Number(item.freshness_score || 0),
+        episodeChangedAt:Date.parse(String(item.last_episode_change_at || '')) || 0,
+        updatedAt:Date.parse(String(item.movie_updated_at || '')) || 0,
+      }))
+      .filter(item=>{
+        const lastInspection = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(item.slug)}`) || 0;
+        if (lastInspection < staleBefore) return true;
+        return item.tier === 'ongoing' && item.episodeChangedAt > lastInspection;
+      })
+      .sort((a,b)=>{
+        const lastA = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(a.slug)}`) || 0;
+        const lastB = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(b.slug)}`) || 0;
+        const ongoingChangeA = Number(a.tier === 'ongoing' && a.episodeChangedAt > lastA);
+        const ongoingChangeB = Number(b.tier === 'ongoing' && b.episodeChangedAt > lastB);
+        if (ongoingChangeA !== ongoingChangeB) return ongoingChangeB - ongoingChangeA;
+        const tierWeight = (item:typeof a) => item.tier === 'ongoing' ? 3 : item.tier === 'upcoming' ? 2 : 1;
+        const tierDiff = tierWeight(b) - tierWeight(a);
+        if (tierDiff !== 0) return tierDiff;
+        const inspectedDiff = (inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(a.slug)}`) || 0)
+          - (inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(b.slug)}`) || 0);
+        if (inspectedDiff !== 0) return inspectedDiff;
+        return b.freshness - a.freshness || b.score - a.score || b.updatedAt - a.updatedAt;
+      })
       .slice(0,inspectionLimit);
     const inspections=[];
     const inspectionErrors:string[]=[];
     for (const candidate of candidateRows) {
       try { inspections.push(await inspectUrl(token,candidate)); }
-      catch (error) { inspectionErrors.push(error instanceof Error ? error.message : String(error)); if (/429/.test(String(error))) break; }
+      catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        inspectionErrors.push(message);
+        if (/429|403|disabled/i.test(message)) break;
+      }
     }
     if (inspections.length) {
       const {error} = await supabase.from('seo_url_inspections').upsert(inspections,{onConflict:'url'});
       if (error) throw error;
     }
     const indexed = inspections.filter(item=>item.verdict==='PASS').length;
-    await supabase.from('seo_gsc_runs').update({finished_at:new Date().toISOString(),success:true,pages_collected:pageData.rows.length,queries_collected:queryData.rows.length,urls_inspected:inspections.length,indexed_urls:indexed,metadata:{inspection_errors:inspectionErrors.slice(0,10),date_start:pageData.startDate,date_end:pageData.endDate}}).eq('id',run.id);
-    return json({ok:true,run_id:run.id,pages:pageData.rows.length,queries:queryData.rows.length,inspected:inspections.length,indexed,inspection_errors:inspectionErrors.slice(0,10)},200,headers);
+    const success = analyticsErrors.length < 2 || inspections.length > 0;
+    const operationalErrors = [...analyticsErrors, ...inspectionErrors].slice(0,10);
+    await supabase.from('seo_gsc_runs').update({
+      finished_at:new Date().toISOString(),
+      success,
+      pages_collected:pageData.rows.length,
+      queries_collected:queryData.rows.length,
+      urls_inspected:inspections.length,
+      indexed_urls:indexed,
+      error_message:success ? null : operationalErrors.join(' | '),
+      metadata:{
+        analytics_errors:analyticsErrors.slice(0,4),
+        inspection_errors:inspectionErrors.slice(0,10),
+        date_start:pageData.startDate,
+        date_end:pageData.endDate,
+      },
+    }).eq('id',run.id);
+    return json({
+      ok:success,
+      run_id:run.id,
+      pages:pageData.rows.length,
+      queries:queryData.rows.length,
+      inspected:inspections.length,
+      indexed,
+      analytics_errors:analyticsErrors.slice(0,4),
+      inspection_errors:inspectionErrors.slice(0,10),
+    },success ? 200 : 502,headers);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await supabase.from('seo_gsc_runs').update({finished_at:new Date().toISOString(),success:false,error_message:message}).eq('id',run.id);

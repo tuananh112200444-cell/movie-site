@@ -10,6 +10,7 @@ const CORS_HEADERS = {
 const CRITICAL_EVENTS = new Set([
   'stall_fatal',
   'hls_fatal',
+  'hls_fatal_retry',
   'direct_video_error',
   'native_hls_error',
   'iframe_blocked',
@@ -138,22 +139,28 @@ async function penalizeTelemetryFailedStreams(
   supabase: SupabaseClient,
   movieId: string,
   hosts: string[],
+  episodeSlugs: string[],
 ): Promise<number> {
   const normalizedHosts = new Set(hosts.map((host) => host.toLowerCase().replace(/^www\./, '')).filter(Boolean));
+  const normalizedEpisodes = new Set(episodeSlugs.map((slug) => slug.trim().toLowerCase()).filter(Boolean));
   if (!movieId || normalizedHosts.size === 0) return 0;
   const { data } = await supabase.from('streams')
-    .select('id,stream_url,embed_url,failure_count')
+    .select('id,episode_slug,stream_url,embed_url,failure_count,priority')
     .eq('movie_id', movieId).eq('is_active', true)
     .abortSignal(AbortSignal.timeout(12_000));
   let penalized = 0;
   for (const row of data || []) {
     const host = urlHost(row.stream_url || row.embed_url);
     if (!normalizedHosts.has(host)) continue;
+    const episodeSlug = String(row.episode_slug || '').trim().toLowerCase();
+    if (normalizedEpisodes.size > 0 && !normalizedEpisodes.has(episodeSlug)) continue;
     const { error } = await supabase.from('streams').update({
-      health_status: 'failed',
-      failure_count: Math.min(20, Number(row.failure_count || 0) + 3),
-      last_error: 'Viewer telemetry: repeated fatal playback failure',
-      last_checked_at: new Date().toISOString(),
+      // Browser telemetry can be caused by the viewer's connection, tab
+      // suspension, VPN or device decoder. It may request a repair and lower
+      // preference, but only stream-health-check may disable a stored stream
+      // after an independent probe.
+      priority: Math.max(-2, Number(row.priority || 0) - 1),
+      last_error: 'Viewer telemetry: repair requested; independent probe required',
     }).eq('id', row.id);
     if (!error) penalized += 1;
   }
@@ -180,13 +187,13 @@ function summarizeCandidates(events: PlayerErrorEvent[], threshold: number, limi
     };
 
     current.critical += 1;
-    current.score += event.event_type === 'stall_fatal' ? 5 : 4;
+    current.score += event.event_type === 'stall_fatal' ? 5 : event.event_type === 'hls_fatal_retry' ? 3 : 4;
     if (event.created_at > current.last_seen_at) current.last_seen_at = event.created_at;
     const eventHost = String(event.source_host || '').toLowerCase().replace(/^www\./, '').trim();
     if (eventHost) current.host_counts[eventHost] = Number(current.host_counts[eventHost] || 0) + 1;
     addUnique(current.hosts, eventHost, 6);
     addUnique(current.servers, event.server_name, 6);
-    addUnique(current.episodes, event.episode_name || event.episode_slug, 6);
+    addUnique(current.episodes, event.episode_slug || event.episode_name, 6);
     if (!current.title || current.title === slug) current.title = String(event.movie_title || slug);
     map.set(slug, current);
   }
@@ -407,7 +414,12 @@ serve(async (req) => {
     }
 
     const calls: FunctionCallResult[] = [];
-    const penalizedStreams = await penalizeTelemetryFailedStreams(supabase, movie.id, candidate.hosts);
+    const penalizedStreams = await penalizeTelemetryFailedStreams(
+      supabase,
+      movie.id,
+      candidate.hosts,
+      candidate.episodes,
+    );
     if (isBlvietsubMovie(movie)) {
       const movieUrl = getBlvietsubMovieUrl(movie);
       if (movieUrl) {
@@ -437,6 +449,16 @@ serve(async (req) => {
         episodes: '1',
         limit: 1,
       }));
+      // The primary provider can keep publishing the same expired URL. Search
+      // one already-configured independent provider by title; its importer has
+      // identity/year guards and persists only verified playable episodes.
+      if (candidate.critical >= 3) {
+        calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'sync-motchill-feed', {
+          query: String(movie.name || movie.origin_name || candidate.title || movie.slug),
+          limit: 3,
+          refresh_search: '1',
+        }));
+      }
     }
 
     await deleteMovieCaches(supabase, [
@@ -457,7 +479,15 @@ serve(async (req) => {
       errors.push(`${movie.slug}: ${failed.map((call) => `${call.name}:${call.status}`).join(', ')}`);
     } else {
       repaired += 1;
-      await supabase.from('sync_cursors').upsert({ key: repairKey, page: 0, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      // sync_cursors.page has a strict `page > 0` contract. Writing zero made
+      // every cooldown upsert fail silently, so the same source was penalized
+      // and re-synced again every ten minutes. Persist a valid cursor and make
+      // a contract failure visible in the run log instead of hiding it.
+      const { error: cursorError } = await supabase.from('sync_cursors').upsert(
+        { key: repairKey, page: 1, updated_at: new Date().toISOString() },
+        { onConflict: 'key' },
+      );
+      if (cursorError) errors.push(`${movie.slug}: repair cooldown cursor: ${cursorError.message}`);
     }
 
     repairs.push({

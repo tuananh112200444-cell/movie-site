@@ -37,7 +37,7 @@ const CHECKS = [
     name: 'sitemap-index',
     url: `${SITE_URL}/sitemap.xml`,
     maxMs: 1200,
-    required: ['<sitemapindex', '/sitemap-static.xml', '/sitemap-seo-landing.xml', '/sitemap-movies-recent.xml', '/feed.xml'],
+    required: ['<sitemapindex', '/sitemap-static.xml', '/sitemap-seo-landing.xml', '/sitemap-movies-recent.xml', '/sitemap-movies-ongoing.xml', '/feed.xml'],
   },
   {
     name: 'seo-sitemap',
@@ -290,13 +290,13 @@ async function assertSitemapsClean() {
   ]);
   const failures = [];
   if (!index.includes('<sitemapindex')) failures.push('public/sitemap.xml is not a sitemap index.');
-  for (const loc of ['sitemap-static.xml', 'sitemap-seo-landing.xml', 'sitemap-movies-recent.xml', 'feed.xml']) {
+  for (const loc of ['sitemap-static.xml', 'sitemap-seo-landing.xml', 'sitemap-movies-recent.xml', 'sitemap-movies-upcoming.xml', 'sitemap-movies-ongoing.xml', 'feed.xml']) {
     if (!index.includes(loc)) failures.push(`public/sitemap.xml is missing ${loc}.`);
   }
   if (index.includes('sitemap-movies.xml')) {
     failures.push('public/sitemap.xml should use chunked movie sitemaps instead of the full sitemap-movies.xml.');
   }
-  if (/sitemap-movies-[1-8]\.xml/.test(index) || index.includes('sitemap-movies-upcoming.xml')) failures.push('public/sitemap.xml should not expose broad or upcoming movie sitemaps during quality recovery.');
+  if (/sitemap-movies-[1-8]\.xml/.test(index)) failures.push('public/sitemap.xml should not expose broad movie chunks during quality recovery.');
   if (!seo.includes('<urlset')) failures.push('public/sitemap-seo-landing.xml is not a URL set.');
   for (const loc of ['/xem-phim-online', '/phim-vietsub', '/phim-dang-chieu']) {
     if (!seo.includes(loc)) failures.push(`public/sitemap-seo-landing.xml is missing ${loc}.`);

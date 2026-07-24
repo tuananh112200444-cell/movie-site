@@ -93,6 +93,7 @@ function sourceKind(row) {
   ].map((value) => String(value || '').toLowerCase()).join(' ');
   if (haystack.includes('verified') && haystack.includes('ophim')) return 'verified_ophim';
   if (haystack.includes('verified') && (haystack.includes('kkphim') || haystack.includes('phimapi'))) return 'verified_kkphim';
+  if (haystack.includes('glvietsub')) return 'glvietsub';
   if (haystack.includes('blvietsub') || haystack.includes('ssplay') || haystack.includes('abyssplayer') || haystack.includes('dailymotion')) return 'blvietsub';
   if (haystack.includes('ophim') || haystack.includes('opstream')) return 'ophim';
   if (haystack.includes('kkphim') || haystack.includes('phimapi')) return 'kkphim';
@@ -117,7 +118,7 @@ async function fetchPublishedMovies() {
   return rows;
 }
 
-async function queryRows(table, select, movieIds) {
+async function queryRows(table, select, movieIds, { activeOnly = false } = {}) {
   const idChunks = chunk(movieIds, 100);
   const chunkResults = new Array(idChunks.length);
   let cursor = 0;
@@ -131,10 +132,14 @@ async function queryRows(table, select, movieIds) {
       let data;
       let error;
       for (let attempt = 1; attempt <= 3; attempt += 1) {
-        const result = await supabase
+        let query = supabase
           .from(table)
           .select(select)
-          .in('movie_id', ids)
+          .in('movie_id', ids);
+        if (activeOnly) query = query.eq('is_active', true);
+        const result = await query
+          .order('movie_id', { ascending: true })
+          .order('id', { ascending: true })
           .range(from, from + 999)
           .abortSignal(AbortSignal.timeout(45_000));
         data = result.data;
@@ -157,9 +162,14 @@ async function queryRows(table, select, movieIds) {
 const movies = await fetchPublishedMovies();
 const movieIds = movies.map((movie) => movie.id).filter(Boolean);
 const [movieEpisodes, episodes, streams] = await Promise.all([
-  queryRows('movie_episodes', 'movie_id,episode_number,slug,episode_name,server_name,source,link_embed,link_m3u8', movieIds),
-  queryRows('episodes', 'movie_id,episode_number,episode_slug,episode_name,server_name,link_embed,link_m3u8,server_data', movieIds),
-  queryRows('streams', 'movie_id,episode_slug,server_name,source,stream_url,embed_url,is_active,health_status,failure_count,response_time_ms', movieIds),
+  queryRows('movie_episodes', 'id,movie_id,episode_number,slug,episode_name,server_name,source,link_embed,link_m3u8', movieIds),
+  queryRows('episodes', 'id,movie_id,episode_number,episode_slug,episode_name,server_name,link_embed,link_m3u8,server_data', movieIds),
+  queryRows(
+    'streams',
+    'id,movie_id,episode_slug,server_name,source,stream_url,embed_url,is_active,health_status,failure_count,response_time_ms',
+    movieIds,
+    { activeOnly: true },
+  ),
 ]);
 
 const rowsByMovie = new Map();

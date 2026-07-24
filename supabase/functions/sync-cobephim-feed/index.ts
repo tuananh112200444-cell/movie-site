@@ -555,6 +555,9 @@ serve(async (req) => {
   let streamsInserted = 0;
   let streamsUpdated = 0;
   const discovery = await fetchUrls(sitemapPage, offset, limit);
+  if (discovery.urls.length === 0) {
+    errors.push('CobePhim discovery returned 0 movie URLs; connector circuit should remain paused');
+  }
 
   for (const movieUrl of discovery.urls) {
     try {

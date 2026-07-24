@@ -40,6 +40,7 @@ function isDynamicMovieSitemap(fileName) {
   return fileName === 'sitemap-movies.xml'
     || fileName === 'sitemap-movies-recent.xml'
     || fileName === 'sitemap-movies-upcoming.xml'
+    || fileName === 'sitemap-movies-ongoing.xml'
     || /^sitemap-movies-\d+\.xml$/.test(fileName);
 }
 
@@ -92,8 +93,9 @@ if (!cloudflareFunction.includes("'X-Sitemap-Retired': 'index-bloat-cleanup'")) 
 if (!cloudflareFunction.includes("potentialAction: hasPlayableEpisode ? { '@type': 'WatchAction', target: watchUrl }")) {
   addError('Movie prerender WatchAction must target the dedicated watch page.');
 }
-if (/['\"]@type['\"]:\s*['\"]VideoObject['\"]/.test(cloudflareFunction)) {
-  addError('Movie detail prerender must not claim VideoObject after the player moved to a noindex watch page.');
+if (!/['\"]@type['\"]:\s*['\"]VideoObject['\"]/.test(cloudflareFunction)
+  || !cloudflareFunction.includes('embedUrl: trailerEmbedUrl')) {
+  addError('Movie detail prerender must expose a real trailer VideoObject for eligible upcoming pages.');
 }
 
 const llms = await read('public/llms.txt').catch(() => '');
@@ -176,6 +178,14 @@ const recentMovieSitemap = `${SITE_URL}/sitemap-movies-recent.xml`;
 if (!childSitemaps.includes(recentMovieSitemap)) {
   addError(`sitemap.xml is missing the curated recent movie sitemap: ${recentMovieSitemap}`);
 }
+const upcomingMovieSitemap = `${SITE_URL}/sitemap-movies-upcoming.xml`;
+if (!childSitemaps.includes(upcomingMovieSitemap)) {
+  addError(`sitemap.xml is missing the quality-gated upcoming movie sitemap: ${upcomingMovieSitemap}`);
+}
+const ongoingMovieSitemap = `${SITE_URL}/sitemap-movies-ongoing.xml`;
+if (!childSitemaps.includes(ongoingMovieSitemap)) {
+  addError(`sitemap.xml is missing the freshness-ranked ongoing movie sitemap: ${ongoingMovieSitemap}`);
+}
 if (!childSitemaps.includes(`${SITE_URL}/feed.xml`)) {
   addError('sitemap.xml is missing the curated recent-movie RSS feed.');
 }
@@ -194,10 +204,6 @@ const curatedMovieLocs = extractLocs(curatedMovieXml);
 if (curatedMovieLocs.length < 100 || curatedMovieLocs.length > 750) {
   addError(`Curated movie sitemap must contain 100-750 URLs during recovery; found ${curatedMovieLocs.length}.`);
 }
-if (await exists(resolve('public', 'sitemap-movies-upcoming.xml'))) {
-  addError('Legacy upcoming sitemap must not be shipped while index quality is recovering.');
-}
-
 for (const loc of childSitemaps) {
   if (!loc.startsWith(`${SITE_URL}/`)) {
     addError(`Sitemap loc is not canonical: ${loc}`);

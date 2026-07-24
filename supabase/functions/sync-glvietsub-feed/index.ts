@@ -409,8 +409,17 @@ serve(async (req) => {
       } : await storeEntry(db, entry));
       consecutiveFailures = 0;
     } catch (error) {
-      consecutiveFailures += 1;
-      errors.push(`${parsed.sourceUrl}: ${error instanceof Error ? error.message : String(error)}`);
+      const message = `${parsed.sourceUrl}: ${error instanceof Error ? error.message : String(error)}`;
+      // Archive sitemaps can retain removed posts. A verified 404/410 is a
+      // stale catalogue entry, not a connector outage, so it must not open the
+      // circuit or make fresh playable titles in the same batch look failed.
+      if (/HTTP\s+(404|410)\b/i.test(message)) {
+        skippedUnplayable += 1;
+        consecutiveFailures = 0;
+      } else {
+        consecutiveFailures += 1;
+        errors.push(message);
+      }
     }
   }
   const result = { success: errors.length === 0, dry_run: dryRun, scanned: discovered.length, stored, skipped_unplayable: skippedUnplayable, errors, circuit_open: consecutiveFailures >= 3, elapsed_ms: Date.now() - started };

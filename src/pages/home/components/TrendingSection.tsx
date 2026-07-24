@@ -7,6 +7,7 @@ import { useImageFallback } from '../../../hooks/useImageFallback';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import type { Movie } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
+import { Flame } from 'lucide-react';
 
 /* â”€â”€ Helpers â”€â”€ */
 function timeAgo(dateStr: string): string {
@@ -410,15 +411,15 @@ function SectionHeader({ count }: { count?: number }) {
       <div className="flex items-center gap-2 lg:gap-3 flex-wrap">
         <div className="relative">
           <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center shadow-lg shadow-red-500/20">
-            <i className="ri-fire-fill text-white text-base md:text-lg" />
+            <Flame className="h-4 w-4 text-white md:h-[18px] md:w-[18px]" fill="currentColor" aria-hidden="true" />
           </div>
           <div className="absolute inset-0 w-8 h-8 md:w-9 md:h-9 rounded-lg bg-red-500/30 blur-md -z-10" />
         </div>
         <div className="flex flex-col">
           <h3 className="text-lg md:text-2xl lg:text-[1.55rem] font-black text-white flex items-center gap-2">
-            Top Thịnh Hành
+            Mới cập nhật &amp; đang hot
           </h3>
-          <span className="text-[10px] text-white/30 -mt-0.5">BXH theo lượt xem tuần qua</span>
+          <span className="text-[10px] text-white/30 -mt-0.5">Tập mới trước, phim nổi bật tiếp theo</span>
         </div>
         {typeof count === 'number' && (
           <span className="text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full uppercase tracking-wide">

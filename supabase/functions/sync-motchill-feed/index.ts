@@ -291,9 +291,25 @@ async function storeMovie(db: ReturnType<typeof createClient>, entry: Record<str
 async function discover(query: string, limit: number) {
   if (query) {
     const raw = await fetchText(`${BASE}/wp-json/wp/v2/search?search=${encodeURIComponent(query)}&per_page=${limit}`);
-    return (JSON.parse(raw) as Array<Record<string, unknown>>)
+    const searchResults = (JSON.parse(raw) as Array<Record<string, unknown>>)
       .filter((item) => ['tvshows', 'movies', 'posts'].includes(String(item.subtype || '')))
       .map((item) => normalizeSourceUrl(item.url)).filter(Boolean).slice(0, limit);
+    if (searchResults.length) return searchResults;
+
+    // WordPress search can lag behind newly published detail pages. Probe the
+    // deterministic source slug so repair jobs do not wait for that index.
+    const sourceSlug = slugify(query);
+    for (const kind of ['phim-bo', 'phim-le']) {
+      const candidate = `${BASE}/${kind}/${sourceSlug}`;
+      try {
+        const html = await fetchText(candidate, 12_000);
+        const canonicalTitle = text(match(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i) || meta(html, 'og:title'));
+        if (canonicalTitle) return [candidate];
+      } catch {
+        // Try the other content type before declaring the title undiscovered.
+      }
+    }
+    return [];
   }
   const fields = 'id,slug,link,title,date,modified';
   const batches = await Promise.all(['tvshows', 'posts'].map(async (kind) => {
@@ -302,6 +318,28 @@ async function discover(query: string, limit: number) {
   }));
   return [...new Set(batches.flat().sort((a, b) => Date.parse(String(b.modified)) - Date.parse(String(a.modified)))
     .map((item) => normalizeSourceUrl(item.link)).filter(Boolean))].slice(0, limit);
+}
+
+async function discoverOngoing(
+  db: ReturnType<typeof createClient>,
+  limit: number,
+  claim: boolean,
+) {
+  if (claim) {
+    const { data, error } = await db.rpc('claim_motchill_ongoing_for_sync', { p_limit: limit });
+    if (error) throw error;
+    return [...new Set((data || []).map((item: Record<string, unknown>) => normalizeSourceUrl(item.source_url)).filter(Boolean))];
+  }
+  const { data, error } = await db.from('movies')
+    .select('source_url')
+    .eq('source_site', SOURCE)
+    .eq('is_published', true)
+    .eq('status', 'ongoing')
+    .not('source_url', 'is', null)
+    .order('last_synced_at', { ascending: true, nullsFirst: true })
+    .limit(limit);
+  if (error) throw error;
+  return [...new Set((data || []).map((item: Record<string, unknown>) => normalizeSourceUrl(item.source_url)).filter(Boolean))];
 }
 
 serve(async (req) => {
@@ -316,18 +354,26 @@ serve(async (req) => {
   const db = createClient(dbUrl, serviceKey, { auth: { persistSession: false } });
   const dryRun = url.searchParams.get('dry_run') === '1';
   const query = String(url.searchParams.get('query') || '').trim().slice(0, 120);
+  const repairOngoing = url.searchParams.get('repair_ongoing') === '1';
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 8), 16));
-  const urls = await discover(query, limit); const stored: unknown[] = []; const errors: string[] = [];
+  const urls = repairOngoing
+    ? await discoverOngoing(db, limit, !dryRun)
+    : await discover(query, limit);
+  const stored: unknown[] = []; const errors: string[] = []; const skippedUnplayable: string[] = [];
   for (const sourceUrl of urls) {
     try {
       const entry = await parseMovie(db, sourceUrl);
       stored.push(dryRun ? { name: entry.name, origin_name: entry.originName, episodes: entry.currentEpisode, sources: entry.episodes.length } : await storeMovie(db, entry));
-    } catch (error) { errors.push(`${sourceUrl}: ${errorMessage(error)}`); }
+    } catch (error) {
+      const message = `${sourceUrl}: ${errorMessage(error)}`;
+      if (/No verified playable episodes|HTTP\s+(404|410)\b/i.test(message)) skippedUnplayable.push(message);
+      else errors.push(message);
+    }
   }
   if (!dryRun && stored.length) {
     await db.from('home_page_cache').update({ expires_at: new Date().toISOString() }).in('id', ['homepage_v3', 'search_index_v4_rows']);
   }
-  const result = { success: errors.length === 0, dry_run: dryRun, query, scanned: urls.length, stored, errors, elapsed_ms: Date.now() - started };
-  if (!dryRun) await db.from('sync_logs').insert({ function_name: 'sync-motchill-feed', run_at: new Date().toISOString(), scanned: urls.length, added: stored.filter((item: any) => item.created).length, skipped: stored.filter((item: any) => !item.created).length, errors: errors.length, details: errors, elapsed_ms: result.elapsed_ms, success: result.success, metadata: result });
+  const result = { success: errors.length === 0, dry_run: dryRun, mode: repairOngoing ? 'ongoing_recheck' : query ? 'title_repair' : 'new_releases', query, scanned: urls.length, stored, skipped_unplayable: skippedUnplayable, errors, elapsed_ms: Date.now() - started };
+  if (!dryRun) await db.from('sync_logs').insert({ function_name: 'sync-motchill-feed', run_at: new Date().toISOString(), scanned: urls.length, added: stored.filter((item: any) => item.created).length, skipped: stored.filter((item: any) => !item.created).length + skippedUnplayable.length, errors: errors.length, details: errors, elapsed_ms: result.elapsed_ms, success: result.success, metadata: result });
   return reply(result, result.success ? 200 : 207);
 });

@@ -35,6 +35,7 @@ type ActionItem = {
 const CRITICAL_EVENTS = new Set([
   'stall_fatal',
   'hls_fatal',
+  'hls_fatal_retry',
   'direct_video_error',
   'native_hls_error',
   'iframe_blocked',

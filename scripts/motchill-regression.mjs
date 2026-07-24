@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const edge = fs.readFileSync('supabase/functions/sync-motchill-feed/index.ts', 'utf8');
 const migration = fs.readFileSync('supabase/migrations/20260722233000_add_motchill_release_sync.sql', 'utf8');
+const ongoingMigration = fs.readFileSync('supabase/migrations/20260724061500_add_motchill_ongoing_recheck_queue.sql', 'utf8');
 const external = fs.readFileSync('scripts/motchill-sync-core.mjs', 'utf8');
 const failures = [];
 
@@ -18,7 +19,10 @@ for (const [ok, message] of [
   [edge.includes('const declared = 0') && edge.includes('movie.source_site === SOURCE'), 'Recommendation-card episode total contamination guard is missing'],
   [edge.includes('Motchill Vietsub #${option.nume}') && edge.includes("not('server_name', 'in', quoted)"), 'Stable server grouping and stale-label cleanup are missing'],
   [edge.includes("refresh_movie_seo_quality") && edge.includes("search_index_v4_rows"), 'SEO/search cache refresh contract is missing'],
+  [edge.includes('WordPress search can lag') && edge.includes("['phim-bo', 'phim-le']"), 'Lagging WordPress search fallback is missing'],
+  [edge.includes('discoverOngoing') && edge.includes("repair_ongoing") && edge.includes("'ongoing_recheck'"), 'Ongoing Motchill recheck mode is missing'],
   [migration.includes('sync-motchill-feed-every-10-minutes'), 'Motchill release cron is missing'],
+  [ongoingMigration.includes('for update skip locked') && ongoingMigration.includes('recheck-motchill-ongoing-every-10-minutes') && ongoingMigration.includes('repair_ongoing=1&limit=2'), 'Load-bounded overlap-safe ongoing Motchill cron is missing'],
   [external.includes('motchillkz.org'), 'Manual Motchill sync still points only at a retired domain'],
 ]) if (!ok) failures.push(message);
 
@@ -26,4 +30,4 @@ if (failures.length) {
   console.error(JSON.stringify({ ok: false, failures }, null, 2));
   process.exit(1);
 }
-console.log(JSON.stringify({ ok: true, checks: 14 }, null, 2));
+console.log(JSON.stringify({ ok: true, checks: 17 }, null, 2));

@@ -66,7 +66,8 @@ function getMovieSeasonSignature(movie: MovieItem): string {
 function canonicalDuplicateTitle(value?: string | null): string {
   return normalizeSearchText(value)
     .replace(/\b(18|19|20)\d{2}\b/g, ' ')
-    .replace(/\b(tap|ep|episode|phan|season|trailer|vietsub|thuyet minh|long tieng|full|hd|fhd|4k)\b/g, ' ')
+    .replace(/\bthe\s+series\b/g, ' ')
+    .replace(/\b(tap|ep|episode|phan|season|trailer|vietsub|thuyet minh|long tieng|full|hd|fhd|4k|uncut|ver|version|series)\b/g, ' ')
     .replace(/\b\d+\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

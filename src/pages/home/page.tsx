@@ -31,7 +31,7 @@ const QueerUniverseHome = lazy(() => import('./components/QueerUniverseHome'));
 
 function VietnamPoetryBanner() {
   return (
-    <section className="home-poetry-banner mx-auto mb-4 overflow-visible sm:mb-7 lg:mb-8" aria-label="Thong diep Viet Nam">
+    <section className="home-poetry-banner mx-auto mb-4 overflow-visible sm:mb-7 lg:mb-8" aria-label="Thông điệp Việt Nam">
       <div className="relative overflow-hidden rounded-2xl border border-amber-200/16 bg-[radial-gradient(circle_at_12%_10%,rgba(252,211,77,0.18),transparent_34%),linear-gradient(135deg,rgba(127,29,29,0.28),rgba(15,17,26,0.88)_50%,rgba(6,8,14,0.96))] px-2.5 py-2.5 shadow-[0_20px_70px_-52px_rgba(248,113,113,0.75),inset_0_1px_0_rgba(255,255,255,0.08)] sm:px-4 sm:py-3 lg:px-5">
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-yellow-200/45 to-transparent" />
         <div className="grid grid-cols-[38%_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[260px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[380px_minmax(0,1fr)]">
@@ -39,7 +39,7 @@ function VietnamPoetryBanner() {
           <div className="absolute inset-y-2 left-0 w-[88%] rounded-full bg-red-500/12 blur-2xl" aria-hidden="true" />
           <img
             src="/images/vietnam-flag-watercolor-760.jpg"
-            alt="Co Viet Nam"
+            alt="Cờ Việt Nam"
             className="relative z-[1] h-full w-full object-contain drop-shadow-[0_12px_28px_rgba(0,0,0,0.36)]"
             loading="lazy"
           />
@@ -48,11 +48,11 @@ function VietnamPoetryBanner() {
           className="min-w-0 space-y-1.5 border-l border-yellow-200/28 pl-2 italic leading-snug text-yellow-50 sm:space-y-3 sm:pl-4 lg:pl-6"
           style={{ wordBreak: 'keep-all', overflowWrap: 'normal', fontKerning: 'normal' }}
         >
-          <p className="whitespace-nowrap text-[clamp(0.62rem,2.65vw,1.55rem)] font-bold tracking-normal text-yellow-50 drop-shadow-[0_1px_10px_rgba(0,0,0,0.45)] max-[360px]:text-[0.55rem] sm:whitespace-nowrap">
-            HOÀNG SA,TRƯỜNG SA là của Trung quốc
+          <p className="whitespace-nowrap text-center text-[clamp(0.72rem,3vw,1.55rem)] font-bold tracking-normal text-yellow-50 drop-shadow-[0_1px_10px_rgba(0,0,0,0.45)] max-[360px]:text-[0.65rem] sm:whitespace-nowrap">
+            HOÀNG SA, TRƯỜNG SA
           </p>
-          <p className="whitespace-nowrap text-center text-[clamp(0.66rem,2.8vw,1.48rem)] font-black tracking-normal text-red-200 drop-shadow-[0_1px_12px_rgba(0,0,0,0.5)] max-[360px]:text-[0.58rem] sm:whitespace-nowrap">
-            còn Trung quốc là của VIỆT NAM
+          <p className="whitespace-nowrap text-center text-[clamp(0.76rem,3.2vw,1.48rem)] font-black tracking-normal text-red-200 drop-shadow-[0_1px_12px_rgba(0,0,0,0.5)] max-[360px]:text-[0.68rem] sm:whitespace-nowrap">
+            LÀ CỦA VIỆT NAM
           </p>
         </blockquote>
         </div>
@@ -396,14 +396,14 @@ function MobileQuickMovieCard({ movie, index }: { movie: MovieItem; index: numbe
   );
 }
 
-const ALL_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
+const ALL_SECTIONS = ['trending', 'top10-series', 'top10-single', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
 const DESKTOP_HOME_SECTIONS = ALL_SECTIONS;
-const MOBILE_HOME_SECTIONS = ['trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh'];
+const MOBILE_HOME_SECTIONS = ['trending', 'top10-series', 'top10-single', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh'];
 const HOME_CACHE_KEY = 'kp_home_proxy_v6_short';
 const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
 const HOME_FALLBACK_URL = '/home-fallback.json';
-const HOME_CACHE_TTL = 30 * 60 * 1000;
+const HOME_CACHE_TTL = 15 * 60 * 1000;
 const HOME_REFRESH_ON_RETURN_MS = 60 * 1000;
 const EMPTY_MOVIES: MovieItem[] = [];
 
@@ -501,6 +501,9 @@ export default function Home() {
   const warmHomeRef = useRef<Record<string, MovieItem[]> | null>(null);
   if (warmHomeRef.current === null) warmHomeRef.current = readWarmHomeCache();
   const [homeData, setHomeData] = useState<Record<string, MovieItem[]>>(() => warmHomeRef.current ?? {});
+  const [heroMovies, setHeroMovies] = useState<MovieItem[]>(
+    () => (warmHomeRef.current?.trending ?? []).slice(0, 5),
+  );
   const [homeLoading, setHomeLoading] = useState(() => !hasHomeMovies(warmHomeRef.current ?? {}));
   const [homeError, setHomeError] = useState(false);
   const homeDataRef = useRef(homeData);
@@ -539,6 +542,8 @@ export default function Home() {
           if (cancelled) return;
           if (res.status) {
             const nextSections = mergeHomeSections(homeDataRef.current, res.sections);
+            const nextHeroMovies = (res.sections.trending ?? []).slice(0, 5);
+            if (nextHeroMovies.length > 0) setHeroMovies(nextHeroMovies);
             setHomeData(nextSections);
             setHomeError(false);
             clearHomeStorageCache();
@@ -567,6 +572,9 @@ export default function Home() {
             writeWarmHomeCache(merged);
             return merged;
           });
+          setHeroMovies((current) => current.length > 0
+            ? current
+            : (fallbackSections.trending ?? []).slice(0, 5));
           setHomeLoading(false);
         })
         .catch(() => undefined);
@@ -626,16 +634,6 @@ export default function Home() {
     });
   }, [activePortal, homeData.trending]);
   const trendingMovies = homeData.trending ?? [];
-  const stableHeroMoviesRef = useRef<MovieItem[]>([]);
-  if (stableHeroMoviesRef.current.length === 0 && trendingMovies.length > 0) {
-    // Keep the first meaningful hero set stable for this visit. The background
-    // refresh may arrive seconds later; swapping the largest image at that
-    // point would reset LCP and create a distracting visual jump.
-    stableHeroMoviesRef.current = trendingMovies.slice(0, 5);
-  }
-  const heroMovies = stableHeroMoviesRef.current.length > 0
-    ? stableHeroMoviesRef.current
-    : trendingMovies;
   const topRatedMovies = useMemo(() => {
     const seen = new Set<string>();
     return [
@@ -732,6 +730,22 @@ export default function Home() {
         <MobileQuickMovies movies={mobileQuickMovies} loading={homeLoading} />
         <ContinueWatching />
         <TrendingSection movies={trendingMovies} loading={bannerLoading} />
+        <LazyMovieSection
+          fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 18}
+          title="Phim Điện Ảnh Mới Coóng" viewAllLink="/phim-le"
+          cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
+          movies={homeData['phim-le'] ?? []}
+          loading={homeLoading}
+        />
+        <DeferredHomeSection minHeight={compactMobile ? 210 : 240}>
+          <Suspense fallback={<div className="h-[210px] sm:h-[240px] skeleton" />}>
+            <Top10TodaySection
+              variant="series"
+              initialMovies={homeData['top10-series']?.length ? homeData['top10-series'] : (homeData['phim-bo'] ?? EMPTY_MOVIES)}
+              loading={homeLoading}
+            />
+          </Suspense>
+        </DeferredHomeSection>
         <DeferredHomeSection minHeight={compactMobile ? 210 : 260}>
           <Suspense fallback={<div className="h-[210px] sm:h-[260px] skeleton" />}>
             <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? EMPTY_MOVIES} loading={homeLoading} />
@@ -739,7 +753,10 @@ export default function Home() {
         </DeferredHomeSection>
         <DeferredHomeSection minHeight={compactMobile ? 210 : 240}>
           <Suspense fallback={<div className="h-[210px] sm:h-[240px] skeleton" />}>
-            <Top10TodaySection initialMovies={trendingMovies} loading={homeLoading} />
+            <Top10TodaySection
+              initialMovies={homeData['top10-single']?.length ? homeData['top10-single'] : trendingMovies}
+              loading={homeLoading}
+            />
           </Suspense>
         </DeferredHomeSection>
         <DeferredHomeSection minHeight={compactMobile ? 210 : 220}>
@@ -756,13 +773,6 @@ export default function Home() {
 
         {/* Category shelves sit below the discovery/ranking sections for a cleaner viewing flow. */}
         <LazyMovieSection
-          fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 18}
-          title="Phim Lẻ Hay" viewAllLink="/phim-le"
-          cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
-          movies={homeData['phim-le'] ?? []}
-          loading={homeLoading}
-        />
-        <LazyMovieSection
           fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 18}
           title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
           cols={6} rootMargin="120px" sectionIndex={1} theme="trending"
@@ -771,7 +781,7 @@ export default function Home() {
         />
         <LazyMovieSection
           fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 9 : 18}
-          title="Hoạt Hình Mới Nhất" viewAllLink="/hoat-hinh"
+          title="Kho Tàng Anime Mới Nhất" viewAllLink="/hoat-hinh"
           cols={6} rootMargin="120px" sectionIndex={2} theme="anime"
           movies={homeData['hoat-hinh'] ?? []}
           loading={homeLoading}

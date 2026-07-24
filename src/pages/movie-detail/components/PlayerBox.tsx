@@ -6,6 +6,7 @@ import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
 import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
 import { isPortraitPhoneViewport, tryLockPlayerLandscape, unlockPlayerOrientation } from '@/utils/playerFullscreen';
+import { markSourcePlaybackHealthy } from '@/services/playerSourceHealth';
 /* ─── URL helpers ─── */
 const SSPLAY_VARIANTS = ['SU', 'SG', 'SD', 'HY'] as const;
 type SsplayVariant = typeof SSPLAY_VARIANTS[number];
@@ -317,6 +318,16 @@ function getEpisodeHost(ep?: EpisodeData | null): string {
   return getSourceHost(ep?.link_m3u8 || ep?.link_embed || '');
 }
 
+function getEpisodeSourceKeys(ep?: EpisodeData | null): string[] {
+  if (!ep) return [];
+  return Array.from(new Set([ep.link_m3u8, ep.link_embed]
+    .map((url) => {
+      const raw = String(url || '').trim();
+      return getSourceHost(raw) || raw;
+    })
+    .filter(Boolean)));
+}
+
 function buildFallbackServersAvoidingHost(
   servers: EpisodeServer[],
   activeServer: number,
@@ -389,12 +400,15 @@ export default function PlayerBox({
   const [ssplayVariant, setSsplayVariant] = useState<SsplayVariant>(() => getPreferredSsplayVariant(episode?.link_embed ?? ''));
   const [autoNextActive, setAutoNextActive] = useState(false);
   const [autoNextCountdown, setAutoNextCountdown] = useState(5);
-  const prevEpSlug = useRef<string | null>(null);
+  const prevSourceIdentityRef = useRef<string | null>(null);
+  const fallbackEpisodeKeyRef = useRef<string | null>(null);
+  const failedSourceKeysRef = useRef<Set<string>>(new Set());
   const iframeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const directVideoStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const directVideoStallMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const directVideoLastTimeRef = useRef(0);
   const directVideoRecoveryAttemptsRef = useRef(0);
+  const playbackSuccessIdentityRef = useRef<string | null>(null);
   const sourcePageRecoveryKeyRef = useRef<string | null>(null);
   const embedContainerRef = useRef<HTMLDivElement>(null);
   const directVideoRef = useRef<HTMLVideoElement>(null);
@@ -600,10 +614,14 @@ export default function PlayerBox({
   }, [embedSrc, episode?.link_m3u8, playerMode]);
   const scheduledLeft = episode?.scheduled_target_at ? getTimeLeft(episode.scheduled_target_at, serverNow) : null;
   const activeServerName = allServers[activeServer]?.server_name ?? '';
-  const activeSourceHost = useMemo(
-    () => getSourceHost(episode?.link_m3u8 || episode?.link_embed || ''),
-    [episode?.link_m3u8, episode?.link_embed]
-  );
+  const activeSourceHost = useMemo(() => {
+    const activeUrl = effectivePlayerMode === 'embed'
+      ? embedSrc
+      : effectivePlayerMode === 'video'
+      ? directVideoSrc
+      : hlsSrc;
+    return getSourceHost(activeUrl || episode?.link_m3u8 || episode?.link_embed || '');
+  }, [directVideoSrc, effectivePlayerMode, embedSrc, episode?.link_embed, episode?.link_m3u8, hlsSrc]);
   useEffect(() => {
     const origins = Array.from(new Set([
       getUrlOrigin(hlsSrc),
@@ -625,6 +643,17 @@ export default function PlayerBox({
       ...issue,
     });
   }, [activeServerName, activeSourceHost, effectivePlayerMode, episode?.name, episode?.slug, movieSlug, movieTitle]);
+  const reportPlaybackStarted = useCallback(() => {
+    if (!activeSourceHost || document.hidden || navigator.onLine === false) return;
+    const identity = `${movieSlug}|${episode?.slug || episode?.name || ''}|${effectivePlayerMode}|${activeSourceHost}`;
+    if (playbackSuccessIdentityRef.current === identity) return;
+    playbackSuccessIdentityRef.current = identity;
+    markSourcePlaybackHealthy(activeSourceHost);
+    reportIssue({
+      event_type: 'playback_started',
+      error_message: 'playback reached playing state',
+    });
+  }, [activeSourceHost, effectivePlayerMode, episode?.name, episode?.slug, movieSlug, reportIssue]);
   useEffect(() => {
     if (directVideoRef.current) directVideoRef.current.playbackRate = directVideoSpeed;
   }, [directVideoSpeed, directVideoSrc]);
@@ -633,11 +662,27 @@ export default function PlayerBox({
     directVideoRecoveryAttemptsRef.current = 0;
   }, [directVideoSrc]);
 
-  /* Reset when episode changes */
+  /*
+   * Reset whenever the actual source changes, not only when the episode slug
+   * changes. A fallback normally keeps the same slug, so the old check left an
+   * iframe source in HLS mode (or the inverse) after an automatic server switch.
+   */
   useEffect(() => {
-    const currentSlug = episode?.slug ?? null;
-    if (currentSlug !== prevEpSlug.current) {
-      prevEpSlug.current = currentSlug;
+    const logicalEpisodeKey = `${movieSlug}:${episode?.slug || episode?.name || ''}`;
+    const sourceIdentity = [
+      logicalEpisodeKey,
+      activeServer,
+      episode?.link_m3u8 || '',
+      episode?.link_embed || '',
+    ].join('|');
+
+    if (logicalEpisodeKey !== fallbackEpisodeKeyRef.current) {
+      fallbackEpisodeKeyRef.current = logicalEpisodeKey;
+      failedSourceKeysRef.current.clear();
+    }
+
+    if (sourceIdentity !== prevSourceIdentityRef.current) {
+      prevSourceIdentityRef.current = sourceIdentity;
       setIframeLoaded(false);
       setIframeBlocked(false);
       setIframeKey((k) => k + 1);
@@ -646,7 +691,7 @@ export default function PlayerBox({
       setAutoNextCountdown(5);
       setPlayerMode(getPlayerMode(episode));
     }
-  }, [episode?.slug, episode?.link_m3u8, episode?.link_embed]);
+  }, [activeServer, episode?.name, episode?.slug, episode?.link_m3u8, episode?.link_embed, movieSlug]);
 
   /* Iframe load timeout fallback */
   useEffect(() => {
@@ -698,12 +743,29 @@ export default function PlayerBox({
 
   const switchToFallbackServer = useCallback(() => {
     rememberBadSourceHost(activeSourceHost);
-    const { indices: remainingServerIndices, servers: remainingServers } = buildFallbackServersAvoidingHost(
+    const activeSourceKey = activeSourceHost || String(episode?.link_m3u8 || episode?.link_embed || '').trim();
+    if (activeSourceKey) failedSourceKeysRef.current.add(activeSourceKey);
+
+    const { indices: candidateIndices, servers: candidateServers } = buildFallbackServersAvoidingHost(
       allServers,
       activeServer,
       activeSourceHost,
       episode,
     );
+    const remainingPairs = candidateServers
+      .map((server, index) => ({
+        originalIndex: candidateIndices[index],
+        server: {
+          ...server,
+          server_data: (server.server_data ?? []).filter((candidate) => {
+            const keys = getEpisodeSourceKeys(candidate);
+            return keys.length === 0 || keys.every((key) => !failedSourceKeysRef.current.has(key));
+          }),
+        },
+      }))
+      .filter(({ server }) => (server.server_data ?? []).length > 0);
+    const remainingServerIndices = remainingPairs.map(({ originalIndex }) => originalIndex);
+    const remainingServers = remainingPairs.map(({ server }) => server);
     const fallback = pickBestEpisodeByPriority(remainingServers, episode?.slug);
     if (fallback) {
       onSwitchServer(remainingServerIndices[fallback.serverIndex]);
@@ -711,7 +773,7 @@ export default function PlayerBox({
       return true;
     }
     return false;
-  }, [activeServer, activeSourceHost, allServers, episode?.slug, onSelectEp, onSwitchServer]);
+  }, [activeServer, activeSourceHost, allServers, episode, onSelectEp, onSwitchServer]);
 
   useEffect(() => {
     if (!embedIsSourcePage || effectivePlayerMode !== 'embed') return;
@@ -759,6 +821,7 @@ export default function PlayerBox({
   }, [effectivePlayerMode, episode?.link_embed, reportIssue, switchToFallbackServer]);
 
   const handleDirectVideoError = useCallback(() => {
+    if (navigator.onLine === false) return;
     const video = directVideoRef.current;
     reportIssue({
       event_type: 'direct_video_error',
@@ -775,6 +838,7 @@ export default function PlayerBox({
   }, [effectivePlayerMode, episode?.link_embed, reportIssue, switchToFallbackServer]);
 
   const handleDirectVideoStallFatal = useCallback((reason: string) => {
+    if (navigator.onLine === false) return;
     const video = directVideoRef.current;
     reportIssue({
       event_type: 'stall_fatal',
@@ -805,6 +869,7 @@ export default function PlayerBox({
     };
     const recoverOrFallback = (reason: string) => {
       if (video.paused || video.ended) return;
+      if (navigator.onLine === false) return;
       if (getVideoBufferedAhead(video) > 1.5) return;
 
       directVideoRecoveryAttemptsRef.current += 1;
@@ -851,6 +916,7 @@ export default function PlayerBox({
       clearStallTimer();
       directVideoRecoveryAttemptsRef.current = 0;
       startMonitor();
+      if (!video.paused && !video.ended) reportPlaybackStarted();
     };
     const onPause = () => {
       clearStallTimer();
@@ -860,6 +926,13 @@ export default function PlayerBox({
       clearStallTimer();
       stopMonitor();
     };
+    const onOnline = () => {
+      if (effectivePlayerMode !== 'video') return;
+      const resumeAt = video.currentTime;
+      video.load();
+      if (resumeAt > 0) video.currentTime = resumeAt;
+      video.play().catch(() => {});
+    };
 
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('stalled', onWaiting);
@@ -867,6 +940,7 @@ export default function PlayerBox({
     video.addEventListener('canplay', onPlaying);
     video.addEventListener('pause', onPause);
     video.addEventListener('ended', onEnded);
+    window.addEventListener('online', onOnline);
 
     if (!video.paused && !video.ended) startMonitor();
 
@@ -877,19 +951,37 @@ export default function PlayerBox({
       video.removeEventListener('canplay', onPlaying);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('ended', onEnded);
+      window.removeEventListener('online', onOnline);
       clearStallTimer();
       stopMonitor();
     };
-  }, [directVideoSrc, effectivePlayerMode, handleDirectVideoStallFatal, reportIssue]);
+  }, [directVideoSrc, effectivePlayerMode, handleDirectVideoStallFatal, reportIssue, reportPlaybackStarted]);
 
   useEffect(() => {
     if (!iframeBlocked || effectivePlayerMode !== 'embed') return;
+    if (navigator.onLine === false) {
+      const retryWhenOnline = () => {
+        setIframeBlocked(false);
+        setIframeLoaded(false);
+        setIframeKey((key) => key + 1);
+      };
+      window.addEventListener('online', retryWhenOnline, { once: true });
+      return () => window.removeEventListener('online', retryWhenOnline);
+    }
     reportIssue({
       event_type: 'iframe_blocked',
       error_message: 'embed iframe load timed out or failed',
     });
+    // The provider iframe and its direct media URL are separate playback
+    // paths. If the iframe is blocked by CSP/cookies, try the direct stream of
+    // the same episode before abandoning it for another server.
+    if (episode?.link_m3u8) {
+      setIframeBlocked(false);
+      setPlayerMode(isHlsUrl(episode.link_m3u8) ? 'hls' : 'video');
+      return;
+    }
     switchToFallbackServer();
-  }, [effectivePlayerMode, iframeBlocked, reportIssue, switchToFallbackServer]);
+  }, [effectivePlayerMode, episode?.link_m3u8, iframeBlocked, reportIssue, switchToFallbackServer]);
 
   return (
     <div className="movie-player-box mb-2 relative">
@@ -941,9 +1033,9 @@ export default function PlayerBox({
               height="100%"
               className="w-full h-full border-0"
               allowFullScreen
-              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture; web-share"
               sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-popups"
-              referrerPolicy="no-referrer"
+              referrerPolicy={isDailymotion(embedSrc) ? 'strict-origin-when-cross-origin' : 'no-referrer'}
               loading="eager"
               onLoad={() => {
                 setIframeLoaded(true);
@@ -1081,6 +1173,7 @@ export default function PlayerBox({
               onEnded={handleEnded}
               onVideoEnded={onVideoEnded}
               onFatalError={handleHlsFatal}
+              onPlaybackStarted={reportPlaybackStarted}
               onPlayerIssue={reportIssue}
               subtitleUrl={episode?.subtitle_url || ''}
             />

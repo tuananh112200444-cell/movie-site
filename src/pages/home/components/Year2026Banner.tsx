@@ -67,7 +67,7 @@ export default function Year2026Banner() {
 
           {/* Shimmer heading — DÙNG transform animation thay vì background-size */}
           <h3 className="text-lg md:text-3xl lg:text-4xl font-black mb-2 md:mb-3 leading-tight">
-            <span className="text-white">Phim Hay Nhất</span>
+            <span className="text-white">Phim Hay Nhất</span>{' '}
             <br />
             <span className="text-white">Năm 2026</span>
           </h3>

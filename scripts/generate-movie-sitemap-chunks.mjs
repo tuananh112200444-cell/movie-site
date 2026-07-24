@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
 const FUNCTION_URL = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml';
 
@@ -20,6 +20,19 @@ async function fetchSitemap(fileName, query) {
     throw new Error(`${fileName} did not return a valid movie URL sitemap`);
   }
   return xml;
+}
+
+async function fetchSitemapWithLastKnownGood(fileName, query) {
+  try {
+    return await fetchSitemap(fileName, query);
+  } catch (error) {
+    const cached = await readFile(`public/${fileName}`, 'utf8').catch(() => '');
+    if (cached.includes('<urlset') && cached.includes('https://khophim.org/phim/')) {
+      console.warn(`[seo-generate] ${fileName}: upstream unavailable; preserving last-known-good sitemap.`);
+      return cached;
+    }
+    throw error;
+  }
 }
 
 function stripPlaceholderImages(xml) {
@@ -53,7 +66,7 @@ await mkdir('public', { recursive: true });
 
 const results = [];
 for (const [fileName, query] of targets) {
-  const xml = stripPlaceholderImages(await fetchSitemap(fileName, query));
+  const xml = stripPlaceholderImages(await fetchSitemapWithLastKnownGood(fileName, query));
   await writeFileWithRetry(`public/${fileName}`, xml);
   const count = (xml.match(/<url>/g) || []).length;
   results.push({ fileName, count });

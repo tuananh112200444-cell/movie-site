@@ -98,7 +98,7 @@ const architectureChecks = [
   [suggestionsSource.includes('useDebounce(query, 180)'), 'Suggestion debounce must remain responsive'],
   [movieApiSource.includes("new URL('/api/search', window.location.origin)"), 'Browser search must use the same-origin edge cache'],
   [workerSource.includes("pathname === '/api/search'"), 'Cloudflare worker must expose the search route'],
-  [workerSource.includes('/__api-cache/search/v8/'), 'Cloudflare search must use a versioned cache key'],
+  [workerSource.includes('/__api-cache/search/v9/'), 'Cloudflare search must use a versioned cache key'],
   [searchMigrationSource.includes('movie_search_documents_blob_trgm_idx'), 'Search documents need a trigram index'],
   [searchMigrationSource.includes('movies_refresh_search_document'), 'Movie writes must refresh search documents automatically'],
 ];

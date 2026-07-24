@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
 export type PlayerIssueEventType =
+  | 'playback_started'
   | 'hls_retry'
   | 'hls_fatal_retry'
   | 'hls_media_retry'

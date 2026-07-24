@@ -5,7 +5,7 @@ const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functio
 const SUPABASE_REST_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/rest/v1';
 // This is Supabase's public browser key (RLS still applies), not a service key.
 const SUPABASE_PUBLIC_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
-const SEO_PRERENDER_VERSION = '20260719-index-quality-v2';
+const SEO_PRERENDER_VERSION = '20260723-ongoing-freshness-v4';
 
 const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
@@ -643,6 +643,25 @@ function isUpcomingMovie(movie) {
   const status = normalizeSearchText(movie.seo_catalog_status || movie.status);
   const releaseAt = movie.release_at ? new Date(movie.release_at).getTime() : 0;
   return status === 'upcoming' || ep.includes('sap chieu') || ep.includes('sắp chiếu') || releaseAt > Date.now();
+}
+
+function getTrailerEmbedUrl(value) {
+  const raw = String(value || '').trim();
+  if (!/^https:\/\//i.test(raw)) return '';
+  try {
+    const url = new URL(raw);
+    if (url.hostname === 'youtu.be') {
+      const id = url.pathname.split('/').filter(Boolean)[0] || '';
+      return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
+    }
+    if (/(^|\.)youtube\.com$/i.test(url.hostname)) {
+      const id = url.searchParams.get('v') || (/^\/(?:embed|shorts)\/([^/?#]+)/.exec(url.pathname)?.[1] ?? '');
+      return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
+    }
+    return raw;
+  } catch {
+    return '';
+  }
 }
 
 function hasPlayableMovieEvidence(movie) {
@@ -1399,7 +1418,9 @@ function renderStaticPrerender(pathname) {
   }), {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=900, s-maxage=3600',
+      'Cache-Control': isOngoing
+        ? 'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'
+        : 'public, max-age=900, s-maxage=3600',
       'X-Prerendered': 'cloudflare-static',
       'X-Robots-Tag': 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
       ...SECURITY_HEADERS,
@@ -1489,29 +1510,58 @@ function renderMoviePrerender(pathname, movie, slug) {
   const isTrailerOnly = isTrailerOnlyMovie(movie);
   const isUpcoming = isUpcomingMovie(movie);
   const hasPlayableEpisode = hasPlayableMovieEvidence(movie);
-  const isIndexable = hasPlayableEpisode && !isUpcoming && !isTrailerOnly && Boolean(name && poster && content.length >= 80);
+  const trailerEmbedUrl = getTrailerEmbedUrl(movie.trailer_url);
+  const qualityApproved = movie.seo_eligible_for_index === true;
+  const qualityTier = String(movie.seo_index_tier || '');
+  const isOngoing = qualityTier === 'ongoing';
+  const qualityChecked = Boolean(movie.seo_quality_checked_at);
+  const isIndexableUpcoming = qualityApproved
+    && qualityTier === 'upcoming'
+    && (isUpcoming || isTrailerOnly)
+    && Boolean(trailerEmbedUrl && name && poster && content.length >= 120);
+  const isIndexablePlayable = (
+    qualityApproved
+      && (qualityTier === 'playable' || qualityTier === 'ongoing')
+      && hasPlayableEpisode
+      && Boolean(name && poster && content.length >= 80)
+  ) || (!qualityChecked
+      && hasPlayableEpisode
+      && !isUpcoming
+      && !isTrailerOnly
+      && Boolean(name && poster && content.length >= 80));
+  const isIndexable = isIndexableUpcoming || isIndexablePlayable;
   const releaseDateText = formatVietnamDate(movie.release_at);
-  const modifiedAt = getMovieModifiedAt(movie);
+  const episodeChangedAt = Date.parse(String(movie.seo_last_episode_change_at || '')) || 0;
+  const modifiedAt = Math.max(getMovieModifiedAt(movie), episodeChangedAt);
   const modifiedIso = modifiedAt ? new Date(modifiedAt).toISOString() : undefined;
   const modifiedText = modifiedAt ? formatVietnamDateTime(modifiedAt) : '';
   const isFreshUpdate = isFreshMovieUpdate(movie);
   const episodeText = String(movie.episode_current || '').trim();
-  const totalEpisodeCount = parseEpisodeCount(movie.episode_total);
-  const updateIntentText = isFreshUpdate && episodeText && !isUpcoming && !isTrailerOnly
+  const latestEpisodeNumber = Number(movie.seo_latest_episode_number || movie.current_episode || 0);
+  const totalEpisodeCount = Number(movie.seo_declared_total_episodes || parseEpisodeCount(movie.episode_total) || 0);
+  const episodeProgress = Number(movie.seo_episode_progress_percent || 0);
+  const freshnessScore = Number(movie.seo_freshness_score || 0);
+  const nextEpisodeText = formatVietnamDateTime(movie.seo_next_episode_at || movie.next_episode_at);
+  const updateIntentText = (isOngoing || isFreshUpdate) && episodeText && !isUpcoming && !isTrailerOnly
     ? `Tập mới cập nhật: ${episodeText}.`
     : '';
   const title = isUpcoming
     ? `${name} - Lịch Chiếu Và Thông Tin Phim | KhoPhim`
     : isTrailerOnly
       ? `${name} - Trailer Và Thông Tin Phim | KhoPhim`
+      : isOngoing
+        ? `${name} - ${episodeText || `Tập ${latestEpisodeNumber}`} Đang Chiếu ${lang} | KhoPhim`
       : `${name}${year ? ` (${year})` : ''} - Xem Phim ${lang} | KhoPhim`;
   const description = compactMeta([
     isUpcoming
       ? `${name}${origin ? ` (${origin})` : ''} là phim sắp chiếu, được cập nhật trailer, lịch chiếu, nội dung và thông tin diễn viên trên KhoPhim.`
       : isTrailerOnly
         ? `Xem trailer ${name}${origin ? ` (${origin})` : ''}, thông tin phim, nội dung, thể loại và lịch cập nhật tập mới trên KhoPhim.`
+        : isOngoing
+          ? `${name}${origin ? ` (${origin})` : ''} đang chiếu bản ${lang}, hiện có ${episodeText || `tập ${latestEpisodeNumber}`}${totalEpisodeCount ? ` trên tổng dự kiến ${totalEpisodeCount} tập` : ''}. Theo dõi và xem tập mới trên KhoPhim.`
         : `Xem thông tin và các tập đang có của ${name}${origin ? ` (${origin})` : ''} bản ${lang} trên KhoPhim.`,
     updateIntentText,
+    nextEpisodeText ? `Tập tiếp theo dự kiến: ${nextEpisodeText}.` : '',
     releaseDateText ? `Dự kiến phát hành: ${releaseDateText}.` : '',
     episodeText ? `Trạng thái: ${episodeText}.` : '',
     modifiedText ? `Cập nhật lúc ${modifiedText}.` : '',
@@ -1551,6 +1601,7 @@ function renderMoviePrerender(pathname, movie, slug) {
       episode: episodeText ? {
         '@type': 'Episode',
         name: episodeText,
+        episodeNumber: latestEpisodeNumber || undefined,
         url: canonical,
         datePublished: modifiedIso,
         dateModified: modifiedIso,
@@ -1566,7 +1617,21 @@ function renderMoviePrerender(pathname, movie, slug) {
       countryOfOrigin: countries.map((country) => ({ '@type': 'Country', name: country })),
       inLanguage: lang,
       potentialAction: hasPlayableEpisode ? { '@type': 'WatchAction', target: watchUrl } : undefined,
+      trailer: trailerEmbedUrl ? { '@id': `${canonical}#trailer` } : undefined,
     },
+    ...(trailerEmbedUrl ? [{
+      '@context': 'https://schema.org',
+      '@type': 'VideoObject',
+      '@id': `${canonical}#trailer`,
+      name: `Trailer ${name}`,
+      description,
+      thumbnailUrl: [poster],
+      uploadDate: modifiedIso || movie.release_at || (year ? `${year}-01-01` : undefined),
+      embedUrl: trailerEmbedUrl,
+      url: canonical,
+      inLanguage: lang,
+      isFamilyFriendly: true,
+    }] : []),
     {
       '@context': 'https://schema.org',
       '@type': 'WebPage',
@@ -1582,6 +1647,7 @@ function renderMoviePrerender(pathname, movie, slug) {
       significantLink: [
         `${SITE_URL}/phim-moi-cap-nhat`,
         `${SITE_URL}/phim-moi-nhat`,
+        ...(isOngoing ? [`${SITE_URL}/phim-dang-chieu`, `${SITE_URL}/sitemap-movies-ongoing.xml`] : []),
         `${SITE_URL}/sitemap-movies-recent.xml`,
       ],
     },
@@ -1610,13 +1676,28 @@ function renderMoviePrerender(pathname, movie, slug) {
   const body = `${origin ? `<p>${escapeHtml(origin)}</p>` : ''}
     ${titleVariants.length ? `<p>Tên khác: ${titleVariants.map(escapeHtml).join(', ')}</p>` : ''}
     <img src="${escapeHtml(poster)}" alt="${escapeHtml(name)}">
-    <p>${escapeHtml(isUpcoming ? 'Phim sắp chiếu' : isTrailerOnly ? 'Trailer và thông tin phim' : isFreshUpdate ? 'Phim mới cập nhật tập mới' : 'Xem phim online')}</p>
+    <p>${escapeHtml(isUpcoming ? 'Phim sắp chiếu' : isTrailerOnly ? 'Trailer và thông tin phim' : isOngoing ? 'Phim đang chiếu và cập nhật tập mới' : isFreshUpdate ? 'Phim mới cập nhật tập mới' : 'Xem phim online')}</p>
     ${releaseDateText ? `<p>Lịch chiếu dự kiến: ${escapeHtml(releaseDateText)}</p>` : ''}
     ${episodeText ? `<p>Trạng thái hiện tại: ${escapeHtml(episodeText)}</p>` : ''}
+    ${isOngoing && totalEpisodeCount ? `<p>Tiến độ phát sóng: ${latestEpisodeNumber}/${totalEpisodeCount} tập (${episodeProgress}%).</p>` : ''}
+    ${isOngoing && nextEpisodeText ? `<p>Tập tiếp theo dự kiến: ${escapeHtml(nextEpisodeText)}</p>` : ''}
+    ${isOngoing ? `<p>Độ mới của cập nhật tập: ${freshnessScore}/100. <a href="${SITE_URL}/phim-dang-chieu">Xem các phim đang chiếu khác</a>.</p>` : ''}
     ${isFreshUpdate && modifiedText ? `<p>Ưu tiên cập nhật mới: ${escapeHtml(name)} ${episodeText ? `${escapeHtml(episodeText)} ` : ''}được làm mới lúc ${escapeHtml(modifiedText)}.</p>` : ''}
     ${actorLinks ? `<p>Diễn viên: ${actorLinks}</p>` : ''}
     ${directorLinks ? `<p>Đạo diễn: ${directorLinks}</p>` : ''}
     <p>${escapeHtml(description)}</p>
+    ${trailerEmbedUrl ? `<section>
+      <h2>Trailer ${escapeHtml(name)}</h2>
+      <iframe
+        src="${escapeHtml(trailerEmbedUrl)}"
+        title="Trailer ${escapeHtml(name)}"
+        width="960"
+        height="540"
+        loading="eager"
+        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+        allowfullscreen
+      ></iframe>
+    </section>` : ''}
     <nav>
       <a href="${escapeHtml(canonical)}">${escapeHtml(isUpcoming || isTrailerOnly ? `Xem trailer va thong tin ${name}` : `Xem phim ${name}`)}</a>
       <a href="${SITE_URL}/phim-moi-cap-nhat">Phim mới cập nhật</a>
@@ -1646,7 +1727,9 @@ function renderMoviePrerender(pathname, movie, slug) {
   }), {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=900, s-maxage=3600',
+      'Cache-Control': isOngoing
+        ? 'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'
+        : 'public, max-age=900, s-maxage=3600',
       'X-Prerendered': 'cloudflare-movie',
       'X-Robots-Tag': isIndexable
         ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
@@ -1697,7 +1780,7 @@ function renderMovieNotFound(pathname, slug) {
 }
 
 async function proxySitemap(pathname, request, context) {
-  if (/^\/sitemap-movies-\d+\.xml$/.test(pathname) || pathname === '/sitemap-movies-upcoming.xml') {
+  if (/^\/sitemap-movies-\d+\.xml$/.test(pathname)) {
     return new Response(request.method === 'HEAD' ? null : '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
       status: 410,
       headers: {
@@ -1728,6 +1811,14 @@ async function proxySitemap(pathname, request, context) {
     <lastmod>${today}</lastmod>
   </sitemap>
   <sitemap>
+    <loc>${SITE_URL}/sitemap-movies-upcoming.xml</loc>
+    <lastmod>${today}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${SITE_URL}/sitemap-movies-ongoing.xml</loc>
+    <lastmod>${today}</lastmod>
+  </sitemap>
+  <sitemap>
     <loc>${SITE_URL}/feed.xml</loc>
     <lastmod>${today}</lastmod>
   </sitemap>
@@ -1743,7 +1834,7 @@ async function proxySitemap(pathname, request, context) {
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  const sitemapVersion = '20260721-gl-raw-quality-v5';
+  const sitemapVersion = '20260723-ongoing-quality-v9';
   let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=5000&v=${sitemapVersion}`;
@@ -1751,6 +1842,8 @@ async function proxySitemap(pathname, request, context) {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=2000&v=${sitemapVersion}`;
   } else if (pathname === '/sitemap-movies-upcoming.xml') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?upcoming=1&page_size=5000&v=${sitemapVersion}`;
+  } else if (pathname === '/sitemap-movies-ongoing.xml') {
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?ongoing=1&page_size=5000&v=${sitemapVersion}`;
   } else if (pathname === '/feed.xml') {
     target = `${SUPABASE_FUNCTION_BASE}/movie-rss-feed?v=${sitemapVersion}`;
   } else if (movieChunkMatch) {
@@ -1781,15 +1874,21 @@ async function proxySitemap(pathname, request, context) {
       }
     }
 
+    const isOngoingSitemap = pathname === '/sitemap-movies-ongoing.xml';
     const response = await fetch(target, {
       headers: { 'Accept': 'application/xml', 'User-Agent': request.headers.get('user-agent') || 'KhoPhimBot/1.0' },
-      cf: { cacheTtl: 1800, cacheEverything: true },
+      cf: { cacheTtl: isOngoingSitemap ? 600 : 1800, cacheEverything: true },
       signal: AbortSignal.timeout(30000),
     });
     if (!response.ok) throw new Error(`Sitemap upstream ${response.status}`);
     const headers = new Headers(response.headers);
     headers.set('Content-Type', 'application/xml; charset=utf-8');
-    headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600');
+    headers.set(
+      'Cache-Control',
+      isOngoingSitemap
+        ? 'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'
+        : 'public, max-age=1800, s-maxage=3600',
+    );
     headers.set('X-Sitemap-Proxy', 'cloudflare-pages');
     headers.set('X-Sitemap-Cache', 'MISS');
     headers.delete('Set-Cookie');
@@ -1926,7 +2025,7 @@ async function proxyMovieDetail(request, context) {
   const upstreamUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
   upstreamUrl.searchParams.set('slug', slug);
   if (refresh) upstreamUrl.searchParams.set('refresh', '1');
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}`, { method: 'GET' });
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}?rev=canonical-v3`, { method: 'GET' });
   const failureKey = new Request(`${SITE_URL}/__circuit/movie-detail/${encodeURIComponent(slug)}`, { method: 'GET' });
 
   try {
@@ -1993,7 +2092,7 @@ async function proxySearch(request, context) {
   }
 
   const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v8/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v9/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
   if (request.method === 'GET' && typeof caches !== 'undefined') {
     const cached = await caches.default.match(cacheKey);
     if (cached) {
@@ -2258,6 +2357,7 @@ export async function onRequest(context) {
     pathname === '/sitemap-movies-dynamic' ||
     pathname === '/sitemap-movies-recent.xml' ||
     pathname === '/sitemap-movies-upcoming.xml' ||
+    pathname === '/sitemap-movies-ongoing.xml' ||
     pathname === '/feed.xml' ||
     /^\/sitemap-movies-\d+\.xml$/.test(pathname)
   ) {
