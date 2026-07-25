@@ -328,10 +328,18 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
           return srv && matched ? { ...srv, server_data: [matched], originalIndex: idx } : null;
         })
         .filter(Boolean) as Array<EpisodeServer & { originalIndex: number }>;
-      const tabMatchedServers = serverTypeTab === 'all'
+      const activeAudioType = activeServer >= 0
+        ? detectServerType(getServerIdentityText(episodes[activeServer]))
+        : 'other';
+      const sameAudioServers = activeAudioType === 'other' || activeAudioType === 'khophim'
         ? allAvailableServers
-        : allAvailableServers.filter((srv) => detectServerType(getServerIdentityText(srv)) === serverTypeTab);
-      const availableServers = tabMatchedServers.length > 0 ? tabMatchedServers : allAvailableServers;
+        : allAvailableServers.filter(
+          (srv) => detectServerType(getServerIdentityText(srv)) === activeAudioType,
+        );
+      const tabMatchedServers = serverTypeTab === 'all'
+        ? sameAudioServers
+        : sameAudioServers.filter((srv) => detectServerType(getServerIdentityText(srv)) === serverTypeTab);
+      const availableServers = tabMatchedServers.length > 0 ? tabMatchedServers : sameAudioServers;
       const best = pickBestEpisodeByPriority(availableServers);
       if (best) {
         onSwitchServer(availableServers[best.serverIndex].originalIndex);

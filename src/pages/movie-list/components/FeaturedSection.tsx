@@ -82,10 +82,17 @@ export default function FeaturedSection({ movies, type }: FeaturedSectionProps) 
 
 /* ─── Main Card (16:9 large) ─── */
 function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PALETTE['phim-le'] }) {
-  const imagePath = movie.thumb_url || movie.poster_url;
+  // Featured cards are landscape surfaces. OPhim and most catalog sources use
+  // thumb_url for the portrait cover and poster_url for the wide backdrop.
+  // Preferring thumb_url here enlarged a vertical poster into a 16:9 frame on
+  // every list page that uses this shared section.
+  const imagePath = movie.hero_backdrop_url || movie.poster_url || movie.thumb_url;
+  const fallbackPath = movie.hero_backdrop_url
+    ? (movie.poster_url || movie.thumb_url)
+    : movie.thumb_url;
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
     imagePath,
-    movie.poster_url || movie.thumb_url,
+    fallbackPath,
     isImagePreloaded(getFeaturedUrl(imagePath)),
     1180,
     88,
@@ -180,10 +187,13 @@ function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PA
 
 /* ─── Side Card (horizontal list item) ─── */
 function FeaturedSideCard({ movie, palette }: { movie: Movie; palette: typeof PALETTE['phim-le'] }) {
-  const imagePath = movie.thumb_url || movie.poster_url;
+  const imagePath = movie.hero_backdrop_url || movie.poster_url || movie.thumb_url;
+  const fallbackPath = movie.hero_backdrop_url
+    ? (movie.poster_url || movie.thumb_url)
+    : movie.thumb_url;
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
     imagePath,
-    movie.poster_url || movie.thumb_url,
+    fallbackPath,
     isImagePreloaded(getImageUrl(imagePath)),
     420,
     84,

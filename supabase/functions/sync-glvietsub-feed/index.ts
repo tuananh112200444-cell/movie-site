@@ -266,7 +266,7 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
     else { const { error } = await db.from('streams').insert(streamPayload); if (error) throw error; }
     rows += 1;
   }
-  await db.from('movie_api_cache').delete().eq('slug', movie.slug);
+  await db.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).eq('slug', movie.slug);
   return { slug: movie.slug, created, rows, current_episode: entry.currentEpisode, total_episodes: entry.expectedEpisodes };
 }
 
@@ -320,7 +320,7 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
   const { error: seoError } = await db.rpc('refresh_movie_seo_quality', { p_movie_id: movie.id });
   if (seoError) throw seoError;
   await db.from('home_page_cache').update({ expires_at: now }).in('id', ['homepage_v3', 'search_index_v4_rows']);
-  await db.from('movie_api_cache').delete().eq('slug', movie.slug);
+  await db.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).eq('slug', movie.slug);
   return { ...result, current_episode: nextCurrent, raw_episode: rawEpisode, playable_episode: playableEpisode };
 }
 

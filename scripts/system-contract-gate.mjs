@@ -39,13 +39,13 @@ if (!navbar.includes('drop-shadow-[0_0_5px_currentColor]') || navbar.includes('t
   failures.push('desktop social icons can still render dim before hover');
 }
 
-for (const step of ['schema:test', 'seo:upcoming:test', 'seo:ongoing:test', 'system:contracts', 'home:test', 'search:test', 'movie:data:test', 'watch:test', 'diagnostics:test']) {
+for (const step of ['schema:test', 'seo:upcoming:test', 'seo:ongoing:test', 'system:contracts', 'sync:safety:test', 'home:test', 'search:test', 'movie:data:test', 'watch:test', 'diagnostics:test']) {
   if (!releaseGate.includes(`['${step}']`)) failures.push(`release gate is missing ${step}`);
 }
 
 for (const file of connectors) {
   const source = read(file);
-  if (!source.includes("from('movie_api_cache').delete()")) failures.push(`${file} does not invalidate movie detail cache`);
+  if (!source.includes("from('movie_api_cache').update({ expires_at:")) failures.push(`${file} does not expire movie detail cache safely`);
   if (!source.includes('const urlChanged')) failures.push(`${file} can overwrite health without checking URL identity`);
 }
 for (const file of connectors.slice(0, 2)) {
@@ -59,7 +59,7 @@ if (!cronStagger.includes("cron.unschedule('cobephim-smart-sync')") || !cronStag
 }
 if (!searchCronTuning.includes("'17,47 * * * *'")) failures.push('full search-index safety rebuild runs too frequently');
 if (!indexingCronCleanup.includes("cron.unschedule('auto-ping-google-daily')")) failures.push('deprecated Google Indexing API cron is still part of the control plane');
-if (!ophimSync.includes(".eq('id', 'homepage_v3')") || !ophimSync.includes(".delete().in('slug', targets)")) {
+if (!ophimSync.includes(".eq('id', 'homepage_v3')") || !ophimSync.includes(".update({ expires_at: new Date().toISOString() }).in('slug', targets)")) {
   failures.push('OPhim sync must invalidate only changed movie caches and preserve stale homepage data');
 }
 if (ophimSync.includes("delete().neq('slug', '__never__')") || ophimSync.includes("home_page_cache').delete().neq")) {

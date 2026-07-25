@@ -91,11 +91,11 @@ function getTrailerEmbedUrl(url: string): string | null {
   const shortMatch = url.match(/youtu\.be\/([^?]+)/);
   if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}?autoplay=0`;
   if (url.includes('youtube.com/embed/')) return url;
-  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/video\/([a-zA-Z0-9]+)/i.exec(url);
-  if (dm) return `https://www.dailymotion.com/embed/video/${dm[1]}`;
+  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/(?:embed\/)?video\/([a-zA-Z0-9]+)/i.exec(url);
+  if (dm) return `https://geo.dailymotion.com/player.html?video=${dm[1]}`;
   const shortDm = /^https?:\/\/dai\.ly\/([a-zA-Z0-9]+)/i.exec(url);
-  if (shortDm) return `https://www.dailymotion.com/embed/video/${shortDm[1]}`;
-  if (url.includes('dailymotion.com/embed/')) return url;
+  if (shortDm) return `https://geo.dailymotion.com/player.html?video=${shortDm[1]}`;
+  if (url.includes('dailymotion.com/player')) return url;
   const vimeo = /^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)/i.exec(url);
   if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
   if (url.includes('player.vimeo.com/')) return url;

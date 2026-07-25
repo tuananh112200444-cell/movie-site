@@ -1433,20 +1433,22 @@ async function fetchOphimMovie(slug) {
     `https://ophim1.com/phim/${encodeURIComponent(slug)}`,
     `https://ophim.tv/phim/${encodeURIComponent(slug)}`,
   ];
-  for (const url of urls) {
+  const results = await Promise.allSettled(urls.map(async (url) => {
     try {
       const response = await fetch(url, {
         headers: { 'User-Agent': 'KhoPhimBot/1.0' },
-        signal: AbortSignal.timeout(4500),
+        signal: AbortSignal.timeout(4000),
       });
-      if (!response.ok) continue;
+      if (!response.ok) return null;
       const data = await response.json();
-      if (data && data.movie && data.movie.slug) return data.movie;
+      return data && data.movie && data.movie.slug ? data.movie : null;
     } catch {
-      // Try next mirror.
+      return null;
     }
-  }
-  return null;
+  }));
+  return results
+    .map((result) => result.status === 'fulfilled' ? result.value : null)
+    .find(Boolean) || null;
 }
 
 async function fetchSupabaseMovie(slug) {
@@ -1456,12 +1458,11 @@ async function fetchSupabaseMovie(slug) {
   detailUrl.searchParams.set('slug', slug);
 
   const attempts = [
-    { url: seoUrl, timeoutMs: 4500 },
-    { url: detailUrl, timeoutMs: 9000 },
-    { url: detailUrl, timeoutMs: 14000 },
+    { url: seoUrl, timeoutMs: 3500 },
+    { url: detailUrl, timeoutMs: 5000 },
   ];
 
-  for (const attempt of attempts) {
+  const results = await Promise.allSettled(attempts.map(async (attempt) => {
     try {
       const response = await fetch(attempt.url.toString(), {
         headers: {
@@ -1470,14 +1471,44 @@ async function fetchSupabaseMovie(slug) {
         },
         signal: AbortSignal.timeout(attempt.timeoutMs),
       });
-      if (!response.ok) continue;
+      if (!response.ok) return null;
       const data = await response.json();
-      if (data && data.status && data.movie && data.movie.slug) return data.movie;
+      return data && data.status && data.movie && data.movie.slug ? data.movie : null;
     } catch {
-      // Fall through to the next source. Detail repair can be slow on first hit.
+      return null;
     }
-  }
-  return null;
+  }));
+  return results
+    .map((result) => result.status === 'fulfilled' ? result.value : null)
+    .find(Boolean) || null;
+}
+
+function renderEmergencyRss() {
+  const now = new Date().toUTCString();
+  const items = [
+    ['/phim/nu-hoang-nuoc-mat', 'Nữ Hoàng Nước Mắt'],
+    ['/phim-moi-cap-nhat', 'Phim mới cập nhật'],
+    ['/phim-dang-chieu', 'Phim đang chiếu'],
+  ].map(([path, title]) => `<item>
+    <title>${escapeHtml(title)}</title>
+    <link>${SITE_URL}${path}</link>
+    <guid isPermaLink="true">${SITE_URL}${path}</guid>
+    <pubDate>${now}</pubDate>
+    <description>Nội dung dự phòng của KhoPhim trong lúc dịch vụ dữ liệu đang phục hồi.</description>
+  </item>`).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>KhoPhim - Phim mới cập nhật</title>
+    <link>${SITE_URL}</link>
+    <description>Phim mới, phim đang chiếu và tập mới trên KhoPhim.</description>
+    <language>vi-VN</language>
+    <lastBuildDate>${now}</lastBuildDate>
+    <atom:link href="${SITE_URL}/feed.xml" rel="self" type="application/rss+xml"/>
+    <atom:link href="https://pubsubhubbub.appspot.com/" rel="hub"/>
+    ${items}
+  </channel>
+</rss>`;
 }
 
 function renderMoviePrerender(pathname, movie, slug) {
@@ -1910,6 +1941,18 @@ async function proxySitemap(pathname, request, context) {
     }
     return sitemapResponse;
   } catch (error) {
+    if (pathname === '/feed.xml') {
+      return new Response(request.method === 'HEAD' ? null : renderEmergencyRss(), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/rss+xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=120, s-maxage=300, stale-while-revalidate=3600',
+          'X-Sitemap-Proxy': 'cloudflare-pages-emergency-rss',
+          'X-Upstream-Degraded': '1',
+          ...SECURITY_HEADERS,
+        },
+      });
+    }
     const message = escapeHtml(error instanceof Error ? error.message : 'Sitemap upstream failed');
     return new Response(`<?xml version="1.0" encoding="UTF-8"?><error>${message}</error>`, {
       status: 503,
@@ -2047,7 +2090,9 @@ async function proxyMovieDetail(request, context) {
     const upstream = await fetch(upstreamUrl.toString(), {
       headers: { Accept: 'application/json' },
       cf: refresh ? undefined : { cacheTtl: 300, cacheEverything: true },
-      signal: AbortSignal.timeout(10000),
+      // Viewer requests must fail fast to the browser's Supabase/provider
+      // fallbacks. Waiting ten seconds here caused a 15–20 second blank page.
+      signal: AbortSignal.timeout(4000),
     });
     const headers = new Headers(upstream.headers);
     headers.delete('Set-Cookie');
@@ -2393,12 +2438,16 @@ export async function onRequest(context) {
       const cacheKey = new Request(`${SITE_URL}/__seo-prerender/${SEO_PRERENDER_VERSION}/phim/${encodeURIComponent(slug)}`, { method: 'GET' });
       const cachedMovieResponse = await getCachedPrerender(cacheKey, request);
       if (cachedMovieResponse) return cachedMovieResponse;
-      let movie = await fetchSupabaseMovie(slug);
+      const [supabaseResult, ophimResult] = await Promise.allSettled([
+        fetchSupabaseMovie(slug),
+        fetchOphimMovie(slug),
+      ]);
+      let movie = supabaseResult.status === 'fulfilled' ? supabaseResult.value : null;
+      const ophimMovie = ophimResult.status === 'fulfilled' ? ophimResult.value : null;
       if (shouldPreferOphimMovieName(movie, slug)) {
-        const ophimMovie = await fetchOphimMovie(slug);
         movie = mergeMovieForPrerender(movie, ophimMovie);
       }
-      if (!movie) movie = await fetchOphimMovie(slug);
+      if (!movie) movie = ophimMovie;
       const movieResponse = movie
         ? renderMoviePrerender(pathname, movie, slug)
         : renderMovieNotFound(pathname, slug);

@@ -1613,7 +1613,7 @@ async function deleteDetailCache(supabase: SupabaseClient, slugs: string[]): Pro
   const targets = Array.from(new Set(slugs.map((slug) => slug.trim()).filter(Boolean)));
   if (targets.length === 0) return;
   try {
-    await supabase.from('movie_api_cache').delete().in('slug', targets);
+    await supabase.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).in('slug', targets);
   } catch {
     /* detail cache is best-effort */
   }
@@ -1871,10 +1871,10 @@ async function clearSeoCaches(supabase: SupabaseClient, slugs: string[]): Promis
   try {
     const targets = uniqueSlugs(slugs);
     await Promise.allSettled([
-      supabase.from('home_page_cache').delete().neq('id', '__never__'),
+      supabase.from('home_page_cache').update({ expires_at: new Date().toISOString() }).neq('id', '__never__'),
       targets.length > 0
-        ? supabase.from('movie_api_cache').delete().in('slug', targets)
-        : supabase.from('movie_api_cache').delete().neq('slug', '__never__'),
+        ? supabase.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).in('slug', targets)
+        : Promise.resolve(),
     ]);
     return true;
   } catch {

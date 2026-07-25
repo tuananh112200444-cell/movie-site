@@ -33,10 +33,10 @@ function isBlvietsubWatchPageUrl(url: string): boolean {
 
 function normalizeDailymotionUrl(url: string): string {
   if (isBlvietsubWatchPageUrl(url)) return '';
-  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/video\/([a-zA-Z0-9]+)/i.exec(url);
-  if (dm) return `https://www.dailymotion.com/embed/video/${dm[1]}`;
+  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/(?:embed\/)?video\/([a-zA-Z0-9]+)/i.exec(url);
+  if (dm) return `https://geo.dailymotion.com/player.html?video=${dm[1]}`;
   const short = /^https?:\/\/dai\.ly\/([a-zA-Z0-9]+)/i.exec(url);
-  if (short) return `https://www.dailymotion.com/embed/video/${short[1]}`;
+  if (short) return `https://geo.dailymotion.com/player.html?video=${short[1]}`;
   return url;
 }
 
@@ -1053,7 +1053,11 @@ export async function fetchMoviesByType(
       .catch(() => null)
   );
 
-  const result = await raceFirstValidWithTimeout(promises, 6000);
+  // List providers do not publish an identical catalogue. Racing them made the
+  // fastest mirror win even when that mirror returned stale/broken artwork.
+  // Give the canonical OPhim endpoint a short head start, then fail over to the
+  // already-running mirrors so reliability does not add a long loading delay.
+  const result = await preferPrimaryWithFallback(promises, 1800, 6000);
   if (result) {
     // Filter out trailer-only items from list endpoints
     const filteredItems = (result.items ?? []).filter(
@@ -1113,7 +1117,7 @@ export async function fetchMoviesByCategory(params: {
       .catch(() => null)
   );
 
-  const result = await raceFirstValidWithTimeout(promises, 6000);
+  const result = await preferPrimaryWithFallback(promises, 1800, 6000);
   if (result) {
     // Filter out trailer-only items from list endpoints
     const filteredItems = (result.items ?? []).filter(
@@ -3383,6 +3387,17 @@ function raceFirstValidWithTimeout<T>(
   });
 }
 
+async function preferPrimaryWithFallback<T>(
+  promises: Promise<T | null>[],
+  primaryWaitMs: number,
+  totalTimeoutMs: number,
+): Promise<T | null> {
+  if (promises.length === 0) return null;
+  const primary = await withNullTimeout(promises[0], primaryWaitMs);
+  if (primary !== null) return primary;
+  return raceFirstValidWithTimeout(promises.slice(1), Math.max(500, totalTimeoutMs - primaryWaitMs));
+}
+
 function withNullTimeout<T>(
   promise: Promise<T | null>,
   timeoutMs: number,
@@ -3566,18 +3581,20 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
         return quickPlayable;
       }
 
-      proxy = await proxyPromise.catch(() => null);
-      sb = detailHasPlayableEpisodes(proxy) ? null : await fetchMovieDetailFromSupabase(slug).catch(() => null);
-      if (!detailHasPlayableEpisodes(sb)) {
-        const ophimPromise = slug.startsWith(BLVIETSUB_SLUG_PREFIX)
-          ? Promise.resolve(null)
-          : fetchMovieDetailFromOPhim(slug, false);
-        blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
-        [ophim, blvietsub] = await Promise.all([
-          withNullTimeout(ophimPromise, 4500),
-          withNullTimeout(blvietsubPromise, 6000),
-        ]);
-      }
+      // The proxy already missed its fast-path budget. From here all fallbacks
+      // must run in parallel; awaiting proxy -> Supabase -> provider serially
+      // produced 15–20 second blank detail pages during Supabase incidents.
+      const supabaseFallbackPromise = fetchMovieDetailFromSupabase(slug, 4200).catch(() => null);
+      const ophimFallbackPromise = slug.startsWith(BLVIETSUB_SLUG_PREFIX)
+        ? Promise.resolve(null)
+        : withNullTimeout(fetchMovieDetailFromOPhim(slug, false), 4500);
+      blvietsubPromise = withNullTimeout(fetchMovieDetailFromBlvietsub(slug), 5000);
+      [proxy, sb, ophim, blvietsub] = await Promise.all([
+        proxyPromise.catch(() => null),
+        supabaseFallbackPromise,
+        ophimFallbackPromise,
+        blvietsubPromise,
+      ]);
     }
 
     // ── If OPhim returned data, sync it to Supabase for future dedup ──

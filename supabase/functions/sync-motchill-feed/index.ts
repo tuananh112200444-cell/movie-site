@@ -105,6 +105,24 @@ function playerOptions(html: string) {
   return output.slice(0, 3);
 }
 
+function inferAudioType(value: unknown): 'vietsub' | 'thuyetminh' | 'longtieng' | null {
+  const normalized = slugify(String(value || ''));
+  if (normalized.includes('thuyet-minh') || normalized === 'tm') return 'thuyetminh';
+  if (normalized.includes('long-tieng') || normalized.includes('dub')) return 'longtieng';
+  if (normalized.includes('vietsub') || normalized.includes('viet-sub') || normalized.includes('phu-de')) return 'vietsub';
+  return null;
+}
+
+function motchillServerName(option: PlayerOption): string {
+  const audioType = inferAudioType(option.label);
+  const audioLabel = audioType === 'thuyetminh'
+    ? 'Thuyết Minh'
+    : audioType === 'longtieng'
+      ? 'Lồng Tiếng'
+      : 'Vietsub';
+  return `Motchill ${audioLabel} #${option.nume}`;
+}
+
 function embedUrlFromPayload(raw: string) {
   try {
     const payload = JSON.parse(raw);
@@ -163,7 +181,8 @@ async function parseEpisode(item: { url: string; number: number }) {
       if (!player.embedUrl) continue;
       rows.push({
         episode_number: item.number, episode_name: `Tập ${item.number}`, slug: `tap-${item.number}`,
-        server_name: `Motchill Vietsub #${option.nume}`, link_embed: player.embedUrl, link_m3u8: player.hlsUrl,
+        server_name: motchillServerName(option), link_embed: player.embedUrl, link_m3u8: player.hlsUrl,
+        audio_type: inferAudioType(option.label),
         source_episode_url: item.url, quality: 'HD',
       });
     } catch { /* another mirror may still be healthy */ }
@@ -237,7 +256,16 @@ async function storeMovie(db: ReturnType<typeof createClient>, entry: Record<str
     if (error) throw error; movie = data; created = true;
   } else {
     const current = Number(movie.current_episode || 0);
-    const update: Record<string, unknown> = { last_synced_at: new Date().toISOString(), is_published: true };
+    // Motchill does not expose a trustworthy declared season total here.
+    // Treating current_episode === total_episodes as "completed" removes the
+    // title from the ongoing recheck queue and is exactly how later episodes
+    // were missed. Keep it ongoing until an authoritative completion signal is
+    // added to this connector.
+    const update: Record<string, unknown> = {
+      last_synced_at: new Date().toISOString(),
+      is_published: true,
+      status: 'ongoing',
+    };
     if (Number(entry.currentEpisode) >= current) Object.assign(update, {
       episode_current: `Tập ${entry.currentEpisode}`, current_episode: entry.currentEpisode,
       total_episodes: movie.source_site === SOURCE
@@ -248,14 +276,13 @@ async function storeMovie(db: ReturnType<typeof createClient>, entry: Record<str
     await db.from('movies').update(update).eq('id', movie.id);
   }
   let rows = 0;
-  const activeServerNames = [...new Set((entry.episodes as Array<Record<string, unknown>>).map((episode) => String(episode.server_name || '')).filter(Boolean))];
   for (const episode of entry.episodes as Array<Record<string, unknown>>) {
     const episodePayload = {
       movie_id: movie.id, episode_number: episode.episode_number, episode_name: episode.episode_name,
       slug: episode.slug, server_name: episode.server_name, link_embed: episode.link_embed,
       link_m3u8: String(episode.link_m3u8 || ''),
       subtitle_url: '', thumbnail_url: entry.thumb || '', source: SOURCE,
-      is_backup: movie.source_site !== SOURCE, audio_type: null,
+      is_backup: movie.source_site !== SOURCE, audio_type: episode.audio_type,
     };
     const { data: old } = await db.from('movie_episodes').select('id').eq('movie_id', movie.id)
       .eq('episode_number', episode.episode_number).eq('server_name', episode.server_name).limit(1).maybeSingle();
@@ -264,7 +291,7 @@ async function storeMovie(db: ReturnType<typeof createClient>, entry: Record<str
     const streamPayload = {
       movie_id: movie.id, server_name: episode.server_name, episode_slug: episode.slug,
       stream_url: String(episode.link_m3u8 || ''), embed_url: episode.link_embed, source: SOURCE, quality: 'HD', priority: 28,
-      is_active: true, health_status: 'unchecked', failure_count: 0, last_error: '', audio_type: null,
+      is_active: true, health_status: 'unchecked', failure_count: 0, last_error: '', audio_type: episode.audio_type,
     };
     const { data: stream } = await db.from('streams').select('id,embed_url,stream_url').eq('movie_id', movie.id).eq('source', SOURCE)
       .eq('server_name', episode.server_name).eq('episode_slug', episode.slug).limit(1).maybeSingle();
@@ -276,14 +303,11 @@ async function storeMovie(db: ReturnType<typeof createClient>, entry: Record<str
     } else { const { error } = await db.from('streams').insert(streamPayload); if (error) throw error; }
     rows += 1;
   }
-  if (activeServerNames.length) {
-    const quoted = `(${activeServerNames.map((name) => `"${name.replaceAll('"', '')}"`).join(',')})`;
-    await db.from('streams').update({ is_active: false }).eq('movie_id', movie.id).eq('source', SOURCE).not('server_name', 'in', quoted);
-    // Episode rows are regenerated from the verified source on every sync, so
-    // stale provider labels can be removed without touching other sources.
-    await db.from('movie_episodes').delete().eq('movie_id', movie.id).eq('source', SOURCE).not('server_name', 'in', quoted);
-  }
-  await db.from('movie_api_cache').delete().eq('slug', movie.slug);
+  // Additive-only publication contract: one partial/blocked source response
+  // must never remove a last-known-good episode or deactivate its stream.
+  // Stale rows are quarantined by the independent health/integrity pipeline,
+  // which requires repeated evidence and preserves rollback data.
+  await db.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).eq('slug', movie.slug);
   try { await db.rpc('refresh_movie_seo_quality', { target_movie_id: movie.id }); } catch { /* optional */ }
   return { slug: movie.slug, created, rows };
 }
