@@ -497,7 +497,7 @@ async function upsertPlayableRows(supabase: SupabaseClient, movie: Record<string
 
 async function clearCaches(supabase: SupabaseClient, slugs: string[]) {
   if (!slugs.length) return;
-  await supabase.from('movie_api_cache').delete().in('slug', slugs);
+  await supabase.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).in('slug', slugs);
 }
 
 async function writeLog(supabase: SupabaseClient, result: Record<string, unknown>) {

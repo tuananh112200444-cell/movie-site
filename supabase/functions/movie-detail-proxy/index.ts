@@ -80,10 +80,10 @@ function isBlvietsubWatchPageUrl(url: string): boolean {
 
 function normalizeDailymotionUrl(url: string): string {
   if (isBlvietsubWatchPageUrl(url)) return '';
-  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/video\/([a-zA-Z0-9]+)/i.exec(url);
-  if (dm) return `https://www.dailymotion.com/embed/video/${dm[1]}`;
+  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/(?:embed\/)?video\/([a-zA-Z0-9]+)/i.exec(url);
+  if (dm) return `https://geo.dailymotion.com/player.html?video=${dm[1]}`;
   const short = /^https?:\/\/dai\.ly\/([a-zA-Z0-9]+)/i.exec(url);
-  if (short) return `https://www.dailymotion.com/embed/video/${short[1]}`;
+  if (short) return `https://geo.dailymotion.com/player.html?video=${short[1]}`;
   return url;
 }
 
@@ -438,7 +438,12 @@ async function readCachedDetail(
     ]);
 
     const row = data as { detail_json?: unknown; expires_at?: string } | null;
-    if (!row?.detail_json || !row.expires_at || row.expires_at <= new Date().toISOString()) return null;
+    if (!row?.detail_json || !row.expires_at) return null;
+    // An expired detail is still the last-known-good publication. Keep serving
+    // it during database/upstream incidents; a newer movies.current_episode
+    // below invalidates it as soon as verified episode coverage advances.
+    const staleAgeMs = Date.now() - Date.parse(row.expires_at);
+    if (Number.isFinite(staleAgeMs) && staleAgeMs > 7 * 24 * 60 * 60 * 1000) return null;
     const cachedMovie = (row.detail_json as Record<string, unknown>).movie as Record<string, unknown> | undefined;
     if (getExpectedEpisodeNumber(liveMovie as Record<string, unknown> | null) > getExpectedEpisodeNumber(cachedMovie)) return null;
     return row.detail_json as Record<string, unknown>;

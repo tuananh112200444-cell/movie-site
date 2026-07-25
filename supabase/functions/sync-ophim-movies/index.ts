@@ -1164,7 +1164,7 @@ async function clearCaches(supabase: SupabaseClient, slugs: string[]): Promise<v
     // it expired lets the warmer refresh it without creating a cold-cache gap.
     supabase.from('home_page_cache').update({ expires_at: new Date(0).toISOString() }).eq('id', 'homepage_v3'),
     targets.length
-      ? supabase.from('movie_api_cache').delete().in('slug', targets)
+      ? supabase.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).in('slug', targets)
       : Promise.resolve(),
   ]);
 }

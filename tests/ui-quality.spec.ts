@@ -77,7 +77,8 @@ test('trang chủ mobile: icon nội bộ và section thức dậy sau khi quay 
   await expect(discovery.getByText('Vũ Trụ Đam Mỹ', { exact: true })).toBeVisible();
   await expect(discovery.locator('button svg')).toHaveCount(4);
 
-  const shelfTitle = page.getByRole('heading', { level: 3, name: 'Phim Lẻ Hay' });
+  // The editorial shelf replaced the legacy "Phim Lẻ Hay" heading.
+  const shelfTitle = page.getByRole('heading', { level: 3, name: 'Phim Điện Ảnh Mới Coóng' });
   await shelfTitle.scrollIntoViewIfNeeded();
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('kp:page-resumed')));
   await expect(shelfTitle).toBeVisible({ timeout: 10_000 });

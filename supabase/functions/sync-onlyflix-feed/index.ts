@@ -185,7 +185,6 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
     await db.from('movies').update(update).eq('id', movie.id);
   }
   let rows = 0;
-  const activeServerNames = [...new Set((entry.episodes as Array<Record<string, unknown>>).map((episode) => String(episode.server_name || '')))];
   for (const episode of entry.episodes as Array<Record<string, unknown>>) {
     const episodePayload = {
       movie_id: movie.id, episode_number: episode.episode_number, episode_name: episode.episode_name,
@@ -215,11 +214,10 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
     else { const { error } = await db.from('streams').insert(streamPayload); if (error) throw error; }
     rows += 1;
   }
-  if (activeServerNames.length) {
-    await db.from('streams').update({ is_active: false })
-      .eq('movie_id', movie.id).eq('source', SOURCE).not('server_name', 'in', `(${activeServerNames.map((name) => `"${name.replaceAll('"', '')}"`).join(',')})`);
-  }
-  await db.from('movie_api_cache').delete().eq('slug', movie.slug);
+  // A feed response is only positive evidence. Missing rows may be caused by
+  // pagination, rate limiting or an upstream layout change, so sync cannot
+  // deactivate a previously playable stream. Health checks own quarantine.
+  await db.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).eq('slug', movie.slug);
   return { slug: movie.slug, created, rows };
 }
 

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { EpisodeData, EpisodeServer } from '@/types/movie';
-import { getEpisodeFailureCluster, getSourceFailureClusterFromUrl, pickBestEpisodeByPriority } from '@/services/movieApi';
+import { detectServerType, getEpisodeFailureCluster, getSourceFailureClusterFromUrl, pickBestEpisodeByPriority } from '@/services/movieApi';
 import { getSourceHost, reportPlayerIssue, type PlayerIssuePayload } from '@/services/playerDiagnostics';
 import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
@@ -13,10 +13,10 @@ type SsplayVariant = typeof SSPLAY_VARIANTS[number];
 const SSPLAY_SU_FIRST_VIDEO_IDS = new Set(['360319631381167']);
 
 function normalizeDailymotionUrl(url: string): string {
-  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/video\/([a-zA-Z0-9]+)/i.exec(url);
-  if (dm) return `https://www.dailymotion.com/embed/video/${dm[1]}?queue-enable=false&sharing-enable=false&ui-logo=false`;
+  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/(?:embed\/)?video\/([a-zA-Z0-9]+)/i.exec(url);
+  if (dm) return `https://geo.dailymotion.com/player.html?video=${dm[1]}&queue-enable=false&sharing-enable=false&ui-logo=false`;
   const short = /^https?:\/\/dai\.ly\/([a-zA-Z0-9]+)/i.exec(url);
-  if (short) return `https://www.dailymotion.com/embed/video/${short[1]}?queue-enable=false&sharing-enable=false&ui-logo=false`;
+  if (short) return `https://geo.dailymotion.com/player.html?video=${short[1]}&queue-enable=false&sharing-enable=false&ui-logo=false`;
   return url;
 }
 
@@ -57,6 +57,15 @@ function normalizeSsplayUrl(url: string, variant: SsplayVariant = 'SD'): string 
 function getOriginalDailymotionUrl(url: string): string {
   const embed = /^https?:\/\/(?:www\.)?dailymotion\.com\/embed\/video\/([a-zA-Z0-9]+)/i.exec(url);
   if (embed) return `https://www.dailymotion.com/video/${embed[1]}`;
+  try {
+    const parsed = new URL(url);
+    if (/(^|\.)dailymotion\.com$/i.test(parsed.hostname)) {
+      const videoId = parsed.searchParams.get('video');
+      if (videoId && /^[a-zA-Z0-9]+$/.test(videoId)) return `https://www.dailymotion.com/video/${videoId}`;
+    }
+  } catch {
+    // Keep the original URL below.
+  }
   return url;
 }
 
@@ -69,6 +78,7 @@ function isIframeSource(url: string): boolean {
     (u.includes('opstream') && u.includes('/share/')) ||
     u.includes('youtube.com/embed') ||
     u.includes('youtu.be') ||
+    u.includes('dailymotion.com/player') ||
     u.includes('dailymotion.com/embed') ||
     u.includes('dailymotion.com/video') ||
     u.includes('dai.ly') ||
@@ -326,6 +336,15 @@ function getEpisodeSourceKeys(ep?: EpisodeData | null): string[] {
       return getSourceHost(raw) || raw;
     })
     .filter(Boolean)));
+}
+
+function getServerAudioType(server?: EpisodeServer | null): ReturnType<typeof detectServerType> {
+  if (!server) return 'other';
+  const firstEpisode = server.server_data?.[0];
+  return detectServerType([
+    server.server_name,
+    firstEpisode?.audio_type,
+  ].filter(Boolean).join(' '));
 }
 
 function buildFallbackServersAvoidingHost(
@@ -764,8 +783,14 @@ export default function PlayerBox({
         },
       }))
       .filter(({ server }) => (server.server_data ?? []).length > 0);
-    const remainingServerIndices = remainingPairs.map(({ originalIndex }) => originalIndex);
-    const remainingServers = remainingPairs.map(({ server }) => server);
+    // Playback recovery must not silently change Vietsub into Thuyết minh or
+    // Lồng tiếng. Cross-audio switching is always an explicit viewer action.
+    const activeAudioType = getServerAudioType(allServers[activeServer]);
+    const audioCompatiblePairs = activeAudioType === 'other' || activeAudioType === 'khophim'
+      ? remainingPairs
+      : remainingPairs.filter(({ server }) => getServerAudioType(server) === activeAudioType);
+    const remainingServerIndices = audioCompatiblePairs.map(({ originalIndex }) => originalIndex);
+    const remainingServers = audioCompatiblePairs.map(({ server }) => server);
     const fallback = pickBestEpisodeByPriority(remainingServers, episode?.slug);
     if (fallback) {
       onSwitchServer(remainingServerIndices[fallback.serverIndex]);
