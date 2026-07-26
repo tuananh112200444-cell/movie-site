@@ -7,6 +7,8 @@ const checks = [
   { name: 'rss', path: '/feed.xml', status: 200, has: ['<rss','rel="hub"','/phim/'] },
   { name: 'robots', path: '/robots.txt', status: 200, has: ['Sitemap:'] },
   { name: 'press', path: '/press/', status: 200, has: ['Thông tin thương hiệu','khophim-logo-v2'] },
+  { name: 'home-googlebot', path: '/', status: 200, has: ['index, follow','application/ld+json','KhoPhim'], bot: true },
+  { name: 'seo-landing-googlebot', path: '/xem-phim-online', status: 200, has: ['index, follow','rel="canonical"','Xem Phim Online'], bot: true },
   { name: 'movie-googlebot', path: '/phim/quyet-chien-tai-mohenjo', status: 200, has: ['rel="canonical"','Movie','role=actor'], bot: true },
   { name: 'thin-movie-noindex', path: '/phim/cam-on-nguoi-da-thuc-cung-toi', status: 200, has: ['noindex, follow'], bot: true },
 ];

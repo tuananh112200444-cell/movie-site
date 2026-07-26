@@ -3,7 +3,8 @@ import { verifyAdminRequest } from '../_shared/admin-session.ts';
 
 const PROPERTY_URI = 'sc-domain:khophim.org';
 const SITE_URL = 'https://khophim.org';
-const SEARCH_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+const CANONICAL_SITEMAP = `${SITE_URL}/sitemap.xml`;
+const SEARCH_SCOPE = 'https://www.googleapis.com/auth/webmasters';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 function cors(origin: string | null): Record<string, string> {
@@ -71,6 +72,29 @@ async function searchAnalytics(token: string, dimension: 'page'|'query') {
   return { startDate, endDate, rows:Array.isArray(data.rows) ? data.rows : [] };
 }
 
+async function ensureCanonicalSitemap(token: string) {
+  const endpoint = `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(PROPERTY_URI)}/sitemaps`;
+  const listResponse = await fetch(endpoint, {
+    headers:{Authorization:`Bearer ${token}`},
+    signal:AbortSignal.timeout(15000),
+  });
+  const listData = await listResponse.json();
+  if (!listResponse.ok) throw new Error(`Sitemap list ${listResponse.status}: ${listData.error?.message || 'request failed'}`);
+  const sitemaps = Array.isArray(listData.sitemap) ? listData.sitemap : [];
+  const present = sitemaps.some((item:Record<string,unknown>)=>String(item.path || '') === CANONICAL_SITEMAP);
+  if (present) return {present:true,submitted:false,registered:sitemaps.length};
+  const submitResponse = await fetch(`${endpoint}/${encodeURIComponent(CANONICAL_SITEMAP)}`, {
+    method:'PUT',
+    headers:{Authorization:`Bearer ${token}`},
+    signal:AbortSignal.timeout(15000),
+  });
+  if (!submitResponse.ok) {
+    const submitData = await submitResponse.json().catch(()=>({}));
+    throw new Error(`Sitemap submit ${submitResponse.status}: ${submitData.error?.message || 'request failed'}`);
+  }
+  return {present:true,submitted:true,registered:sitemaps.length+1};
+}
+
 type Candidate = { id:string; slug:string };
 
 function inspectionDiagnosis(result: Record<string,unknown>): { recommendation:string; priority:number } {
@@ -78,11 +102,13 @@ function inspectionDiagnosis(result: Record<string,unknown>): { recommendation:s
   const coverage = String(result.coverageState || '');
   const fetchState = String(result.pageFetchState || '');
   const robots = String(result.robotsTxtState || '');
-  if (robots && robots !== 'ALLOWED') return { recommendation:'robots_blocked', priority:100 };
-  if (fetchState && fetchState !== 'SUCCESSFUL') return { recommendation:'fix_fetch_error', priority:95 };
+  if (/BLOCKED|DISALLOWED/i.test(robots)) return { recommendation:'robots_blocked', priority:100 };
+  if (/SOFT_404|BLOCKED|NOT_FOUND|ACCESS_DENIED|SERVER_ERROR|REDIRECT_ERROR|INTERNAL_CRAWL_ERROR|INVALID_URL/i.test(fetchState)) {
+    return { recommendation:'fix_fetch_error', priority:95 };
+  }
   if (/duplicate/i.test(coverage)) return { recommendation:'review_canonical_duplicate', priority:80 };
-  if (/discovered.*not indexed/i.test(coverage)) return { recommendation:'strengthen_internal_links_and_content', priority:75 };
-  if (/crawled.*not indexed/i.test(coverage)) return { recommendation:'improve_original_content', priority:85 };
+  if (/discovered.*not indexed|phát hiện.*chưa được lập chỉ mục/i.test(coverage)) return { recommendation:'strengthen_internal_links_and_content', priority:75 };
+  if (/crawled.*not indexed|thu thập dữ liệu.*chưa được lập chỉ mục/i.test(coverage)) return { recommendation:'improve_original_content', priority:85 };
   if (verdict === 'PASS') return { recommendation:'healthy', priority:0 };
   return { recommendation:'monitor_and_reinspect', priority:50 };
 }
@@ -137,14 +163,19 @@ Deno.serve(async (req) => {
     const input = await req.json().catch(()=>({})) as {inspection_limit?:number};
     const inspectionLimit = Math.max(1,Math.min(Number(input.inspection_limit || 25),50));
     const token = await googleAccessToken();
-    const [pageResult,queryResult] = await Promise.allSettled([
+    const [pageResult,queryResult,sitemapResult] = await Promise.allSettled([
       searchAnalytics(token,'page'),
       searchAnalytics(token,'query'),
+      ensureCanonicalSitemap(token),
     ]);
     const analyticsErrors = [
       ...(pageResult.status === 'rejected' ? [`page: ${pageResult.reason instanceof Error ? pageResult.reason.message : String(pageResult.reason)}`] : []),
       ...(queryResult.status === 'rejected' ? [`query: ${queryResult.reason instanceof Error ? queryResult.reason.message : String(queryResult.reason)}`] : []),
     ];
+    const sitemapError = sitemapResult.status === 'rejected'
+      ? (sitemapResult.reason instanceof Error ? sitemapResult.reason.message : String(sitemapResult.reason))
+      : '';
+    const sitemapStatus = sitemapResult.status === 'fulfilled' ? sitemapResult.value : null;
     const fallbackRange = {startDate:isoDate(31),endDate:isoDate(3),rows:[] as Record<string,unknown>[]};
     const pageData = pageResult.status === 'fulfilled' ? pageResult.value : fallbackRange;
     const queryData = queryResult.status === 'fulfilled' ? queryResult.value : fallbackRange;
@@ -158,7 +189,7 @@ Deno.serve(async (req) => {
     }
     const staleBefore = Date.now()-72*3600000;
     const [{data:eligible,error:candidateError},{data:known,error:knownError}] = await Promise.all([
-      supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at,index_tier,quality_score,freshness_score,last_episode_change_at').eq('eligible_for_index',true).order('quality_score',{ascending:false}).order('movie_updated_at',{ascending:false}).limit(1500),
+      supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at,index_tier,quality_score,freshness_score,last_episode_change_at').eq('eligible_for_index',true).in('index_tier',['ongoing','upcoming','playable']).order('quality_score',{ascending:false}).order('movie_updated_at',{ascending:false}).limit(1500),
       supabase.from('seo_url_inspections').select('url,inspected_at').order('inspected_at',{ascending:true}).limit(5000),
     ]);
     if (candidateError) throw candidateError;
@@ -209,8 +240,8 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
     const indexed = inspections.filter(item=>item.verdict==='PASS').length;
-    const success = analyticsErrors.length < 2 || inspections.length > 0;
-    const operationalErrors = [...analyticsErrors, ...inspectionErrors].slice(0,10);
+    const success = (analyticsErrors.length < 2 || inspections.length > 0) && !sitemapError;
+    const operationalErrors = [...analyticsErrors, ...(sitemapError ? [`sitemap: ${sitemapError}`] : []), ...inspectionErrors].slice(0,10);
     await supabase.from('seo_gsc_runs').update({
       finished_at:new Date().toISOString(),
       success,
@@ -221,6 +252,8 @@ Deno.serve(async (req) => {
       error_message:success ? null : operationalErrors.join(' | '),
       metadata:{
         analytics_errors:analyticsErrors.slice(0,4),
+        sitemap:sitemapStatus,
+        sitemap_error:sitemapError || null,
         inspection_errors:inspectionErrors.slice(0,10),
         date_start:pageData.startDate,
         date_end:pageData.endDate,
@@ -233,6 +266,8 @@ Deno.serve(async (req) => {
       queries:queryData.rows.length,
       inspected:inspections.length,
       indexed,
+      sitemap:sitemapStatus,
+      sitemap_error:sitemapError || null,
       analytics_errors:analyticsErrors.slice(0,4),
       inspection_errors:inspectionErrors.slice(0,10),
     },success ? 200 : 502,headers);

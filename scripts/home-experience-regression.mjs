@@ -19,6 +19,10 @@ const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 const homeFallback = JSON.parse(await readFile('public/home-fallback.json', 'utf8'));
 const failures = [];
 
+if (!movieApi.includes('phimimg\\.com|icdn\\.darkbytes\\.xyz')) {
+  failures.push('Image optimization must bypass origins that wsrv.nl rejects with HTTP 400.');
+}
+
 if (home.includes('idleFallback') || !home.includes("window.addEventListener('pageshow', checkPosition)")) {
   failures.push('Deferred sections must use viewport checks without waking the whole page on an idle timer.');
 }

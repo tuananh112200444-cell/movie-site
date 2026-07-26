@@ -45,6 +45,7 @@ interface MovieItem {
   total_episodes?: number;
   next_episode_at?: string;
   seo_index_tier?: string;
+  seo_eligible_for_index?: boolean;
   seo_quality_score?: number;
   seo_freshness_score?: number;
   seo_last_episode_change_at?: string;
@@ -359,9 +360,15 @@ async function fetchEligibleUpcomingMovies(limit = 5000): Promise<MovieItem[]> {
     .order('checked_at', { ascending: false })
     .limit(Math.min(5000, Math.max(1, limit)));
   if (error) throw error;
-  return (data || [])
-    .flatMap((row) => Array.isArray(row.movies) ? row.movies : [row.movies])
-    .filter(Boolean) as unknown as MovieItem[];
+  return (data || []).flatMap((row) => {
+    const movies = Array.isArray(row.movies) ? row.movies : [row.movies];
+    return movies.filter(Boolean).map((movie) => ({
+      ...(movie as unknown as MovieItem),
+      seo_index_tier: 'upcoming',
+      seo_eligible_for_index: true,
+      seo_quality_score: Number(row.quality_score || 0),
+    }));
+  });
 }
 
 async function fetchEligibleOngoingMovies(limit = 5000): Promise<MovieItem[]> {
@@ -395,6 +402,7 @@ async function fetchEligibleOngoingMovies(limit = 5000): Promise<MovieItem[]> {
       return movies.filter(Boolean).map((movie) => ({
         ...(movie as unknown as MovieItem),
         seo_index_tier: 'ongoing',
+        seo_eligible_for_index: true,
         seo_quality_score: Number(row.quality_score || 0),
         seo_freshness_score: Number(row.freshness_score || 0),
         seo_last_episode_change_at: String(row.last_episode_change_at || ''),
@@ -402,10 +410,58 @@ async function fetchEligibleOngoingMovies(limit = 5000): Promise<MovieItem[]> {
     });
 }
 
+async function fetchEligibleMovies(offset = 0, limit = 50000): Promise<MovieItem[]> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+  const pageSize = 1000;
+  const rows: MovieItem[] = [];
+  const endExclusive = offset + Math.min(50000, Math.max(1, limit));
+
+  for (let from = offset; from < endExclusive; from += pageSize) {
+    const { data, error } = await supabase
+      .from('movie_seo_quality_status')
+      .select(`
+        movie_id,
+        index_tier,
+        quality_score,
+        freshness_score,
+        last_episode_change_at,
+        movies!inner(
+          id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,
+          total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,
+          release_at,tmdb_popularity,trailer_url,status,year
+        )
+      `)
+      .eq('eligible_for_index', true)
+      .in('index_tier', ['playable', 'ongoing', 'upcoming'])
+      .order('quality_score', { ascending: false })
+      .order('movie_id', { ascending: true })
+      .range(from, Math.min(from + pageSize - 1, endExclusive - 1));
+    if (error) throw error;
+    if (!data?.length) break;
+    rows.push(...data.flatMap((row) => {
+      const movies = Array.isArray(row.movies) ? row.movies : [row.movies];
+      return movies.filter(Boolean).map((movie) => ({
+        ...(movie as unknown as MovieItem),
+        seo_index_tier: String(row.index_tier || ''),
+        seo_eligible_for_index: true,
+        seo_quality_score: Number(row.quality_score || 0),
+        seo_freshness_score: Number(row.freshness_score || 0),
+        seo_last_episode_change_at: String(row.last_episode_change_at || ''),
+      }));
+    }));
+    if (data.length < pageSize) break;
+  }
+
+  return rows;
+}
+
 function getSitemapOptions(req: Request): { offset: number; limit: number; outputLimit: number; includeOphim: boolean; mode: 'all' | 'recent' | 'upcoming' | 'ongoing' } {
   const url = new URL(req.url);
   const page = Number(url.searchParams.get('page') || '0');
-  const pageSize = Math.min(10000, Math.max(100, Number(url.searchParams.get('page_size') || '10000')));
+  const pageSize = Math.min(50000, Math.max(100, Number(url.searchParams.get('page_size') || '50000')));
   const recent = url.searchParams.get('recent') === '1';
   const upcoming = url.searchParams.get('upcoming') === '1';
   const ongoing = url.searchParams.get('ongoing') === '1';
@@ -437,7 +493,11 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       ? fetchEligibleUpcomingMovies(options.outputLimit)
       : options.mode === 'ongoing'
         ? fetchEligibleOngoingMovies(options.outputLimit)
-        : fetchSupabaseMovies(options.offset, options.limit, options.mode),
+        : options.mode === 'recent'
+          ? fetchEligibleMovies(0, 50000)
+          : options.mode === 'all'
+          ? fetchEligibleMovies(options.offset, options.limit)
+          : fetchSupabaseMovies(options.offset, options.limit, options.mode),
     ...(options.includeOphim ? LIST_TYPES.flatMap((type) => pages.map((page) => fetchMoviePage(type, page))) : []),
   ]);
 
@@ -445,7 +505,10 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
   const qualityByMovieId = new Map<string, boolean>();
   if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && supabaseMovies.length > 0) {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-    const ids = supabaseMovies.map((movie) => movie.id).filter(Boolean) as string[];
+    const ids = supabaseMovies
+      .filter((movie) => movie.seo_eligible_for_index !== true)
+      .map((movie) => movie.id)
+      .filter(Boolean) as string[];
     for (let start = 0; start < ids.length; start += 500) {
       const { data } = await supabase
         .from('movie_seo_quality_status')
@@ -461,14 +524,10 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       if (!slug || seen.has(slug)) return false;
       seen.add(slug);
       if (!isIndexableMovie(movie)) return false;
-      // Never expose an unreviewed database movie to Google. Historically this
-      // fallback admitted almost the entire public catalogue and created tens
-      // of thousands of "Discovered - currently not indexed" URLs. OPhim
-      // fallback rows have no local id; local rows must explicitly pass the
-      // materialized SEO quality view before entering any sitemap.
+      // Local rows must explicitly pass the materialized SEO quality view.
+      // This keeps sitemap URLs aligned with the prerender index decision.
       if (!movie.id) return true;
-      if (isUpcoming(movie) || isTrailer(movie)) return qualityByMovieId.get(movie.id) === true;
-      return !qualityByMovieId.has(movie.id) || qualityByMovieId.get(movie.id) === true;
+      return movie.seo_eligible_for_index === true || qualityByMovieId.get(movie.id) === true;
     });
 
   if (options.mode === 'upcoming') {

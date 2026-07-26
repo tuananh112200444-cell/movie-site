@@ -175,6 +175,8 @@ export default function LightweightHlsPlayer({
   const streamRecoveryRef = useRef(0);
   const pageActiveRef = useRef(typeof document === 'undefined' ? true : !document.hidden);
   const wasPageSuspendedRef = useRef(false);
+  const suspendedTimeRef = useRef(0);
+  const wasPlayingBeforeSuspendRef = useRef(false);
   const networkOfflineRef = useRef(typeof navigator === 'undefined' ? false : navigator.onLine === false);
   const pseudoFsRef = useRef(false);
   const scrollPositionRef = useRef(0);
@@ -199,22 +201,32 @@ export default function LightweightHlsPlayer({
   const [pipActive, setPipActive] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
 
-  /* Mobile browsers abort HLS requests when the tab/app is backgrounded.
-     Treat that as suspension, not as a dead source, and rebuild the player
-     when the page becomes active again (including BFCache restoration). */
+  /* Keep the media element and HLS instance alive across ordinary tab changes.
+     Rebuilding here resets playback to the stale initialTime (often zero). */
   useEffect(() => {
     const suspend = () => {
+      if (!pageActiveRef.current) return;
+      const video = videoRef.current;
       pageActiveRef.current = false;
       wasPageSuspendedRef.current = true;
+      suspendedTimeRef.current = video?.currentTime || 0;
+      wasPlayingBeforeSuspendRef.current = Boolean(video && !video.paused && !video.ended);
     };
     const resume = () => {
       if (document.hidden) return;
       pageActiveRef.current = true;
       if (!wasPageSuspendedRef.current) return;
       wasPageSuspendedRef.current = false;
+      const video = videoRef.current;
+      const resumeAt = suspendedTimeRef.current;
       setHasError(false);
       setErrorMsg('');
-      setRetryNonce((value) => value + 1);
+      if (!video) return;
+      if (resumeAt > 0 && Math.abs(video.currentTime - resumeAt) > 0.5) {
+        video.currentTime = resumeAt;
+      }
+      hlsRef.current?.startLoad(resumeAt >= 0 ? resumeAt : -1);
+      if (wasPlayingBeforeSuspendRef.current) void video.play().catch(() => {});
     };
     const onVisibilityChange = () => document.hidden ? suspend() : resume();
     window.addEventListener('pagehide', suspend);

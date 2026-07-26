@@ -75,6 +75,11 @@ async function handleMhophimRequest(context, url, pathname) {
     return hostRedirect(`${SITE_URL}${pathname}${url.search}`, 'khophim.org');
   }
 
+  if (/^\/(?:the-loai|quoc-gia|danh-sach)(?:\/|$)/i.test(pathname)
+    || /^\/(?:xem-phim(?:-online|-mien-phi|-hd|-vietsub)?|web-xem-phim|kho-phim-online|phim-(?:moi-nhat|moi-cap-nhat|dang-chieu|bo|le|chieu-rap|vietsub|han-quoc|trung-quoc|nhat-ban|thai-lan|au-my|viet-nam)|anime|tv-shows|vu-tru-dam-my)\/?$/i.test(pathname)) {
+    return hostRedirect(`${SITE_URL}${pathname}${url.search}`, 'khophim.org');
+  }
+
   if (pathname === '/robots.txt') return serveAsset(context, '/mhophim/robots.txt');
   if (pathname === '/sitemap.xml') return serveAsset(context, '/mhophim/sitemap.xml');
   if (pathname === '/' || pathname === '') return serveAsset(context, '/mhophim/index.html');
@@ -1418,7 +1423,7 @@ function renderStaticPrerender(pathname) {
   }), {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': isOngoing
+      'Cache-Control': isFreshHub
         ? 'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'
         : 'public, max-age=900, s-maxage=3600',
       'X-Prerendered': 'cloudflare-static',
@@ -1811,19 +1816,6 @@ function renderMovieNotFound(pathname, slug) {
 }
 
 async function proxySitemap(pathname, request, context) {
-  if (/^\/sitemap-movies-\d+\.xml$/.test(pathname)) {
-    return new Response(request.method === 'HEAD' ? null : '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
-      status: 410,
-      headers: {
-        'Content-Type': 'application/xml; charset=utf-8',
-        'Cache-Control': 'public, max-age=86400, s-maxage=86400',
-        'X-Robots-Tag': 'noindex, nofollow',
-        'X-Sitemap-Retired': 'index-bloat-cleanup',
-        ...SECURITY_HEADERS,
-      },
-    });
-  }
-
   if (pathname === '/sitemap.xml' || isLegacySitemapAlias(pathname)) {
     const today = currentVietnamDate();
     const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
@@ -1847,6 +1839,10 @@ async function proxySitemap(pathname, request, context) {
   </sitemap>
   <sitemap>
     <loc>${SITE_URL}/sitemap-movies-ongoing.xml</loc>
+    <lastmod>${today}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${SITE_URL}/sitemap-movies-1.xml</loc>
     <lastmod>${today}</lastmod>
   </sitemap>
   <sitemap>
@@ -1878,7 +1874,7 @@ async function proxySitemap(pathname, request, context) {
   } else if (pathname === '/feed.xml') {
     target = `${SUPABASE_FUNCTION_BASE}/movie-rss-feed?v=${sitemapVersion}`;
   } else if (movieChunkMatch) {
-    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=5000&v=${sitemapVersion}`;
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=50000&v=${sitemapVersion}`;
   }
   const cacheKey = new Request(target, { method: 'GET' });
 
