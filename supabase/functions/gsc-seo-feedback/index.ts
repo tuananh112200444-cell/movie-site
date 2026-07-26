@@ -72,7 +72,7 @@ async function searchAnalytics(token: string, dimension: 'page'|'query') {
   return { startDate, endDate, rows:Array.isArray(data.rows) ? data.rows : [] };
 }
 
-async function ensureCanonicalSitemap(token: string) {
+async function ensureCanonicalSitemap(token: string, forceSubmit = false) {
   const endpoint = `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(PROPERTY_URI)}/sitemaps`;
   const listResponse = await fetch(endpoint, {
     headers:{Authorization:`Bearer ${token}`},
@@ -82,7 +82,7 @@ async function ensureCanonicalSitemap(token: string) {
   if (!listResponse.ok) throw new Error(`Sitemap list ${listResponse.status}: ${listData.error?.message || 'request failed'}`);
   const sitemaps = Array.isArray(listData.sitemap) ? listData.sitemap : [];
   const present = sitemaps.some((item:Record<string,unknown>)=>String(item.path || '') === CANONICAL_SITEMAP);
-  if (present) return {present:true,submitted:false,registered:sitemaps.length};
+  if (present && !forceSubmit) return {present:true,submitted:false,registered:sitemaps.length};
   const submitResponse = await fetch(`${endpoint}/${encodeURIComponent(CANONICAL_SITEMAP)}`, {
     method:'PUT',
     headers:{Authorization:`Bearer ${token}`},
@@ -135,14 +135,38 @@ async function inspectUrl(token:string, candidate:Candidate) {
   };
 }
 
+function queryClass(value: string): 'khophim_brand'|'legacy_brand'|'generic_movie'|'other' {
+  const query = value.toLowerCase();
+  if (/kho[ ._-]*phim|khophim|khopim|khphim|khohim|khophom|khophum/.test(query)) return 'khophim_brand';
+  if (/mho[ ._-]*phim|mhophim|mhop|mhphim|hophim/.test(query)) return 'legacy_brand';
+  if (/xem phim|phim online|phim vietsub|phim mới|phim moi|phim bộ|phim bo|phim lẻ|phim le|phim chiếu rạp|phim chieu rap|anime|hoạt hình|hoat hinh/.test(query)) return 'generic_movie';
+  return 'other';
+}
+
 async function dashboard(supabase: ReturnType<typeof createClient>) {
-  const [{data:run},{data:inspections},{data:pages},{data:queries}] = await Promise.all([
-    supabase.from('seo_gsc_runs').select('*').order('started_at',{ascending:false}).limit(1).maybeSingle(),
+  const {data:run} = await supabase.from('seo_gsc_runs').select('*').order('started_at',{ascending:false}).limit(1).maybeSingle();
+  const runId = run?.id;
+  const [{data:inspections},{data:pages},{data:queries}] = await Promise.all([
     supabase.from('seo_url_inspections').select('url,slug,verdict,coverage_state,indexing_state,page_fetch_state,last_crawl_time,inspected_at,recommendation,priority').order('priority',{ascending:false}).order('inspected_at',{ascending:false}).limit(50),
-    supabase.from('seo_search_metrics').select('dimension_value,clicks,impressions,ctr,position,collected_at').eq('dimension_type','page').order('impressions',{ascending:false}).limit(25),
-    supabase.from('seo_search_metrics').select('dimension_value,clicks,impressions,ctr,position,collected_at').eq('dimension_type','query').order('impressions',{ascending:false}).limit(25),
+    supabase.from('seo_search_metrics').select('dimension_value,clicks,impressions,ctr,position,collected_at').eq('run_id',runId).eq('dimension_type','page').order('impressions',{ascending:false}).limit(25),
+    supabase.from('seo_search_metrics').select('dimension_value,clicks,impressions,ctr,position,collected_at').eq('run_id',runId).eq('dimension_type','query').order('impressions',{ascending:false}).limit(2500),
   ]);
-  return { latest_run:run || null, inspections:inspections || [], top_pages:pages || [], top_queries:queries || [] };
+  const queryVisibility:Record<string,{queries:number;clicks:number;impressions:number}> = {};
+  for (const item of queries || []) {
+    const category = queryClass(String(item.dimension_value || ''));
+    const summary = queryVisibility[category] || {queries:0,clicks:0,impressions:0};
+    summary.queries += 1;
+    summary.clicks += Number(item.clicks || 0);
+    summary.impressions += Number(item.impressions || 0);
+    queryVisibility[category] = summary;
+  }
+  return {
+    latest_run:run || null,
+    inspections:inspections || [],
+    top_pages:pages || [],
+    top_queries:(queries || []).slice(0,25),
+    query_visibility:queryVisibility,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -160,13 +184,13 @@ Deno.serve(async (req) => {
   const {data:run,error:runError} = await supabase.from('seo_gsc_runs').insert({started_at:startedAt,property_uri:PROPERTY_URI}).select('id').single();
   if (runError || !run) return json({error:runError?.message || 'run insert failed'},500,headers);
   try {
-    const input = await req.json().catch(()=>({})) as {inspection_limit?:number};
+    const input = await req.json().catch(()=>({})) as {inspection_limit?:number;resubmit_sitemap?:boolean};
     const inspectionLimit = Math.max(1,Math.min(Number(input.inspection_limit || 25),50));
     const token = await googleAccessToken();
     const [pageResult,queryResult,sitemapResult] = await Promise.allSettled([
       searchAnalytics(token,'page'),
       searchAnalytics(token,'query'),
-      ensureCanonicalSitemap(token),
+      ensureCanonicalSitemap(token,input.resubmit_sitemap === true),
     ]);
     const analyticsErrors = [
       ...(pageResult.status === 'rejected' ? [`page: ${pageResult.reason instanceof Error ? pageResult.reason.message : String(pageResult.reason)}`] : []),

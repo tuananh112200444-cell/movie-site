@@ -10,6 +10,7 @@ interface GscFeedback {
   inspections: Array<{ url:string; slug:string; verdict:string; coverage_state:string; recommendation:string; priority:number; inspected_at:string }>;
   top_pages: Array<{ dimension_value:string; clicks:number; impressions:number; ctr:number; position:number }>;
   top_queries: Array<{ dimension_value:string; clicks:number; impressions:number; ctr:number; position:number }>;
+  query_visibility: Array<{ class_name:string; clicks:number; impressions:number; queries:number }>;
 }
 
 /* ─── Sitemap definitions ─── */
@@ -19,50 +20,80 @@ const SITEMAPS = [
     name: 'Sitemap Index',
     url: `${SITE_URL}/sitemap.xml`,
     type: 'index' as const,
-    urls: 4,
-    lastmod: '2026-04-22',
+    urls: 7,
+    lastmod: 'Tự động',
     priority: 'Cao nhất',
-    desc: 'Chứa 4 sitemap con: static, movies, reviews, seo-landing',
+    desc: 'Chứa 7 nguồn URL: trang tĩnh, landing SEO và các nhóm phim động',
   },
   {
     id: 'sitemap-static',
     name: 'Static Pages Sitemap',
     url: `${SITE_URL}/sitemap-static.xml`,
     type: 'static' as const,
-    urls: 80,
-    lastmod: '2026-04-22',
+    urls: 15,
+    lastmod: 'Theo lần build',
     priority: 'Cao',
     desc: 'Trang chủ, danh mục, thể loại, quốc gia, diễn viên, about, policy',
-  },
-  {
-    id: 'sitemap-movies',
-    name: 'Movies Sitemap',
-    url: `${SITE_URL}/sitemap-movies.xml`,
-    type: 'dynamic' as const,
-    urls: 498,
-    lastmod: '2026-04-22',
-    priority: 'Cao',
-    desc: 'Tất cả trang phim chi tiết với hình ảnh sitemap',
-  },
-  {
-    id: 'sitemap-reviews',
-    name: 'Reviews Sitemap',
-    url: `${SITE_URL}/sitemap-reviews.xml`,
-    type: 'dynamic' as const,
-    urls: '~200',
-    lastmod: '2026-04-22',
-    priority: 'Trung bình',
-    desc: 'Trang review phim tự động tạo bởi AI',
   },
   {
     id: 'sitemap-seo-landing',
     name: 'SEO Landing Sitemap',
     url: `${SITE_URL}/sitemap-seo-landing.xml`,
     type: 'static' as const,
-    urls: 30,
-    lastmod: '2026-04-22',
+    urls: 56,
+    lastmod: 'Theo lần build',
     priority: 'Cao',
     desc: 'Trang SEO landing: phim theo năm, chất lượng, ngôn ngữ, trạng thái',
+  },
+  {
+    id: 'sitemap-movies',
+    name: 'Movies Sitemap',
+    url: `${SITE_URL}/sitemap-movies-1.xml`,
+    type: 'dynamic' as const,
+    urls: 'Động',
+    lastmod: 'Tự động',
+    priority: 'Cao',
+    desc: 'Danh mục phim đủ điều kiện index; tự loại URL thiếu chất lượng',
+  },
+  {
+    id: 'sitemap-recent',
+    name: 'Recent Movies Sitemap',
+    url: `${SITE_URL}/sitemap-movies-recent.xml`,
+    type: 'dynamic' as const,
+    urls: 'Tối đa 500',
+    lastmod: 'Tự động',
+    priority: 'Cao',
+    desc: 'Phim mới cập nhật để Google phát hiện thay đổi nhanh',
+  },
+  {
+    id: 'sitemap-ongoing',
+    name: 'Ongoing Movies Sitemap',
+    url: `${SITE_URL}/sitemap-movies-ongoing.xml`,
+    type: 'dynamic' as const,
+    urls: 'Động',
+    lastmod: 'Tự động',
+    priority: 'Cao',
+    desc: 'Phim đang chiếu và đang cập nhật tập',
+  },
+  {
+    id: 'sitemap-upcoming',
+    name: 'Upcoming Movies Sitemap',
+    url: `${SITE_URL}/sitemap-movies-upcoming.xml`,
+    type: 'dynamic' as const,
+    urls: 'Động',
+    lastmod: 'Tự động',
+    priority: 'Trung bình',
+    desc: 'Phim sắp chiếu đủ điều kiện index',
+  },
+  {
+    id: 'sitemap-feed',
+    name: 'Recent Feed',
+    url: `${SITE_URL}/feed.xml`,
+    type: 'dynamic' as const,
+    urls: 'Tối đa 100',
+    lastmod: 'Tự động',
+    priority: 'Trung bình',
+    desc: 'Nguồn cập nhật phim gần nhất',
   },
 ];
 
@@ -72,7 +103,7 @@ const HEALTH_CHECKS = [
     id: 'robots',
     name: 'Robots.txt',
     status: 'pass' as const,
-    detail: 'Có 5 sitemap được khai báo, Allow: / đầy đủ',
+    detail: 'Khai báo sitemap index và cho phép crawl các trang công khai',
     url: `${SITE_URL}/robots.txt`,
   },
   {
@@ -93,7 +124,7 @@ const HEALTH_CHECKS = [
     id: 'sitemap-index',
     name: 'Sitemap Index',
     status: 'pass' as const,
-    detail: '5 sitemap với tổng ~800+ URL',
+    detail: '7 nguồn URL; sitemap phim được tạo động và lọc chất lượng',
     url: `${SITE_URL}/sitemap.xml`,
   },
   {
@@ -120,8 +151,8 @@ const HEALTH_CHECKS = [
   {
     id: 'indexing',
     name: 'Google Indexing',
-    status: 'warning' as const,
-    detail: 'Cần submit sitemap vào Google Search Console',
+    status: 'pass' as const,
+    detail: 'Sitemap được kiểm tra và submit tự động qua Search Console',
     url: 'https://search.google.com/search-console',
   },
 ];
@@ -301,7 +332,7 @@ export default function AdminSEOPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { icon: 'ri-links-line', label: 'Tổng URL', value: `~${totalUrls}+`, sub: 'Trong tất cả sitemap', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                { icon: 'ri-map-2-line', label: 'Sitemap', value: '5', sub: '1 index + 4 sitemap con', color: 'text-amber-400', bg: 'bg-amber-500/10' },
+                { icon: 'ri-map-2-line', label: 'Sitemap', value: '7', sub: '7 nguồn URL trong sitemap index', color: 'text-amber-400', bg: 'bg-amber-500/10' },
                 { icon: 'ri-checkbox-circle-line', label: 'Health Check', value: `${passedChecks}/${HEALTH_CHECKS.length}`, sub: `${warningChecks} cần chú ý`, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
                 { icon: 'ri-google-line', label: 'GSC tự động', value: gscFeedback?.latest_run?.success ? 'Đang chạy' : 'Chờ dữ liệu', sub: gscFeedback?.latest_run ? `${gscFeedback.latest_run.urls_inspected} URL kiểm tra gần nhất` : 'Cron thu thập mỗi ngày', color: gscFeedback?.latest_run?.success ? 'text-emerald-400' : 'text-amber-400', bg: 'bg-emerald-500/10' },
               ].map((card, i) => (
@@ -340,6 +371,25 @@ export default function AdminSEOPage() {
                     </div>
                   ))}
                 </div>
+                {gscFeedback.query_visibility?.length > 0 && (
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {gscFeedback.query_visibility.map((item) => {
+                      const labels: Record<string,string> = {
+                        khophim_brand: 'Thương hiệu KhoPhim',
+                        legacy_brand: 'Thương hiệu cũ',
+                        generic_movie: 'Từ khóa phim phổ thông',
+                        other: 'Long-tail / khác',
+                      };
+                      return (
+                        <div key={item.class_name} className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
+                          <p className="text-sm font-black text-white">{item.impressions.toLocaleString('vi-VN')} hiển thị</p>
+                          <p className="mt-0.5 text-[11px] text-white/50">{labels[item.class_name] || item.class_name}</p>
+                          <p className="mt-1 text-[10px] text-white/30">{item.clicks.toLocaleString('vi-VN')} click · {item.queries} từ khóa</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -378,7 +428,7 @@ export default function AdminSEOPage() {
                   <div className="flex-1">
                     <h3 className="text-white font-semibold text-sm mb-1">Submit Sitemap lên Google</h3>
                     <p className="text-white/45 text-xs leading-relaxed mb-3">
-                      Bước quan trọng nhất để Google biết đến tất cả URL của bạn. Submit sitemap index chứa 4 sitemap con.
+                      Sitemap index được hệ thống kiểm tra và submit tự động; nút dưới dùng để kiểm tra thủ công khi cần.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button

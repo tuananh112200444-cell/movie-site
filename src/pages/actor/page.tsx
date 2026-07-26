@@ -123,6 +123,7 @@ export default function ActorPage() {
         ogImage={actor.image}
         ogType="article"
         schema={schema}
+        noIndex
       />
       <Navbar />
 

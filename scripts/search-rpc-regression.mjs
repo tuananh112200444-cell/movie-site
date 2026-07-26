@@ -96,6 +96,8 @@ const architectureChecks = [
   [searchPageSource.includes('if (items.length === 0 || pg > 1)'), 'External APIs must stay outside the first-page critical path'],
   [!suggestionsSource.includes('fetchSupabaseSearchIndex'), 'Mobile suggestions must not download the full movie index'],
   [suggestionsSource.includes('useDebounce(query, 180)'), 'Suggestion debounce must remain responsive'],
+  [suggestionsSource.includes('keyboardHighlightRef.current === highlightIndex') && suggestionsSource.includes("navigate(`/search?q=${encodeURIComponent(query.trim())}`)"), 'Desktop Enter must submit the query unless keyboard arrows explicitly selected a movie'],
+  [searchPageSource.includes('keyboardHighlightRef.current === highlightIndex') && searchPageSource.includes('handleSubmit(e);'), 'Search-page Enter must ignore pointer hover and submit the current query'],
   [movieApiSource.includes("new URL('/api/search', window.location.origin)"), 'Browser search must use the same-origin edge cache'],
   [workerSource.includes("pathname === '/api/search'"), 'Cloudflare worker must expose the search route'],
   [workerSource.includes('/__api-cache/search/v9/'), 'Cloudflare search must use a versioned cache key'],

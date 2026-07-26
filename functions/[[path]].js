@@ -6,6 +6,23 @@ const SUPABASE_REST_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/rest/v1';
 // This is Supabase's public browser key (RLS still applies), not a service key.
 const SUPABASE_PUBLIC_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
 const SEO_PRERENDER_VERSION = '20260723-ongoing-freshness-v4';
+const CONSOLIDATED_SEO_PATHS = new Map([
+  ['/xem-phim', '/xem-phim-online'],
+  ['/xem-phim-mien-phi', '/xem-phim-online'],
+  ['/xem-phim-hd', '/xem-phim-online'],
+  ['/web-xem-phim', '/xem-phim-online'],
+  ['/kho-phim-online', '/xem-phim-online'],
+  ['/xem-phim-vietsub', '/phim-vietsub'],
+  ['/xem-phim-moi', '/phim-moi-cap-nhat'],
+  ['/xem-phim-le', '/phim-le'],
+  ['/xem-phim-bo', '/phim-bo'],
+  ['/xem-phim-chieu-rap', '/phim-chieu-rap'],
+  ['/xem-phim-viet-nam', '/phim-viet-nam'],
+  ['/xem-phim-han-quoc', '/phim-han-quoc'],
+  ['/xem-phim-trung-quoc', '/phim-trung-quoc'],
+  ['/xem-phim-au-my', '/phim-au-my'],
+  ['/xem-anime-vietsub', '/anime'],
+]);
 
 const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
@@ -409,6 +426,8 @@ const NOINDEX_PATHS = [
   /^\/register/,
   /^\/forgot-password/,
   /^\/reset-password/,
+  /^\/dien-vien(?:\/|$)/,
+  /^\/blog\/[^/]+\/?$/,
 ];
 
 function escapeHtml(value) {
@@ -1040,16 +1059,16 @@ const STATIC_TOPIC_CONTENT = {
   },
   '/phim-hot-2026': {
     intro: [
-      'Trang phim hot 2026 tập trung vào các phim đang được tìm kiếm nhiều trong năm 2026, bao gồm phim chiếu rạp, phim bộ, anime và các phim theo xu hướng mạng xã hội.',
+      'Trang phim thịnh hành 2026 sử dụng dữ liệu phim thực tế của KhoPhim, ưu tiên độ phổ biến, thời điểm cập nhật và trạng thái tập mới thay vì danh sách viết tay.',
       'Cụm này giúp KhoPhim bắt tín hiệu trend theo năm, trong khi các trang danh mục vẫn giữ vai trò phân loại theo quốc gia và thể loại.',
     ],
     highlights: [
-      'Tối ưu cho phim hot 2026, phim mới 2026, phim hay 2026 và phim đang nổi.',
+      'Giúp người xem khám phá phim thịnh hành 2026, phim mới cập nhật và phim đang có tập xem.',
       'Liên kết đến phim mới nhất, phim chiếu rạp, phim sắp chiếu và trailer để theo sát vòng đời tìm kiếm.',
       'Nội dung server-side giúp Google đọc được chủ đề trend trước khi app tải dữ liệu động.',
     ],
     faq: [
-      ['Phim hot 2026 là gì?', 'Đây là nhóm phim trong năm 2026 đang có nhu cầu tìm kiếm cao, được người xem quan tâm hoặc vừa có thông tin mới.'],
+      ['Danh sách phim thịnh hành 2026 được chọn thế nào?', 'KhoPhim ưu tiên dữ liệu độ phổ biến, độ mới của lần cập nhật và trạng thái có tập xem; danh sách được làm mới tự động.'],
       ['Có nên tách phim hot 2026 khỏi trang chủ không?', 'Có, vì truy vấn theo năm có ý định riêng và cần landing page riêng để không làm loãng trang chủ.'],
     ],
   },
@@ -1352,6 +1371,7 @@ function renderStaticPrerender(pathname) {
   const cleanPath = getCanonicalPath(pathname);
   const meta = CLEAN_STATIC_META[cleanPath] || dynamicStaticMeta(cleanPath);
   if (!meta) return null;
+  const noIndex = isNoIndexPath(cleanPath);
 
   const canonical = `${SITE_URL}${cleanPath === '/' ? '/' : cleanPath}`;
   const keywords = keywordVariants([
@@ -1420,6 +1440,9 @@ function renderStaticPrerender(pathname) {
     body,
     schema,
     keywords,
+    robots: noIndex
+      ? 'noindex, follow'
+      : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
   }), {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
@@ -1427,7 +1450,9 @@ function renderStaticPrerender(pathname) {
         ? 'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'
         : 'public, max-age=900, s-maxage=3600',
       'X-Prerendered': 'cloudflare-static',
-      'X-Robots-Tag': 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
+      'X-Robots-Tag': noIndex
+        ? 'noindex, follow'
+        : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
       ...SECURITY_HEADERS,
     },
   });
@@ -2365,6 +2390,12 @@ export async function onRequest(context) {
 
   if (url.hostname === 'www.khophim.org' || url.protocol === 'http:') {
     return canonicalRedirect(url, pathname);
+  }
+
+  const consolidatedSeoPath = CONSOLIDATED_SEO_PATHS.get(pathname.replace(/\/+$/, '') || '/');
+  if (consolidatedSeoPath) {
+    url.search = '';
+    return canonicalRedirect(url, consolidatedSeoPath);
   }
 
   if (isDmcaRemovedPath(pathname)) {
