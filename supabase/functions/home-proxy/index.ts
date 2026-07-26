@@ -60,7 +60,7 @@ function isTrailerOnly(episodeCurrent?: string): boolean {
 
 function filteredSectionItems(sections: Record<string, unknown[]> | null | undefined, key: string): unknown[] {
   return ((sections?.[key] ?? []) as unknown[])
-    .filter((m) => !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
+    .filter((m) => key === 'onlyflix-moi' || !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
 }
 
 function cacheHasRequestedSections(sections: Record<string, unknown[]> | null | undefined, requestedSections: string[]): boolean {
@@ -409,7 +409,27 @@ async function enrichTrendingHeroArtwork(
   items: Record<string, unknown>[],
 ): Promise<Record<string, unknown>[]> {
   const heroWindow = items.slice(0, 8);
-  const enriched = await Promise.all(heroWindow.map(async (item) => {
+  const heroSlugs = heroWindow.map((item) => String(item.slug || '').trim()).filter(Boolean);
+  const { data: verifiedRows } = heroSlugs.length
+    ? await supabase
+      .from('movies')
+      .select('slug,hero_backdrop_url,hero_poster_url')
+      .in('slug', heroSlugs)
+      .abortSignal(timeoutSignal(900))
+    : { data: [] };
+  const verifiedBySlug = new Map(
+    (verifiedRows ?? []).map((row) => [String(row.slug), row as Record<string, unknown>]),
+  );
+
+  const enriched = await Promise.all(heroWindow.map(async (rawItem) => {
+    const verified = verifiedBySlug.get(String(rawItem.slug || ''));
+    const item = verified
+      ? {
+        ...rawItem,
+        hero_backdrop_url: verified.hero_backdrop_url || rawItem.hero_backdrop_url,
+        hero_poster_url: verified.hero_poster_url || rawItem.hero_poster_url,
+      }
+      : rawItem;
     if (String(item.hero_backdrop_url || '').trim()) return item;
     const artwork = await fetchVerifiedTmdbHeroArtwork(item);
     if (!artwork) return item;
@@ -1032,6 +1052,49 @@ async function fetchSupabaseSection(
   }
 }
 
+async function fetchOnlyflixTrendingMovies(
+  supabase: ReturnType<typeof createClient>,
+  limit = 10,
+): Promise<Record<string, unknown>[]> {
+  try {
+    const { data: logs, error: logError } = await supabase
+      .from('sync_logs')
+      .select('metadata')
+      .eq('function_name', 'sync-onlyflix-feed')
+      .eq('success', true)
+      .order('run_at', { ascending: false })
+      .limit(1)
+      .abortSignal(timeoutSignal(1500));
+    const trending = (logs?.[0]?.metadata as Record<string, unknown> | undefined)?.trending;
+    if (logError || !Array.isArray(trending)) return [];
+    const orderedSlugs = trending
+      .map((row) => String((row as Record<string, unknown>).slug || ''))
+      .filter(Boolean)
+      .slice(0, Math.min(limit, 10));
+    if (!orderedSlugs.length) return [];
+    const { data, error } = await supabase
+      .from('movies')
+      .select(HOME_SUPABASE_SELECT)
+      .eq('is_published', true)
+      .in('slug', orderedSlugs)
+      .abortSignal(timeoutSignal(1500));
+    if (error || !data) return [];
+    const bySlug = new Map((data as Record<string, unknown>[]).map((row) => [String(row.slug), row]));
+    return orderedSlugs
+      .map((slug) => bySlug.get(slug))
+      .filter(Boolean)
+      .map((row) => cleanMovieItem({
+        ...row,
+        _id: row!.id,
+        modified: { time: row!.updated_at || new Date().toISOString() },
+      }, 'onlyflix'))
+      .filter(Boolean)
+      .slice(0, Math.min(limit, 10)) as Record<string, unknown>[];
+  } catch {
+    return [];
+  }
+}
+
 function mergeSectionWithPriority(
   priorityItems: Record<string, unknown>[],
   sectionItems: Record<string, unknown>[],
@@ -1188,20 +1251,23 @@ async function fetchSection(
       .filter(Boolean)
       .filter((m) => !isTrailerOnly((m as Record<string, unknown>).episode_current as string))
       .slice(0, limit);
-    if (items.length > 0) return items as Record<string, unknown>[];
+    if (items.length > 0) {
+      return items as Record<string, unknown>[];
+    }
   }
 
   // Fallback external
   const extData = await fetchExternal(externalEndpoint, 3000);
   if (extData) {
-    return extractItems(extData)
+    const items = extractItems(extData)
       .map((raw) => cleanMovieItem(raw, 'phimapi'))
       .filter(Boolean)
       .filter((m) => !isTrailerOnly((m as Record<string, unknown>).episode_current as string))
       .slice(0, limit) as Record<string, unknown>[];
+    return items;
   }
 
-  return fetchSupabaseSection(supabase, typeOrCategory, isCountry, limit);
+  return await fetchSupabaseSection(supabase, typeOrCategory, isCountry, limit);
 }
 
 /* ── Supabase custom overrides ── */
@@ -1216,7 +1282,7 @@ async function applySupabaseOverrides(
   try {
     const { data: overrides } = await supabase
       .from('movies')
-      .select('slug, name, poster_url, thumb_url, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, release_at, next_episode_at, next_episode_name, schedule_note, status')
+      .select('slug, name, poster_url, thumb_url, hero_backdrop_url, hero_poster_url, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, release_at, next_episode_at, next_episode_name, schedule_note, status')
       .in('slug', slugs)
       .eq('is_published', true);
 
@@ -1235,6 +1301,8 @@ async function applySupabaseOverrides(
         name: ov.name || item.name,
         poster_url: ov.poster_url || item.poster_url,
         thumb_url: ov.thumb_url || item.thumb_url,
+        hero_backdrop_url: ov.hero_backdrop_url || item.hero_backdrop_url,
+        hero_poster_url: ov.hero_poster_url || item.hero_poster_url,
         episode_current: ov.episode_current || item.episode_current,
         episode_total: ov.episode_total || item.episode_total,
         current_episode: ov.current_episode ?? item.current_episode,
@@ -1364,6 +1432,9 @@ serve(async (req) => {
   if (requestedSections.includes('phim-chieu-rap')) {
     sectionPromises['phim-chieu-rap'] = fetchSection(supabase, 'phim-chieu-rap', false, limit);
   }
+  if (requestedSections.includes('onlyflix-moi')) {
+    sectionPromises['onlyflix-moi'] = fetchOnlyflixTrendingMovies(supabase, limit);
+  }
   if (requestedSections.includes('phim-le')) {
     sectionPromises['phim-le'] = fetchSection(supabase, 'phim-le', false, limit);
   }
@@ -1422,7 +1493,7 @@ serve(async (req) => {
   /* 4b. Filter out trailer-only movies from all sections */
   for (const key of Object.keys(freshSections)) {
     freshSections[key] = freshSections[key].filter(
-      (m) => !isTrailerOnly(m.episode_current as string)
+      (m) => key === 'onlyflix-moi' || !isTrailerOnly(m.episode_current as string)
     );
   }
 
@@ -1501,13 +1572,13 @@ serve(async (req) => {
       .update(payload)
       .eq('id', CACHE_KEY)
       .select('id')
-      .abortSignal(timeoutSignal(1000));
+      .abortSignal(timeoutSignal(3000));
 
     if (!updateError && (!updatedRows || updatedRows.length === 0)) {
       await supabase
         .from('home_page_cache')
         .upsert({ id: CACHE_KEY, ...payload }, { onConflict: 'id' })
-        .abortSignal(timeoutSignal(1000));
+        .abortSignal(timeoutSignal(3000));
     }
   } catch {
     /* ignore cache write errors */

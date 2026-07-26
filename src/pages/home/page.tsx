@@ -396,9 +396,9 @@ function MobileQuickMovieCard({ movie, index }: { movie: MovieItem; index: numbe
   );
 }
 
-const ALL_SECTIONS = ['trending', 'top10-series', 'top10-single', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
+const ALL_SECTIONS = ['trending', 'top10-series', 'top10-single', 'onlyflix-moi', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
 const DESKTOP_HOME_SECTIONS = ALL_SECTIONS;
-const MOBILE_HOME_SECTIONS = ['trending', 'top10-series', 'top10-single', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh'];
+const MOBILE_HOME_SECTIONS = ['trending', 'top10-series', 'top10-single', 'onlyflix-moi', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh'];
 const HOME_CACHE_KEY = 'kp_home_proxy_v6_short';
 const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
@@ -724,6 +724,13 @@ export default function Home() {
             Phim mới <i className="ri-arrow-right-line" aria-hidden="true" />
           </Link>
         </div>
+        <LazyMovieSection
+          fetchType="type" fetchKey="onlyflix-moi" limit={compactMobile ? 9 : 18}
+          title="Phim Đang Chiếu Rạp" viewAllLink="/phim-chieu-rap"
+          cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
+          movies={homeData['onlyflix-moi'] ?? []}
+          loading={homeLoading}
+        />
         <HomeDiscoverySection onSelect={setActivePortal} />
         <MobileQuickCategories />
         <VietnamPoetryBanner />

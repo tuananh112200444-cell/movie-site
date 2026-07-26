@@ -50,6 +50,18 @@ if (!smartCache.includes("prefix: 'kp_home_proxy_', ttl: 30 * MINUTE")) {
 if (!home.includes('loadStaticHomeFallback(fallbackController.signal, DESKTOP_HOME_SECTIONS)')) {
   failures.push('Mobile static fallback must include every shelf for fast scrolling.');
 }
+if (!home.includes("'onlyflix-moi'") || !home.includes('title="Phim Đang Chiếu Rạp"')) {
+  failures.push('Homepage is missing the dedicated OnlyFlix cinema shelf.');
+}
+if (!proxy.includes("requestedSections.includes('onlyflix-moi')") || !proxy.includes("sectionPromises['onlyflix-moi'] = fetchOnlyflixTrendingMovies")) {
+  failures.push('Home proxy is missing the OnlyFlix-only cinema section contract.');
+}
+if (home.indexOf('fetchKey="onlyflix-moi"') > home.indexOf('<HomeDiscoverySection')) {
+  failures.push('The OnlyFlix cinema shelf must be the first homepage content section.');
+}
+if (!proxy.includes('.abortSignal(timeoutSignal(3000))')) {
+  failures.push('Homepage cache writes need enough time to persist the full section snapshot.');
+}
 if (discovery.includes("icon: 'ri-") || portalGateway.includes('ri-movie-2-line') || portalGateway.includes('ri-heart-3-line')) {
   failures.push('Primary mobile portal icons must not depend on the external icon font.');
 }
@@ -169,9 +181,13 @@ for (const snippet of [
 for (const snippet of [
   'fetchVerifiedTmdbHeroArtwork',
   'enrichTrendingHeroArtwork',
+  "select('slug,hero_backdrop_url,hero_poster_url')",
+  'verifiedBySlug',
   'hero_backdrop_url',
   'hero_poster_url',
   'Math.abs(expectedYear - candidateYear) <= 1',
+  'hero_backdrop_url: ov.hero_backdrop_url || item.hero_backdrop_url',
+  'hero_poster_url: ov.hero_poster_url || item.hero_poster_url',
 ]) {
   if (!proxy.includes(snippet)) {
     failures.push(`Homepage data brain is missing dedicated TMDB hero artwork: ${snippet}.`);
