@@ -72,9 +72,9 @@ function isBlvietsubWatchPageUrl(url: string): boolean {
   if (!raw) return false;
   try {
     const parsed = new URL(raw);
-    return /(^|\.)blvietsub\.com$/i.test(parsed.hostname) && /\/+xem-phim\//i.test(parsed.pathname);
+    return /^(?:www\.)?blvietsub\.com$/i.test(parsed.hostname) && /\/+xem-phim\//i.test(parsed.pathname);
   } catch {
-    return /blvietsub\.com\/+xem-phim\//i.test(raw);
+    return /^(?:https?:\/\/)?(?:www\.)?blvietsub\.com\/+xem-phim\//i.test(raw);
   }
 }
 

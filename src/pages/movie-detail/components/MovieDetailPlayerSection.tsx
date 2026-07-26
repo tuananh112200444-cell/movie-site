@@ -378,7 +378,9 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       if (mergedEpisodes.length === 0) return;
       const playableEpisodes = mergedEpisodes
         .filter((item) => !item.ep.is_scheduled);
-      const translatedEpisodes = playableEpisodes.filter((item) => !isRawEpisode(item.ep));
+      const regularPlayableEpisodes = playableEpisodes.filter((item) => Number.isFinite(epSortKey(item.ep)));
+      const translatedEpisodes = (regularPlayableEpisodes.length > 0 ? regularPlayableEpisodes : playableEpisodes)
+        .filter((item) => !isRawEpisode(item.ep));
       const latestPlayableEpisode = [...(translatedEpisodes.length > 0 ? translatedEpisodes : playableEpisodes)]
         .sort((a, b) => epSortKey(b.ep) - epSortKey(a.ep))[0];
       handleSelectMergedEp(latestPlayableEpisode ?? mergedEpisodes[0]);

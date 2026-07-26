@@ -114,7 +114,8 @@ function getHighestEpisodeFromServers(episodes: EpisodeServer[]): number {
     const serverHighest = (server.server_data ?? []).reduce((max, ep) => {
       if (!hasPlayableUrl(ep) || ep.is_scheduled) return max;
       if (String(ep.audio_type || '').toLowerCase() === 'raw' || /\braw\b/i.test(String(ep.name || ''))) return max;
-      return Math.max(max, getEpisodeNumber(ep));
+      const episodeNumber = getEpisodeNumber(ep);
+      return Number.isFinite(episodeNumber) && episodeNumber > 0 ? Math.max(max, episodeNumber) : max;
     }, 0);
     return Math.max(highest, serverHighest);
   }, 0);
@@ -382,7 +383,10 @@ export default function MovieDetailPage() {
     filteredEpisodes.forEach((server) => {
       (server.server_data ?? []).forEach((episode) => {
         if (!hasPlayableUrl(episode) || episode.is_scheduled) return;
-        const key = String(epSortKey(episode));
+        const sortKey = epSortKey(episode);
+        const key = Number.isFinite(sortKey)
+          ? String(sortKey)
+          : `special:${episode.slug || episode.name}`;
         if (!byKey.has(key)) byKey.set(key, episode);
       });
     });

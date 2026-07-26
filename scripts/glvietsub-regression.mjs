@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 
 const source = fs.readFileSync('supabase/functions/sync-glvietsub-feed/index.ts', 'utf8');
+const identity = fs.readFileSync('supabase/functions/_shared/movie-identity.ts', 'utf8');
+const playerBox = fs.readFileSync('src/pages/movie-detail/components/PlayerBox.tsx', 'utf8');
 const migration = fs.readFileSync('supabase/migrations/20260721195500_add_glvietsub_sync.sql', 'utf8');
 const healthMigration = fs.readFileSync('supabase/migrations/20260721210000_harden_operations_health_and_cron.sql', 'utf8');
 const movieApi = fs.readFileSync('src/services/movieApi.ts', 'utf8');
@@ -17,9 +19,16 @@ const checks = [
   [source.includes('const urlChanged') && source.includes("!['health_status', 'failure_count', 'last_error'].includes(key)"), 'Unchanged GLVietsub URLs must preserve accumulated stream health'],
   [source.includes('links.slice(0, 80), 4') && source.includes('mapWithConcurrency(discovered, 2'), 'GLVietsub parsing must use bounded episode and movie concurrency'],
   [source.includes('findCanonicalMovieByIdentity') && source.includes('normalizedNames'), 'GL/BL canonical matching must use the shared identity policy'],
+  [source.includes('Identity matching must use complete titles') && source.includes('[entry.name, entry.originName]'), 'GL identity matching must not collapse a spin-off title to its parent prefix'],
+  [playerBox.includes("return /^(?:www\\.)?blvietsub\\.com$/i.test(parsed.hostname);")
+    && !playerBox.includes("return /(^|\\.)blvietsub\\.com$/i.test(parsed.hostname);"), 'BLVietsub content-page guard must not block player.blvietsub.com embeds'],
+  [identity.includes('.ilike(column, exactCaseInsensitiveName)'), 'Canonical title matching must ignore letter case'],
   [source.includes('.slice(0, 2)'), 'Each episode must expose at most two sources'],
   [source.includes("episode.raw ? 'raw' : 'vietsub'"), 'RAW/Vietsub episodes must remain distinguishable'],
   [source.includes('existing.raw = existing.raw || raw'), 'Duplicate play CTA must not hide the RAW episode label'],
+  [source.includes('-tap-dac-biet') && source.includes('specialNumber'), 'Special-episode URLs must be discovered'],
+  [source.includes('episode.special') && source.includes('regularEpisodes'), 'Special episodes must not inflate the regular episode counters'],
+  [source.includes("eq('audio_type', 'raw')") && source.includes("in('episode_number', translatedEpisodeNumbers)") && source.includes("in('episode_slug', translatedEpisodeSlugs)"), 'Translated releases must remove stale GLVietsub RAW episode and stream rows'],
   [source.includes('no-video') && source.includes('directRawEmbed'), 'Direct RAW iframe fallback is missing'],
   [source.includes('safe.length ? safe'), 'Safer embed providers must be preferred'],
   [source.includes("'glvietsub-feed-backfill'"), 'Archive backfill cursor is missing'],
