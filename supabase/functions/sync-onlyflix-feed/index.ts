@@ -51,6 +51,28 @@ async function fetchText(url: string, timeout = 20_000, init: RequestInit = {}) 
   } finally { clearTimeout(timer); }
 }
 
+function trendingMoviesFromHome(html: string, limit: number) {
+  const raw = html.match(/<script[^>]*data-ofpop-home-json[^>]*>([\s\S]*?)<\/script>/i)?.[1] || '';
+  if (!raw) throw new Error('OnlyFlix Trending Movies payload was not found');
+  const payload = JSON.parse(raw);
+  const period = String(payload?.defaultPeriod || '24h');
+  const rows = payload?.groups?.movies?.periods?.[period];
+  if (!Array.isArray(rows)) throw new Error(`OnlyFlix Trending Movies period ${period} is invalid`);
+  return rows.slice(0, limit).map((row: Record<string, unknown>, index: number) => {
+    const link = String(row.url || '');
+    const slug = link.match(/^https:\/\/onlyflix\.to\/([^/?#]+)\/?$/i)?.[1] || '';
+    if (!slug || !link) throw new Error(`OnlyFlix Trending Movies rank ${index + 1} has no valid movie URL`);
+    return {
+      slug,
+      link,
+      title: { rendered: String(row.title || slug) },
+      trendingRank: index + 1,
+      trendingTotal: Number(row.total || 0),
+      trendingPeriod: period,
+    };
+  });
+}
+
 type Player = { number?: number; url?: string; language?: string; quality?: string; name?: string };
 async function playersFromPage(url: string, html: string) {
   const nonce = match(html, /data-player-nonce=["']([^"']+)/i);
@@ -97,7 +119,9 @@ async function parsePage(item: Record<string, unknown>) {
   const html = await fetchText(sourceUrl);
   const baseTitle = text(String((item.title as Record<string, unknown>)?.rendered || meta(html, 'og:title') || item.slug || ''))
     .replace(/\s+(?:watch free|online streaming).*$/i, '').trim();
-  const links = episodeLinks(html);
+  // A row discovered in the explicit Movies rail is always a movie. Related
+  // series links elsewhere in its HTML must never turn it into a fake season.
+  const links = item.trendingRank ? [] : episodeLinks(html);
   const groups = new Map<number, typeof links>();
   if (links.length) for (const link of links) groups.set(link.season, [...(groups.get(link.season) || []), link]);
   else groups.set(0, [{ url: sourceUrl, season: 0, episode: 1 }]);
@@ -234,28 +258,40 @@ serve(async (req) => {
   if (!dbUrl || !serviceKey) return reply({ success: false, error: 'Missing Supabase env' }, 500);
   const db = createClient(dbUrl, serviceKey, { auth: { persistSession: false } });
   const dryRun = url.searchParams.get('dry_run') === '1';
-  const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 2), 5));
-  const page = Math.max(1, Number(url.searchParams.get('page') || 1));
-  const fields = 'id,slug,link,title,date,modified';
-  const [movies, shows] = await Promise.all(['posts', 'tvshows'].map(async (kind) => {
-    const raw = await fetchText(`${BASE}/wp-json/wp/v2/${kind}?per_page=${limit}&page=${page}&_fields=${fields}`);
-    return JSON.parse(raw) as Array<Record<string, unknown>>;
-  }));
-  const discovered = [...movies, ...shows].sort((a, b) => Date.parse(String(b.modified)) - Date.parse(String(a.modified))).slice(0, limit);
+  const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 10), 10));
+  // Read the exact, bounded Trending Movies rail that OnlyFlix publishes on
+  // its homepage. Never walk its archive or infer trends from publication time.
+  const discovered = trendingMoviesFromHome(await fetchText(BASE), limit);
   const stored: unknown[] = []; const errors: string[] = []; let consecutiveFailures = 0; let parsed = 0;
+  const trending: unknown[] = [];
   for (const item of discovered) {
     if (consecutiveFailures >= 3) break;
     try {
       const entries = await parsePage(item); parsed += entries.length;
-      if (!dryRun) for (const entry of entries) stored.push(await storeEntry(db, entry));
-      else stored.push(...entries.map((entry) => ({ name: entry.name, episodes: (entry.episodes as unknown[]).length })));
+      for (const entry of entries) {
+        const saved = dryRun
+          ? { slug: (await findMovie(db, entry))?.slug || `onlyflix-${entry.sourceSlug}`, name: entry.name, created: false, episodes: (entry.episodes as unknown[]).length }
+          : await storeEntry(db, entry);
+        stored.push(saved);
+        trending.push({
+          rank: item.trendingRank,
+          total: item.trendingTotal,
+          period: item.trendingPeriod,
+          title: entry.name,
+          source_url: item.link,
+          slug: saved.slug,
+        });
+      }
       consecutiveFailures = 0;
     } catch (error) {
       consecutiveFailures += 1;
       errors.push(`${String(item.link)}: ${errorMessage(error)}`);
     }
   }
-  const result = { success: errors.length === 0, dry_run: dryRun, scanned: discovered.length, parsed, stored, errors, circuit_open: consecutiveFailures >= 3, elapsed_ms: Date.now() - started };
-  if (!dryRun) await db.from('sync_logs').insert({ function_name: 'sync-onlyflix-feed', run_at: new Date().toISOString(), scanned: discovered.length, added: stored.filter((x: any) => x.created).length, skipped: stored.filter((x: any) => !x.created).length, errors: errors.length, details: errors, elapsed_ms: result.elapsed_ms, success: result.success, metadata: result });
+  const result = { success: errors.length === 0, dry_run: dryRun, mode: 'trending-movies-only', scanned: discovered.length, parsed, stored, trending, errors, circuit_open: consecutiveFailures >= 3, elapsed_ms: Date.now() - started };
+  if (!dryRun) {
+    await db.from('sync_logs').insert({ function_name: 'sync-onlyflix-feed', run_at: new Date().toISOString(), scanned: discovered.length, added: stored.filter((x: any) => x.created).length, skipped: stored.filter((x: any) => !x.created).length, errors: errors.length, details: errors, elapsed_ms: result.elapsed_ms, success: result.success, metadata: result });
+    if (result.success) await db.from('home_page_cache').update({ expires_at: new Date().toISOString() }).eq('id', 'homepage_v3');
+  }
   return reply(result, result.success ? 200 : 207);
 });

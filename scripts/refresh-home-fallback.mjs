@@ -8,6 +8,7 @@ const REQUIRED_SECTIONS = [
   'trending',
   'top10-single',
   'top10-series',
+  'onlyflix-moi',
   'phim-chieu-rap',
   'phim-le',
   'phim-bo',
