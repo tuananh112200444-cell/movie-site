@@ -51,6 +51,7 @@ export default function ActorListPage() {
         keywords="diễn viên nổi tiếng, diễn viên hàn quốc, lee min ho, song hye kyo, hyun bin, iu, kim soo hyun, park seo jun, gong yoo, phim diễn viên vietsub"
         canonical="/dien-vien"
         schema={schema}
+        noIndex
       />
       <Navbar />
 

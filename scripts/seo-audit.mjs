@@ -72,6 +72,31 @@ if (!redirects.includes('/* /index.html 200')) {
 }
 
 const cloudflareFunction = await read('functions/[[path]].js').catch(() => '');
+const consolidatedSeoPaths = [
+  '/xem-phim',
+  '/xem-phim-mien-phi',
+  '/xem-phim-hd',
+  '/web-xem-phim',
+  '/kho-phim-online',
+  '/xem-phim-vietsub',
+  '/xem-phim-moi',
+  '/xem-phim-le',
+  '/xem-phim-bo',
+  '/xem-phim-chieu-rap',
+  '/xem-phim-viet-nam',
+  '/xem-phim-han-quoc',
+  '/xem-phim-trung-quoc',
+  '/xem-phim-au-my',
+  '/xem-anime-vietsub',
+];
+for (const path of consolidatedSeoPaths) {
+  if (!cloudflareFunction.includes(`['${path}',`)) {
+    addError(`Cloudflare is missing the consolidated SEO redirect for ${path}.`);
+  }
+  if (seoLandingUrls.some((item) => item.path === path)) {
+    addError(`Consolidated SEO path must not remain in the landing sitemap: ${path}.`);
+  }
+}
 if (/url\.hostname === 'mhophim\.com'[\s\S]{0,120}canonicalRedirect\(url,\s*pathname\)/.test(cloudflareFunction)) {
   addError('functions/[[path]].js must not send mhophim.com through the khophim.org canonical redirect.');
 }
@@ -257,9 +282,19 @@ if (SECONDARY_DOMAIN_PATTERN.test(staticSitemap)) {
   addError('sitemap-static.xml must not contain mhophim.com URLs.');
 }
 const staticLocs = extractLocs(staticSitemap);
+if (staticLocs.some((loc) => loc.startsWith(`${SITE_URL}/dien-vien/`))) {
+  addError('Unverified mock actor profiles must not remain in the static sitemap.');
+}
+if (staticLocs.includes(`${SITE_URL}/blog/phim-hot-thang-5-2026-xem-tai-khophim`)) {
+  addError('The stale May 2026 hot-movie article must not remain in the static sitemap.');
+}
 const duplicateStaticLocs = staticLocs.filter((loc, index) => staticLocs.indexOf(loc) !== index);
 if (duplicateStaticLocs.length > 0) {
   addWarning(`sitemap-static.xml has duplicate locs: ${[...new Set(duplicateStaticLocs)].join(', ')}`);
+}
+const overlappingLandingLocs = staticLocs.filter((loc) => seoLocs.includes(loc));
+if (overlappingLandingLocs.length > 0) {
+  addError(`Static and SEO landing sitemaps overlap: ${overlappingLandingLocs.join(', ')}`);
 }
 
 const mhophimRobots = await read('public/mhophim/robots.txt').catch(() => '');
@@ -331,6 +366,35 @@ if (!bannerDelay || Number(bannerDelay.replaceAll('_', '')) > 3000) {
 }
 if (!adminSeoPage.includes('gsc-seo-feedback')) {
   addError('Admin SEO is missing the automated Search Console feedback dashboard.');
+}
+
+const hotMoviesPage = await read('src/pages/hot-movies-2026/page.tsx').catch(() => '');
+for (const requiredSnippet of ['fetchTrendingMovies', 'Cập nhật tự động', 'Đây không phải bảng xếp hạng quảng cáo']) {
+  if (!hotMoviesPage.includes(requiredSnippet)) {
+    addError(`The hot-movies page is missing its evidence-based contract: ${requiredSnippet}`);
+  }
+}
+if (hotMoviesPage.includes("mocks/hotMovies2026") || hasMojibake(hotMoviesPage)) {
+  addError('The hot-movies page must not use mock rankings or mojibake content.');
+}
+
+const actorListPage = await read('src/pages/actor/list-page.tsx').catch(() => '');
+const actorDetailPage = await read('src/pages/actor/page.tsx').catch(() => '');
+const blogDetailPage = await read('src/pages/blog/detail-page.tsx').catch(() => '');
+for (const [file, source] of [
+  ['src/pages/actor/list-page.tsx', actorListPage],
+  ['src/pages/actor/page.tsx', actorDetailPage],
+  ['src/pages/blog/detail-page.tsx', blogDetailPage],
+]) {
+  if (!source.includes('noIndex')) {
+    addError(`${file} must remain noindex until its mock or unverified content is replaced.`);
+  }
+}
+const edgeWorker = await read('functions/[[path]].js').catch(() => '');
+for (const pattern of [String.raw`/^\/dien-vien(?:\/|$)/`, String.raw`/^\/blog\/[^/]+\/?$/`]) {
+  if (!edgeWorker.includes(pattern)) {
+    addError(`Googlebot noindex routing is missing: ${pattern}`);
+  }
 }
 
 const gscFeedbackFunction = await read('supabase/functions/gsc-seo-feedback/index.ts').catch(() => '');

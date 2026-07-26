@@ -71,6 +71,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
   const navigate = useNavigate();
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLElement | null>(null);
+  const keyboardHighlightRef = useRef(-1);
   const isTyping = query.trim().length >= 2;
 
   // Load history on mount — NO API calls
@@ -155,17 +156,21 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
       e.preventDefault();
       setHighlightIndex(prev => {
         const next = prev + 1;
-        return next >= totalItems ? 0 : next;
+        const index = next >= totalItems ? 0 : next;
+        keyboardHighlightRef.current = index;
+        return index;
       });
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlightIndex(prev => {
         const next = prev - 1;
-        return next < 0 ? totalItems - 1 : next;
+        const index = next < 0 ? totalItems - 1 : next;
+        keyboardHighlightRef.current = index;
+        return index;
       });
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (highlightIndex >= 0) {
+      if (highlightIndex >= 0 && keyboardHighlightRef.current === highlightIndex) {
         if (isTyping) {
           if (highlightIndex < suggestions.length) {
             const movie = suggestions[highlightIndex];
@@ -198,6 +203,10 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
             }
           }
         }
+      } else if (isTyping) {
+        addToHistory(query.trim());
+        navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+        onSelect?.();
       }
     } else if (e.key === 'Escape') {
       onSelect?.();
@@ -208,6 +217,10 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    keyboardHighlightRef.current = -1;
+  }, [query]);
 
   // Scroll highlighted item into view
   useEffect(() => {
@@ -271,7 +284,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
                         navigate(getMovieHref(movie));
                         onSelect?.();
                       }}
-                      onMouseEnter={() => setHighlightIndex(idx)}
+                      onMouseEnter={() => { keyboardHighlightRef.current = -1; setHighlightIndex(idx); }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 transition-colors cursor-pointer text-left border-b border-white/5 last:border-0 ${
                         isHighlighted ? 'bg-white/8' : 'hover:bg-white/5'
                       }`}
@@ -318,7 +331,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
                     navigate(`/search?q=${encodeURIComponent(query.trim())}`);
                     onSelect?.();
                   }}
-                  onMouseEnter={() => setHighlightIndex(suggestions.length)}
+                  onMouseEnter={() => { keyboardHighlightRef.current = -1; setHighlightIndex(suggestions.length); }}
                   className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 text-red-400 transition-colors cursor-pointer text-sm font-semibold ${
                     highlightIndex === suggestions.length ? 'bg-red-500/10' : 'hover:bg-red-500/10'
                   }`}
@@ -354,7 +367,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
                 <div
                   key={term}
                   
-                  onMouseEnter={() => setHighlightIndex(idx)}
+                  onMouseEnter={() => { keyboardHighlightRef.current = -1; setHighlightIndex(idx); }}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors text-left ${
                     highlightIndex === idx ? 'bg-white/8' : 'hover:bg-white/5'
                   }`}
@@ -401,7 +414,7 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
                     navigate(`/search?q=${encodeURIComponent(tag.label)}`);
                     onSelect?.();
                   }}
-                  onMouseEnter={() => setHighlightIndex(globalIdx)}
+                  onMouseEnter={() => { keyboardHighlightRef.current = -1; setHighlightIndex(globalIdx); }}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors cursor-pointer text-left ${
                     highlightIndex === globalIdx ? 'bg-white/8' : 'hover:bg-white/5'
                   }`}

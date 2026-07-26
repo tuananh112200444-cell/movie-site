@@ -312,6 +312,7 @@ export default function SearchPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSug, setLoadingSug] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
+  const keyboardHighlightRef = useRef(-1);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -539,6 +540,7 @@ export default function SearchPage() {
     const val = e.target.value;
     setQuery(val);
     setHighlightIndex(-1);
+    keyboardHighlightRef.current = -1;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (val.trim().length >= 2) {
       setShowSuggestions(true);
@@ -558,6 +560,7 @@ export default function SearchPage() {
   const handleSearchFocus = () => {
     setShowSuggestions(true);
     setHighlightIndex(-1);
+    keyboardHighlightRef.current = -1;
     if (query.trim().length > 0) {
       setSuggestions(getInstantLocalHits(localPool, query, 8));
     }
@@ -604,17 +607,21 @@ export default function SearchPage() {
       e.preventDefault();
       setHighlightIndex(prev => {
         const next = prev + 1;
-        return next >= totalSugItems ? 0 : next;
+        const index = next >= totalSugItems ? 0 : next;
+        keyboardHighlightRef.current = index;
+        return index;
       });
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlightIndex(prev => {
         const next = prev - 1;
-        return next < 0 ? totalSugItems - 1 : next;
+        const index = next < 0 ? totalSugItems - 1 : next;
+        keyboardHighlightRef.current = index;
+        return index;
       });
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (highlightIndex >= 0) {
+      if (highlightIndex >= 0 && keyboardHighlightRef.current === highlightIndex) {
         if (query.trim().length >= 1) {
           if (highlightIndex < suggestions.length) {
             const movie = suggestions[highlightIndex];
@@ -848,7 +855,7 @@ export default function SearchPage() {
                           key={movie._id}
                           type="button"
                           onClick={() => pickSuggestion(movie)}
-                          onMouseEnter={() => setHighlightIndex(idx)}
+                          onMouseEnter={() => { keyboardHighlightRef.current = -1; setHighlightIndex(idx); }}
                           className={`w-full flex items-center gap-3 px-4 py-3 transition-colors cursor-pointer border-b border-white/[0.04] last:border-0 text-left ${
                             isHighlighted ? 'bg-white/[0.06]' : 'hover:bg-white/[0.04]'
                           }`}
@@ -888,7 +895,7 @@ export default function SearchPage() {
                           addToHistory(query.trim());
                           setSearchParams({ q: query.trim() });
                         }}
-                        onMouseEnter={() => setHighlightIndex(suggestions.length)}
+                        onMouseEnter={() => { keyboardHighlightRef.current = -1; setHighlightIndex(suggestions.length); }}
                         className={`w-full flex items-center justify-center gap-2 px-4 py-3 text-red-400 transition-colors cursor-pointer text-sm font-semibold border-t border-white/5 ${
                           highlightIndex === suggestions.length ? 'bg-red-500/10' : 'hover:bg-red-500/5'
                         }`}
@@ -921,7 +928,7 @@ export default function SearchPage() {
                           return (
                             <div
                               key={term}
-                              onMouseEnter={() => setHighlightIndex(idx)}
+                              onMouseEnter={() => { keyboardHighlightRef.current = -1; setHighlightIndex(idx); }}
                               className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors text-left ${
                                 isHighlighted ? 'bg-white/[0.06]' : 'hover:bg-white/[0.04]'
                               }`}
@@ -963,7 +970,7 @@ export default function SearchPage() {
                               key={tag.label}
                               type="button"
                               onClick={() => pickHistory(tag.label)}
-                              onMouseEnter={() => setHighlightIndex(globalIdx)}
+                              onMouseEnter={() => { keyboardHighlightRef.current = -1; setHighlightIndex(globalIdx); }}
                               className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors cursor-pointer text-left ${
                                 isHighlighted ? 'bg-white/[0.06]' : 'hover:bg-white/[0.04]'
                               }`}

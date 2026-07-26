@@ -1,22 +1,7 @@
 export const SITE_URL = 'https://khophim.org';
 
 export const seoLandingUrls = [
-  { path: '/xem-phim', changefreq: 'weekly', priority: '0.96' },
   { path: '/xem-phim-online', changefreq: 'weekly', priority: '0.94' },
-  { path: '/xem-phim-mien-phi', changefreq: 'weekly', priority: '0.93' },
-  { path: '/xem-phim-hd', changefreq: 'weekly', priority: '0.91' },
-  { path: '/xem-phim-vietsub', changefreq: 'weekly', priority: '0.91' },
-  { path: '/xem-phim-moi', changefreq: 'daily', priority: '0.93' },
-  { path: '/xem-phim-le', changefreq: 'daily', priority: '0.91' },
-  { path: '/xem-phim-bo', changefreq: 'daily', priority: '0.91' },
-  { path: '/xem-phim-chieu-rap', changefreq: 'daily', priority: '0.90' },
-  { path: '/xem-phim-viet-nam', changefreq: 'weekly', priority: '0.86' },
-  { path: '/xem-phim-han-quoc', changefreq: 'daily', priority: '0.88' },
-  { path: '/xem-phim-trung-quoc', changefreq: 'daily', priority: '0.88' },
-  { path: '/xem-phim-au-my', changefreq: 'daily', priority: '0.86' },
-  { path: '/xem-anime-vietsub', changefreq: 'weekly', priority: '0.86' },
-  { path: '/web-xem-phim', changefreq: 'weekly', priority: '0.88' },
-  { path: '/kho-phim-online', changefreq: 'weekly', priority: '0.88' },
   { path: '/phim-vietsub', changefreq: 'weekly', priority: '0.92' },
   { path: '/phim-thuyet-minh', changefreq: 'weekly', priority: '0.88' },
   { path: '/phim-long-tieng', changefreq: 'weekly', priority: '0.86' },

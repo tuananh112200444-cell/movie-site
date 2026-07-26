@@ -171,6 +171,7 @@ export default function BlogDetailPage() {
         ogType="article"
         ogImage={post.image}
         schema={[schema, breadcrumbSchema]}
+        noIndex
       />
       <Navbar />
 
