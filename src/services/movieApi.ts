@@ -25,9 +25,9 @@ function isBlvietsubWatchPageUrl(url: string): boolean {
   if (!raw) return false;
   try {
     const parsed = new URL(raw);
-    return /(^|\.)blvietsub\.com$/i.test(parsed.hostname);
+    return /^(?:www\.)?blvietsub\.com$/i.test(parsed.hostname);
   } catch {
-    return /(^|\/\/|[./])blvietsub\.com(\/|$)/i.test(raw);
+    return /^(?:https?:\/\/)?(?:www\.)?blvietsub\.com(?:\/|$)/i.test(raw);
   }
 }
 
@@ -2229,6 +2229,7 @@ function getEpisodeNumberFromText(value?: string): number {
 }
 
 function getEpisodeNumberFromData(ep: EpisodeData): number {
+  if (isSpecialEpisode(ep)) return 0;
   const explicit = Number(ep.episode_number ?? 0);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
   return getEpisodeNumberFromText(ep.slug) || getEpisodeNumberFromText(ep.name);
@@ -3349,6 +3350,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
   }
 }
 export function epSortKey(ep: EpisodeData): number {
+  if (isSpecialEpisode(ep)) return Infinity;
   const explicit = Number(ep.episode_number ?? 0);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
   const text = ep.slug || ep.name || '';
@@ -3356,6 +3358,11 @@ export function epSortKey(ep: EpisodeData): number {
   if (match) return Number(match[1]);
   if (text.toLowerCase().includes('full')) return 0;
   return Infinity;
+}
+
+export function isSpecialEpisode(ep?: Pick<EpisodeData, 'name' | 'slug'> | null): boolean {
+  const text = `${ep?.slug || ''} ${ep?.name || ''}`.toLowerCase();
+  return text.includes('tap-dac-biet') || text.includes('tập đặc biệt') || text.includes('special episode');
 }
 
 const detailInflight = new Map<string, Promise<MovieDetailResponse | null>>();
@@ -4041,6 +4048,7 @@ export function getSourceFailureClusterFromUrl(value = ''): string {
     return 'ssplay_abyss';
   }
   if (host.includes('dailymotion.com') || host === 'dai.ly') return 'dailymotion';
+  if (host === 'player.blvietsub.com') return 'stable_embed';
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) return 'khophim_direct';
   if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) return 'ophim';
   if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) {
@@ -4215,7 +4223,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) score += KKPHIM_PREFERRED_SOURCE_BONUS;
   if (lower.includes('.m3u8')) score += 70;
   if (host.includes('versondd.top') || host.includes('short.icu')) score -= 1200;
-  if (host.includes('blvietsub.com')) score -= 900;
+  if (host === 'blvietsub.com' || host === 'www.blvietsub.com') score -= 900;
   if (embed && !m3u8 && score < 20) score += 10;
 
   return score - getRecentBadHostPenalty(ep);

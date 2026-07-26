@@ -1018,9 +1018,9 @@ function isBlvietsubWatchUrl(rawUrl = ''): boolean {
   const value = rawUrl.replace(/&amp;/g, '&').trim();
   try {
     const url = new URL(value);
-    return /(^|\.)blvietsub\.com$/i.test(url.hostname) && /\/+xem-phim\//i.test(url.pathname);
+    return /^(?:www\.)?blvietsub\.com$/i.test(url.hostname) && /\/+xem-phim\//i.test(url.pathname);
   } catch {
-    return /blvietsub\.com\/+xem-phim\//i.test(value);
+    return /^(?:https?:\/\/)?(?:www\.)?blvietsub\.com\/+xem-phim\//i.test(value);
   }
 }
 

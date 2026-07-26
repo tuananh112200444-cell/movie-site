@@ -34,8 +34,10 @@ export async function findCanonicalMovieByIdentity(
   const fields = 'id,slug,name,origin_name,normalized_name,year,source_site,source_name,current_episode,total_episodes,is_published';
   const candidates: Record<string, unknown>[] = [];
   for (const name of unique(input.names)) {
+    const exactCaseInsensitiveName = name.replaceAll('%', '\\%').replaceAll('_', '\\_');
     for (const column of ['name', 'origin_name']) {
-      const { data, error } = await db.from('movies').select(fields).eq('year', year).eq(column, name).limit(20);
+      const { data, error } = await db.from('movies').select(fields).eq('year', year)
+        .ilike(column, exactCaseInsensitiveName).limit(20);
       if (!error) candidates.push(...(data || []));
     }
   }

@@ -76,24 +76,57 @@ function discoverSitemapUrls(xml: string): string[] {
     .map((match) => decode(match[1]).replace(/\/$/, ''));
 }
 
-function episodeLinks(html: string): Array<{ url: string; number: number; raw: boolean }> {
-  const values: Array<{ url: string; number: number; raw: boolean }> = [];
-  const byUrl = new Map<string, { url: string; number: number; raw: boolean }>();
-  for (const match of html.matchAll(/<a[^>]+href=["'](https:\/\/www\.glvietsub\.net\/xem-phim\/[^"']+tap-(\d+))[^>]*>([\s\S]*?)<\/a>/gi)) {
+function episodeLinks(html: string): Array<{
+  url: string; number: number; raw: boolean; special: boolean; label: string; slug: string;
+}> {
+  const values: Array<{
+    url: string; number: number; raw: boolean; special: boolean; label: string; slug: string;
+  }> = [];
+  const byUrl = new Map<string, typeof values[number]>();
+  for (const match of html.matchAll(/<a[^>]+href=["'](https:\/\/www\.glvietsub\.net\/xem-phim\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
     const url = decode(match[1]).replace(/\/$/, '');
-    const raw = /\bRAW\b/i.test(plain(match[3]));
+    const sourceSlug = url.split('/').filter(Boolean).at(-1) || '';
+    const regularMatch = sourceSlug.match(/-tap-(\d+)$/i);
+    const special = /-tap-dac-biet(?:-|$)/i.test(sourceSlug);
+    if (!regularMatch && !special) continue;
+    const label = plain(match[2]);
+    const raw = /\bRAW\b/i.test(label);
     const existing = byUrl.get(url);
     if (existing) {
       // The large "Play" CTA appears before the episode-list label and has no
       // RAW marker. Aggregate duplicate anchors so the richer label wins.
       existing.raw = existing.raw || raw;
+      if (/dac\s*biet/i.test(slugify(label))) existing.label = label;
       continue;
     }
-    const episode = { url, number: Number(match[2]), raw };
+    const specialNumber = special
+      ? Number(slugify(label).match(/dac-biet-(\d+)/i)?.[1]
+        || sourceSlug.match(/-tap-dac-biet-(\d+)(?:-|$)/i)?.[1] || 0)
+      : 0;
+    const episode = {
+      url,
+      number: regularMatch ? Number(regularMatch[1]) : -(1000 + specialNumber),
+      raw,
+      special,
+      label,
+      slug: special ? sourceSlug.slice(sourceSlug.indexOf('tap-dac-biet')) : `tap-${regularMatch?.[1]}`,
+    };
     byUrl.set(url, episode);
     values.push(episode);
   }
-  return values.sort((a, b) => a.number - b.number);
+  let nextSpecialNumber = 1;
+  const usedSpecialNumbers = new Set(values.filter((episode) => episode.special && episode.number < -1000)
+    .map((episode) => Math.abs(episode.number) - 1000)
+    .filter(Boolean));
+  for (const episode of values.filter((item) => item.special && item.number === -1000)) {
+    while (usedSpecialNumbers.has(nextSpecialNumber)) nextSpecialNumber += 1;
+    episode.number = -(1000 + nextSpecialNumber);
+    usedSpecialNumbers.add(nextSpecialNumber);
+  }
+  return values.sort((a, b) => {
+    if (a.special !== b.special) return a.special ? 1 : -1;
+    return a.special ? Math.abs(a.number) - Math.abs(b.number) : a.number - b.number;
+  });
 }
 
 function unwrapEmbed(payload: Record<string, unknown>): string {
@@ -161,17 +194,21 @@ async function parseDetail(sourceUrl: string) {
       : /^https?:\/\//i.test(directRawEmbed) ? [decode(directRawEmbed)] : [];
     return urls.map((url, index) => ({
       episode_number: episode.number,
-      episode_name: `Tập ${episode.number}${episode.raw ? ' RAW' : ''}`,
-      slug: `tap-${episode.number}`,
+      episode_name: episode.special
+        ? `${episode.label.replace(/\s*RAW\b/i, '').trim() || 'Tập Đặc Biệt'}${episode.raw ? ' RAW' : ''}`
+        : `Tập ${episode.number}${episode.raw ? ' RAW' : ''}`,
+      slug: episode.slug,
       server_name: episode.raw ? `GLVietsub RAW ${index + 1}` : `GLVietsub ${index + 1}`,
       link_embed: url,
       raw: episode.raw,
+      special: episode.special,
     }));
   });
   const episodes: Array<Record<string, unknown>> = episodeGroups.flat();
-  const translatedNumbers = episodes.filter((row) => !row.raw).map((row) => Number(row.episode_number || 0));
-  const rawNumbers = episodes.filter((row) => row.raw).map((row) => Number(row.episode_number || 0));
-  const playableNumbers = episodes.map((row) => Number(row.episode_number || 0));
+  const regularEpisodes = episodes.filter((row) => !row.special);
+  const translatedNumbers = regularEpisodes.filter((row) => !row.raw).map((row) => Number(row.episode_number || 0));
+  const rawNumbers = regularEpisodes.filter((row) => row.raw).map((row) => Number(row.episode_number || 0));
+  const playableNumbers = regularEpisodes.map((row) => Number(row.episode_number || 0));
   const currentEpisode = Math.max(0, ...translatedNumbers);
   const rawEpisode = Math.max(0, ...rawNumbers);
   const playableEpisode = Math.max(0, ...playableNumbers);
@@ -192,7 +229,12 @@ async function findMovie(db: ReturnType<typeof createClient>, entry: Record<stri
   // Match through punctuation-safe normalized values. Raw titles can contain
   // commas/parentheses that alter PostgREST .or() syntax and silently prevent
   // GL episodes from attaching to an existing BL canonical movie.
-  const aliases = titleAliases(entry.name, entry.originName);
+  // Identity matching must use complete titles. A prefix before ":" can name
+  // the parent series (for example "Fourever You Season 2") and would attach a
+  // spin-off's episodes to that parent.
+  const aliases = Array.from(new Set(
+    [entry.name, entry.originName].map((value) => plain(String(value || '')).trim()).filter(Boolean),
+  ));
   const normalizedNames = Array.from(new Set(aliases.map((value) => slugify(value)).filter(Boolean)));
   return await findCanonicalMovieByIdentity(db, {
     names: aliases,
@@ -265,6 +307,32 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
     }
     else { const { error } = await db.from('streams').insert(streamPayload); if (error) throw error; }
     rows += 1;
+  }
+  const translatedEpisodes = (entry.episodes as Array<Record<string, unknown>>)
+    .filter((episode) => !episode.raw);
+  const translatedEpisodeNumbers = Array.from(new Set(
+    translatedEpisodes
+      .map((episode) => Number(episode.episode_number || 0))
+      .filter((episodeNumber) => Number.isFinite(episodeNumber) && episodeNumber !== 0),
+  ));
+  if (translatedEpisodeNumbers.length) {
+    const translatedEpisodeSlugs = Array.from(new Set(translatedEpisodes
+      .map((episode) => String(episode.slug || '').trim())
+      .filter(Boolean)));
+    const { error: staleEpisodeError } = await db.from('movie_episodes').delete()
+      .eq('movie_id', movie.id)
+      .eq('source', SOURCE)
+      .eq('audio_type', 'raw')
+      .in('episode_number', translatedEpisodeNumbers);
+    if (staleEpisodeError) throw staleEpisodeError;
+    if (translatedEpisodeSlugs.length) {
+      const { error: staleStreamError } = await db.from('streams').delete()
+        .eq('movie_id', movie.id)
+        .eq('source', SOURCE)
+        .eq('audio_type', 'raw')
+        .in('episode_slug', translatedEpisodeSlugs);
+      if (staleStreamError) throw staleStreamError;
+    }
   }
   await db.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).eq('slug', movie.slug);
   return { slug: movie.slug, created, rows, current_episode: entry.currentEpisode, total_episodes: entry.expectedEpisodes };
