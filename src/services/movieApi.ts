@@ -683,7 +683,7 @@ function isVolatileOphimVodImage(url: string): boolean {
 }
 
 function shouldBypassImageProxy(url: string): boolean {
-  return /^https?:\/\/(image\.tmdb\.org|blogger\.googleusercontent\.com|[^/]+\.bp\.blogspot\.com|i\.ibb\.co|pic1\.iqiyipic\.com|vcover-hz-pic\.wetvinfo\.com)\//i.test(url);
+  return /^https?:\/\/(image\.tmdb\.org|blogger\.googleusercontent\.com|[^/]+\.bp\.blogspot\.com|i\.ibb\.co|pic1\.iqiyipic\.com|vcover-hz-pic\.wetvinfo\.com|phimimg\.com|icdn\.darkbytes\.xyz)\//i.test(url);
 }
 
 export function getImageFallbacks(primaryPath?: string, altPath?: string): string[] {

@@ -87,8 +87,14 @@ for (const requiredSnippet of [
     addError(`functions/[[path]].js is missing host SEO guard: ${requiredSnippet}`);
   }
 }
-if (!cloudflareFunction.includes("'X-Sitemap-Retired': 'index-bloat-cleanup'")) {
-  addError('Cloudflare SEO worker must retire legacy numbered movie sitemaps with HTTP 410.');
+if (cloudflareFunction.includes("'X-Sitemap-Retired': 'index-bloat-cleanup'")) {
+  addError('Cloudflare SEO worker must not retire quality-gated numbered movie sitemaps.');
+}
+if (!cloudflareFunction.includes('page_size=50000')) {
+  addError('Cloudflare SEO worker must expose the complete quality-gated movie sitemap chunk.');
+}
+if (!cloudflareFunction.includes('the-loai|quoc-gia|danh-sach')) {
+  addError('MHoPhim legacy catalogue URLs must consolidate into khophim.org.');
 }
 if (!cloudflareFunction.includes("potentialAction: hasPlayableEpisode ? { '@type': 'WatchAction', target: watchUrl }")) {
   addError('Movie prerender WatchAction must target the dedicated watch page.');
@@ -186,16 +192,20 @@ const ongoingMovieSitemap = `${SITE_URL}/sitemap-movies-ongoing.xml`;
 if (!childSitemaps.includes(ongoingMovieSitemap)) {
   addError(`sitemap.xml is missing the freshness-ranked ongoing movie sitemap: ${ongoingMovieSitemap}`);
 }
+const qualityMovieChunk = `${SITE_URL}/sitemap-movies-1.xml`;
+if (!childSitemaps.includes(qualityMovieChunk)) {
+  addError(`sitemap.xml is missing the complete quality-gated movie chunk: ${qualityMovieChunk}`);
+}
 if (!childSitemaps.includes(`${SITE_URL}/feed.xml`)) {
   addError('sitemap.xml is missing the curated recent-movie RSS feed.');
 }
-for (let page = 1; page <= 8; page += 1) {
+for (let page = 2; page <= 8; page += 1) {
   const chunkLoc = `${SITE_URL}/sitemap-movies-${page}.xml`;
   if (childSitemaps.includes(chunkLoc)) {
-    addError(`sitemap.xml should not expose broad movie chunks during index-quality recovery: ${chunkLoc}`);
+    addError(`sitemap.xml must not expose unneeded movie chunks: ${chunkLoc}`);
   }
   if (await exists(resolve('public', `sitemap-movies-${page}.xml`))) {
-    addError(`Legacy public/sitemap-movies-${page}.xml must not be shipped after index-bloat cleanup.`);
+    addError(`Unused public/sitemap-movies-${page}.xml must not be shipped.`);
   }
 }
 

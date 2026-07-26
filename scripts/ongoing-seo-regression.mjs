@@ -75,6 +75,8 @@ requireText(sitemap, "url.searchParams.get('ongoing') === '1'", 'sitemap endpoin
 requireText(sitemap, "isOngoingTier(movie) ? 'daily'", 'ongoing sitemap has no active crawl hint');
 requireText(sitemap, "return '0.98'", 'fresh ongoing movies are not prioritized');
 requireText(sitemap, "'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'", 'ongoing sitemap cache can hide new episodes for too long');
+requireText(sitemap, 'fetchEligibleMovies(options.offset, options.limit)', 'full movie sitemap does not read the quality-gated catalogue');
+requireText(sitemap, 'movie.seo_eligible_for_index === true || qualityByMovieId.get(movie.id) === true', 'unreviewed movies can still enter a sitemap');
 
 requireText(prerenderData, 'seo_latest_episode_number', 'prerender does not expose latest episode state');
 requireText(prerenderData, 'seo_last_episode_change_at', 'prerender does not expose episode freshness');
@@ -83,16 +85,24 @@ requireText(worker, 'Phim đang chiếu và cập nhật tập mới', 'ongoing 
 requireText(worker, "'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'", 'ongoing prerender cache can hide new episode metadata for too long');
 requireText(worker, "'@type': 'Episode'", 'ongoing structured data lacks Episode information');
 requireText(worker, '/sitemap-movies-ongoing.xml', 'Cloudflare sitemap routing omits ongoing movies');
+requireText(worker, '<loc>${SITE_URL}/sitemap-movies-1.xml</loc>', 'root sitemap omits the complete quality-gated movie chunk');
+requireText(worker, 'page_size=50000', 'numbered sitemap cannot expose the complete approved catalogue');
 requireText(sitemapGenerator, "'sitemap-movies-ongoing.xml'", 'generated root sitemap omits ongoing movies');
 requireText(movieSitemapGenerator, 'fetchSitemapWithLastKnownGood', 'a transient Supabase outage can break the entire frontend build');
 requireText(redirects, '/sitemap-movies-ongoing.xml', 'static fallback routing omits ongoing movies');
 
 requireText(gsc, "item.tier === 'ongoing' && item.episodeChangedAt > lastInspection", 'GSC does not re-inspect a movie after a new episode');
 requireText(gsc, "item.tier === 'ongoing' ? 3", 'GSC does not prioritize actively airing movies');
+requireText(gsc, ".in('index_tier',['ongoing','upcoming','playable'])", 'GSC inspection candidates are not restricted to indexable lifecycle tiers');
+requireText(gsc, '/BLOCKED|DISALLOWED/i.test(robots)', 'GSC treats an unspecified robots state as a false blocking error');
+requireText(gsc, 'INTERNAL_CRAWL_ERROR|INVALID_URL/i.test(fetchState)', 'GSC does not distinguish explicit fetch errors from an unspecified fetch state');
+requireText(gsc, 'phát hiện.*chưa được lập chỉ mục', 'GSC diagnosis ignores the Vietnamese coverage state returned in production');
+requireText(gsc, "const SEARCH_SCOPE = 'https://www.googleapis.com/auth/webmasters';", 'GSC cannot ensure the canonical sitemap is submitted');
+requireText(gsc, 'ensureCanonicalSitemap(token)', 'GSC automation does not verify the canonical sitemap registration');
 
 console.log(JSON.stringify({
   status: failures.length ? 'failed' : 'passed',
-  contracts: 61,
+  contracts: 67,
   failures,
 }, null, 2));
 
