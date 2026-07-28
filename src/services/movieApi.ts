@@ -4039,11 +4039,24 @@ function isHlsStreamUrl(value = ''): boolean {
   return /\.m3u8(?:[?#].*)?$/i.test(value);
 }
 
+function isSsplayOkWrapperUrl(value = ''): boolean {
+  try {
+    const parsed = new URL(value);
+    return /(^|\.)ssplay\.net$/i.test(parsed.hostname) && /^\/ok\/[^/]+\/?$/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export function getSourceFailureClusterFromUrl(value = ''): string {
   const raw = String(value || '').trim();
   const host = getUrlHost(raw);
   const lower = raw.toLowerCase();
   if (!raw) return 'empty';
+  // BLVietsub's /ok/{id} endpoint is a stable wrapper around its own player,
+  // not an Abyss/short.icu mirror. Keeping it in the shared failure cluster
+  // made the player skip a working primary source and start on OK/VK instead.
+  if (isSsplayOkWrapperUrl(raw)) return 'ssplay_ok_wrapper';
   if (host.includes('ssplay') || host.includes('abyssplayer') || host.includes('short.icu') || lower.includes('ssplay')) {
     return 'ssplay_abyss';
   }
@@ -4079,6 +4092,7 @@ export function getEpisodeSourceKind(ep?: EpisodeData | null): EpisodeSourceKind
     return 'kkphim';
   }
   if (host.includes('dailymotion.com') || host === 'dai.ly') return 'dailymotion';
+  if (isSsplayOkWrapperUrl(embed)) return 'stable_embed';
   if (host.includes('ssplay') || host.includes('abyssplayer') || host.includes('short.icu') || lower.includes('ssplay')) {
     return 'ssplay_abyss';
   }
@@ -4359,8 +4373,12 @@ export function hasPlayableUrl(ep: EpisodeData): boolean {
   if (!hasUrl) return false;
   const healthStatus = String(ep.source_health_status || '').trim().toLowerCase();
   const failureCount = Number(ep.source_failure_count || 0);
+  const browserManagedProbeException =
+    /https?:\/\/player\.phimapi\.com\/player\//i.test(embed) ||
+    /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
   if (healthStatus === 'dead') return false;
   if (healthStatus === 'failed' && failureCount >= 3) return false;
+  if (healthStatus === 'blocked' && !browserManagedProbeException) return false;
   return true;
 }
 

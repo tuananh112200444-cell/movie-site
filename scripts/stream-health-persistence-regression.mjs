@@ -12,7 +12,10 @@ const failures = [];
 for (const file of connectors) {
   const source = fs.readFileSync(file, 'utf8');
   if (!source.includes('const urlChanged')) failures.push(`${file}: missing URL-change health gate`);
-  if (!source.includes("!['health_status', 'failure_count', 'last_error'].includes(key)")) {
+  if (
+    !source.includes("!['health_status', 'failure_count', 'last_error'].includes(key)") &&
+    !source.includes("!['is_active', 'health_status', 'failure_count', 'last_error'].includes(key)")
+  ) {
     failures.push(`${file}: unchanged URLs can reset accumulated health`);
   }
   if (!/select\(['"]id,stream_url,embed_url['"]\)/.test(source)) {

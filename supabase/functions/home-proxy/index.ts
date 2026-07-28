@@ -1362,6 +1362,8 @@ serve(async (req) => {
 
   const now = new Date().toISOString();
   const cacheValid = cacheRow && cacheRow.expires_at > now;
+  const cacheAgeMs = cacheRow ? Date.now() - Date.parse(cacheRow.updated_at) : Number.POSITIVE_INFINITY;
+  const cacheEligibleForStale = Number.isFinite(cacheAgeMs) && cacheAgeMs <= 6 * 60 * 60 * 1000;
   const cachedSections = (cacheRow?.sections as Record<string, unknown[]> | undefined) ?? undefined;
   const cacheCompleteForRequest = cacheHasRequestedSections(cachedSections, requestedSections);
 
@@ -1375,7 +1377,7 @@ serve(async (req) => {
   }
 /* 2b. Expired cache is still better than blocking first paint.
      Trigger a background refresh; the foreground request returns stale data fast. */
-  if (cacheRow && cacheCompleteForRequest && !forceRefresh) {
+  if (cacheRow && cacheEligibleForStale && cacheCompleteForRequest && !forceRefresh) {
     try {
       const refreshUrl = new URL(req.url);
       refreshUrl.searchParams.set('refresh', '1');
@@ -1537,7 +1539,7 @@ serve(async (req) => {
   /* 5. Stale-while-revalidate: if OPhim returned nothing but cache exists, return stale */
   const hasAnyFresh = Object.values(safeFreshSections).some((arr) => arr.length > 0);
 
-  if (!hasAnyFresh && cacheRow && cacheCompleteForRequest) {
+  if (!hasAnyFresh && cacheRow && cacheEligibleForStale && cacheCompleteForRequest) {
     const payload = buildPayloadFromSections(cachedSections, requestedSections);
     return jsonResponse({ status: true, source: 'stale', sections: payload }, 200, {
       'Cache-Control': homeCacheControl(30),

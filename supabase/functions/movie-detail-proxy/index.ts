@@ -3,12 +3,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const MOVIE_DETAIL_PROXY_SECRET = Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') ?? '';
 const ENABLE_PUBLIC_LAZY_PERSIST = Deno.env.get('ENABLE_PUBLIC_LAZY_PERSIST') === 'true';
 const DETAIL_CACHE_TTL_MIN = 10;
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Origin': 'https://khophim.org',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-khophim-proxy-secret',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Vary': 'Origin',
 };
 
 const MOVIE_DETAIL_SELECT = [
@@ -188,6 +190,17 @@ function hasPlayableEpisodeLink(epData: Record<string, unknown>): boolean {
   );
 }
 
+function hasPlayableFullMovie(servers: Array<{ server_data?: unknown[] }> = []): boolean {
+  return servers.some((server) =>
+    (server.server_data || []).some((raw) => {
+      const episode = raw as Record<string, unknown>;
+      if (!hasPlayableEpisodeLink(episode) || !episodeHealthIsUsable(episode)) return false;
+      const label = `${String(episode.slug || '')} ${String(episode.name || '')}`.trim().toLowerCase();
+      return /\bfull\b/.test(label) && !label.includes('trailer');
+    })
+  );
+}
+
 function pushEpisode(serverMap: Map<string, unknown[]>, serverName: string, epData: Record<string, unknown>): void {
   if (!hasPlayableEpisodeLink(epData)) return;
   if (!serverMap.has(serverName)) serverMap.set(serverName, []);
@@ -250,6 +263,11 @@ function shouldSuppressUnhealthyStream(row: Record<string, unknown> | null): boo
   if (!row) return false;
   const healthStatus = String(row.health_status || '').toLowerCase();
   const failureCount = Number(row.failure_count || 0);
+  const embedUrl = String(row.embed_url || row.link_embed || '').trim();
+  const browserManagedProbeException =
+    /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl) ||
+    /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl);
+  if (healthStatus === 'blocked' && !browserManagedProbeException) return true;
   return (healthStatus === 'dead' && failureCount >= 2) || (healthStatus === 'failed' && failureCount >= 3);
 }
 
@@ -1586,6 +1604,13 @@ serve(async (req) => {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  const suppliedProxySecret = req.headers.get('x-khophim-proxy-secret') ?? '';
+  if (!MOVIE_DETAIL_PROXY_SECRET || suppliedProxySecret !== MOVIE_DETAIL_PROXY_SECRET) {
+    return jsonResponse({ status: false, message: 'Unauthorized' }, 401, {
+      'Cache-Control': 'no-store',
+    });
+  }
+
   const { searchParams } = new URL(req.url);
   const slug = searchParams.get('slug');
   const forceRefresh = searchParams.get('refresh') === '1';
@@ -1729,6 +1754,12 @@ serve(async (req) => {
       const movieEpisodeRows = [...(meRows ?? [])].sort((a, b) => {
         const am = a as Record<string, unknown>;
         const bm = b as Record<string, unknown>;
+        const aPreferredOnlyflix = /moviesapi/i.test(String(am.server_name || ''));
+        const bPreferredOnlyflix = /moviesapi/i.test(String(bm.server_name || ''));
+        if (aPreferredOnlyflix !== bPreferredOnlyflix) return aPreferredOnlyflix ? -1 : 1;
+        const aSecondaryOnlyflix = /vidfast\.(?:pro|vc)/i.test(String(am.server_name || ''));
+        const bSecondaryOnlyflix = /vidfast\.(?:pro|vc)/i.test(String(bm.server_name || ''));
+        if (aSecondaryOnlyflix !== bSecondaryOnlyflix) return aSecondaryOnlyflix ? -1 : 1;
         const aHidden = isHiddenEpisodeSource(am.source);
         const bHidden = isHiddenEpisodeSource(bm.source);
         if (aHidden !== bHidden) return aHidden ? -1 : 1;
@@ -2192,6 +2223,12 @@ serve(async (req) => {
         response.movie.total_episodes = undefined;
         response.movie.episode_total = '';
       }
+    }
+    if (liveMaxEpisode === 0 && hasPlayableFullMovie(episodeServers)) {
+      response.movie.episode_current = 'Full';
+      response.movie.episode_total = '1';
+      response.movie.current_episode = 1;
+      response.movie.total_episodes = Math.max(Number(response.movie.total_episodes || 0), 1);
     }
 
     // Cache successful responses for repeat opens; episode metadata rarely changes minute by minute.

@@ -9,6 +9,11 @@ interface BannerItem {
   alt: string;
 }
 
+function optimizedBannerImage(image: string): string {
+  const absolute = image.startsWith('/') ? `https://khophim.org${image}` : image;
+  return `https://wsrv.nl/?url=${encodeURIComponent(absolute)}&w=728&q=76&output=webp&we`;
+}
+
 const BANNERS: BannerItem[] = [
   {
     id: 'world-cup-2026',
@@ -109,10 +114,11 @@ export default function NavBanner() {
             className="relative mx-auto block w-full max-w-[728px] active:scale-[0.99] transition-transform cursor-pointer lg:max-w-[500px]"
           >
             <img
-              src={activeBanner.image}
+              src={optimizedBannerImage(activeBanner.image)}
               alt={activeBanner.alt}
               className="aspect-[728/90] h-auto w-full object-contain object-center lg:max-h-[62px]"
               loading="eager"
+              fetchPriority="low"
               width={728}
               height={90}
             />
@@ -151,10 +157,11 @@ export default function NavBanner() {
               className="relative block min-w-0 active:scale-[0.99] transition-transform cursor-pointer"
             >
               <img
-                src={banner.image}
+                src={optimizedBannerImage(banner.image)}
                 alt={banner.alt}
                 className="aspect-[728/90] h-auto w-full object-contain object-center lg:max-h-[62px]"
-                loading="eager"
+                loading={banner.id === BANNERS[0]?.id ? 'eager' : 'lazy'}
+                fetchPriority="low"
                 width={728}
                 height={90}
               />

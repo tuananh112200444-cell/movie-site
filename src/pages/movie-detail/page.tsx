@@ -360,6 +360,22 @@ export default function MovieDetailPage() {
 
   const displayMovie = useMemo(() => {
     if (!detail?.movie) return null;
+    const hasPlayableFullMovie = filteredEpisodes.some((server) =>
+      (server.server_data ?? []).some((episode) => {
+        if (!hasPlayableUrl(episode) || episode.is_scheduled) return false;
+        const label = `${episode.slug || ''} ${episode.name || ''}`.trim().toLowerCase();
+        return /\bfull\b/.test(label) && !label.includes('trailer');
+      })
+    );
+    if (hasPlayableFullMovie && String(detail.movie.episode_current || '').trim().toLowerCase() !== 'full') {
+      return {
+        ...detail.movie,
+        current_episode: 1,
+        total_episodes: Math.max(Number(detail.movie.total_episodes || 0), 1),
+        episode_current: 'Full',
+        episode_total: '1',
+      };
+    }
     const highestEpisode = getHighestEpisodeFromServers(filteredEpisodes);
     const currentEpisode =
       detail.movie.current_episode ??
@@ -428,14 +444,16 @@ export default function MovieDetailPage() {
   const isTrailerOnly = useMemo(() => {
     if (!detail?.movie) return false;
     const epCurrent = (detail.movie.episode_current ?? '').toLowerCase().trim();
-    if (epCurrent === 'trailer') return true;
-    if (epCurrent === 'sap chieu' || epCurrent === 'dang cap nhat') return true;
     const allEps = detail.episodes?.flatMap((s) => s.server_data ?? []) ?? [];
-    if (allEps.length === 0) {
-      return epCurrent === 'trailer' || epCurrent === 'sap chieu' || epCurrent === 'dang cap nhat';
+    const playableEpisodes = allEps.filter((episode) =>
+      !episode.is_scheduled && hasPlayableUrl(episode)
+    );
+    if (playableEpisodes.length > 0) {
+      return playableEpisodes.every((episode) =>
+        String(episode.name || episode.slug || '').toLowerCase().includes('trailer')
+      );
     }
-    if (allEps.every((ep) => ep.name?.toLowerCase().includes('trailer'))) return true;
-    return false;
+    return epCurrent === 'trailer' || epCurrent === 'sap chieu' || epCurrent === 'dang cap nhat';
   }, [detail]);
 
   useEffect(() => {

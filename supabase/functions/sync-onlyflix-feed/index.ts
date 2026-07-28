@@ -87,10 +87,14 @@ async function playersFromPage(url: string, html: string) {
   const candidates = (Array.isArray(payload?.data?.players) ? payload.data.players : [])
     .filter((item: Player) => /^https?:\/\//i.test(String(item?.url || ''))) as Player[];
   // Keep the source picker useful instead of exposing every upstream mirror.
-  // These two providers pass KhoPhim's production health checks; if OnlyFlix
-  // changes providers, retain two fallbacks so the connector can self-recover.
-  const healthyProviders = candidates.filter((item) => /vidapi\.xyz|moviesapi\.to/i.test(String(item.url || '')));
-  return (healthyProviders.length ? healthyProviders : candidates).slice(0, 2);
+  // Keep OnlyFlix servers 3, 4 and 5 as bounded fallbacks. Do not import the
+  // rest of the upstream mirror list.
+  const healthyProviders = candidates
+    .filter((item) => /moviesapi\.to|vidfast\.(?:pro|vc)|multiembed\.mov/i.test(String(item.url || '')))
+    .sort((a, b) => (
+      Number(/moviesapi\.to/i.test(String(b.url || ''))) - Number(/moviesapi\.to/i.test(String(a.url || '')))
+    ) || Number(a.number || 99) - Number(b.number || 99));
+  return (healthyProviders.length ? healthyProviders : candidates).slice(0, 3);
 }
 
 function episodeLinks(html: string) {
@@ -140,6 +144,11 @@ async function parsePage(item: Record<string, unknown>) {
         server_name: `OnlyFlix ${player.name || `Server ${player.number || 1}`} · ${player.language || 'EN'}`,
         link_embed: player.url,
         quality: player.quality || 'HD',
+        source_priority: /moviesapi\.to/i.test(String(player.url || ''))
+          ? 25
+          : /vidfast\.(?:pro|vc)/i.test(String(player.url || ''))
+            ? 15
+            : 10,
       });
     }
     if (!playable.length) continue;
@@ -159,7 +168,7 @@ async function parsePage(item: Record<string, unknown>) {
 }
 
 async function findMovie(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
-  const fields = 'id,slug,name,origin_name,normalized_name,year,source_site,source_name,current_episode,total_episodes,is_published';
+  const fields = 'id,slug,name,origin_name,normalized_name,year,source_site,source_name,status,episode_current,current_episode,total_episodes,is_published';
   if (!entry.season) {
     for (const [column, value] of [['imdb_id', entry.imdbId], ['tmdb_id', entry.tmdbId]]) {
       if (!value) continue;
@@ -196,6 +205,12 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
       tmdb_id: entry.season ? null : nullableInteger(entry.tmdbId),
       is_published: true, last_synced_at: new Date().toISOString(), schedule_timezone: 'Asia/Ho_Chi_Minh',
     };
+    if (entry.type === 'single') Object.assign(payload, {
+      episode_current: 'Dang cap nhat',
+      episode_total: '0',
+      current_episode: 0,
+      total_episodes: 0,
+    });
     const { data, error } = await db.from('movies').insert(payload).select('id,slug,source_site').single();
     if (error) throw error;
     movie = data; created = true;
@@ -206,6 +221,24 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
       current_episode: entry.currentEpisode,
       total_episodes: Math.max(Number(movie.total_episodes || 0), Number(entry.currentEpisode || 0)),
     });
+    const hasVerifiedFullMovie = entry.type === 'single'
+      && (entry.episodes as Array<Record<string, unknown>>).some((episode) => episode.slug === 'full');
+    const pendingLabel = /^(?:trailer|sap chieu|sắp chiếu|coming soon|dang cap nhat)$/i
+      .test(String(movie.episode_current || '').trim());
+    if (hasVerifiedFullMovie && pendingLabel) Object.assign(update, {
+      episode_current: 'Full',
+      episode_total: '1',
+      current_episode: 1,
+      total_episodes: Math.max(Number(movie.total_episodes || 0), 1),
+      status: 'completed',
+    });
+    // An upstream iframe URL is not proof of playback. Single movies may only
+    // be promoted by production playback health, never by feed discovery.
+    if (entry.type === 'single') {
+      for (const key of ['episode_current', 'episode_total', 'current_episode', 'total_episodes', 'status']) {
+        delete update[key];
+      }
+    }
     await db.from('movies').update(update).eq('id', movie.id);
   }
   let rows = 0;
@@ -223,7 +256,7 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
     const streamPayload = {
       movie_id: movie.id, server_name: episode.server_name, episode_slug: episode.slug,
       stream_url: '', embed_url: episode.link_embed, source: SOURCE, quality: episode.quality || 'HD',
-      priority: 15, is_active: true, health_status: 'unchecked', failure_count: 0, last_error: '', audio_type: null,
+      priority: Number(episode.source_priority || 15), is_active: true, health_status: 'unchecked', failure_count: 0, last_error: '', audio_type: null,
     };
     const { data: stream } = await db.from('streams').select('id,stream_url,embed_url').eq('movie_id', movie.id).eq('source', SOURCE)
       .eq('server_name', episode.server_name).eq('episode_slug', episode.slug).limit(1).maybeSingle();
@@ -232,7 +265,7 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
         || String(stream.embed_url || '') !== String(streamPayload.embed_url || '');
       const updatePayload = urlChanged
         ? streamPayload
-        : Object.fromEntries(Object.entries(streamPayload).filter(([key]) => !['health_status', 'failure_count', 'last_error'].includes(key)));
+        : Object.fromEntries(Object.entries(streamPayload).filter(([key]) => !['is_active', 'health_status', 'failure_count', 'last_error'].includes(key)));
       await db.from('streams').update(updatePayload).eq('id', stream.id);
     }
     else { const { error } = await db.from('streams').insert(streamPayload); if (error) throw error; }

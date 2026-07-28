@@ -443,16 +443,24 @@ serve(async (req) => {
         }));
       }
     } else if (isOphimLikeMovie(movie)) {
+      const primaryProvider = getOphimProvider(movie);
       calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'sync-ophim-movies', {
-        provider: getOphimProvider(movie),
+        provider: primaryProvider,
         slug: getOphimRepairSlug(movie),
         episodes: '1',
         limit: 1,
       }));
-      // The primary provider can keep publishing the same expired URL. Search
-      // one already-configured independent provider by title; its importer has
-      // identity/year guards and persists only verified playable episodes.
+      // The primary provider can keep publishing the same expired URL. Resolve
+      // the same movie through the other configured provider by guarded
+      // title/year identity instead of assuming both catalogs share a slug.
       if (candidate.critical >= 3) {
+        calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'sync-ophim-movies', {
+          provider: primaryProvider === 'ophim' ? 'kkphim' : 'ophim',
+          movie_id: movie.id,
+          episodes: '1',
+          limit: 1,
+          strict_missing_detail: '1',
+        }));
         calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'sync-motchill-feed', {
           query: String(movie.name || movie.origin_name || candidate.title || movie.slug),
           limit: 3,

@@ -144,6 +144,24 @@ function requiresUnsandboxedEmbed(url: string): boolean {
   }
 }
 
+function isOnlyflixEmbed(url: string): boolean {
+  try {
+    const host = new URL(url, window.location.origin).hostname;
+    return /(^|\.)moviesapi\.to$/i.test(host) ||
+      /(^|\.)vidfast\.(?:pro|vc)$/i.test(host) ||
+      /(^|\.)multiembed\.mov$/i.test(host) ||
+      /(^|\.)streamingnow\.mov$/i.test(host);
+  } catch {
+    return false;
+  }
+}
+
+function getEmbedReferrerPolicy(url: string): React.IframeHTMLAttributes<HTMLIFrameElement>['referrerPolicy'] {
+  return requiresUnsandboxedEmbed(url) || isOnlyflixEmbed(url) || isDailymotion(url)
+    ? 'strict-origin-when-cross-origin'
+    : 'no-referrer';
+}
+
 function isDirectVideo(url: string): boolean {
   const u = url.toLowerCase();
   return /\.(mp4|webm|mkv|mov)(?:[?#].*)?$/.test(u);
@@ -258,7 +276,7 @@ interface PlayerBoxProps {
   allServers: EpisodeServer[];
   activeServer: number;
   onSwitchServer: (idx: number) => void;
-  onSelectEp: (ep: EpisodeData) => void;
+  onSelectEp: (ep: EpisodeData, seekTime?: number) => void;
   initialTime?: number;
   onTimeUpdate?: (time: number, duration: number) => void;
   onVideoEnded?: () => void;
@@ -423,6 +441,7 @@ export default function PlayerBox({
   const fallbackEpisodeKeyRef = useRef<string | null>(null);
   const failedSourceKeysRef = useRef<Set<string>>(new Set());
   const iframeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPlaybackTimeRef = useRef(Math.max(0, Number(initialTime || 0)));
   const directVideoStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const directVideoStallMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const directVideoLastTimeRef = useRef(0);
@@ -597,7 +616,10 @@ export default function PlayerBox({
   const embedIsSourcePage = useMemo(() => isBlvietsubWatchPageUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
   const embedIsSsplay = useMemo(() => isSsplayEmbedUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
   const embedSrc = useMemo(() => getSafeEmbedUrl(episode?.link_embed ?? '', ssplayVariant), [episode?.link_embed, ssplayVariant]);
-  const embedNeedsLooseSandbox = useMemo(() => requiresUnsandboxedEmbed(embedSrc), [embedSrc]);
+  const embedNeedsLooseSandbox = useMemo(
+    () => requiresUnsandboxedEmbed(embedSrc) || isOnlyflixEmbed(embedSrc),
+    [embedSrc],
+  );
   const dmOriginalUrl = useMemo(() => getOriginalDailymotionUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
   const directVideoSrc = useMemo(() => {
     const streamUrl = episode?.link_m3u8 ?? '';
@@ -719,7 +741,7 @@ export default function PlayerBox({
     setIframeBlocked(false);
     if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
     const hasFallbackServer = allServers.some((_, index) => index !== activeServer);
-    const slowThirdPartyEmbed = requiresUnsandboxedEmbed(embedSrc);
+    const slowThirdPartyEmbed = requiresUnsandboxedEmbed(embedSrc) || isOnlyflixEmbed(embedSrc);
     iframeTimerRef.current = setTimeout(() => {
       if (slowThirdPartyEmbed) {
         setIframeLoaded(true);
@@ -794,7 +816,7 @@ export default function PlayerBox({
     const fallback = pickBestEpisodeByPriority(remainingServers, episode?.slug);
     if (fallback) {
       onSwitchServer(remainingServerIndices[fallback.serverIndex]);
-      onSelectEp(fallback.episode);
+      onSelectEp(fallback.episode, lastPlaybackTimeRef.current);
       return true;
     }
     return false;
@@ -1059,8 +1081,8 @@ export default function PlayerBox({
               className="w-full h-full border-0"
               allowFullScreen
               allow="autoplay; encrypted-media; fullscreen; picture-in-picture; web-share"
-              sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-popups"
-              referrerPolicy={isDailymotion(embedSrc) ? 'strict-origin-when-cross-origin' : 'no-referrer'}
+              sandbox={embedNeedsLooseSandbox ? undefined : 'allow-scripts allow-same-origin allow-presentation allow-forms'}
+              referrerPolicy={getEmbedReferrerPolicy(embedSrc)}
               loading="eager"
               onLoad={() => {
                 setIframeLoaded(true);
@@ -1194,7 +1216,10 @@ export default function PlayerBox({
               src={hlsSrc}
               title={movieTitle}
               initialTime={initialTime}
-              onTimeUpdate={onTimeUpdate}
+              onTimeUpdate={(time, duration) => {
+                if (Number.isFinite(time)) lastPlaybackTimeRef.current = Math.max(0, time);
+                onTimeUpdate?.(time, duration);
+              }}
               onEnded={handleEnded}
               onVideoEnded={onVideoEnded}
               onFatalError={handleHlsFatal}
