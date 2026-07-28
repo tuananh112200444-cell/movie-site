@@ -66,7 +66,7 @@ interface Props {
   episodes: EpisodeServer[];
   isTrailerOnly: boolean;
   trailerEmbedUrl: string | null;
-  onSelectEp: (ep: EpisodeData) => void;
+  onSelectEp: (ep: EpisodeData, seekTime?: number) => void;
   onTimeUpdate?: (time: number, duration: number) => void;
   resumeInfo: { time: number; duration: number; progress: number; shouldResume: boolean } | null;
   showResumeBanner: boolean;

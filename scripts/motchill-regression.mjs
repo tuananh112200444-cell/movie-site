@@ -17,7 +17,7 @@ for (const [ok, message] of [
   [edge.includes('youtube\\.com|youtu\\.be'), 'Trailer-only episode rejection is missing'],
   [edge.includes('localizedTitle(db'), 'Season localization from canonical catalogue is missing'],
   [edge.includes('const declared = 0') && edge.includes('movie.source_site === SOURCE'), 'Recommendation-card episode total contamination guard is missing'],
-  [edge.includes('Motchill Vietsub #${option.nume}') && edge.includes("not('server_name', 'in', quoted)"), 'Stable server grouping and stale-label cleanup are missing'],
+  [edge.includes('function motchillServerName') && edge.includes('#${option.nume}') && edge.includes("not('server_name', 'in', quoted)"), 'Stable server grouping and stale-label cleanup are missing'],
   [edge.includes("refresh_movie_seo_quality") && edge.includes("search_index_v4_rows"), 'SEO/search cache refresh contract is missing'],
   [edge.includes('WordPress search can lag') && edge.includes("['phim-bo', 'phim-le']"), 'Lagging WordPress search fallback is missing'],
   [edge.includes('discoverOngoing') && edge.includes("repair_ongoing") && edge.includes("'ongoing_recheck'"), 'Ongoing Motchill recheck mode is missing'],

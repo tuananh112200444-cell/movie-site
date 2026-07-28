@@ -303,10 +303,28 @@ async function storeMovie(db: ReturnType<typeof createClient>, entry: Record<str
     } else { const { error } = await db.from('streams').insert(streamPayload); if (error) throw error; }
     rows += 1;
   }
-  // Additive-only publication contract: one partial/blocked source response
-  // must never remove a last-known-good episode or deactivate its stream.
-  // Stale rows are quarantined by the independent health/integrity pipeline,
-  // which requires repeated evidence and preserves rollback data.
+  const activeServerNames = Array.from(new Set(
+    (entry.episodes as Array<Record<string, unknown>>)
+      .map((episode) => String(episode.server_name || '').trim())
+      .filter(Boolean),
+  ));
+  if (activeServerNames.length > 0) {
+    const quoted = `(${activeServerNames.map((name) => `"${name.replaceAll('"', '\\"')}"`).join(',')})`;
+    const { error: staleEpisodeError } = await db.from('movie_episodes').delete()
+      .eq('movie_id', movie.id)
+      .eq('source', SOURCE)
+      .like('server_name', 'Motchill %')
+      .not('server_name', 'in', quoted);
+    if (staleEpisodeError) throw staleEpisodeError;
+    const { error: staleStreamError } = await db.from('streams').delete()
+      .eq('movie_id', movie.id)
+      .eq('source', SOURCE)
+      .like('server_name', 'Motchill %')
+      .not('server_name', 'in', quoted);
+    if (staleStreamError) throw staleStreamError;
+  }
+  // Episode publication remains additive. Only legacy Motchill server labels
+  // are removed after a complete movie parse produced verified replacements.
   await db.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).eq('slug', movie.slug);
   try { await db.rpc('refresh_movie_seo_quality', { target_movie_id: movie.id }); } catch { /* optional */ }
   return { slug: movie.slug, created, rows };

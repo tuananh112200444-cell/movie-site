@@ -253,6 +253,25 @@ assert(
   'OK embed must be chosen before short.icu or VK mirrors for the same episode'
 );
 
+const blvietsubSsplayWrapperServers = [
+  {
+    server_name: 'SV 1',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_embed: 'https://ssplay.net/ok/6465380289130' }],
+  },
+  {
+    server_name: 'SV 2',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_embed: 'https://ok.ru/videoembed/6465380289130?autoplay=1' }],
+  },
+  {
+    server_name: 'SV 3',
+    server_data: [{ name: 'Tập 24', slug: 'tap-24', link_embed: 'https://vk.com/video_ext.php?oid=1&id=2' }],
+  },
+];
+assert(
+  pickBestEpisodeByPriority(blvietsubSsplayWrapperServers, 'tap-24')?.serverIndex === 0,
+  'BLVietsub ssplay /ok wrapper must stay ahead of its OK/VK mirrors'
+);
+
 const ssplayActiveWithAbyssMirror = [
   {
     server_name: 'Server SS',

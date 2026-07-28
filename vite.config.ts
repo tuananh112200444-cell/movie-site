@@ -36,7 +36,11 @@ function homeHeroPreloadPlugin() {
         // Keep these URLs byte-for-byte aligned with HeroBanner. A preload with
         // a different width or quality is a separate request and cannot improve
         // LCP even when it points to the same original poster.
-        const optimized = (width: number, quality: number) => `https://wsrv.nl/?url=${encodeURIComponent(original)}&w=${width}&q=${quality}&output=webp&fit=cover&we`;
+        const optimized = (width: number, quality: number) => (
+          /^https?:\/\/phimimg\.com\//i.test(original)
+            ? original
+            : `https://wsrv.nl/?url=${encodeURIComponent(original)}&w=${width}&q=${quality}&output=webp&fit=cover&we`
+        );
         return [
           { tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'image', href: optimized(672, 78), media: '(max-width: 639px)', fetchpriority: 'high' } },
           { tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'image', href: optimized(1680, 82), media: '(min-width: 640px)', fetchpriority: 'high' } },

@@ -68,7 +68,7 @@ if (ophimSync.includes("delete().neq('slug', '__never__')") || ophimSync.include
 if (!homeProxy.includes('stale-if-error=86400') || !searchProxy.includes('stale-if-error=86400') || !detailProxy.includes('stale-if-error=86400')) {
   failures.push('critical read APIs do not preserve last-known-good data during upstream failure');
 }
-if (!cloudflareWorker.includes('?rev=canonical-v3')) {
+if (!cloudflareWorker.includes('?rev=canonical-v4')) {
   failures.push('Cloudflare detail cache was not versioned after the canonical alias contract changed');
 }
 if (
@@ -78,10 +78,13 @@ if (
   failures.push('BLVietsub auxiliary discovery can still block a viewer-facing detail response');
 }
 if (
-  !playerBox.includes("isDailymotion(embedSrc) ? 'strict-origin-when-cross-origin' : 'no-referrer'") ||
+  !playerBox.includes("requiresUnsandboxedEmbed(url) || isOnlyflixEmbed(url) || isDailymotion(url)") ||
+  !playerBox.includes("requiresUnsandboxedEmbed(embedSrc) || isOnlyflixEmbed(embedSrc)") ||
+  !playerBox.includes("sandbox={embedNeedsLooseSandbox ? undefined") ||
+  playerBox.includes('allow-forms allow-popups') ||
   playerBox.includes('referrerPolicy="no-referrer"')
 ) {
-  failures.push('Dailymotion embeds can lose the cross-origin Referer required for playback');
+  failures.push('Cross-origin embeds can lose playback capabilities or regain popup permission');
 }
 if (
   !viewerReadCapacity.includes("'17 3 * * *'") ||
@@ -100,6 +103,14 @@ if (reviewService.includes('/google-index-ping') || reviewService.includes('ping
 
 if (!detailProxy.includes("from('streams')") || !detailProxy.includes('source_health_status')) {
   failures.push('movie-detail-proxy does not expose the stored stream-health contract');
+}
+if (
+  !detailProxy.includes("Deno.env.get('MOVIE_DETAIL_PROXY_SECRET')") ||
+  !detailProxy.includes("req.headers.get('x-khophim-proxy-secret')") ||
+  detailProxy.includes("'Access-Control-Allow-Origin': '*'") ||
+  !cloudflareWorker.includes("'X-KhoPhim-Proxy-Secret'")
+) {
+  failures.push('movie-detail-proxy must remain private behind the same-origin Cloudflare gateway');
 }
 if (!detailProxy.includes('hasUnhealthyExpectedCoverage') || !detailProxy.includes('shouldRepairUnhealthyCoverage')) {
   failures.push('complete episode counts can still hide unhealthy playback coverage');

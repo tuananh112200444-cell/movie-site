@@ -27,6 +27,12 @@ const diagnostics = fs.readFileSync('src/services/playerDiagnostics.ts', 'utf8')
 const sourceHealthBrain = fs.readFileSync('supabase/functions/player-source-health/index.ts', 'utf8');
 
 const checks = [
+  [playerBox.includes("function isOnlyflixEmbed(url: string)") && !playerBox.includes('allow-forms allow-popups'), 'OnlyFlix embeds must keep playback capabilities without popup permission'],
+  [playerBox.includes("requiresUnsandboxedEmbed(url) || isOnlyflixEmbed(url) || isDailymotion(url)"), 'Sandboxed OnlyFlix embeds must retain the provider Referer required for playback'],
+  [playerBox.includes("requiresUnsandboxedEmbed(embedSrc) || isOnlyflixEmbed(embedSrc)"), 'OnlyFlix embeds that reject iframe sandboxing must be rendered without a sandbox'],
+  [playerBox.includes('onSelectEp(fallback.episode, lastPlaybackTimeRef.current)'), 'Automatic server fallback must preserve the current playback position'],
+  [lightweightPlayer.includes('const MAX_STREAM_RECOVERY_ATTEMPTS = 2') && lightweightPlayer.includes('const STALL_RECOVERY_DELAY_MS = 2500'), 'A stalled HLS source must fail over promptly instead of retrying five times'],
+  [movieApi.includes("healthStatus === 'blocked' && !browserManagedProbeException") && detailProxy.includes("healthStatus === 'blocked' && !browserManagedProbeException"), 'Blocked direct sources must not enter playback while browser-managed probe exceptions remain narrow'],
   [!vite.includes('appendAssetVersion'), 'Hashed Vite assets must not receive a second query-string identity'],
   [html.includes("w.setTimeout(function(){if('requestIdleCallback'in w)w.requestIdleCallback(loadGtm,{timeout:5000});else loadGtm();},10000)"), 'GTM must have a real minimum delay after the critical viewing path'],
   [html.includes('rel="preload" as="style"') && html.includes('display=optional'), 'Web fonts must not block the first movie render'],

@@ -36,7 +36,7 @@ const CHECKS = [
   { key: 'mhophim', label: 'MHoPhim', group: 'page' as const, url: 'https://mhophim.com/' },
   { key: 'home-proxy', label: 'Home proxy', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/home-proxy` },
   { key: 'search-index', label: 'Search index cache', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/search-index-proxy?limit=80` },
-  { key: 'movie-detail', label: 'Movie detail proxy', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/movie-detail-proxy?slug=goi-ngay-bac-si-khuong` },
+  { key: 'movie-detail', label: 'Movie detail proxy', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/movie-detail-proxy?slug=goi-ngay-bac-si-khuong`, headers: { 'X-KhoPhim-Proxy-Secret': Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') ?? '' } },
 ];
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
@@ -78,6 +78,7 @@ async function runCheck(check: typeof CHECKS[number]): Promise<CheckResult> {
       headers: {
         'User-Agent': 'KhoPhim-SiteHealth/1.0',
         'Accept': check.group === 'seo' ? 'text/xml,text/plain,text/html,*/*' : 'text/html,application/json,*/*',
+        ...('headers' in check ? check.headers : {}),
       },
     });
     const elapsed = Math.round(performance.now() - started);

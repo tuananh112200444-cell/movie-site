@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
 const BANNER_URL = 'https://winaz.it.com/?utm_source=Khophim&utm_medium=facebook&utm_campaign=booking';
+const BANNER_IMAGE = `https://wsrv.nl/?url=${encodeURIComponent('https://khophim.org/banners/winaz-top-20260722.gif?v=20260722')}&w=728&q=76&output=webp&we`;
 const DISMISSED_KEY = 'kp_sticky_banner_dismissed';
 function trackBannerClick(pagePath: string) {
   const payload = {
@@ -71,7 +72,7 @@ export default function StickyBanner() {
   useEffect(() => {
     if (dismissed) return undefined;
 
-    // The animated campaign asset is close to 1 MB. Keep the banner's space and
+    // Keep the banner's space and
     // call-to-action visible immediately, but let the hero/LCP image use the
     // constrained mobile connection first.
     let timer = 0;
@@ -122,10 +123,11 @@ export default function StickyBanner() {
             <div className="aspect-[728/90] max-h-[46px] w-full bg-white/[0.025] sm:max-h-[62px] lg:max-h-[48px]">
               {bannerReady ? (
                 <img
-                  src="/banners/winaz-top-20260722.gif?v=20260722"
+                  src={BANNER_IMAGE}
                   alt="WinAZ banner"
                   className="h-full w-full object-contain object-center"
                   loading="lazy"
+                  fetchPriority="low"
                   decoding="async"
                   width={728}
                   height={90}

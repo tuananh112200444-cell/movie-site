@@ -1481,7 +1481,7 @@ async function fetchOphimMovie(slug) {
     .find(Boolean) || null;
 }
 
-async function fetchSupabaseMovie(slug) {
+async function fetchSupabaseMovie(slug, context) {
   const seoUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-seo-prerender-data`);
   seoUrl.searchParams.set('slug', slug);
   const detailUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
@@ -1498,6 +1498,9 @@ async function fetchSupabaseMovie(slug) {
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'KhoPhimBot/1.0 SEO-Prerender',
+          ...(attempt.url === detailUrl && context?.env?.MOVIE_DETAIL_PROXY_SECRET
+            ? { 'X-KhoPhim-Proxy-Secret': context.env.MOVIE_DETAIL_PROXY_SECRET }
+            : {}),
         },
         signal: AbortSignal.timeout(attempt.timeoutMs),
       });
@@ -2089,7 +2092,7 @@ async function proxyMovieDetail(request, context) {
   const upstreamUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
   upstreamUrl.searchParams.set('slug', slug);
   if (refresh) upstreamUrl.searchParams.set('refresh', '1');
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}?rev=canonical-v3`, { method: 'GET' });
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}?rev=canonical-v4`, { method: 'GET' });
   const failureKey = new Request(`${SITE_URL}/__circuit/movie-detail/${encodeURIComponent(slug)}`, { method: 'GET' });
 
   try {
@@ -2109,7 +2112,12 @@ async function proxyMovieDetail(request, context) {
     }
 
     const upstream = await fetch(upstreamUrl.toString(), {
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...(context?.env?.MOVIE_DETAIL_PROXY_SECRET
+          ? { 'X-KhoPhim-Proxy-Secret': context.env.MOVIE_DETAIL_PROXY_SECRET }
+          : {}),
+      },
       cf: refresh ? undefined : { cacheTtl: 300, cacheEverything: true },
       // Viewer requests must fail fast to the browser's Supabase/provider
       // fallbacks. Waiting ten seconds here caused a 15–20 second blank page.
@@ -2466,7 +2474,7 @@ export async function onRequest(context) {
       const cachedMovieResponse = await getCachedPrerender(cacheKey, request);
       if (cachedMovieResponse) return cachedMovieResponse;
       const [supabaseResult, ophimResult] = await Promise.allSettled([
-        fetchSupabaseMovie(slug),
+        fetchSupabaseMovie(slug, context),
         fetchOphimMovie(slug),
       ]);
       let movie = supabaseResult.status === 'fulfilled' ? supabaseResult.value : null;
