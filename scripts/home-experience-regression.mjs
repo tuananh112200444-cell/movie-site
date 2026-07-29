@@ -17,7 +17,16 @@ const top10 = await readFile('src/pages/home/components/Top10TodaySection.tsx', 
 const viteConfig = await readFile('vite.config.ts', 'utf8');
 const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 const homeFallback = JSON.parse(await readFile('public/home-fallback.json', 'utf8'));
+const stickyBanner = await readFile('src/components/feature/StickyBanner.tsx', 'utf8');
 const failures = [];
+if (
+  stickyBanner.includes('sessionStorage') ||
+  stickyBanner.includes('kp_sticky_banner_dismissed') ||
+  !stickyBanner.includes('setVisible(true);') ||
+  !stickyBanner.includes('[location.pathname]')
+) {
+  failures.push('WinAZ close state must reset on route navigation and must not persist for the browser session.');
+}
 
 if (!movieApi.includes('phimimg\\.com|icdn\\.darkbytes\\.xyz')) {
   failures.push('Image optimization must bypass origins that wsrv.nl rejects with HTTP 400.');

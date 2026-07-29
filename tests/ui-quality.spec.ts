@@ -202,6 +202,15 @@ test('player: khôi phục tiến độ xem sau khi mở lại trang', async ({ 
   await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
   await expect(page.getByText('Tiếp tục xem dở')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('2:05', { exact: false })).toBeVisible();
+  const video = page.locator('video').first();
+  await expect(video).toBeVisible();
+  await page.getByRole('button', { name: 'Tiếp tục', exact: true }).click();
+  await video.evaluate((element) => {
+    const media = element as HTMLVideoElement;
+    Object.defineProperty(media, 'duration', { configurable: true, value: 500 });
+    media.dispatchEvent(new Event('loadedmetadata'));
+  });
+  await expect.poll(() => video.evaluate((element) => Math.round((element as HTMLVideoElement).currentTime))).toBe(125);
 });
 
 test('xem tiếp mobile: giữ đúng trang khi fullscreen, phát và lưu tiến độ', async ({ page }, testInfo) => {

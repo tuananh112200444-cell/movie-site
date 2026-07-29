@@ -4,7 +4,11 @@ import { verifyAdminRequest } from '../_shared/admin-session.ts';
 const PROPERTY_URI = 'sc-domain:khophim.org';
 const SITE_URL = 'https://khophim.org';
 const CANONICAL_SITEMAP = `${SITE_URL}/sitemap.xml`;
-const SEARCH_SCOPE = 'https://www.googleapis.com/auth/webmasters';
+const GA_PROPERTY_ID = '541432210';
+const GOOGLE_SCOPES = [
+  'https://www.googleapis.com/auth/webmasters',
+  'https://www.googleapis.com/auth/analytics.readonly',
+].join(' ');
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 function cors(origin: string | null): Record<string, string> {
@@ -39,7 +43,7 @@ async function googleAccessToken(): Promise<string> {
   if (!email || !privateKey) throw new Error('Google service account secrets are missing');
   const now = Math.floor(Date.now()/1000);
   const header = base64Url(JSON.stringify({ alg:'RS256', typ:'JWT' }));
-  const payload = base64Url(JSON.stringify({ iss:email, scope:SEARCH_SCOPE, aud:TOKEN_URL, iat:now-30, exp:now+3300 }));
+  const payload = base64Url(JSON.stringify({ iss:email, scope:GOOGLE_SCOPES, aud:TOKEN_URL, iat:now-30, exp:now+3300 }));
   const signingInput = `${header}.${payload}`;
   const key = await crypto.subtle.importKey('pkcs8', pemBytes(privateKey), { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' }, false, ['sign']);
   const signature = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput)));
@@ -70,6 +74,40 @@ async function searchAnalytics(token: string, dimension: 'page'|'query') {
   const data = await response.json();
   if (!response.ok) throw new Error(`Search Analytics ${response.status}: ${data.error?.message || 'request failed'}`);
   return { startDate, endDate, rows:Array.isArray(data.rows) ? data.rows : [] };
+}
+
+function previousCalendarMonth(): { startDate:string; endDate:string } {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth()-1, 1));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+  return {
+    startDate:start.toISOString().slice(0,10),
+    endDate:end.toISOString().slice(0,10),
+  };
+}
+
+async function ga4Report(token:string, dimension?:'country'|'deviceCategory') {
+  const {startDate,endDate} = previousCalendarMonth();
+  const body:Record<string,unknown> = {
+    dateRanges:[{startDate,endDate}],
+    metrics:[
+      {name:'screenPageViews'},
+      {name:'sessions'},
+      {name:'activeUsers'},
+      {name:'engagedSessions'},
+    ],
+    limit:dimension ? 100 : 1,
+  };
+  if (dimension) body.dimensions = [{name:dimension}];
+  const response = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${GA_PROPERTY_ID}:runReport`, {
+    method:'POST',
+    headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+    body:JSON.stringify(body),
+    signal:AbortSignal.timeout(30000),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`GA4 ${response.status}: ${data.error?.message || 'request failed'}`);
+  return {startDate,endDate,dimension:dimension || 'total',rows:Array.isArray(data.rows) ? data.rows : []};
 }
 
 async function ensureCanonicalSitemap(token: string, forceSubmit = false) {
@@ -187,10 +225,13 @@ Deno.serve(async (req) => {
     const input = await req.json().catch(()=>({})) as {inspection_limit?:number;resubmit_sitemap?:boolean};
     const inspectionLimit = Math.max(1,Math.min(Number(input.inspection_limit || 25),50));
     const token = await googleAccessToken();
-    const [pageResult,queryResult,sitemapResult] = await Promise.allSettled([
+    const [pageResult,queryResult,sitemapResult,gaTotalResult,gaCountryResult,gaDeviceResult] = await Promise.allSettled([
       searchAnalytics(token,'page'),
       searchAnalytics(token,'query'),
       ensureCanonicalSitemap(token,input.resubmit_sitemap === true),
+      ga4Report(token),
+      ga4Report(token,'country'),
+      ga4Report(token,'deviceCategory'),
     ]);
     const analyticsErrors = [
       ...(pageResult.status === 'rejected' ? [`page: ${pageResult.reason instanceof Error ? pageResult.reason.message : String(pageResult.reason)}`] : []),
@@ -200,6 +241,15 @@ Deno.serve(async (req) => {
       ? (sitemapResult.reason instanceof Error ? sitemapResult.reason.message : String(sitemapResult.reason))
       : '';
     const sitemapStatus = sitemapResult.status === 'fulfilled' ? sitemapResult.value : null;
+    const ga4Error = [gaTotalResult,gaCountryResult,gaDeviceResult]
+      .filter((result):result is PromiseRejectedResult=>result.status==='rejected')
+      .map(result=>result.reason instanceof Error ? result.reason.message : String(result.reason))
+      .join(' | ');
+    const ga4 = gaTotalResult.status === 'fulfilled' ? {
+      total:gaTotalResult.value,
+      countries:gaCountryResult.status === 'fulfilled' ? gaCountryResult.value : null,
+      devices:gaDeviceResult.status === 'fulfilled' ? gaDeviceResult.value : null,
+    } : null;
     const fallbackRange = {startDate:isoDate(31),endDate:isoDate(3),rows:[] as Record<string,unknown>[]};
     const pageData = pageResult.status === 'fulfilled' ? pageResult.value : fallbackRange;
     const queryData = queryResult.status === 'fulfilled' ? queryResult.value : fallbackRange;
@@ -278,6 +328,8 @@ Deno.serve(async (req) => {
         analytics_errors:analyticsErrors.slice(0,4),
         sitemap:sitemapStatus,
         sitemap_error:sitemapError || null,
+        ga4,
+        ga4_error:ga4Error || null,
         inspection_errors:inspectionErrors.slice(0,10),
         date_start:pageData.startDate,
         date_end:pageData.endDate,
@@ -292,6 +344,8 @@ Deno.serve(async (req) => {
       indexed,
       sitemap:sitemapStatus,
       sitemap_error:sitemapError || null,
+      ga4,
+      ga4_error:ga4Error || null,
       analytics_errors:analyticsErrors.slice(0,4),
       inspection_errors:inspectionErrors.slice(0,10),
     },success ? 200 : 502,headers);
