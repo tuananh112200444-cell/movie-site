@@ -914,6 +914,20 @@ export default function PlayerBox({
         directVideoStallMonitorRef.current = null;
       }
     };
+    const reloadDirectVideoAt = (resumeAt: number, shouldPlay: boolean) => {
+      let restored = false;
+      const restorePlayback = () => {
+        if (restored) return;
+        restored = true;
+        if (resumeAt > 0 && Number.isFinite(video.duration) && resumeAt < video.duration - 2) {
+          video.currentTime = resumeAt;
+        }
+        if (shouldPlay) video.play().catch(() => {});
+      };
+      video.addEventListener('loadedmetadata', restorePlayback, { once: true });
+      video.load();
+      if (video.readyState >= 1) restorePlayback();
+    };
     const recoverOrFallback = (reason: string) => {
       if (video.paused || video.ended) return;
       if (navigator.onLine === false) return;
@@ -929,9 +943,7 @@ export default function PlayerBox({
           error_message: reason,
         });
         const resumeAt = video.currentTime;
-        video.load();
-        video.currentTime = resumeAt;
-        video.play().catch(() => {});
+        reloadDirectVideoAt(resumeAt, true);
         return;
       }
 
@@ -976,9 +988,8 @@ export default function PlayerBox({
     const onOnline = () => {
       if (effectivePlayerMode !== 'video') return;
       const resumeAt = video.currentTime;
-      video.load();
-      if (resumeAt > 0) video.currentTime = resumeAt;
-      video.play().catch(() => {});
+      const shouldPlay = !video.paused && !video.ended;
+      reloadDirectVideoAt(resumeAt, shouldPlay);
     };
 
     video.addEventListener('waiting', onWaiting);
