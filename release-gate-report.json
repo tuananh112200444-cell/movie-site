@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-07-20T16:32:51.553Z",
+  "started_at": "2026-07-29T07:03:43.896Z",
   "status": "passed",
   "steps": [
     {
@@ -7,64 +7,106 @@
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 1995
+      "elapsed_ms": 1065
     },
     {
       "name": "security:supabase",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 1419
+      "elapsed_ms": 617
     },
     {
       "name": "schema:test",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 848
+      "elapsed_ms": 624
+    },
+    {
+      "name": "seo:upcoming:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 694
+    },
+    {
+      "name": "seo:ongoing:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 543
+    },
+    {
+      "name": "system:contracts",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 559
+    },
+    {
+      "name": "sync:safety:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 569
     },
     {
       "name": "type-check",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 34723
+      "elapsed_ms": 15710
     },
     {
       "name": "build",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 32142
+      "elapsed_ms": 35119
+    },
+    {
+      "name": "home:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 710
+    },
+    {
+      "name": "list:test",
+      "ok": true,
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 610
     },
     {
       "name": "search:test",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 11060
+      "elapsed_ms": 4351
     },
     {
       "name": "movie:data:test",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 202076
+      "elapsed_ms": 19703
     },
     {
       "name": "watch:test",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 707
+      "elapsed_ms": 766
     },
     {
       "name": "diagnostics:test",
       "ok": true,
       "exit_code": 0,
       "signal": null,
-      "elapsed_ms": 1110
+      "elapsed_ms": 1483
     }
   ],
-  "finished_at": "2026-07-20T16:37:37.639Z"
+  "finished_at": "2026-07-29T07:05:07.025Z"
 }

@@ -38,6 +38,10 @@ interface DiagnosticsSummary {
   critical_events: number;
   recovery_events: number;
   health_score: number;
+  measured_sessions?: number;
+  successful_sessions?: number;
+  recovered_sessions?: number;
+  failed_sessions?: number;
   top_events: CountItem[];
   top_hosts: CountItem[];
   top_servers: CountItem[];
@@ -291,6 +295,9 @@ export default function AdminDiagnosticsPage() {
             <ActionItemsPanel items={summary.action_items ?? []} />
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <StatCard icon="ri-play-circle-line" label="Phiên phát thành công" value={summary.successful_sessions ?? 0} tone="emerald" />
+              <StatCard icon="ri-restart-line" label="Phiên tự cứu thành công" value={summary.recovered_sessions ?? 0} tone="sky" />
+              <StatCard icon="ri-error-warning-line" label="Phiên thất bại cuối" value={summary.failed_sessions ?? 0} tone={(summary.failed_sessions ?? 0) > 0 ? 'red' : 'emerald'} />
               <StatCard icon="ri-heart-pulse-line" label="Điểm ổn định" value={`${summary.health_score}%`} tone={summary.health_score >= 90 ? 'emerald' : summary.health_score >= 70 ? 'amber' : 'red'} />
               <StatCard icon="ri-bug-line" label={`Tổng sự kiện ${summary.window_hours}h`} value={summary.total_events} />
               <StatCard icon="ri-error-warning-line" label="Lỗi nghiêm trọng" value={summary.critical_events} tone={summary.critical_events > 0 ? 'red' : 'emerald'} />

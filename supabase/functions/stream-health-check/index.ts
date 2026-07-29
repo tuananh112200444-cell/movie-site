@@ -304,6 +304,7 @@ serve(async (req) => {
     .order('last_checked_at', { ascending: true, nullsFirst: true })
     .order('priority', { ascending: false })
     .limit(limit);
+  let preselectedRows: unknown[] | null = null;
 
   if (slug) query = query.eq('movies.slug', slug);
   else if (queue === 'unchecked') {
@@ -338,29 +339,46 @@ serve(async (req) => {
       .order('priority', { ascending: false })
       .limit(limit);
   } else if (queue === 'hot') {
-    const { data: hotMovies, error: hotMovieError } = await supabase
-      .from('movies')
-      .select('id')
-      .eq('is_published', true)
+    // Viewer telemetry is advisory until this queue independently probes the
+    // exact stored source. It must outrank merely recent catalogue updates.
+    const { data: telemetryRows, error: telemetryError } = await supabase
+      .from('streams')
+      .select(streamSelect)
+      .eq('is_active', true)
+      .like('last_error', 'Viewer telemetry:%')
+      .or('stream_url.neq.,embed_url.neq.')
       .order('updated_at', { ascending: false })
-      .limit(movieLimit);
+      .limit(limit);
+    if (telemetryError) return json({ success: false, error: telemetryError.message }, 500);
 
-    if (hotMovieError) return json({ success: false, error: hotMovieError.message }, 500);
-    const movieIds = unique(((hotMovies || []) as MovieQueueRow[]).map((movie) => movie.id).filter(Boolean));
-    if (movieIds.length > 0) {
-      query = supabase
-        .from('streams')
-        .select(streamSelect)
-        .eq('is_active', true)
-        .in('movie_id', movieIds)
-        .or('stream_url.neq.,embed_url.neq.')
-        .order('last_checked_at', { ascending: true, nullsFirst: true })
-        .order('priority', { ascending: false })
-        .limit(limit);
+    if ((telemetryRows || []).length > 0) {
+      preselectedRows = telemetryRows;
+    } else {
+      const { data: hotMovies, error: hotMovieError } = await supabase
+        .from('movies')
+        .select('id')
+        .eq('is_published', true)
+        .order('updated_at', { ascending: false })
+        .limit(movieLimit);
+
+      if (hotMovieError) return json({ success: false, error: hotMovieError.message }, 500);
+      const movieIds = unique(((hotMovies || []) as MovieQueueRow[]).map((movie) => movie.id).filter(Boolean));
+      if (movieIds.length > 0) {
+        query = supabase
+          .from('streams')
+          .select(streamSelect)
+          .eq('is_active', true)
+          .in('movie_id', movieIds)
+          .or('stream_url.neq.,embed_url.neq.')
+          .order('last_checked_at', { ascending: true, nullsFirst: true })
+          .order('priority', { ascending: false })
+          .limit(limit);
+      }
     }
   }
 
-  const { data, error } = await query;
+  const queryResult = preselectedRows ? { data: preselectedRows, error: null } : await query;
+  const { data, error } = queryResult;
   if (error) return json({ success: false, error: error.message }, 500);
 
   const rows = (data || []) as unknown as StreamRow[];

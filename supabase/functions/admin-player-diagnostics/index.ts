@@ -22,6 +22,7 @@ type PlayerErrorEvent = {
   viewport_width: number | null;
   viewport_height: number | null;
   visibility_state: string | null;
+  playback_session_id: string | null;
 };
 
 type ActionItem = {
@@ -198,6 +199,7 @@ function summarizeEvents(events: PlayerErrorEvent[], hours: number) {
   const hourlyCounts = new Map<string, number>();
   let criticalCount = 0;
   let recoveryCount = 0;
+  const sessions = new Map<string, { started: boolean; critical: boolean }>();
 
   for (const event of events) {
     const eventType = keyLabel(event.event_type, 'unknown');
@@ -214,6 +216,18 @@ function summarizeEvents(events: PlayerErrorEvent[], hours: number) {
     if (CRITICAL_EVENTS.has(eventType)) criticalCount += 1;
     if (eventType.includes('recovery') || eventType.includes('retry') || eventType.includes('recovered')) {
       recoveryCount += 1;
+    }
+    const sessionId = String(event.playback_session_id || '').trim();
+    if (sessionId) {
+      const sessionKey = [
+        sessionId,
+        keyLabel(event.movie_slug, 'unknown-movie'),
+        keyLabel(event.episode_slug, 'unknown-episode'),
+      ].join('|');
+      const session = sessions.get(sessionKey) ?? { started: false, critical: false };
+      if (eventType === 'playback_started') session.started = true;
+      if (CRITICAL_EVENTS.has(eventType)) session.critical = true;
+      sessions.set(sessionKey, session);
     }
   }
 
@@ -241,13 +255,23 @@ function summarizeEvents(events: PlayerErrorEvent[], hours: number) {
   const topMovies = topFromMap(movieCounts);
   const playerModes = topFromMap(modeCounts);
   const networks = topFromMap(networkCounts);
-  const healthScore = events.length === 0 ? 100 : Math.max(0, Math.round(100 - (criticalCount / events.length) * 100));
+  const successfulSessions = [...sessions.values()].filter((session) => session.started).length;
+  const recoveredSessions = [...sessions.values()].filter((session) => session.started && session.critical).length;
+  const failedSessions = [...sessions.values()].filter((session) => !session.started && session.critical).length;
+  const measuredSessions = successfulSessions + failedSessions;
+  const healthScore = measuredSessions === 0
+    ? 100
+    : Math.round((successfulSessions / measuredSessions) * 100);
 
   return {
     window_hours: hours,
     total_events: events.length,
     critical_events: criticalCount,
     recovery_events: recoveryCount,
+    measured_sessions: measuredSessions,
+    successful_sessions: successfulSessions,
+    recovered_sessions: recoveredSessions,
+    failed_sessions: failedSessions,
     top_events: topEvents,
     top_hosts: topHosts,
     top_servers: topServers,
@@ -292,7 +316,7 @@ Deno.serve(async (req) => {
 
     const { data, error } = await supabase
       .from('player_error_events')
-      .select('id, created_at, movie_slug, movie_title, episode_slug, episode_name, server_name, event_type, player_mode, source_host, playback_time, duration, buffered_ahead, error_message, effective_type, downlink, device_memory, viewport_width, viewport_height, visibility_state')
+      .select('id, created_at, movie_slug, movie_title, episode_slug, episode_name, server_name, event_type, player_mode, source_host, playback_time, duration, buffered_ahead, error_message, effective_type, downlink, device_memory, viewport_width, viewport_height, visibility_state, playback_session_id')
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(limit);
