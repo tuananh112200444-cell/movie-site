@@ -97,7 +97,7 @@ requireText(gsc, ".in('index_tier',['ongoing','upcoming','playable'])", 'GSC ins
 requireText(gsc, '/BLOCKED|DISALLOWED/i.test(robots)', 'GSC treats an unspecified robots state as a false blocking error');
 requireText(gsc, 'INTERNAL_CRAWL_ERROR|INVALID_URL/i.test(fetchState)', 'GSC does not distinguish explicit fetch errors from an unspecified fetch state');
 requireText(gsc, 'phát hiện.*chưa được lập chỉ mục', 'GSC diagnosis ignores the Vietnamese coverage state returned in production');
-requireText(gsc, "const SEARCH_SCOPE = 'https://www.googleapis.com/auth/webmasters';", 'GSC cannot ensure the canonical sitemap is submitted');
+requireText(gsc, "'https://www.googleapis.com/auth/webmasters'", 'GSC cannot ensure the canonical sitemap is submitted');
 requireText(gsc, 'ensureCanonicalSitemap(token,input.resubmit_sitemap === true)', 'GSC automation does not verify the canonical sitemap registration');
 
 console.log(JSON.stringify({

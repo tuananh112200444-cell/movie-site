@@ -72,7 +72,7 @@ function episodeNumberFromText(value) {
   if (slash) return Number(slash[1] || 0) || 0;
   const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
   if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
-  const matches = [...text.matchAll(/(\d{1,5})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+  const matches = [...text.matchAll(/(\d{1,9})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
   return matches.length ? Math.max(...matches) : 0;
 }
 
@@ -93,6 +93,14 @@ function isBlvietsubMovie(movie) {
 }
 
 function isExternalQueerEpisodeRow(row) {
+  const explicitSource = String(row.source || '').trim().toLowerCase();
+  const explicitServer = String(row.server_name || '').trim().toLowerCase();
+  // Motchill rows are deliberately synced as an attributed backup. Its CDN
+  // may contain an OPhim-like hostname, which is not evidence that the row was
+  // accidentally injected by the generic OPhim importer.
+  if (explicitSource === 'motchill' && explicitServer.includes('motchill')) {
+    return false;
+  }
   const haystack = [
     row.source,
     row.server_name,

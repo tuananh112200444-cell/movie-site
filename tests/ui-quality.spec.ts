@@ -213,6 +213,41 @@ test('player: khôi phục tiến độ xem sau khi mở lại trang', async ({ 
   await expect.poll(() => video.evaluate((element) => Math.round((element as HTMLVideoElement).currentTime))).toBe(125);
 });
 
+test('player: đổi nguồn giữa phim giữ nguyên thời gian đang xem', async ({ page }) => {
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'Nguồn A', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media.example.test/a.mp4' }] },
+    { server_name: 'Nguồn B', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media.example.test/b.mp4' }] },
+  ]));
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+  const firstVideo = page.locator('video').first();
+  await expect(firstVideo).toBeVisible({ timeout: 20_000 });
+  await firstVideo.evaluate((element) => {
+    const media = element as HTMLVideoElement;
+    Object.defineProperty(media, 'duration', { configurable: true, value: 500 });
+    media.currentTime = 180;
+    media.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const resume = JSON.parse(localStorage.getItem('kp_resume_v1') || '{}');
+    return Math.round(resume['e2e-player__tap-1']?.time || 0);
+  })).toBe(180);
+
+  await page.getByRole('button', { name: 'Đổi nguồn', exact: false }).click();
+  const backupButton = page.getByRole('button', { name: 'Dự phòng 2, 1 tập', exact: true });
+  await expect(backupButton).toBeVisible();
+  await backupButton.click();
+  await expect(page.locator('video').first()).toHaveAttribute('src', /media\.example\.test\/b\.mp4/);
+  await page.waitForTimeout(100);
+  const switchedVideo = page.locator('video').first();
+  await expect(switchedVideo).toHaveAttribute('data-resume-at', '180');
+  await switchedVideo.evaluate((element) => {
+    const media = element as HTMLVideoElement;
+    Object.defineProperty(media, 'duration', { configurable: true, value: 500 });
+    media.dispatchEvent(new Event('loadedmetadata'));
+  });
+  await expect.poll(() => switchedVideo.evaluate((element) => Math.round((element as HTMLVideoElement).currentTime))).toBe(180);
+});
+
 test('xem tiếp mobile: giữ đúng trang khi fullscreen, phát và lưu tiến độ', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chrome', 'Chỉ áp dụng cho điện thoại');
   await page.addInitScript(() => {

@@ -191,6 +191,7 @@ export default function MovieDetailPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingProgressRef = useRef<{ time: number; duration: number } | null>(null);
+  const playbackTimeRef = useRef(0);
   const lastProgressSavedAtRef = useRef(0);
   const activeEpRef = useRef<string | null>(null);
   const relatedFetchedRef = useRef(false);
@@ -487,24 +488,11 @@ export default function MovieDetailPage() {
     const best = requested ?? pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
     if (!best) return;
     const originalIdx = resolveOriginalServerIndex(filteredEpisodes[best.serverIndex], detail.episodes);
+    playbackTimeRef.current = 0;
     setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
     setActiveEp(best.episode);
     setInitialSeekTime(0);
   }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly, isWatchPage, routeEpisode]);
-
-  // If the cross-viewer health response arrives after the detail JSON, move
-  // away from the now-confirmed bad host while keeping the exact same episode.
-  useEffect(() => {
-    if (!isWatchPage || sourceHealthVersion === 0 || !activeEp || !detail?.episodes) return;
-    const currentUrl = getPlayableSourceUrl(activeEp);
-    if (!areAllPlaybackPathsDegraded(activeEp)) return;
-    const best = pickBestEpisodeByPriority(filteredEpisodes, activeEp.slug || activeEp.name);
-    if (!best || getPlayableSourceUrl(best.episode) === currentUrl) return;
-    const originalIdx = resolveOriginalServerIndex(filteredEpisodes[best.serverIndex], detail.episodes);
-    setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
-    setActiveEp(best.episode);
-    setInitialSeekTime(0);
-  }, [activeEp, detail?.episodes, filteredEpisodes, isWatchPage, sourceHealthVersion]);
 
   const trailerEmbedUrl = useMemo(
     () => (detail?.movie?.trailer_url ? getTrailerEmbedUrl(detail.movie.trailer_url) : null),
@@ -532,12 +520,34 @@ export default function MovieDetailPage() {
     }
   }, [detail?.movie, saveProgress, slug]);
 
+  // A late cross-viewer health update may replace the source while a visitor
+  // is already watching. Persist and carry the live position into the new
+  // player; zero is reserved for an explicit restart or a genuinely new
+  // episode.
+  useEffect(() => {
+    if (!isWatchPage || sourceHealthVersion === 0 || !activeEp || !detail?.episodes) return;
+    const currentUrl = getPlayableSourceUrl(activeEp);
+    if (!areAllPlaybackPathsDegraded(activeEp)) return;
+    const best = pickBestEpisodeByPriority(filteredEpisodes, activeEp.slug || activeEp.name);
+    if (!best || getPlayableSourceUrl(best.episode) === currentUrl) return;
+    const resumeAt = Math.max(
+      playbackTimeRef.current,
+      pendingProgressRef.current?.time ?? 0,
+    );
+    flushProgress();
+    const originalIdx = resolveOriginalServerIndex(filteredEpisodes[best.serverIndex], detail.episodes);
+    setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
+    setActiveEp(best.episode);
+    setInitialSeekTime(resumeAt);
+  }, [activeEp, detail?.episodes, filteredEpisodes, flushProgress, isWatchPage, sourceHealthVersion]);
+
   const handleSelectEp = useCallback((ep: EpisodeData, seekTime = 0) => {
     if (!hasPlayableUrl(ep)) {
       showToast('Tập này chưa có liên kết phát. Vui lòng thử tập khác.', 'error');
       return;
     }
     flushProgress();
+    playbackTimeRef.current = Math.max(0, seekTime);
     setActiveEp(ep);
     setInitialSeekTime(seekTime);
     setShowResumeBanner(false);
@@ -572,16 +582,23 @@ export default function MovieDetailPage() {
         showToast(`Nguồn này không có ${activeEp.name || 'tập đang xem'}. Vui lòng chọn nguồn khác.`, 'info');
         return;
       }
+      const resumeAt = Math.max(
+        playbackTimeRef.current,
+        pendingProgressRef.current?.time ?? 0,
+      );
+      flushProgress();
       setActiveServer(originalIdx);
       setActiveEp(newEp);
+      setInitialSeekTime(resumeAt);
       return;
     }
     setActiveServer(originalIdx);
-  }, [filteredEpisodes, detail?.episodes, activeEp, showToast]);
+  }, [filteredEpisodes, detail?.episodes, activeEp, flushProgress, showToast]);
 
   const handleTimeUpdate = useCallback((time: number, duration: number) => {
     if (!slug || !activeEpRef.current) return;
     if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) return;
+    playbackTimeRef.current = Math.max(0, time);
     pendingProgressRef.current = { time, duration };
     const elapsed = Date.now() - lastProgressSavedAtRef.current;
     if (elapsed >= 5000) {
@@ -612,18 +629,26 @@ export default function MovieDetailPage() {
 
   const handleResume = useCallback(() => {
     if (!resumeInfo) return;
+    playbackTimeRef.current = Math.max(0, resumeInfo.time);
     setInitialSeekTime(resumeInfo.time);
     setShowResumeBanner(false);
   }, [resumeInfo]);
 
   const handleRestart = useCallback(() => {
     if (slug && activeEp) clearProgress(slug, activeEp.slug);
+    playbackTimeRef.current = 0;
     setInitialSeekTime(0);
     setShowResumeBanner(false);
   }, [slug, activeEp, clearProgress]);
 
   const handleRefetchMovie = useCallback(async () => {
     if (!slug) return;
+    const targetEpisode = activeEpRef.current;
+    const resumeAt = Math.max(
+      playbackTimeRef.current,
+      pendingProgressRef.current?.time ?? 0,
+    );
+    flushProgress();
     setLoading(true);
     setError(null);
     setActiveEp(null);
@@ -639,9 +664,22 @@ export default function MovieDetailPage() {
       setDetail(data);
       const deduped = deduplicateAndLimitServers(data.episodes ?? []);
       if (deduped.length > 0) {
-        const bestIdx = pickBestServerIndex(deduped);
-        const origIdx = (data.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
-        setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
+        const recovered = targetEpisode
+          ? pickBestEpisodeByPriority(deduped, targetEpisode)
+          : null;
+        if (recovered) {
+          const originalIdx = resolveOriginalServerIndex(deduped[recovered.serverIndex], data.episodes ?? []);
+          playbackTimeRef.current = resumeAt;
+          setActiveServer(originalIdx >= 0 ? originalIdx : recovered.serverIndex);
+          setActiveEp(recovered.episode);
+          setInitialSeekTime(resumeAt);
+        } else {
+          const bestIdx = pickBestServerIndex(deduped);
+          const origIdx = (data.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
+          playbackTimeRef.current = 0;
+          setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
+          setInitialSeekTime(0);
+        }
       } else {
         setActiveServer(-1);
       }
@@ -652,7 +690,7 @@ export default function MovieDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug, showToast]);
+  }, [flushProgress, showToast, slug]);
 
   const handleFavToggle = useCallback(() => {
     if (!detail?.movie) return;
