@@ -112,6 +112,7 @@ function classify(url, response, html, error) {
   if ([301, 302, 307, 308].includes(status)) return { issue: 'redirect', detail: location };
   if (status === 404 || status === 410) return { issue: 'not_found', detail: String(status) };
   if (status < 200 || status >= 300) return { issue: 'bad_status', detail: String(status) };
+  if (/\/feed\.xml(?:$|[?#])/i.test(new URL(url).pathname)) return { issue: 'ok', detail: 'rss' };
   if (xRobots.includes('noindex') || robots.includes('noindex')) return { issue: 'noindex', detail: xRobots || robots };
   if (!canonical) return { issue: 'missing_canonical', detail: '' };
   if (cleanCanonical !== cleanUrl) return { issue: 'canonical_mismatch', detail: canonical };

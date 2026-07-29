@@ -5,7 +5,7 @@ const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functio
 const SUPABASE_REST_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/rest/v1';
 // This is Supabase's public browser key (RLS still applies), not a service key.
 const SUPABASE_PUBLIC_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
-const SEO_PRERENDER_VERSION = '20260723-ongoing-freshness-v4';
+const SEO_PRERENDER_VERSION = '20260729-sitewide-trust-v14';
 const CONSOLIDATED_SEO_PATHS = new Map([
   ['/xem-phim', '/xem-phim-online'],
   ['/xem-phim-mien-phi', '/xem-phim-online'],
@@ -609,8 +609,11 @@ function mergeMovieForPrerender(primaryMovie, ophimMovie) {
   if (!primaryMovie) return ophimMovie || null;
   if (!ophimMovie) return primaryMovie;
   return {
-    ...primaryMovie,
-    ...Object.fromEntries(Object.entries(ophimMovie).filter(([, value]) => value !== undefined && value !== null && value !== '')),
+    ...ophimMovie,
+    ...Object.fromEntries(Object.entries(primaryMovie).filter(([, value]) => value !== undefined && value !== null && value !== '')),
+    name: ophimMovie.name || primaryMovie.name,
+    origin_name: ophimMovie.origin_name || primaryMovie.origin_name,
+    title_vi: ophimMovie.name || primaryMovie.title_vi,
     slug: primaryMovie.slug || ophimMovie.slug,
     tmdb_id: primaryMovie.tmdb_id || ophimMovie.tmdb_id,
     imdb_id: primaryMovie.imdb_id || ophimMovie.imdb_id,
@@ -659,7 +662,8 @@ function keywordVariants(values) {
 
 function isTrailerOnlyMovie(movie) {
   const ep = normalizeSearchText(movie.episode_current);
-  return !hasPlayableMovieEvidence(movie) && (ep === 'trailer' || ep.includes('trailer') || Boolean(movie.trailer_url));
+  if (ep === 'trailer' || ep.includes('trailer')) return true;
+  return !hasPlayableMovieEvidence(movie) && Boolean(movie.trailer_url);
 }
 
 function isUpcomingMovie(movie) {
@@ -1488,8 +1492,8 @@ async function fetchSupabaseMovie(slug, context) {
   detailUrl.searchParams.set('slug', slug);
 
   const attempts = [
-    { url: seoUrl, timeoutMs: 3500 },
-    { url: detailUrl, timeoutMs: 5000 },
+    { url: seoUrl, timeoutMs: 6000 },
+    { url: detailUrl, timeoutMs: 6500 },
   ];
 
   const results = await Promise.allSettled(attempts.map(async (attempt) => {
@@ -1579,13 +1583,22 @@ function renderMoviePrerender(pathname, movie, slug) {
   const qualityTier = String(movie.seo_index_tier || '');
   const isOngoing = qualityTier === 'ongoing';
   const qualityChecked = Boolean(movie.seo_quality_checked_at);
-  const isIndexableUpcoming = qualityApproved
-    && qualityTier === 'upcoming'
-    && (isUpcoming || isTrailerOnly)
-    && Boolean(trailerEmbedUrl && name && poster && content.length >= 120);
+  const isIndexableUpcoming = (
+    (
+    qualityApproved
+      && qualityTier === 'upcoming'
+      && (isUpcoming || isTrailerOnly)
+      && Boolean(trailerEmbedUrl && name && poster && content.length >= 120)
+    )
+    || (
+      !qualityChecked
+      && isTrailerOnly
+      && Boolean(name && poster && content.length >= 120)
+    )
+  );
   const isIndexablePlayable = (
     qualityApproved
-      && (qualityTier === 'playable' || qualityTier === 'ongoing')
+      && (qualityTier === 'playable' || qualityTier === 'ongoing' || qualityTier === 'upcoming')
       && hasPlayableEpisode
       && Boolean(name && poster && content.length >= 80)
   ) || (!qualityChecked
@@ -1593,7 +1606,10 @@ function renderMoviePrerender(pathname, movie, slug) {
       && !isUpcoming
       && !isTrailerOnly
       && Boolean(name && poster && content.length >= 80));
-  const isIndexable = isIndexableUpcoming || isIndexablePlayable;
+  const isIndexableFallback = !qualityChecked
+    && (hasPlayableEpisode || isTrailerOnly)
+    && Boolean(name && poster && content.length >= 20);
+  const isIndexable = isIndexableUpcoming || isIndexablePlayable || isIndexableFallback;
   const releaseDateText = formatVietnamDate(movie.release_at);
   const episodeChangedAt = Date.parse(String(movie.seo_last_episode_change_at || '')) || 0;
   const modifiedAt = Math.max(getMovieModifiedAt(movie), episodeChangedAt);
@@ -2320,6 +2336,7 @@ async function getCachedPrerender(cacheKey, request) {
 
 function putCachedPrerender(context, cacheKey, response, request) {
   if (request.method !== 'GET' || typeof caches === 'undefined' || response.status !== 200) return;
+  if ((response.headers.get('X-Robots-Tag') || '').toLowerCase().includes('noindex')) return;
   const cachedResponse = response.clone();
   contextWaitUntil(context, caches.default.put(cacheKey, cachedResponse));
 }

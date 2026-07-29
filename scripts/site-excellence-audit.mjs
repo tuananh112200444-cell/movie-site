@@ -221,7 +221,7 @@ async function assertProductionBuildClean() {
     { pattern: /^index-.*\.js$/, maxBytes: 390_000, label: 'main app JS' },
     { pattern: /^vendor-hls-.*\.js$/, maxBytes: 560_000, label: 'HLS vendor JS' },
     { pattern: /^vendor-react-.*\.js$/, maxBytes: 220_000, label: 'React vendor JS' },
-    { pattern: /^index-.*\.css$/, maxBytes: 230_000, label: 'main CSS' },
+    { pattern: /^index-.*\.css$/, maxBytes: 400_000, label: 'main CSS source' },
   ];
 
   for (const file of files) {
@@ -234,6 +234,12 @@ async function assertProductionBuildClean() {
     }
     if (!fileSet.has(`${file}.gz`)) failures.push(`${file} is missing gzip precompression.`);
     if (!fileSet.has(`${file}.br`)) failures.push(`${file} is missing brotli precompression.`);
+    if (/^index-.*\.css$/.test(file) && fileSet.has(`${file}.br`)) {
+      const brotliBytes = (await readFile(`out/assets/${file}.br`)).byteLength;
+      if (brotliBytes > 60_000) {
+        failures.push(`main CSS brotli ${file}.br is ${brotliBytes} bytes, above network budget 60000.`);
+      }
+    }
   }
 
   return failures;
@@ -259,8 +265,8 @@ async function assertHeadersClean() {
     if (!headers.includes(needle)) failures.push(`public/_headers is missing: ${needle}`);
   }
   const smartCacheBlocks = new Map([
-    ['/', 'Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600'],
-    ['/phim/*', 'Cache-Control: public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600'],
+    ['/', 'Cache-Control: public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=300'],
+    ['/phim/*', 'Cache-Control: public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=300'],
     ['/search*', 'Cache-Control: public, max-age=30, s-maxage=120, stale-while-revalidate=300'],
   ]);
   for (const [route, cacheHeader] of smartCacheBlocks) {
@@ -275,7 +281,6 @@ async function assertHeadersClean() {
     '/llms.txt',
     '/home-fallback.json',
     '/queer-fallback.json',
-    '/sitemap*.xml',
   ]) {
     if (!routes.includes(excludedRoute)) failures.push(`public/_routes.json should exclude ${excludedRoute} from Pages Functions.`);
   }
@@ -296,7 +301,7 @@ async function assertSitemapsClean() {
   if (index.includes('sitemap-movies.xml')) {
     failures.push('public/sitemap.xml should use chunked movie sitemaps instead of the full sitemap-movies.xml.');
   }
-  if (/sitemap-movies-[1-8]\.xml/.test(index)) failures.push('public/sitemap.xml should not expose broad movie chunks during quality recovery.');
+  if (!/sitemap-movies-\d+\.xml/.test(index)) failures.push('public/sitemap.xml must expose the quality-gated movie catalogue chunks.');
   if (!seo.includes('<urlset')) failures.push('public/sitemap-seo-landing.xml is not a URL set.');
   for (const loc of ['/xem-phim-online', '/phim-vietsub', '/phim-dang-chieu']) {
     if (!seo.includes(loc)) failures.push(`public/sitemap-seo-landing.xml is missing ${loc}.`);

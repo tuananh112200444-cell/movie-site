@@ -416,6 +416,86 @@ if (webSubMigration.includes('SUPABASE_ANON_KEY')) {
   addError('Movie WebSub cron must use its internal cron secret without a nullable anon authorization header.');
 }
 
+const categoryPage = await read('src/pages/movie-list/page.tsx').catch(() => '');
+const categorySeoContent = await read('src/pages/movie-list/components/CategorySEOContent.tsx').catch(() => '');
+const countryPage = await read('src/pages/country/page.tsx').catch(() => '');
+const countrySeoContent = await read('src/pages/country/components/CountrySEOContent.tsx').catch(() => '');
+const homePage = await read('src/pages/home/page.tsx').catch(() => '');
+const homeGenreSeo = await read('src/pages/home/components/GenreSEOSection.tsx').catch(() => '');
+const homeAbout = await read('src/pages/home/components/AboutSection.tsx').catch(() => '');
+const homeFaq = await read('src/pages/home/components/FAQSection.tsx').catch(() => '');
+const newMoviesPage = await read('src/pages/new-movies/page.tsx').catch(() => '');
+const animePage = await read('src/pages/anime/page.tsx').catch(() => '');
+const horrorPage = await read('src/pages/phim-ma/page.tsx').catch(() => '');
+const handsomePage = await read('src/pages/my-nam/page.tsx').catch(() => '');
+const movieReview = await read('src/components/feature/MovieReview.tsx').catch(() => '');
+for (const [file, source] of [
+  ['src/pages/movie-list/components/CategorySEOContent.tsx', categorySeoContent],
+  ['src/pages/country/components/CountrySEOContent.tsx', countrySeoContent],
+  ['src/pages/home/page.tsx', homePage],
+  ['src/pages/home/components/GenreSEOSection.tsx', homeGenreSeo],
+  ['src/pages/home/components/AboutSection.tsx', homeAbout],
+  ['src/pages/home/components/FAQSection.tsx', homeFaq],
+  ['src/pages/new-movies/page.tsx', newMoviesPage],
+  ['src/pages/anime/page.tsx', animePage],
+  ['src/pages/phim-ma/page.tsx', horrorPage],
+  ['src/pages/my-nam/page.tsx', handsomePage],
+]) {
+  if (/itemType="https:\/\/schema\.org\/Review"|reviewRating|Biên tập viên KhoPhim/.test(source)) {
+    addError(`${file} must not publish unverified editorial reviews or ratings.`);
+  }
+  if (/\b(?:10[.,]000|12[.,]000|15[.,]000|20[.,]000|50[.,]000)\+?\b/.test(source)) {
+    addError(`${file} must not publish hard-coded catalogue-size claims.`);
+  }
+  if (/không quảng cáo|lớn nhất Việt Nam|tốt nhất 2026/i.test(source)) {
+    addError(`${file} must not publish unverifiable promotional claims.`);
+  }
+}
+if (/aria-hidden="true"[\s\S]{0,500}(?:KhoPhim|xem phim)/i.test(homeGenreSeo)
+  || /Google reads this|users don't notice/i.test(homeGenreSeo)) {
+  addError('Homepage genre navigation must not contain hidden search-engine-only copy.');
+}
+if (/\bkeywords="[^"]{250,}"/i.test(homePage)) {
+  addError('Homepage must not publish a long meta-keyword list that Google ignores.');
+}
+if (/reviewRating|itemType="https:\/\/schema\.org\/Rating"|ratingValue.*8/.test(movieReview)) {
+  addError('Movie editorial content must not publish a fabricated fixed rating.');
+}
+if (!cloudflareFunction.includes("SEO_PRERENDER_VERSION = '20260729-sitewide-trust-v14'")) {
+  addError('SEO prerender cache must use the sitewide trust release after metadata changes.');
+}
+if (!cloudflareFunction.includes("includes('noindex')) return;")) {
+  addError('Transient noindex movie prerenders must never be stored in the shared edge cache.');
+}
+if (!cloudflareFunction.includes("if (ep === 'trailer' || ep.includes('trailer')) return true;")) {
+  addError('An explicit trailer episode label must remain authoritative during movie lifecycle transitions.');
+}
+if (!cloudflareFunction.includes("qualityTier === 'upcoming'") || !cloudflareFunction.includes('&& hasPlayableEpisode')) {
+  addError('Quality-approved playable movies must recover from stale lifecycle labels.');
+}
+if (!cloudflareFunction.includes('!qualityChecked') || !cloudflareFunction.includes('&& isTrailerOnly') || !cloudflareFunction.includes('Boolean(name && poster && content.length >= 120)')) {
+  addError('Substantial trailer information pages must remain indexable when only fallback movie data is available.');
+}
+if (!cloudflareFunction.includes('...ophimMovie,')
+  || !cloudflareFunction.includes('Object.entries(primaryMovie)')
+  || !cloudflareFunction.includes('name: ophimMovie.name || primaryMovie.name')) {
+  addError('Secondary title metadata must not overwrite substantive primary movie data.');
+}
+if (!cloudflareFunction.includes('const isIndexableFallback = !qualityChecked')
+  || !cloudflareFunction.includes('(hasPlayableEpisode || isTrailerOnly)')
+  || !cloudflareFunction.includes('Boolean(name && poster && content.length >= 20)')) {
+  addError('Unverified fallback movie data must use one stable, content-gated indexability rule.');
+}
+if (seoLandingUrls.some((entry) => entry.path === '/dien-vien')) {
+  addError('The noindex actor directory must not be included in the indexable SEO sitemap.');
+}
+if (!categoryPage.includes("'@type': 'CollectionPage'") || !categoryPage.includes("'@type': 'ItemList'")) {
+  addError('Movie category pages must retain CollectionPage and ItemList structured data.');
+}
+if (!countryPage.includes("'@type': 'CollectionPage'") || !countryPage.includes("'@type': 'ItemList'")) {
+  addError('Country pages must retain CollectionPage and ItemList structured data.');
+}
+
 if (warnings.length > 0) {
   console.warn('SEO audit warnings:');
   for (const warning of warnings) console.warn(`- ${warning}`);

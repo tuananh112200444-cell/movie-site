@@ -37,6 +37,22 @@ export interface PlayerIssuePayload {
 
 const recentReports = new Map<string, number>();
 const REPORT_THROTTLE_MS = 60_000;
+const PLAYBACK_SESSION_KEY = 'khophim.playback-session.v1';
+
+function getPlaybackSessionId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const existing = window.sessionStorage.getItem(PLAYBACK_SESSION_KEY);
+    if (existing) return existing;
+    const generated = typeof crypto?.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    window.sessionStorage.setItem(PLAYBACK_SESSION_KEY, generated);
+    return generated;
+  } catch {
+    return null;
+  }
+}
 
 function finiteNumber(value?: number): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -94,6 +110,7 @@ export function reportPlayerIssue(payload: PlayerIssuePayload): void {
     payload.movie_slug,
     payload.episode_slug,
     payload.server_name,
+    payload.source_host,
     timeBucket,
   ].join('|');
   const now = Date.now();
@@ -120,6 +137,7 @@ export function reportPlayerIssue(payload: PlayerIssuePayload): void {
     duration: finiteNumber(payload.duration),
     buffered_ahead: finiteNumber(payload.buffered_ahead),
     error_message: payload.error_message?.slice(0, 500) || null,
+    playback_session_id: getPlaybackSessionId(),
     user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 500) : null,
     page_url: typeof location !== 'undefined' ? location.href.slice(0, 800) : null,
     ...connectionInfo,

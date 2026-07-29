@@ -348,6 +348,15 @@ function getHotScore(movie: Movie): number {
   return yearScore + freshScore + (isFull ? 25 : 0) + (movie.chieurap ? 15 : 0);
 }
 
+const COUNTRY_SEO_DESCRIPTIONS: Record<string, string> = {
+  'han-quoc': 'Khám phá phim Hàn Quốc Vietsub HD: drama tình cảm, hành động, cổ trang, hài hước và series đang cập nhật trên KhoPhim.',
+  'trung-quoc': 'Khám phá phim Trung Quốc Vietsub HD: cổ trang, tiên hiệp, ngôn tình, hành động và phim bộ mới cập nhật trên KhoPhim.',
+  'au-my': 'Khám phá phim Âu Mỹ Vietsub HD: Hollywood, hành động, viễn tưởng, kinh dị, chính kịch và phim chiếu rạp mới trên KhoPhim.',
+  'nhat-ban': 'Khám phá phim Nhật Bản và anime Vietsub HD: anime mùa mới, live action, J-drama và phim điện ảnh Nhật trên KhoPhim.',
+  'thai-lan': 'Khám phá phim Thái Lan Vietsub HD: lakorn, BL, tình cảm, hài hước và phim bộ Thái mới cập nhật trên KhoPhim.',
+  'viet-nam': 'Khám phá phim Việt Nam HD: phim chiếu rạp, phim bộ truyền hình, hài, tình cảm và hành động mới cập nhật trên KhoPhim.',
+};
+
 interface Props {
   countrySlug: string;
 }
@@ -459,7 +468,8 @@ export default function CountryPage({ countrySlug }: Props) {
     );
   }
 
-  const seoTitle = `${config.name} Vietsub HD Miễn Phí | KhoPhim`;
+  const seoTitle = `${config.name} Vietsub HD - Phim Mới Cập Nhật | KhoPhim`;
+  const seoDescription = COUNTRY_SEO_DESCRIPTIONS[countrySlug] ?? config.description;
   const schema = [
     {
       '@context': 'https://schema.org',
@@ -474,7 +484,7 @@ export default function CountryPage({ countrySlug }: Props) {
       '@type': 'CollectionPage',
       name: seoTitle,
       url: `${SITE_URL}${config.path}`,
-      description: config.seoDesc,
+      description: seoDescription,
       inLanguage: 'vi',
       isPartOf: { '@type': 'WebSite', name: 'KhoPhim', url: SITE_URL },
     },
@@ -491,22 +501,13 @@ export default function CountryPage({ countrySlug }: Props) {
         name: m.name,
       })),
     }] : []),
-    {
-      '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: config.faq.map(({ q, a }) => ({
-        '@type': 'Question',
-        name: q,
-        acceptedAnswer: { '@type': 'Answer', text: a },
-      })),
-    },
   ];
 
   return (
     <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={seoTitle}
-        description={config.seoDesc}
+        description={seoDescription}
         keywords={config.keywords}
         canonical={canonicalUrl}
         prev={prevPage}

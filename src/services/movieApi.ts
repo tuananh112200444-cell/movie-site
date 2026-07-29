@@ -4147,6 +4147,13 @@ function getRecentBadHostPenalty(ep: EpisodeData): number {
       .map((url) => getUrlHost(String(url || '')))
       .filter(Boolean)));
     if (!hosts.length) return 0;
+    const cluster = getEpisodeFailureCluster(ep);
+    const clusterBadAt = Number(map[`cluster:${cluster}`] || 0);
+    if (clusterBadAt > 0 && Date.now() - clusterBadAt < SERVER_RECENT_BAD_HOST_TTL_MS) {
+      const sourceKind = getEpisodeSourceKind(ep);
+      const multiplier = sourceKind === 'ophim' || sourceKind === 'kkphim' ? 1.35 : 1;
+      return Math.round(SERVER_RECENT_BAD_HOST_PENALTY * multiplier);
+    }
     const badPaths = hosts.filter((host) => {
       const lastBadAt = Number(map[host] || 0);
       return lastBadAt > 0 && Date.now() - lastBadAt < SERVER_RECENT_BAD_HOST_TTL_MS;

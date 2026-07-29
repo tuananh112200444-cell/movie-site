@@ -65,7 +65,7 @@ const STATS = [
 const FEATURES = [
   {
     icon: 'ri-play-circle-line',
-    title: 'Xem Phim Không Quảng Cáo',
+    title: 'Truy cập trực tiếp trên trình duyệt',
     desc: 'Trải nghiệm xem phim liền mạch, không bị gián đoạn bởi quảng cáo phiền nhiễu. KhoPhim cam kết mang lại trải nghiệm xem phim vietsub thuần túy nhất.',
   },
   {
@@ -96,14 +96,14 @@ const FEATURES = [
 ];
 
 const CATEGORIES = [
-  { label: 'Phim Lẻ', to: '/phim-le', icon: 'ri-movie-2-line', count: '15,000+' },
-  { label: 'Phim Bộ', to: '/phim-bo', icon: 'ri-tv-2-line', count: '20,000+' },
-  { label: 'Phim Chiếu Rạp', to: '/phim-chieu-rap', icon: 'ri-building-4-line', count: '5,000+' },
-  { label: 'Hoạt Hình & Anime', to: '/hoat-hinh', icon: 'ri-gamepad-line', count: '8,000+' },
-  { label: 'TV Shows', to: '/tv-shows', icon: 'ri-broadcast-line', count: '3,000+' },
-  { label: 'Phim Hàn Quốc', to: '/phim-han-quoc', icon: 'ri-heart-3-line', count: '12,000+' },
-  { label: 'Phim Trung Quốc', to: '/phim-trung-quoc', icon: 'ri-ancient-pavilion-line', count: '10,000+' },
-  { label: 'Phim Âu Mỹ', to: '/phim-au-my', icon: 'ri-rocket-2-line', count: '8,000+' },
+  { label: 'Phim Lẻ', to: '/phim-le', icon: 'ri-movie-2-line', count: 'Điện ảnh' },
+  { label: 'Phim Bộ', to: '/phim-bo', icon: 'ri-tv-2-line', count: 'Series' },
+  { label: 'Phim Chiếu Rạp', to: '/phim-chieu-rap', icon: 'ri-building-4-line', count: 'Phim rạp' },
+  { label: 'Hoạt Hình & Anime', to: '/hoat-hinh', icon: 'ri-gamepad-line', count: 'Hoạt hình' },
+  { label: 'TV Shows', to: '/tv-shows', icon: 'ri-broadcast-line', count: 'Truyền hình' },
+  { label: 'Phim Hàn Quốc', to: '/phim-han-quoc', icon: 'ri-heart-3-line', count: 'Drama Hàn' },
+  { label: 'Phim Trung Quốc', to: '/phim-trung-quoc', icon: 'ri-ancient-pavilion-line', count: 'Phim Trung' },
+  { label: 'Phim Âu Mỹ', to: '/phim-au-my', icon: 'ri-rocket-2-line', count: 'Hollywood' },
 ];
 
 const FAQS = [
@@ -248,7 +248,7 @@ export default function AboutPage() {
                     <i className="ri-play-fill text-white text-sm" />
                   </div>
                   <div>
-                    <p className="text-white text-xs font-semibold">Xem phim không quảng cáo</p>
+                    <p className="text-white text-xs font-semibold">Xem trực tiếp trên trình duyệt</p>
                     <p className="text-white/40 text-[10px]">HD · Vietsub · Miễn phí · Không đăng ký</p>
                   </div>
                 </div>

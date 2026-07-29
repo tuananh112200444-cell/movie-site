@@ -1,6 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 type PlayerErrorEvent = {
+  playback_session_id: string | null;
+  movie_slug: string | null;
+  episode_slug: string | null;
   event_type: string | null;
   source_host: string | null;
   server_name: string | null;
@@ -19,6 +22,13 @@ type HostHealth = {
   total: number;
   server_names: string[];
   player_modes: string[];
+};
+
+type ClusterOutage = {
+  cluster: string;
+  affected_hosts: number;
+  critical: number;
+  success: number;
 };
 
 const SOURCE_CRITICAL_EVENTS = new Set([
@@ -172,6 +182,47 @@ function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
     .slice(0, 20);
 }
 
+function deduplicatePlaybackEvents(events: PlayerErrorEvent[]): PlayerErrorEvent[] {
+  const seen = new Set<string>();
+  const output: PlayerErrorEvent[] = [];
+  for (const event of events) {
+    const eventType = String(event.event_type || '');
+    const eventClass = SOURCE_CRITICAL_EVENTS.has(eventType)
+      ? 'critical'
+      : SOURCE_SUCCESS_EVENTS.has(eventType)
+        ? 'success'
+        : 'recovery';
+    const minuteBucket = Math.floor(Date.parse(event.created_at) / (5 * 60 * 1000));
+    const playbackIdentity = String(event.playback_session_id || '').trim()
+      || `${event.movie_slug || ''}:${event.episode_slug || ''}:${minuteBucket}`;
+    const key = `${playbackIdentity}|${normalizeHost(event.source_host)}|${eventClass}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(event);
+  }
+  return output;
+}
+
+function summarizeClusterOutages(hosts: HostHealth[]): ClusterOutage[] {
+  const clusters = new Map<string, ClusterOutage>();
+  for (const host of hosts) {
+    if (!host.cluster || host.cluster === host.host) continue;
+    const current = clusters.get(host.cluster) ?? {
+      cluster: host.cluster,
+      affected_hosts: 0,
+      critical: 0,
+      success: 0,
+    };
+    current.affected_hosts += 1;
+    current.critical += host.critical;
+    current.success += host.success;
+    clusters.set(host.cluster, current);
+  }
+  // A single bad CDN hostname is not a provider outage. Require independent
+  // failures on at least three shards before clients demote the whole cluster.
+  return [...clusters.values()].filter((item) => item.affected_hosts >= 3 && item.critical >= 12);
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
@@ -192,7 +243,7 @@ Deno.serve(async (req) => {
 
     const { data, error } = await supabase
       .from('player_error_events')
-      .select('event_type, source_host, server_name, player_mode, created_at')
+      .select('playback_session_id, movie_slug, episode_slug, event_type, source_host, server_name, player_mode, created_at')
       .gte('created_at', since)
       .in('event_type', [...SOURCE_CRITICAL_EVENTS, ...SOURCE_RECOVERY_EVENTS, ...SOURCE_SUCCESS_EVENTS])
       .order('created_at', { ascending: false })
@@ -201,7 +252,9 @@ Deno.serve(async (req) => {
 
     if (error) return fallbackHealth(serializeError(error), corsHeaders);
 
-    const badHosts = summarizeHostHealth((data ?? []) as PlayerErrorEvent[]);
+    const balancedEvents = deduplicatePlaybackEvents((data ?? []) as PlayerErrorEvent[]);
+    const badHosts = summarizeHostHealth(balancedEvents);
+    const clusterOutages = summarizeClusterOutages(badHosts);
 
     return json({
       ok: true,
@@ -209,7 +262,10 @@ Deno.serve(async (req) => {
       since,
       window_hours: hours,
       penalty_minutes: 30,
+      scanned_events: (data ?? []).length,
+      balanced_events: balancedEvents.length,
       bad_hosts: badHosts,
+      cluster_outages: clusterOutages,
     }, 200, corsHeaders);
   } catch (error) {
     return fallbackHealth(serializeError(error), corsHeaders);

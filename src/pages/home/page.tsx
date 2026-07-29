@@ -109,12 +109,11 @@ const homeSchema = [
       'KhoPhim', 'Kho Phim', 'khophim', 'kho phim',
       'khophim', 'khophim.org', 'kho phim', 'KhoPhim',
       'kho phim online', 'kho phim miễn phí', 'kho phim vietsub',
-      'kho phim hd', 'kho phim 2026', 'kho phim lớn nhất',
-      'kho phim hàng đầu', 'kho phim mới nhất', 'kho phim bom tấn',
+      'kho phim hd', 'kho phim 2026', 'kho phim mới nhất',
       'Xem Phim Online Miễn Phí', 'KhoPhim.com',
     ],
     url: SITE_URL,
-    description: 'KhoPhim (khophim.org) – Xem phim online miễn phí chất lượng cao HD, Full HD, vietsub, lồng tiếng. Kho phim lẻ, phim bộ, phim chiếu rạp, hoạt hình, anime mới nhất 2026 cập nhật hàng ngày. Xem không quảng cáo, không cần đăng ký.',
+    description: 'KhoPhim tổng hợp phim lẻ, phim bộ, phim chiếu rạp, hoạt hình và anime. Danh sách phim cùng trạng thái tập được cập nhật theo dữ liệu hiện có.',
     inLanguage: 'vi',
     potentialAction: [
       {
@@ -132,27 +131,20 @@ const homeSchema = [
     '@type': 'Organization',
     '@id': `${SITE_URL}/#organization`,
     name: 'KhoPhim',
-    alternateName: [
-      'KhoPhim', 'Kho Phim', 'khophim', 'kho phim',
-      'khophim', 'khophim.org', 'kho phim', 'KhoPhim',
-      'kho phim online', 'kho phim miễn phí', 'kho phim vietsub',
-      'kho phim hd', 'kho phim 2026', 'kho phim lớn nhất',
-      'kho phim hàng đầu', 'kho phim mới nhất', 'kho phim bom tấn',
-    ],
+    alternateName: ['Kho Phim', 'khophim.org'],
     url: SITE_URL,
-    description: 'KhoPhim (khophim.org) – Trang web xem phim online miễn phí hàng đầu Việt Nam. KhoPhim có hơn 50,000 bộ phim vietsub HD không quảng cáo. Truy cập KhoPhim ngay tại khophim.org để xem phim miễn phí.',
+    description: 'KhoPhim là website tra cứu và xem thông tin phim, phim lẻ, phim bộ, phim chiếu rạp, hoạt hình và anime tại khophim.org.',
     logo: {
       '@type': 'ImageObject',
       '@id': `${SITE_URL}/#logo`,
       url: 'https://khophim.org/brand/khophim-logo-v2.png',
       width: 1024,
       height: 1024,
-      caption: 'KhoPhim – Xem Phim Online Miễn Phí',
+      caption: 'Biểu trưng KhoPhim',
     },
     image: {
       '@id': `${SITE_URL}/#logo`,
     },
-    foundingDate: '2020',
     areaServed: {
       '@type': 'Country',
       name: 'Vietnam',
@@ -178,7 +170,7 @@ const homeSchema = [
         name: 'KhoPhim có xem phim online miễn phí không?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Có, KhoPhim (khophim.org) cung cấp dịch vụ xem phim online hoàn toàn miễn phí với chất lượng HD và Full HD, vietsub và lồng tiếng. Không cần đăng ký tài khoản, không quảng cáo phiền nhiễu.',
+          text: 'KhoPhim cho phép mở trang phim và sử dụng các nguồn xem hiện có mà không bắt buộc đăng ký tài khoản. Chất lượng và loại âm thanh được hiển thị theo dữ liệu của từng nguồn.',
         },
       },
       {
@@ -191,10 +183,10 @@ const homeSchema = [
       },
       {
         '@type': 'Question',
-        name: 'Xem phim vietsub miễn phí không quảng cáo ở đâu?',
+        name: 'Làm sao tìm phim Vietsub trên KhoPhim?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'KhoPhim (khophim.org) là trang xem phim vietsub miễn phí tốt nhất hiện nay. Không quảng cáo, không giới hạn xem, cập nhật hàng ngày với chất lượng HD Full HD. Xem ngay trên trình duyệt mà không cần tải app.',
+          text: 'Dùng ô tìm kiếm hoặc các trang phim mới, thể loại và quốc gia để tìm phim. Nhãn Vietsub, thuyết minh hoặc lồng tiếng được hiển thị khi dữ liệu nguồn có cung cấp.',
         },
       },
       {
@@ -696,11 +688,10 @@ export default function Home() {
   }
   return (
     <div className="min-h-screen kp-cinema-page text-white">
-      <h1 className="sr-only">KhoPhim – Xem Phim Online Vietsub HD Miễn Phí 2026</h1>
+      <h1 className="sr-only">KhoPhim – Tìm phim theo tên, thể loại và quốc gia</h1>
       <SEO
-        title="KhoPhim – Xem Phim Online Vietsub HD Miễn Phí 2026"
-        description="KhoPhim (khophim.org) – Xem 50.000+ phim online vietsub HD miễn phí 2026. Phim lẻ, phim bộ, phim chiếu rạp, phim Hàn, Trung, Âu Mỹ, anime mới nhất. Không quảng cáo, không cần đăng ký. Xem ngay!"
-        keywords="khophim, kho phim, khophim.org, xem phim khophim, kho phim, khophim, xem phim online miễn phí, phim vietsub HD, phim hay 2026, phim mới nhất 2026, phim hành động vietsub, phim tình cảm Hàn Quốc, phim kinh dị, phim hài hước, phim viễn tưởng, phim hoạt hình anime, phim tâm lý, phim phiêu lưu, phim cổ trang Trung Quốc, phim hình sự, phim chiến tranh, phim gia đình, phim bí ẩn, phim Hàn vietsub, phim han quoc, phim Trung vietsub, phim trung quoc, phim lẻ vietsub, phim le, phim bộ vietsub, phim bo, phim chiếu rạp 2026, phim Âu Mỹ Hollywood, phim Nhật Bản anime, phim Thái Lan, phim Việt Nam"
+        title="KhoPhim – Tìm phim theo tên, thể loại và quốc gia"
+        description="Khám phá phim mới, phim lẻ, phim bộ, phim chiếu rạp, phim Hàn, Trung, Âu Mỹ và anime trên KhoPhim. Danh sách và trạng thái tập được cập nhật liên tục."
         canonical="/"
         ogType="website"
         schema={homeSchema}

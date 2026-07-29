@@ -58,7 +58,6 @@ export const seoLandingUrls = [
   { path: '/the-loai/khoa-hoc', changefreq: 'weekly', priority: '0.70' },
   { path: '/the-loai/chinh-kich', changefreq: 'weekly', priority: '0.70' },
 
-  { path: '/dien-vien', changefreq: 'weekly', priority: '0.76' },
   { path: '/blog', changefreq: 'weekly', priority: '0.76' },
   { path: '/about', changefreq: 'monthly', priority: '0.60' },
   { path: '/policy', changefreq: 'monthly', priority: '0.50' },

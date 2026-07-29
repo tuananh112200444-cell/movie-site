@@ -59,8 +59,8 @@ const FAQ = [
     a: 'Phim cổ trang Trung Quốc nổi tiếng với dàn mỹ nam visual cực phẩm. KhoPhim có kho phim cổ trang Trung Quốc khổng lồ: Trần Tình Lệnh, Hữu Phỉ, Trường An Như Cố, và hàng trăm bộ khác.',
   },
   {
-    q: 'Xem phim mỹ nam miễn phí ở đâu tốt nhất?',
-    a: 'KhoPhim Mỹ Nam là điểm đến lý tưởng để xem phim có diễn viên nam đẹp trai miễn phí. Không quảng cáo phiền phức, vietsub HD, cập nhật liên tục các phim Hàn, Trung, Thái hot nhất.',
+    q: 'Làm sao tìm phim trong mục Mỹ Nam?',
+    a: 'Dùng trang Mỹ Nam để lọc các phim được tổng hợp theo diễn viên và chủ đề từ Hàn Quốc, Trung Quốc, Thái Lan cùng các quốc gia khác.',
   },
   {
     q: 'Phim boy love (BL) có đầy đủ không?',

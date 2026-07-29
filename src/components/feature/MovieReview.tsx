@@ -62,7 +62,7 @@ export default function MovieReviewSection({ slug, movieName, originName, year, 
     },
     mainEntityOfPage: {
       '@type': 'WebPage',
-      '@id': `https://khophim.org/blog/review-${slug}`,
+      '@id': `https://khophim.org/phim/${slug}`,
     },
     inLanguage: 'vi',
     keywords: [
@@ -75,28 +75,6 @@ export default function MovieReviewSection({ slug, movieName, originName, year, 
     ].join(', '),
   };
 
-  const reviewSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Review',
-    name: `Review phim ${movieName}`,
-    reviewBody: review.content.slice(0, 500),
-    reviewRating: {
-      '@type': 'Rating',
-      ratingValue: '8',
-      bestRating: '10',
-      worstRating: '1',
-    },
-    author: { '@type': 'Organization', name: 'KhoPhim' },
-    itemReviewed: {
-      '@type': 'Movie',
-      name: movieName,
-      ...(originName ? { alternateName: originName } : {}),
-      ...(year ? { datePublished: String(year) } : {}),
-    },
-    datePublished: review.updatedAt,
-    publisher: { '@type': 'Organization', name: 'KhoPhim' },
-  };
-
   return (
     <>
       {/* Schema JSON-LD — Google đọc được dù JS chạy sau */}
@@ -104,11 +82,6 @@ export default function MovieReviewSection({ slug, movieName, originName, year, 
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
       />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(reviewSchema) }}
-      />
-
       <article
         className="mt-6 rounded-2xl border border-white/[0.06] bg-[#0d0f18] p-5 md:p-7"
         aria-label={`Review phim ${movieName}`}
@@ -131,16 +104,6 @@ export default function MovieReviewSection({ slug, movieName, originName, year, 
                 Cập nhật {new Date(review.updatedAt).toLocaleDateString('vi-VN')}
               </time>
             </p>
-          </div>
-          {/* Rating stars */}
-          <div className="flex items-center gap-1.5 flex-shrink-0" itemScope itemType="https://schema.org/Rating">
-            <div className="flex gap-0.5">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <i key={star} className="ri-star-fill text-amber-400 text-sm" />
-              ))}
-            </div>
-            <span className="text-amber-400/70 text-xs font-medium" itemProp="ratingValue">8</span>
-            <span className="text-white/20 text-xs">/10</span>
           </div>
         </div>
 

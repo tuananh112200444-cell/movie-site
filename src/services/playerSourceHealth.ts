@@ -1,6 +1,6 @@
 const BAD_SOURCE_HOSTS_KEY = 'khophim.bad-source-hosts.v1';
 const SOURCE_HEALTH_LAST_FETCH_KEY = 'khophim.source-health.last-fetch.v1';
-const SOURCE_HEALTH_FETCH_TTL_MS = 10 * 60 * 1000;
+const SOURCE_HEALTH_FETCH_TTL_MS = 5 * 60 * 1000;
 const SOURCE_HEALTH_TIMEOUT_MS = 3500;
 const SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000;
 export const SOURCE_HEALTH_UPDATED_EVENT = 'kp:source-health-updated';
@@ -17,6 +17,11 @@ type SourceHealthHost = {
 type SourceHealthResponse = {
   ok?: boolean;
   bad_hosts?: SourceHealthHost[];
+  cluster_outages?: Array<{
+    cluster?: string;
+    affected_hosts?: number;
+    critical?: number;
+  }>;
 };
 
 function canUseBrowserStorage(): boolean {
@@ -85,6 +90,11 @@ export async function warmPlayerSourceHealth(): Promise<void> {
       map[host] = now;
       // Keep the penalty scoped to the exact host. One failing CDN shard must
       // not demote every source from the same provider.
+    }
+    for (const item of payload.cluster_outages ?? []) {
+      const cluster = normalizeHost(item.cluster);
+      if (!cluster || Number(item.affected_hosts || 0) < 3 || Number(item.critical || 0) < 12) continue;
+      map[`cluster:${cluster}`] = now;
     }
     writeJsonMap(BAD_SOURCE_HOSTS_KEY, map);
     window.localStorage.setItem(SOURCE_HEALTH_LAST_FETCH_KEY, String(now));
