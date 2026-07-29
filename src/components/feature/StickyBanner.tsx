@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase';
 
 const BANNER_URL = 'https://winaz.it.com/?utm_source=Khophim&utm_medium=facebook&utm_campaign=booking';
 const BANNER_IMAGE = `https://wsrv.nl/?url=${encodeURIComponent('https://khophim.org/banners/winaz-top-20260722.gif?v=20260722')}&w=728&q=76&output=webp&we`;
-const DISMISSED_KEY = 'kp_sticky_banner_dismissed';
 function trackBannerClick(pagePath: string) {
   const payload = {
     url: BANNER_URL,
@@ -57,21 +56,12 @@ export default function StickyBanner() {
   const location = useLocation();
   const [bannerReady, setBannerReady] = useState(false);
   const [visible, setVisible] = useState(true);
-  const [dismissed, setDismissed] = useState(() => {
-    try {
-      return sessionStorage.getItem(DISMISSED_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
+
   useEffect(() => {
-    if (dismissed) return;
     setVisible(true);
-  }, [location.pathname, dismissed]);
+  }, [location.pathname]);
 
   useEffect(() => {
-    if (dismissed) return undefined;
-
     // Keep the banner's space and
     // call-to-action visible immediately, but let the hero/LCP image use the
     // constrained mobile connection first.
@@ -86,23 +76,17 @@ export default function StickyBanner() {
       window.removeEventListener('load', schedule);
       window.clearTimeout(timer);
     };
-  }, [dismissed]);
+  }, []);
 
   const handleClose = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setVisible(false);
-    setDismissed(true);
-    try {
-      sessionStorage.setItem(DISMISSED_KEY, '1');
-    } catch { /* ignore */ }
   };
 
   const handleBannerClick = () => {
     trackBannerClick(location.pathname);
   };
-
-  if (dismissed) return null;
 
   return (
     <div
