@@ -137,7 +137,7 @@ export default function CountryHeroBanner({ config, page }: Props) {
               </span>
               <span className="hidden sm:flex items-center gap-1 text-[10px] sm:text-xs text-white/50 bg-white/[0.05] border border-white/[0.08] px-2 py-1 sm:px-3 sm:py-1.5 rounded-full">
                 <i className="ri-advertisement-line text-red-400" />
-                Không quảng cáo
+                Dữ liệu cập nhật
               </span>
             </div>
           </div>

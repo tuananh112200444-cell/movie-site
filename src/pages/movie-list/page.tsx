@@ -18,21 +18,21 @@ interface MovieListPageProps {
 }
 
 const COUNTRY_META: Record<string, { title: string; keywords: string; path: string; desc: string }> = {
-  'han-quoc':   { title: 'Phim Hàn Quốc',  path: '/phim-han-quoc',   keywords: 'phim Hàn, phim han quoc, phim Hàn Quốc, drama Hàn, phim Hàn vietsub, phim han quoc vietsub, phim Hàn hay', desc: 'Xem 12.000+ phim Hàn Quốc vietsub HD miễn phí tại KhoPhim 2026. Kho drama Hàn lớn nhất: romance, hành động, cổ trang, kinh dị. Cập nhật tập mới nhanh nhất, không quảng cáo!' },
-  'trung-quoc': { title: 'Phim Trung Quốc', path: '/phim-trung-quoc', keywords: 'phim Trung, phim trung quoc, phim Trung Quốc, phim cổ trang, tien hiep, tiên hiệp, phim Trung vietsub', desc: 'Xem 20.000+ phim Trung Quốc vietsub HD miễn phí tại KhoPhim 2026. Cổ trang hoàng cung, tiên hiệp tu tiên, ngôn tình hiện đại. Cập nhật liên tục, không quảng cáo, xem ngay!' },
-  'thai-lan':   { title: 'Phim Thái Lan',   path: '/phim-thai-lan',   keywords: 'phim Thái, phim thai lan, phim Thái Lan, phim BL Thái, lakorn, phim thai lan vietsub', desc: 'Xem 3.000+ phim Thái Lan vietsub HD miễn phí tại KhoPhim 2026. Lakorn tình cảm, BL drama, phim hành động Thái. Cập nhật hàng ngày, không quảng cáo, xem ngay!' },
-  'au-my':      { title: 'Phim Âu Mỹ',      path: '/phim-au-my',      keywords: 'phim Mỹ, phim au my, phim Âu Mỹ, phim Hollywood, phim Marvel, phim DC vietsub', desc: 'Xem 8.000+ phim Âu Mỹ vietsub HD miễn phí tại KhoPhim 2026. Bom tấn Hollywood, Marvel, DC, series Netflix HBO mới nhất. Cập nhật nhanh sau ra rạp, không quảng cáo!' },
-  'nhat-ban':   { title: 'Phim Nhật Bản',   path: '/phim-nhat-ban',   keywords: 'anime, phim Nhật, phim nhat ban, phim Nhật Bản, anime vietsub, j-drama, phim nhat hay', desc: 'Xem 6.000+ anime và phim Nhật Bản vietsub HD miễn phí tại KhoPhim 2026. Anime mùa mới, j-drama, điện ảnh Nhật. Cập nhật hàng tuần, không quảng cáo, xem ngay!' },
-  'viet-nam':   { title: 'Phim Việt Nam',   path: '/phim-viet-nam',   keywords: 'phim Việt, phim viet nam, phim Việt Nam, phim Việt hay, phim chieu rap Viet, phim bo Viet', desc: 'Xem 2.000+ phim Việt Nam HD miễn phí tại KhoPhim 2026. Phim chiếu rạp bom tấn, phim bộ truyền hình, phim hài. Cập nhật hàng ngày, không quảng cáo, xem ngay!' },
+  'han-quoc':   { title: 'Phim Hàn Quốc',  path: '/phim-han-quoc',   keywords: 'phim Hàn, phim han quoc, phim Hàn Quốc, drama Hàn, phim Hàn vietsub, phim han quoc vietsub, phim Hàn hay', desc: 'Khám phá phim Hàn Quốc Vietsub HD: drama tình cảm, hành động, cổ trang, hài hước và series đang cập nhật trên KhoPhim.' },
+  'trung-quoc': { title: 'Phim Trung Quốc', path: '/phim-trung-quoc', keywords: 'phim Trung, phim trung quoc, phim Trung Quốc, phim cổ trang, tien hiep, tiên hiệp, phim Trung vietsub', desc: 'Khám phá phim Trung Quốc Vietsub HD: cổ trang, tiên hiệp, ngôn tình, hành động và phim bộ mới cập nhật trên KhoPhim.' },
+  'thai-lan':   { title: 'Phim Thái Lan',   path: '/phim-thai-lan',   keywords: 'phim Thái, phim thai lan, phim Thái Lan, phim BL Thái, lakorn, phim thai lan vietsub', desc: 'Khám phá phim Thái Lan Vietsub HD: lakorn, BL, tình cảm, hài hước và phim bộ Thái mới cập nhật trên KhoPhim.' },
+  'au-my':      { title: 'Phim Âu Mỹ',      path: '/phim-au-my',      keywords: 'phim Mỹ, phim au my, phim Âu Mỹ, phim Hollywood, phim hành động Âu Mỹ, phim khoa học viễn tưởng', desc: 'Khám phá phim Âu Mỹ Vietsub HD: Hollywood, hành động, viễn tưởng, kinh dị, chính kịch và phim chiếu rạp mới trên KhoPhim.' },
+  'nhat-ban':   { title: 'Phim Nhật Bản',   path: '/phim-nhat-ban',   keywords: 'anime, phim Nhật, phim nhat ban, phim Nhật Bản, anime vietsub, j-drama, phim nhat hay', desc: 'Khám phá phim Nhật Bản và anime Vietsub HD: anime mùa mới, live action, J-drama và phim điện ảnh Nhật trên KhoPhim.' },
+  'viet-nam':   { title: 'Phim Việt Nam',   path: '/phim-viet-nam',   keywords: 'phim Việt, phim viet nam, phim Việt Nam, phim Việt hay, phim chieu rap Viet, phim bo Viet', desc: 'Khám phá phim Việt Nam HD: phim chiếu rạp, phim bộ truyền hình, hài, tình cảm và hành động mới cập nhật trên KhoPhim.' },
 };
 
 const TYPE_META: Record<string, { keywords: string; desc: string }> = {
-  'phim-le':        { keywords: 'phim lẻ, phim le, phim lẻ vietsub, phim le vietsub, phim điện ảnh, phim lẻ hay, phim le hay, phim lẻ 2026', desc: 'Xem 10.000+ phim lẻ vietsub HD miễn phí tại KhoPhim 2026. Phim điện ảnh hay nhất từ Hollywood, Hàn, Trung, Việt. Cập nhật hàng ngày, không quảng cáo, xem ngay!' },
-  'phim-bo':        { keywords: 'phim bộ, phim bo, phim bộ vietsub, phim bo vietsub, phim series, phim bộ hay, phim bo hay, phim bộ 2026', desc: 'Xem 15.000+ phim bộ vietsub HD miễn phí tại KhoPhim 2026. Series Hàn, Trung, Âu Mỹ, Việt Nam. Cập nhật tập mới nhanh nhất, không quảng cáo, xem ngay!' },
+  'phim-le':        { keywords: 'phim lẻ, phim le, phim lẻ vietsub, phim le vietsub, phim điện ảnh, phim lẻ hay, phim le hay, phim lẻ 2026', desc: 'Danh sách phim lẻ Vietsub HD gồm hành động, tình cảm, kinh dị, hài hước, viễn tưởng và phim điện ảnh mới cập nhật trên KhoPhim.' },
+  'phim-bo':        { keywords: 'phim bộ, phim bo, phim bộ vietsub, phim bo vietsub, phim series, phim bộ hay, phim bo hay, phim bộ 2026', desc: 'Danh sách phim bộ Vietsub HD và series Hàn Quốc, Trung Quốc, Âu Mỹ, Thái Lan đang cập nhật tập mới trên KhoPhim.' },
   'phim-sap-chieu': { keywords: 'phim sắp chiếu, phim sap chieu, phim sắp ra mắt, trailer phim, phim hot 2026', desc: 'Danh sách phim sắp chiếu 2026 hot nhất tại KhoPhim. Trailer chính thức, lịch ra mắt, dàn diễn viên bom tấn. Cập nhật sớm nhất – theo dõi để không bỏ lỡ!' },
   'tv-shows':       { keywords: 'TV shows, TV shows vietsub, series truyền hình, reality show, Netflix HBO', desc: 'Xem 5.000+ TV shows vietsub HD miễn phí tại KhoPhim 2026. Series Netflix, HBO, Disney+, reality show. Cập nhật mỗi ngày, không quảng cáo, xem ngay!' },
   'hoat-hinh':      { keywords: 'hoạt hình, hoat hinh, anime, anime vietsub, cartoon, hoat hinh hay, anime mùa mới 2026', desc: 'Xem 8.000+ hoạt hình & anime vietsub HD miễn phí tại KhoPhim 2026. Anime mùa mới, cartoon Disney Pixar. Cập nhật hàng tuần, không quảng cáo, xem ngay!' },
-  'phim-chieu-rap': { keywords: 'phim chiếu rạp, phim chieu rap, phim chiếu rạp 2026, phim chieu rap 2026, phim rạp, blockbuster, phim rạp hay', desc: 'Xem 3.000+ phim chiếu rạp vietsub HD miễn phí tại KhoPhim 2026. Blockbuster Hollywood, Hàn, Việt mới nhất. Cập nhật nhanh sau ra rạp, không quảng cáo!' },
+  'phim-chieu-rap': { keywords: 'phim chiếu rạp, phim chieu rap, phim chiếu rạp 2026, phim chieu rap 2026, phim rạp, blockbuster, phim rạp hay', desc: 'Danh sách phim chiếu rạp Vietsub HD gồm bom tấn Hollywood, phim rạp Hàn Quốc, Trung Quốc, Việt Nam và hoạt hình mới cập nhật.' },
 };
 
 const COUNTRY_FAQ: Record<string, Array<{ q: string; a: string }>> = {
@@ -209,15 +209,15 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
   const countryMeta = countryFilter ? COUNTRY_META[countryFilter] : undefined;
   const typeMeta    = TYPE_META[type];
   const seoTitle    = countryMeta
-    ? `${countryMeta.title} 2026 – Vietsub HD Miễn Phí | KhoPhim`
-    : type === 'phim-le'        ? 'Phim Lẻ 2026 – Vietsub HD Miễn Phí | KhoPhim'
-    : type === 'phim-bo'        ? 'Phim Bộ 2026 – Vietsub HD Miễn Phí | KhoPhim'
-    : type === 'phim-chieu-rap' ? 'Phim Chiếu Rạp 2026 – Vietsub HD Miễn Phí | KhoPhim'
-    : type === 'hoat-hinh'      ? 'Hoạt Hình & Anime 2026 – Vietsub HD Miễn Phí | KhoPhim'
-    : type === 'tv-shows'       ? 'TV Shows 2026 – Vietsub HD Miễn Phí | KhoPhim'
+    ? `${countryMeta.title} Vietsub HD - Phim Mới Cập Nhật | KhoPhim`
+    : type === 'phim-le'        ? 'Phim Lẻ Vietsub HD - Phim Điện Ảnh Mới | KhoPhim'
+    : type === 'phim-bo'        ? 'Phim Bộ Vietsub HD - Series Mới Cập Nhật | KhoPhim'
+    : type === 'phim-chieu-rap' ? 'Phim Chiếu Rạp Vietsub HD - Phim Rạp Mới | KhoPhim'
+    : type === 'hoat-hinh'      ? 'Hoạt Hình & Anime Vietsub HD Mới Cập Nhật | KhoPhim'
+    : type === 'tv-shows'       ? 'TV Shows Vietsub HD - Show Mới Cập Nhật | KhoPhim'
     : type === 'phim-sap-chieu' ? 'Phim Sắp Chiếu 2026 – Trailer & Lịch Chiếu | KhoPhim'
-    : `${title} 2026 – Vietsub HD Miễn Phí | KhoPhim`;
-  const seoDesc     = countryMeta?.desc ?? typeMeta?.desc ?? `Xem ${title} vietsub HD miễn phí tại KhoPhim 2026. Kho phim lớn nhất Việt Nam, cập nhật hàng ngày, không quảng cáo, không cần đăng ký. Xem ngay!`;
+    : `${title} Vietsub HD - Phim Mới Cập Nhật | KhoPhim`;
+  const seoDesc     = countryMeta?.desc ?? typeMeta?.desc ?? `Khám phá ${title} Vietsub HD và danh sách phim mới cập nhật trên KhoPhim.`;
   const seoKeywords = countryMeta?.keywords ?? typeMeta?.keywords ?? `${title} vietsub, xem phim online miễn phí, phim HD`;
   const TYPE_PATH: Record<string, string> = {
     'phim-le': '/phim-le', 'phim-bo': '/phim-bo', 'phim-sap-chieu': '/phim-sap-chieu',
@@ -242,12 +242,8 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
     if (movies.length > 0) {
       schemas.push({ '@context': 'https://schema.org', '@type': 'ItemList', name: `${countryMeta?.title ?? title} – Danh Sách Phim`, url: `${SITE_URL}${basePath}`, numberOfItems: movies.length, itemListElement: movies.slice(0, 10).map((m, i) => ({ '@type': 'ListItem', position: (page - 1) * PAGE_SIZE + i + 1, url: `${SITE_URL}/phim/${m.slug}`, name: m.name, image: m.thumb_url ? `https://img.ophim.live/uploads/movies/${m.thumb_url}` : undefined })) });
     }
-    const faqItems = countryFilter ? COUNTRY_FAQ[countryFilter] : TYPE_FAQ[type];
-    if (faqItems && faqItems.length > 0) {
-      schemas.push({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqItems.map(({ q, a }) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) });
-    }
     return schemas;
-  }, [countryMeta, title, basePath, seoDesc, movies, page, countryFilter, type]);
+  }, [countryMeta, title, basePath, seoDesc, movies, page]);
 
   const seoKey = countryFilter ?? type;
   const uiMeta = CATEGORY_META_UI[seoKey] ?? DEFAULT_UI;

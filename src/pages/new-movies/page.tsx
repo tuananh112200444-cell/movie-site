@@ -150,7 +150,7 @@ function buildNewMoviesSchema(pageLabel: string, basePath: string) {
         name: isUpdatePage ? 'Phim mới cập nhật hôm nay xem ở đâu miễn phí?' : 'Phim mới nhất hôm nay xem ở đâu miễn phí?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: `KhoPhim (khophim.org) cập nhật phim mới hàng ngày. Trang ${pageLabel} tổng hợp phim từ tất cả thể loại, giúp bạn không bỏ lỡ phim vừa ra mắt hoặc vừa có tập mới. Miễn phí, vietsub HD, không quảng cáo.`,
+          text: `Trang ${pageLabel} tổng hợp phim vừa được thêm hoặc thay đổi dữ liệu tập, nguồn phát và thông tin phim trên KhoPhim.`,
         },
       },
       {
@@ -186,7 +186,7 @@ const FILTERS = [
 type FilterKey = typeof FILTERS[number]['key'];
 
 const STATS = [
-  { icon: 'ri-film-line', value: '50,000+', label: 'Bộ phim' },
+  { icon: 'ri-film-line', value: 'Nhiều', label: 'Danh mục phim' },
   { icon: 'ri-refresh-line', value: 'Hàng ngày', label: 'Cập nhật' },
   { icon: 'ri-hd-line', value: 'HD / 4K', label: 'Chất lượng' },
   { icon: 'ri-global-line', value: '10+', label: 'Quốc gia' },
@@ -214,8 +214,8 @@ export default function NewMoviesPage() {
   const isUpdatePage = basePath === '/phim-moi-cap-nhat';
   const pageLabel = isUpdatePage ? 'Phim Mới Cập Nhật' : 'Phim Mới Nhất';
   const pageDescription = isUpdatePage
-    ? 'Tổng hợp phim vừa cập nhật tập hoặc nguồn phát mới từ tất cả thể loại · Vietsub HD miễn phí · Không quảng cáo'
-    : 'Tổng hợp phim mới ra mắt và vừa cập nhật từ tất cả thể loại · Vietsub HD miễn phí · Không quảng cáo';
+    ? 'Tổng hợp phim vừa cập nhật tập, nguồn phát hoặc thông tin từ nhiều thể loại'
+    : 'Tổng hợp phim mới được thêm và phim vừa cập nhật từ nhiều thể loại';
   const pageSchema = useMemo(() => buildNewMoviesSchema(pageLabel, basePath), [pageLabel, basePath]);
 
   const handleSetPage = useCallback((p: number) => {
@@ -338,7 +338,7 @@ export default function NewMoviesPage() {
     <div className="min-h-screen kp-cinema-page text-white">
       <SEO
         title={`${pageLabel} 2026 – Vietsub HD Miễn Phí | KhoPhim`}
-        description={`${pageDescription}. 50.000+ bộ phim, không cần đăng ký.`}
+        description={`${pageDescription} trên KhoPhim.`}
         keywords="phim mới nhất 2026, phim mới cập nhật hôm nay, xem phim mới online miễn phí, phim mới vietsub hôm nay, phim mới nhất hôm nay, phim mới cập nhật 2026, xem phim mới miễn phí HD, phim mới ra 2026, phim hot 2026, phim hay mới nhất"
         canonical={canonicalUrl}
         prev={prevPage}
@@ -549,7 +549,7 @@ export default function NewMoviesPage() {
                   <h2 className="text-base font-bold text-white/80 mb-4">Tại Sao Chọn KhoPhim?</h2>
                   {[
                     { icon: 'ri-refresh-line', title: 'Cập nhật hàng ngày', desc: 'Phim mới nhất từ tất cả thể loại và quốc gia' },
-                    { icon: 'ri-hd-line', title: 'Chất lượng HD / 4K', desc: 'Vietsub chuẩn, không quảng cáo, không giới hạn' },
+                    { icon: 'ri-hd-line', title: 'Thông tin chất lượng', desc: 'Hiển thị theo dữ liệu của từng nguồn phim' },
                     { icon: 'ri-global-line', title: '10+ quốc gia', desc: 'Hàn, Trung, Âu Mỹ, Nhật, Thái, Việt Nam...' },
                     { icon: 'ri-shield-check-line', title: 'Hoàn toàn miễn phí', desc: 'Không cần đăng ký, không cần tài khoản' },
                   ].map((f) => (
@@ -571,7 +571,7 @@ export default function NewMoviesPage() {
                     {[
                       {
                         q: 'Phim mới nhất hôm nay xem ở đâu?',
-                        a: 'KhoPhim (khophim.org) cập nhật phim mới nhất hàng ngày. Trang Phim Mới Nhất tổng hợp toàn bộ phim vừa được thêm mới từ tất cả thể loại, giúp bạn không bỏ lỡ bộ phim nào. Miễn phí, vietsub HD, không quảng cáo.'
+                        a: 'Trang Phim Mới Nhất tổng hợp các phim vừa được thêm hoặc cập nhật trong dữ liệu KhoPhim và cho phép lọc theo loại phim.'
                       },
                       {
                         q: 'Phim mới 2026 vietsub xem ở đâu miễn phí?',

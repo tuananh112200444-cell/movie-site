@@ -55,8 +55,8 @@ const GENRE_TAGS = [
 
 const FAQ = [
   {
-    q: 'Xem anime vietsub miễn phí ở đâu tốt nhất?',
-    a: 'KhoPhim Anime là điểm đến lý tưởng để xem anime vietsub HD miễn phí. Kho phim anime khổng lồ với hàng nghìn bộ anime mùa mới được cập nhật nhanh chóng, không quảng cáo phiền phức.',
+    q: 'Làm sao tìm anime Vietsub trên KhoPhim?',
+    a: 'Dùng trang Anime để lọc theo mùa, trạng thái, năm phát hành và thời gian cập nhật. Nhãn Vietsub được hiển thị theo dữ liệu của từng phim.',
   },
   {
     q: 'Anime mùa mới được cập nhật nhanh không?',
@@ -380,7 +380,7 @@ export default function AnimePage() {
       '@type': 'CollectionPage',
       name: seoTitle,
       url: `${SITE_URL}${canonicalPath}`,
-      description: 'Xem anime vietsub HD miễn phí tại KhoPhim Anime. Kho anime Nhật Bản khổng lồ: shounen, shoujo, isekai, mecha, slice of life. Cập nhật mùa mới hàng tuần, không quảng cáo.',
+      description: 'Khám phá anime Vietsub HD trên KhoPhim: shounen, shoujo, isekai, mecha, slice of life và anime mùa mới đang cập nhật.',
       inLanguage: 'vi',
       isPartOf: { '@type': 'WebSite', name: 'KhoPhim Anime', url: SITE_URL },
     },
@@ -412,7 +412,7 @@ export default function AnimePage() {
     <div className="min-h-screen text-white" style={{ backgroundColor: '#0a0614' }}>
       <SEO
         title={seoTitle}
-        description="Xem anime vietsub HD miễn phí tại KhoPhim Anime. Kho anime Nhật Bản khổng lồ: shounen, shoujo, isekai, mecha, slice of life. Cập nhật anime mùa mới hàng tuần, không quảng cáo!"
+        description="Khám phá anime Vietsub HD trên KhoPhim: shounen, shoujo, isekai, mecha, slice of life và anime mùa mới đang cập nhật."
         keywords="anime vietsub, xem anime, anime Nhat Ban, anime mien phi, anime HD, anime shounen, anime isekai, anime moi, anime hoat hinh, kho anime"
         canonical={canonicalUrl}
         schema={schema}
@@ -497,7 +497,7 @@ export default function AnimePage() {
                 Anime <span style={{ color: '#c4b5fd' }}>Vietsub</span> HD Miễn Phí
               </h1>
               <p className="text-white/45 text-sm max-w-2xl leading-relaxed line-clamp-2">
-                Khám phá thế giới anime Nhật Bản tại KhoPhim Anime. Shounen, shoujo, isekai, mecha, slice of life — tất cả đều vietsub HD, không quảng cáo, cập nhật mùa mới hàng tuần.
+                Khám phá anime Nhật Bản theo thể loại, mùa phát hành, trạng thái tập và thời gian cập nhật trên KhoPhim.
               </p>
             </div>
 

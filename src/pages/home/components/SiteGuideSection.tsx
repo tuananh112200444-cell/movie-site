@@ -132,23 +132,20 @@ export default function SiteGuideSection() {
       {/* Bài viết SEO dài */}
       <div className="bg-[#0f1118] border border-white/5 rounded-2xl p-7 mb-6">
         <h2 className="text-lg font-bold text-white mb-4">
-          KhoPhim – Trang Xem Phim Online Miễn Phí Tốt Nhất Việt Nam 2026
+          KhoPhim – Tìm phim theo nhu cầu và dữ liệu cập nhật
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-sm text-white/55 leading-relaxed">
           <div className="space-y-4">
             <p>
               <strong className="text-white/80">KhoPhim</strong> (địa chỉ:{' '}
               <a href="https://khophim.org" className="text-red-400 hover:underline" rel="noopener noreferrer nofollow">khophim.org</a>)
-              là nền tảng xem phim trực tuyến miễn phí hàng đầu Việt Nam, cung cấp kho phim khổng lồ với hơn{' '}
-              <strong className="text-white/70">50,000 bộ phim và series</strong> từ khắp nơi trên thế giới.
-              Được thành lập với mục tiêu mang đến trải nghiệm xem phim tốt nhất, KhoPhim không ngừng cập nhật
-              phim mới hàng ngày với chất lượng HD và Full HD.
+              là website giúp người xem tìm phim theo loại, quốc gia, thể loại và thời gian cập nhật.
+              Thông tin chất lượng, ngôn ngữ và trạng thái tập được hiển thị theo dữ liệu hiện có của từng phim.
             </p>
             <p>
               Điểm nổi bật của KhoPhim so với các trang xem phim khác là{' '}
-              <strong className="text-white/70">hoàn toàn miễn phí</strong>, không yêu cầu đăng ký tài khoản,
-              không có quảng cáo phiền phức làm gián đoạn trải nghiệm xem phim. Giao diện thân thiện, tốc độ
-              tải nhanh và tương thích hoàn toàn trên mọi thiết bị từ máy tính đến điện thoại.
+              <strong className="text-white/70">không bắt buộc đăng ký tài khoản</strong> để duyệt danh sách phim.
+              Giao diện hỗ trợ máy tính, điện thoại và máy tính bảng.
             </p>
             <p>
               Kho phim của KhoPhim bao gồm đầy đủ các thể loại:{' '}

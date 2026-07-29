@@ -1,23 +1,23 @@
 import { Link } from 'react-router-dom';
 
 const genres = [
-  { label: 'Phim Hành Động', slug: 'hanh-dong', desc: 'Xem phim hành động vietsub HD mới nhất – bom tấn, chiến tranh, võ thuật đỉnh cao' },
-  { label: 'Phim Tình Cảm', slug: 'tinh-cam', desc: 'Phim tình cảm lãng mạn vietsub – romance Hàn, Trung, Âu Mỹ hay nhất 2026' },
-  { label: 'Phim Kinh Dị', slug: 'kinh-di', desc: 'Xem phim kinh dị vietsub HD – horror, thriller, ma quỷ rùng rợn nhất' },
-  { label: 'Phim Hài Hước', slug: 'hai-huoc', desc: 'Phim hài hước vietsub – comedy Hàn, Mỹ, Trung vui nhộn giải trí' },
-  { label: 'Phim Viễn Tưởng', slug: 'vien-tuong', desc: 'Phim viễn tưởng sci-fi HD – Marvel, DC, khoa học viễn tưởng đỉnh cao' },
-  { label: 'Phim Hoạt Hình', slug: 'hoat-hinh', desc: 'Xem hoạt hình anime vietsub – Nhật Bản, Disney, Pixar mới nhất' },
-  { label: 'Phim Tâm Lý', slug: 'tam-ly', desc: 'Phim tâm lý drama vietsub – câu chuyện sâu sắc, cảm xúc chân thực' },
-  { label: 'Phim Phiêu Lưu', slug: 'phieu-luu', desc: 'Phim phiêu lưu mạo hiểm vietsub HD – khám phá, hành trình kỳ thú' },
-  { label: 'Phim Cổ Trang', slug: 'co-trang', desc: 'Phim cổ trang Trung Quốc vietsub – tiên hiệp, kiếm hiệp, cung đình hay nhất' },
-  { label: 'Phim Hình Sự', slug: 'hinh-su', desc: 'Phim hình sự trinh thám vietsub – crime, detective, thriller hấp dẫn' },
-  { label: 'Phim Chiến Tranh', slug: 'chien-tranh', desc: 'Phim chiến tranh lịch sử vietsub HD – bom tấn lịch sử đỉnh cao' },
-  { label: 'Phim Gia Đình', slug: 'gia-dinh', desc: 'Phim gia đình vietsub – phim hay cho cả nhà, ấm áp và ý nghĩa' },
-  { label: 'Phim Việt Nam', slug: 'phim-viet-nam', desc: 'Phim Việt Nam vietsub HD – phim chiếu rạp, phim bộ, phim hài Việt hay nhất', to: '/phim-viet-nam' },
-  { label: 'Phim Bí Ẩn', slug: 'bi-an', desc: 'Phim bí ẩn mystery vietsub – câu chuyện huyền bí, twist bất ngờ' },
-  { label: 'Phim Thể Thao', slug: 'the-thao', desc: 'Phim thể thao vietsub – bóng đá, bóng rổ, võ thuật truyền cảm hứng' },
-  { label: 'Phim Âm Nhạc', slug: 'am-nhac', desc: 'Phim âm nhạc vietsub – musical, concert, câu chuyện nghệ sĩ hay nhất' },
-  { label: 'Phim Kinh Điển', slug: 'kinh-dien', desc: 'Phim kinh điển mọi thời đại – classic movies vietsub HD chất lượng cao' },
+  { label: 'Phim Hành Động', slug: 'hanh-dong', desc: 'Danh sách phim hành động, chiến đấu và võ thuật.' },
+  { label: 'Phim Tình Cảm', slug: 'tinh-cam', desc: 'Danh sách phim tình cảm và lãng mạn từ nhiều quốc gia.' },
+  { label: 'Phim Kinh Dị', slug: 'kinh-di', desc: 'Danh sách phim kinh dị, giật gân và chủ đề siêu nhiên.' },
+  { label: 'Phim Hài Hước', slug: 'hai-huoc', desc: 'Danh sách phim hài và nội dung giải trí nhẹ nhàng.' },
+  { label: 'Phim Viễn Tưởng', slug: 'vien-tuong', desc: 'Danh sách phim khoa học và thế giới viễn tưởng.' },
+  { label: 'Phim Hoạt Hình', slug: 'hoat-hinh', desc: 'Danh sách phim hoạt hình và anime.' },
+  { label: 'Phim Tâm Lý', slug: 'tam-ly', desc: 'Danh sách phim tâm lý và chính kịch.' },
+  { label: 'Phim Phiêu Lưu', slug: 'phieu-luu', desc: 'Danh sách phim phiêu lưu và hành trình khám phá.' },
+  { label: 'Phim Cổ Trang', slug: 'co-trang', desc: 'Danh sách phim cổ trang, kiếm hiệp và cung đình.' },
+  { label: 'Phim Hình Sự', slug: 'hinh-su', desc: 'Danh sách phim hình sự, tội phạm và điều tra.' },
+  { label: 'Phim Chiến Tranh', slug: 'chien-tranh', desc: 'Danh sách phim chiến tranh và lịch sử.' },
+  { label: 'Phim Gia Đình', slug: 'gia-dinh', desc: 'Danh sách phim có chủ đề gia đình.' },
+  { label: 'Phim Việt Nam', slug: 'phim-viet-nam', desc: 'Danh sách phim điện ảnh và phim bộ Việt Nam.', to: '/phim-viet-nam' },
+  { label: 'Phim Bí Ẩn', slug: 'bi-an', desc: 'Danh sách phim bí ẩn và điều tra.' },
+  { label: 'Phim Thể Thao', slug: 'the-thao', desc: 'Danh sách phim có chủ đề thể thao.' },
+  { label: 'Phim Âm Nhạc', slug: 'am-nhac', desc: 'Danh sách phim âm nhạc và câu chuyện nghệ sĩ.' },
+  { label: 'Phim Kinh Điển', slug: 'kinh-dien', desc: 'Danh sách các phim được xếp vào nhóm kinh điển.' },
 ];
 
 export default function GenreSEOSection() {
@@ -53,11 +53,10 @@ export default function GenreSEOSection() {
         ))}
       </div>
 
-      {/* Hidden SEO text — Google reads this, users don't notice */}
-      <div className="mt-6 text-white/20 text-xs leading-relaxed select-none" aria-hidden="true">
-        <div className="sr-only">KhoPhim – Xem phim online miễn phí vietsub HD</div>
-        <strong>KhoPhim</strong> – Xem phim online miễn phí vietsub HD đầy đủ thể loại: phim hành động, phim tình cảm, phim kinh dị, phim hài hước, phim viễn tưởng, phim hoạt hình, phim tâm lý, phim phiêu lưu, phim cổ trang, phim hình sự, phim chiến tranh, phim gia đình, phim bí ẩn, phim thể thao, phim âm nhạc. Cập nhật phim mới 2026 hàng ngày tại khophim.org.
-      </div>
+      <p className="mt-6 max-w-4xl text-sm leading-relaxed text-white/55">
+        Chọn một thể loại để xem danh sách phim tương ứng. Mỗi trang thể loại có bộ lọc,
+        trạng thái tập và liên kết tới trang thông tin của từng phim.
+      </p>
     </section>
   );
 }

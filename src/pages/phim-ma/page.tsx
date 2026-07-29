@@ -57,7 +57,7 @@ const FAQ = [
   },
   {
     q: 'Xem phim kinh dị miễn phí ở đâu chất lượng cao?',
-    a: 'KhoPhim Ma là điểm đến hàng đầu để xem phim kinh dị vietsub HD miễn phí. Không quảng cáo phiền phức, cập nhật hàng ngày phim ma, phim zombie, phim exorcism từ Hàn, Nhật, Âu Mỹ.',
+    a: 'Dùng trang Phim Ma để duyệt phim kinh dị, tâm linh, zombie và trừ tà từ nhiều quốc gia theo dữ liệu hiện có trên KhoPhim.',
   },
   {
     q: 'Phim zombie hay nhất 2026 là gì?',
@@ -360,7 +360,7 @@ export default function PhimMaPage() {
       '@type': 'CollectionPage',
       name: seoTitle,
       url: `${SITE_URL}${canonicalPath}`,
-      description: 'Xem phim kinh dị, ma, zombie vietsub HD miễn phí tại KhoPhim Ma. Horror Hàn Quốc, Nhật Bản, Âu Mỹ, Thái Lan. Cập nhật hàng ngày, không quảng cáo!',
+      description: 'Khám phá phim kinh dị, phim ma và zombie Vietsub HD từ Hàn Quốc, Nhật Bản, Âu Mỹ và Thái Lan trên KhoPhim.',
       inLanguage: 'vi',
       isPartOf: { '@type': 'WebSite', name: 'KhoPhim Ma', url: SITE_URL },
     },
@@ -392,7 +392,7 @@ export default function PhimMaPage() {
     <div className="min-h-screen text-white" style={{ backgroundColor: BG_COLOR }}>
       <SEO
         title={seoTitle}
-        description="Xem phim kinh dị, ma, zombie vietsub HD miễn phí tại KhoPhim Ma. Horror Hàn Quốc, Nhật Bản (J-Horror), Âu Mỹ, Thái Lan. Cập nhật hàng ngày, không quảng cáo!"
+        description="Khám phá phim kinh dị, phim ma và zombie Vietsub HD từ Hàn Quốc, Nhật Bản, Âu Mỹ và Thái Lan trên KhoPhim."
         keywords="phim kinh di, phim ma, phim zombie, phim horror, phim ma han quoc, phim kinh di nhat ban, J-horror, phim exorcism, phim ma thai lan, xem phim kinh di"
         canonical={canonicalUrl}
         schema={schema}
@@ -477,7 +477,7 @@ export default function PhimMaPage() {
                 Phim <span style={{ color: '#f87171' }}>Kinh Dị</span> - Ma Zombie HD
               </h1>
               <p className="text-white/45 text-sm max-w-2xl leading-relaxed line-clamp-2">
-                Khám phá thế giới phim kinh dị tại KhoPhim Ma. Horror Hàn Quốc rùng rợn, J-Horror Nhật Bản bí ẩn, zombie Âu Mỹ, phim ma Thái Lan — tất cả vietsub HD, không quảng cáo.
+                Khám phá phim kinh dị Hàn Quốc, J-Horror Nhật Bản, zombie Âu Mỹ và phim ma Thái Lan theo dữ liệu hiện có trên KhoPhim.
               </p>
             </div>
 

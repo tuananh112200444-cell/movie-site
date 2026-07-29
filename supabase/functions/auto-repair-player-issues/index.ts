@@ -208,6 +208,35 @@ function summarizeCandidates(events: PlayerErrorEvent[], threshold: number, limi
     .slice(0, limit);
 }
 
+function detectProviderIncidents(events: PlayerErrorEvent[]): Set<'ophim' | 'kkphim'> {
+  const groups = new Map<'ophim' | 'kkphim', {
+    hosts: Set<string>;
+    movies: Set<string>;
+    critical: number;
+  }>();
+  for (const event of events) {
+    const host = String(event.source_host || '').toLowerCase().replace(/^www\./, '');
+    const provider = /opstream|ophim/.test(host)
+      ? 'ophim'
+      : /kkphimplayer|phim1280|phimapi|kkphim/.test(host)
+        ? 'kkphim'
+        : null;
+    if (!provider || !CRITICAL_EVENTS.has(String(event.event_type || ''))) continue;
+    const current = groups.get(provider) ?? {
+      hosts: new Set<string>(),
+      movies: new Set<string>(),
+      critical: 0,
+    };
+    current.hosts.add(host);
+    if (event.movie_slug) current.movies.add(event.movie_slug);
+    current.critical += 1;
+    groups.set(provider, current);
+  }
+  return new Set([...groups.entries()]
+    .filter(([, item]) => item.hosts.size >= 3 && item.movies.size >= 20 && item.critical >= 30)
+    .map(([provider]) => provider));
+}
+
 async function callFunction(
   supabaseUrl: string,
   serviceKey: string,
@@ -354,7 +383,13 @@ serve(async (req) => {
 
   if (eventsError) return json({ success: false, error: eventsError.message }, 500);
 
-  const candidates = summarizeCandidates((eventRows || []) as PlayerErrorEvent[], threshold, limit);
+  const playerEvents = (eventRows || []) as PlayerErrorEvent[];
+  const providerIncidents = detectProviderIncidents(playerEvents);
+  // During a provider-wide CDN incident, failover is handled by the lightweight
+  // source-health circuit breaker. Keep expensive catalogue repair bounded so
+  // hundreds of affected movies cannot create a database/Edge Function storm.
+  const effectiveLimit = providerIncidents.size > 0 ? Math.min(limit, 2) : limit;
+  const candidates = summarizeCandidates(playerEvents, threshold, effectiveLimit);
   const repairKeys = candidates.map((candidate) => `player-repair:${candidate.slug}`);
   const { data: repairCursorRows } = repairKeys.length
     ? await supabase.from('sync_cursors').select('key,updated_at').in('key', repairKeys).abortSignal(AbortSignal.timeout(8_000))
@@ -444,12 +479,15 @@ serve(async (req) => {
       }
     } else if (isOphimLikeMovie(movie)) {
       const primaryProvider = getOphimProvider(movie);
-      calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'sync-ophim-movies', {
-        provider: primaryProvider,
-        slug: getOphimRepairSlug(movie),
-        episodes: '1',
-        limit: 1,
-      }));
+      const primaryProviderIncident = providerIncidents.has(primaryProvider);
+      if (!primaryProviderIncident) {
+        calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'sync-ophim-movies', {
+          provider: primaryProvider,
+          slug: getOphimRepairSlug(movie),
+          episodes: '1',
+          limit: 1,
+        }));
+      }
       // The primary provider can keep publishing the same expired URL. Resolve
       // the same movie through the other configured provider by guarded
       // title/year identity instead of assuming both catalogs share a slug.
@@ -538,6 +576,7 @@ serve(async (req) => {
     dry_run: dryRun,
     since,
     scanned_events: (eventRows || []).length,
+    provider_incidents: [...providerIncidents],
     repaired,
     skipped,
     errors,

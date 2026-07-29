@@ -202,9 +202,18 @@ export default function MovieDetailPage() {
   useEffect(() => {
     if (!isWatchPage) return;
     const handleHealthUpdate = () => setSourceHealthVersion((version) => version + 1);
+    const refreshHealth = () => {
+      if (document.visibilityState === 'visible') void warmPlayerSourceHealth();
+    };
     window.addEventListener(SOURCE_HEALTH_UPDATED_EVENT, handleHealthUpdate);
-    void warmPlayerSourceHealth();
-    return () => window.removeEventListener(SOURCE_HEALTH_UPDATED_EVENT, handleHealthUpdate);
+    document.addEventListener('visibilitychange', refreshHealth);
+    refreshHealth();
+    const refreshTimer = window.setInterval(refreshHealth, 5 * 60 * 1000);
+    return () => {
+      window.clearInterval(refreshTimer);
+      document.removeEventListener('visibilitychange', refreshHealth);
+      window.removeEventListener(SOURCE_HEALTH_UPDATED_EVENT, handleHealthUpdate);
+    };
   }, [isWatchPage, slug]);
 
   // Preserve old shared/resume links that used /phim/:slug?tap=:episode.
