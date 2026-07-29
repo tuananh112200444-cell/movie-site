@@ -178,6 +178,8 @@ export default function LightweightHlsPlayer({
   const suspendedTimeRef = useRef(0);
   const wasPlayingBeforeSuspendRef = useRef(false);
   const networkOfflineRef = useRef(typeof navigator === 'undefined' ? false : navigator.onLine === false);
+  const offlineTimeRef = useRef(0);
+  const wasPlayingBeforeOfflineRef = useRef(false);
   const pseudoFsRef = useRef(false);
   const scrollPositionRef = useRef(0);
 
@@ -241,7 +243,10 @@ export default function LightweightHlsPlayer({
 
   useEffect(() => {
     const onOffline = () => {
+      const video = videoRef.current;
       networkOfflineRef.current = true;
+      offlineTimeRef.current = video?.currentTime || 0;
+      wasPlayingBeforeOfflineRef.current = Boolean(video && !video.paused && !video.ended);
       setIsBuffering(true);
       setErrorMsg('M\u1ea5t k\u1ebft n\u1ed1i m\u1ea1ng, \u0111ang ch\u1edd k\u1ebft n\u1ed1i l\u1ea1i...');
     };
@@ -250,7 +255,28 @@ export default function LightweightHlsPlayer({
       networkOfflineRef.current = false;
       setHasError(false);
       setErrorMsg('');
-      setRetryNonce((value) => value + 1);
+      const video = videoRef.current;
+      const resumeAt = offlineTimeRef.current;
+      if (!video) return;
+      if (resumeAt > 0 && Math.abs(video.currentTime - resumeAt) > 0.5) {
+        video.currentTime = resumeAt;
+      }
+      if (hlsRef.current) {
+        hlsRef.current.startLoad(resumeAt > 0 ? resumeAt : -1);
+      } else if (video.currentSrc || video.src) {
+        let restored = false;
+        const restoreNativePlayback = () => {
+          if (restored) return;
+          restored = true;
+          if (resumeAt > 0 && Number.isFinite(video.duration) && resumeAt < video.duration - 2) {
+            video.currentTime = resumeAt;
+          }
+          if (wasPlayingBeforeOfflineRef.current) void video.play().catch(() => {});
+        };
+        video.addEventListener('loadedmetadata', restoreNativePlayback, { once: true });
+        video.load();
+      }
+      if (hlsRef.current && wasPlayingBeforeOfflineRef.current) void video.play().catch(() => {});
     };
     window.addEventListener('offline', onOffline);
     window.addEventListener('online', onOnline);
