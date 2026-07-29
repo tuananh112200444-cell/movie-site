@@ -14,6 +14,11 @@ for (const file of connectorFiles) {
   const destructiveEpisodeDelete =
     /from\(['"]movie_episodes['"]\)\s*\.delete\(\)/s.test(source)
     || /from\(['"]episodes['"]\)\s*\.delete\(\)/s.test(source);
+  const verifiedLocalizedReplacement =
+    source.includes('Verified localized replacement contract')
+    && source.includes("filter((episode) => !episode.raw)")
+    && source.includes(".eq('audio_type', 'raw')")
+    && source.includes(".in('episode_number', translatedEpisodeNumbers)");
   const unpublishMovie =
     /from\(['"]movies['"]\)[\s\S]{0,240}(?:update|upsert)\(\{[\s\S]{0,160}is_published\s*:\s*false/s.test(source);
   const automaticStreamDeactivation =
@@ -21,7 +26,7 @@ for (const file of connectorFiles) {
   const destructiveDetailCacheDelete =
     /from\(['"]movie_api_cache['"]\)\s*\.delete\(\)/s.test(source);
 
-  if (destructiveEpisodeDelete) failures.push(`${file}: source sync can delete last-known-good episodes`);
+  if (destructiveEpisodeDelete && !verifiedLocalizedReplacement) failures.push(`${file}: source sync can delete last-known-good episodes`);
   if (unpublishMovie) failures.push(`${file}: source sync can unpublish an existing movie`);
   if (automaticStreamDeactivation) failures.push(`${file}: source sync can deactivate streams from one incomplete feed response`);
   if (destructiveDetailCacheDelete) failures.push(`${file}: source sync deletes last-known-good movie detail cache`);

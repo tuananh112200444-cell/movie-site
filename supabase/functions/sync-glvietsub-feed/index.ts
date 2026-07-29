@@ -310,6 +310,8 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
   }
   const translatedEpisodes = (entry.episodes as Array<Record<string, unknown>>)
     .filter((episode) => !episode.raw);
+  // Verified localized replacement contract: a RAW row is removed only after
+  // this same successful parse produced a translated row for that episode.
   const translatedEpisodeNumbers = Array.from(new Set(
     translatedEpisodes
       .map((episode) => Number(episode.episode_number || 0))

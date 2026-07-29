@@ -14,6 +14,8 @@ const searchCronTuning = read('supabase/migrations/20260721164500_reduce_search_
 const indexingCronCleanup = read('supabase/migrations/20260721171000_remove_deprecated_google_indexing_cron.sql');
 const viewerSourceRecovery = read('supabase/migrations/20260722213000_prioritize_viewer_source_recovery.sql');
 const streamHealth = read('supabase/functions/stream-health-check/index.ts');
+const telemetryHotQueue = read('supabase/migrations/20260729134000_probe_viewer_reported_streams_promptly.sql');
+const adminPlayerDiagnostics = read('supabase/functions/admin-player-diagnostics/index.ts');
 const ophimSync = read('supabase/functions/sync-ophim-movies/index.ts');
 const blvietsubSync = read('supabase/functions/sync-blvietsub-feed/index.ts');
 const glvietsubSync = read('supabase/functions/sync-glvietsub-feed/index.ts');
@@ -126,6 +128,24 @@ if (!detailProxy.includes("provider === 'phimapi'") || !detailProxy.includes('pr
 }
 if (!streamHealth.includes('probeStreamRow') || !streamHealth.includes('HTML 404/deleted-video page')) {
   failures.push('stream health does not validate both stored playback URLs and HTML error pages');
+}
+if (
+  !streamHealth.includes(".like('last_error', 'Viewer telemetry:%')") ||
+  !streamHealth.includes('It must outrank merely recent catalogue updates') ||
+  !telemetryHotQueue.includes('streams_viewer_telemetry_hot_queue_idx') ||
+  !telemetryHotQueue.includes('stream-health-hot-every-5-minutes') ||
+  !telemetryHotQueue.includes('queue=hot&limit=80')
+) {
+  failures.push('viewer-reported playback failures are not independently probed by the bounded hot queue');
+}
+if (
+  !adminPlayerDiagnostics.includes('playback_session_id') ||
+  !adminPlayerDiagnostics.includes('successfulSessions') ||
+  !adminPlayerDiagnostics.includes('recoveredSessions') ||
+  !adminPlayerDiagnostics.includes('failedSessions') ||
+  adminPlayerDiagnostics.includes('100 - (criticalCount / events.length)')
+) {
+  failures.push('player health is still measured from noisy event counts instead of final playback-session outcomes');
 }
 if (!viewerSourceRecovery.includes('stream-health-problem-every-15-minutes') || !viewerSourceRecovery.includes('auto-repair-player-issues-every-10-minutes')) {
   failures.push('viewer-facing health and telemetry recovery are not prioritized by cron');
