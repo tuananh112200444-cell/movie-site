@@ -450,6 +450,11 @@ export default function PlayerBox({
   const sourcePageRecoveryKeyRef = useRef<string | null>(null);
   const embedContainerRef = useRef<HTMLDivElement>(null);
   const directVideoRef = useRef<HTMLVideoElement>(null);
+  const logicalEpisodeKey = `${movieSlug}:${episode?.slug || episode?.name || ''}`;
+  const effectiveInitialTime =
+    fallbackEpisodeKeyRef.current === logicalEpisodeKey
+      ? Math.max(Math.max(0, Number(initialTime || 0)), lastPlaybackTimeRef.current)
+      : Math.max(0, Number(initialTime || 0));
 
   const [isEmbedFullscreen, setIsEmbedFullscreen] = useState(false);
   const [isEmbedPseudoFullscreen, setIsEmbedPseudoFullscreen] = useState(false);
@@ -709,7 +714,6 @@ export default function PlayerBox({
    * iframe source in HLS mode (or the inverse) after an automatic server switch.
    */
   useEffect(() => {
-    const logicalEpisodeKey = `${movieSlug}:${episode?.slug || episode?.name || ''}`;
     const sourceIdentity = [
       logicalEpisodeKey,
       activeServer,
@@ -719,6 +723,7 @@ export default function PlayerBox({
 
     if (logicalEpisodeKey !== fallbackEpisodeKeyRef.current) {
       fallbackEpisodeKeyRef.current = logicalEpisodeKey;
+      lastPlaybackTimeRef.current = Math.max(0, Number(initialTime || 0));
       failedSourceKeysRef.current.clear();
     }
 
@@ -732,7 +737,7 @@ export default function PlayerBox({
       setAutoNextCountdown(5);
       setPlayerMode(getPlayerMode(episode));
     }
-  }, [activeServer, episode?.name, episode?.slug, episode?.link_m3u8, episode?.link_embed, movieSlug]);
+  }, [activeServer, episode?.link_m3u8, episode?.link_embed, initialTime, logicalEpisodeKey]);
 
   /* Iframe load timeout fallback */
   useEffect(() => {
@@ -1226,7 +1231,7 @@ export default function PlayerBox({
               key={`${hlsSrc}-${iframeKey}`}
               src={hlsSrc}
               title={movieTitle}
-              initialTime={initialTime}
+              initialTime={effectiveInitialTime}
               onTimeUpdate={(time, duration) => {
                 if (Number.isFinite(time)) lastPlaybackTimeRef.current = Math.max(0, time);
                 onTimeUpdate?.(time, duration);
@@ -1251,6 +1256,7 @@ export default function PlayerBox({
               key={`${directVideoSrc}-${iframeKey}`}
               ref={directVideoRef}
               src={directVideoSrc}
+              data-resume-at={effectiveInitialTime}
               title={movieTitle}
               className="w-full h-full object-contain"
               controls
@@ -1260,12 +1266,15 @@ export default function PlayerBox({
               onError={handleDirectVideoError}
               onLoadedMetadata={(event) => {
                 const video = event.currentTarget;
-                if (initialTime > 0 && Number.isFinite(video.duration) && initialTime < video.duration - 2) {
-                  video.currentTime = initialTime;
+                if (effectiveInitialTime > 0 && Number.isFinite(video.duration) && effectiveInitialTime < video.duration - 2) {
+                  video.currentTime = effectiveInitialTime;
                 }
               }}
               onTimeUpdate={(event) => {
                 const video = event.currentTarget;
+                if (Number.isFinite(video.currentTime)) {
+                  lastPlaybackTimeRef.current = Math.max(0, video.currentTime);
+                }
                 onTimeUpdate?.(video.currentTime, video.duration || 0);
               }}
               onEnded={() => {

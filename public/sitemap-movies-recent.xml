@@ -3,6 +3,1172 @@
   xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
   xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
   <url>
+    <loc>https://khophim.org/phim/choi-chet</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260505-1/90c3e72ff324feea76940eba19edb817.jpg</image:loc>
+      <image:title>Chơi Chết</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260505-1/90c3e72ff324feea76940eba19edb817.jpg</video:thumbnail_loc>
+      <video:title>Trailer Chơi Chết</video:title>
+      <video:description>Một người phụ nữ tỉnh dậy trong tầng hầm với nhiều vết thương, xung quanh là xác chết. Để sống sót, cô giả vờ chết trong khi một nghi lễ rùng rợn diễn ra ở ngôi nhà phía trên.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/Ry9pq-ggBS8</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nguoi-dan-ong-vo-danh</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260505-1/d3ec9487dedf3c5c06dd596634de1e71.jpg</image:loc>
+      <image:title>Người đàn ông Vô Danh</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260505-1/d3ec9487dedf3c5c06dd596634de1e71.jpg</video:thumbnail_loc>
+      <video:title>Trailer Người đàn ông Vô Danh</video:title>
+      <video:description>Louis, một nhà văn người Flemish, quyết định tự cô lập mình ở vùng Côte d’Azur, với hy vọng nơi này sẽ mang lại cho ông nguồn cảm hứng.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/W7x1EJvXHd4</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/avengers-trieu-dai-cua-kang</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/avengers-trieu-dai-cua-kang-thumb.jpg</image:loc>
+      <image:title>Avengers: Triều Đại của Kang</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/avengers-trieu-dai-cua-kang-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Avengers: Triều Đại của Kang</video:title>
+      <video:description>Một bộ phim sắp ra mắt trong Giai đoạn thứ sáu của Vũ trụ Điện ảnh Marvel và là một phần của The Multiverse Saga. Âm mưu không rõ. Avengers: The Kang Dynasty khởi chiếu ngày 2-5-2025</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/3UQN_dgXsHA</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/mong-ho-diep</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/mong-ho-diep-thumb.jpg</image:loc>
+      <image:title>Mộng Hồ Điệp</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ngoi-truong-bi-an</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/ngoi-truong-bi-an-thumb.jpg</image:loc>
+      <image:title>Ngôi Trường Bí Ẩn</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/khong-minh-thich-tiec-tung</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/khong-minh-thich-tiec-tung-thumb.jpg</image:loc>
+      <image:title>Khổng Minh Thích Tiệc Tùng</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/khong-minh-thich-tiec-tung-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Khổng Minh Thích Tiệc Tùng</video:title>
+      <video:description>Quân sư tài ba Tam Quốc, Gia Cát Khổng Minh người đời ai cũng biết đã ra đi tại gò Ngũ Trượng. Nhưng ông một lần nữa tái sinh với thân xác trẻ, ngay giữa lòng phố Shibuya tấp nập của Nhật Bản hiện đại. Ông được những thanh niên trẻ tuổi rủ rê đến câu lạc bộ hiện đại vang vọng tiếng nhạc trên sân khấu. Tại đây ông tình cờ được cô gái Tsukimi Eiko đang nhắm đến làm ca sĩ. Cuộc gặp gỡ tình cờ này đã mở cho ông sang trang mới ở cuộc đời thứ hai. Ông quyết định trở thành quân sư cho cô gái trẻ có ước mơ trở thành ca sĩ.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/SGIv25w2Z08</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/bat-thuong-tai-truong-phep-thuat-phan-3</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/bat-thuong-tai-truong-phep-thuat-phan-3-thumb.jpg</image:loc>
+      <image:title>Bất thường tại trường phép thuật (Phần 3)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nguoi-nhen-khoi-dau-moi</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/nguoi-nhen-khoi-dau-moi-thumb.jpg</image:loc>
+      <image:title>Người Nhện: Khởi Đầu Mới</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/nguoi-nhen-khoi-dau-moi-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Người Nhện: Khởi Đầu Mới</video:title>
+      <video:description>Bốn năm đã trôi qua מאז các sự kiện của No Way Home, và giờ đây Peter đã là một người trưởng thành sống hoàn toàn đơn độc, sau khi tự nguyện xóa mình khỏi cuộc đời và ký ức của những người anh yêu thương. Vừa chiến đấu với tội phạm trong một New York không còn biết đến tên mình, vừa dốc toàn bộ bản thân để bảo vệ thành phố như một Spider-Man toàn thời gian, Peter ngày càng bị dồn đến giới hạn. Nhưng khi áp lực không ngừng gia tăng, nó kích hoạt một biến đổi thể chất đầy bất ngờ đe dọa chính sự tồn tại của anh, đúng lúc một chuỗi tội ác kỳ lạ bắt đầu hé lộ sự xuất hiện của một trong những mối đe dọa hùng mạnh nhất mà anh từng đối mặt.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/8TZMtslA3UY</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/sinh-vat-than-thoai-phan-1</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/sinh-vat-than-thoai-phan-1-thumb.jpg</image:loc>
+      <image:title>Sinh Vật Thần Thoại (Phần 1)</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/sinh-vat-than-thoai-phan-1-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Sinh Vật Thần Thoại (Phần 1)</video:title>
+      <video:description>Với một kẻ giết người hàng loạt thả rông trên Carnival Row, và một chính phủ nhắm mắt làm ngơ trước cái chết của những công dân thuộc tầng lớp thấp hơn, Rycroft Philostrate, một điều tra viên thiện chiến, là người duy nhất sẵn sàng ngăn chặn các vụ giết người và duy trì nền hòa bình mong manh. Nhưng khi Vignette Stonemoss, một tiên nữ tị nạn, xuất hiện ở Burgue, cô buộc Philo phải nhớ lại quá khứ mà anh đã cố quên đi.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/369LHB9N-Ro</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/sieu-chien-giap-phan-1</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/sieu-chien-giap-phan-1-thumb.jpg</image:loc>
+      <image:title>Siêu Chiến Giáp Phần 1</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/bo-do-tinh-yeu-cua-nha-thiet-ke</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/bo-do-tinh-yeu-cua-nha-thiet-ke-thumb.jpg</image:loc>
+      <image:title>Bộ đồ tình yêu của nhà thiết kế</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/bo-do-tinh-yeu-cua-nha-thiet-ke-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Bộ đồ tình yêu của nhà thiết kế</video:title>
+      <video:description>Nawee hống hách và tự cao tự đại là người thừa kế một gia tài kếch xù. Anh mắc chứng sợ xã hội nghiêm trọng do chấn thương thời thơ ấu. Nhưng đó là trước khi anh gặp nhà thiết kế lịch lãm Aioun. Khi hai người dần hiểu nhau, sức hút lẫn nhau trở nên không thể chối cãi. Một mối tình lãng mạn định mệnh bắt đầu từ đó.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/RhE50QehBtM</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tinh-dau-2026</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260309-1/d551045bc11ca0c90288e0232f356aea.jpg</image:loc>
+      <image:title>Tình Đầu</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/bau-troi-cua-toi</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20241001-1/8e64d262276c331419739357a4241dfc.jpg</image:loc>
+      <image:title>Bầu Trời Của Tôi</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/lau-chu-hoa</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/lau-chu-hoa-thumb.jpg</image:loc>
+      <image:title>Lầu Chú Hỏa</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/lau-chu-hoa-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Lầu Chú Hỏa</video:title>
+      <video:description>Đầu thế kỷ 20, con gái của một gia đình giàu có ở Sài Gòn đã gặp phải một kết cục bi thảm tại dinh thự rộng lớn của gia đình. Mặc dù cái chết của cô được chính thức tuyên bố là một tai nạn, nhưng những lời đồn về một người phụ nữ mặc đồ trắng, được nhìn thấy khóc bên cửa sổ cũ của dinh thự vào đêm khuya, bắt đầu lan truyền.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/NII9Tdprv3g</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/avengers-cuoc-chien-bi-mat</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/avengers-cuoc-chien-bi-mat-thumb.jpg</image:loc>
+      <image:title>Avengers: Cuộc Chiến Bí Mật</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/avengers-cuoc-chien-bi-mat-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Avengers: Cuộc Chiến Bí Mật</video:title>
+      <video:description>Một bộ phim sắp ra mắt trong Giai đoạn thứ sáu của Vũ trụ Điện ảnh Marvel và là phần cuối của The Multiverse Saga. Âm mưu không rõ. Khởi chiếu ngày 1-5-2026</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/ldGpwnBEMMU</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/huyen-tinh-da-trach</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260505-1/8c5199c76e20e44fdefaf1f2b1484883.jpg</image:loc>
+      <image:title>Huyền Tình Dạ Trạch</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260505-1/8c5199c76e20e44fdefaf1f2b1484883.jpg</video:thumbnail_loc>
+      <video:title>Trailer Huyền Tình Dạ Trạch</video:title>
+      <video:description>Huyền Tình Dạ Trạch không chỉ là một bản tình ca lãng mạn về tình yêu vượt mọi quy tắc giữa chàng trai tận tụy Chử Đồng Tử và công chúa Tiên Dung, mà còn là một cuộc hành trình văn hóa sử thi đưa khán giả trở về với vẻ huy hoàng của Đông Sơ Đông. Cuộc gặp gỡ định mệnh của họ tại đầm lầy Dạ Trạch rộng lớn trở thành biểu tượng của tình yêu bất diệt và là cuộc hành trình chung về sự định cư, sinh tồn và nỗ lực chinh phục thiên nhiên của nhân loại trong thời đại Văn Lang.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/Zh0lGIwgOeQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/toc-do-sinh-tu</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260505-1/0813e97d8e86e775f38d05b518cb4d4a.jpg</image:loc>
+      <image:title>Tốc Độ Sinh Tử</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260505-1/0813e97d8e86e775f38d05b518cb4d4a.jpg</video:thumbnail_loc>
+      <video:title>Trailer Tốc Độ Sinh Tử</video:title>
+      <video:description>Phim theo chân Ace cùng đội đua đường phố tinh nhuệ của anh khi họ bị một tổ chức bí ẩn ép buộc tham gia vào nhiệm vụ cực kỳ nguy hiểm, sau khi hoàn thành một phi vụ mang tên Four Amigos, cả nhóm tiếp tục bị lôi kéo làm việc cho tổ chức sát thủ ngầm mang danh Church of Assassins, nhưng dần nhận ra rằng ngay từ đầu thất bại đã được sắp đặt sẵn.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/3_iTX9mWMHQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tinh-tho-hoi-tu</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250525-1/b1c9b1bff1e3f9ccd641f66fd5ef259f.jpg</image:loc>
+      <image:title>Tinh Thổ Hội Tụ</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250525-1/b1c9b1bff1e3f9ccd641f66fd5ef259f.jpg</video:thumbnail_loc>
+      <video:title>Trailer Tinh Thổ Hội Tụ</video:title>
+      <video:description>Năm người đàn ông được sinh ra cùng ngày — thứ Bảy, ngày mùng 5 — được Apichai nhận nuôi và dẫn dắt họ bước vào con đường tu luyện để trở thành bất tử. Mỗi người đều sở hữu một năng lực đặc biệt: Diao Somdet: có thể nghe được âm thanh từ khoảng cách rất xa. Thoed Yodthong: có khả năng tàng hình khi nín thở. Don Thakradan: trong lúc thiền định có thể du hành không gian và khoảng cách. Yod Nangphaya: có thể xuyên qua mọi vật cản. Kring Khlongtakhian: có tốc độ cực nhanh và có thể biến hình thành bất kỳ ai. Nhiệm vụ của họ là truy đuổi nhóm Jarga, những kẻ đã đánh cắp một quả bom sinh học gây bệnh từ phòng thí nghiệm ở châu Âu và giấu nó tại Thái Lan. Trong hành trình này, họ được hỗ trợ bởi: Bussakorn – con gái của Apichai, một chuyên gia trong lĩnh vực sinh học liên quan đến quả bom. Duangkamol – một phụ nữ dũng cảm, cải trang để thâm nhập và điều tra vụ việc.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/FaKYsgJ0EAY</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/bi-mat-tren-ung-dung-hen-ho</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20240825-1/e998e74c11a31b92304a6ff92a240e9d.jpg</image:loc>
+      <image:title>Bí Mật Trên Ứng Dụng Hẹn Hò</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/thanh-tra</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/thanh-tra-thumb.jpg</image:loc>
+      <image:title>Thanh Tra</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/thanh-tra-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Thanh Tra</video:title>
+      <video:description>Ellis French là một thanh niên da đen đồng tính, bị mẹ từ chối và không có nhiều lựa chọn cho tương lai, quyết định gia nhập Thủy quân lục chiến, làm bất cứ điều gì cần thiết để thành công trong một hệ thống sẽ gạt anh ta sang một bên. Nhưng ngay cả khi chiến đấu với định kiến ăn sâu và thói quen đào tạo cơ bản mệt mỏi, anh vẫn tìm thấy tình bạn thân thiết, sức mạnh và sự hỗ trợ bất ngờ trong cộng đồng mới này, mang lại cho anh cảm giác thân thuộc khó kiếm được sẽ hình thành nên con người anh và thay đổi cuộc đời anh mãi mãi. .</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/wSeprzQM6gk</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/vi-than-dien-loan</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/vi-than-dien-loan-thumb.jpg</image:loc>
+      <image:title>Vị Thần Điên Loạn</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/vi-than-dien-loan-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Vị Thần Điên Loạn</video:title>
+      <video:description>30 năm ấp ủ dự án phim của tài năng huyền thoại Phil Tippett, bộ phim kinh dị stop-motion này, lấy bối cảnh địa ngục, rất rùng rợn và ghê rợnTheo chân The Assassin qua một thế giới cấm đoán của những linh hồn bị tra tấn, những căn hầm mục nát và những con quái vật khốn khổ được rèn giũa từ những nỗi kinh hoàng nguyên thủy nhất của tiềm thức. Mọi bộ, sinh vật và hình nộm trong kiệt tác rùng rợn này đều được làm thủ công và làm hoạt hình cẩn thận bằng kỹ thuật chuyển động dừng truyền thống. MAD GOD là tác phẩm của tình yêu, một minh chứng cho sức mạnh của óc sáng tạo và sự tôn kính đối với nghệ thuật hoạt hình stop-motion vượt thời gian. Sẵn sàng đôi mắt của bạn. Sẵn sàng tinh thần.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/jas8OABbn0Y</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/gia-dinh-linh-thieng-phan-2</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/gia-dinh-linh-thieng-phan-2-thumb.jpg</image:loc>
+      <image:title>Gia Đình Linh Thiêng (Phần 2)</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/gia-dinh-linh-thieng-phan-2-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Gia Đình Linh Thiêng (Phần 2)</video:title>
+      <video:description>Đang che giấu một bí mật động trời, gia đình nọ bắt đầu lại ở Madrid. Tại đó, các mối quan hệ mới làm phức tạp kế hoạch của họ và quá khứ của họ bắt đầu bị vạch trần.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/_YiHIA5Zln0</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/danh-cap-trai-tim</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/danh-cap-trai-tim-thumb.jpg</image:loc>
+      <image:title>Đánh Cắp Trái Tim</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/da-lai-huong</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250423-1/4076a6c15885c7c798c7e1527739b398.jpg</image:loc>
+      <image:title>Dạ Lai Hương</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250423-1/4076a6c15885c7c798c7e1527739b398.jpg</video:thumbnail_loc>
+      <video:title>Trailer Dạ Lai Hương</video:title>
+      <video:description>Saran và cộng sự của anh đang thực hiện một nhiệm vụ bí mật để gặp một bà đồng tên là Sonklin, trùng tên với một vị nữ thần. Sonklin buộc phải giúp Saran với tư cách nhân chứng trong cuộc điều tra, đồng thời hợp tác với bác sĩ Pran để truy tìm một bùa hộ mệnh có khả năng giải thoát linh hồn, đưa họ tiếp tục chu kỳ nghiệp báo. Trong lúc đó, họ cũng phải làm sáng tỏ bí ẩn về sự mất tích của Sarum.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/2nDbQNWDrOc</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tram-cam-hay-la-tinh-ich-k</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20240826-1/c3542b37c76fddacbbfa7a19d5b67ede.jpg</image:loc>
+      <image:title>Trầm Cảm Hay Là Tình Ích K</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nguoi-tinh-kim-cuong</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/nguoi-tinh-kim-cuong-thumb.jpg</image:loc>
+      <image:title>Người tình kim cương</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/nguoi-tinh-kim-cuong-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Người tình kim cương</video:title>
+      <video:description>Sau khi gặp tai nạn và giảm cân đáng kể, Mễ Đóa bắt đầu một cuộc đời mới. Đó là làm việc cho Tiêu Lượng, giám đốc điều hành công ty kim cương, người mà cô thầm mến.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/gyt90cV23-8</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/chien-nam-ve-sau-thoat-xac</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260507-1/ea3d4093eb27d4835e09a5ac015f7741.jpg</image:loc>
+      <image:title>Chiến Nam: Ve Sầu Thoát Xác</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260507-1/ea3d4093eb27d4835e09a5ac015f7741.jpg</video:thumbnail_loc>
+      <video:title>Trailer Chiến Nam: Ve Sầu Thoát Xác</video:title>
+      <video:description>Khi nhà báo điều tra Ngọc biến mất cùng bằng chứng chống lại tập đoàn Thái Minh Huyền Thoại, một chiếc USB định mệnh rơi vào tay người bạn thân nhất của cô, Kim. Bị một đế chế tội phạm nhắm đến, người bảo vệ duy nhất của Kim là cảnh sát Chiến Nam. Điều bắt đầu như một nhiệm vụ bảo vệ dần biến thành một cuộc thâm nhập sâu vào tổ chức. Khi K52—đồng nghiệp của Chiến Nam—mất tích và Kim bị bắt cóc, Chiến Nam dấn thân vào mạng lưới âm mưu của Thái Minh. Ngay khi công lý dường như trong tầm tay, tên trùm thực hiện kế hoạch “thoát hiểm bằng vỏ ve sầu”. Cuộc chiến thực sự chỉ mới bắt đầu, buộc Chiến Nam phải dấn thân vào những góc tối nhất để khám phá sự thật đằng sau một màn ảo thuật được dàn dựng hoàn hảo.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/qdiTQ_PZ2Gs</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/muc-than-ky</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.98</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20241028-1/79ad9da402005ec184aa14bd1f781d05.jpg</image:loc>
+      <image:title>Mục Thần Ký</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20241028-1/79ad9da402005ec184aa14bd1f781d05.jpg</video:thumbnail_loc>
+      <video:title>Trailer Mục Thần Ký</video:title>
+      <video:description>Tần Mục sinh ra đã có thân thể phàm trần, sau khi khảo nghiệm, hắn trở thành thủ lĩnh của Thiên Ma Phái, được nước Diên Khang phong làm đệ nhất Thái Tuyết. Trong trận chiến phản loạn của Vương quốc Yankang, Tần Mục đã thu hút quỷ thần, gây ra một cơn bão lớn, sau đó theo Wu Khan vào Hoàng cung Lâu Lan, và tự mình chiến đấu khắp Thánh Cung. Ông trở về Diên Khang, hỗ trợ sư đoàn quốc gia dập tắt cuộc nổi loạn, xây dựng và bắn Đại bác Thần Mặt trời, và sau đó giành được quyền thừa kế của hoàng đế loài người và trở thành một thế hệ hoàng đế loài người mới. Tình cờ, Tần Mục biết được kinh nghiệm sống của mình, dưới sự giúp đỡ của Đạo Môn Tiểu Vũ Cảnh và những người khác, hắn đã mở ra đại thế giới cải cách siêu nhiên Đạo giáo.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/VPDwO3G3tgQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/doi-cuu-ho-tia-chop</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/doi-cuu-ho-tia-chop-thumb.jpg</image:loc>
+      <image:title>Đội Cứu Hộ Tia Chớp</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/phao-dai-homestead</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/phao-dai-homestead-thumb.jpg</image:loc>
+      <image:title>Pháo Đài Homestead (Phần 1)</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/phao-dai-homestead-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Pháo Đài Homestead (Phần 1)</video:title>
+      <video:description>Câu chuyện Homestead: The Series diễn ra sau khi một quả bom hạt nhân nổ gần Los Angeles dẫn đến sự sụp đổ xã hội tại Hoa Kỳ, tiếp nối ngay sau bộ phim điện ảnh Homestead đã ra mắt năm 2024. Cựu lính đặc nhiệm Jeff Eriksson (Bailey Chase) cùng gia đình và nhóm người tị nạn tìm đến Homestead - một khu trú ẩn kiên cố miền núi do Ian và Jenna Ross xây dựng để sinh tồn. Họ phải đối mặt với khủng hoảng thực phẩm, xung đột nội bộ và kẻ thù từ bên ngoài. Homestead: The Series là một dự án hấp dẫn với sự hòa trộn giữa chân thực của phim hành động hậu tận thế, và chiều sâu tâm lý, đạo đức và tín ngưỡng. Nếu bạn thích xem phim thể loại sinh tồn đậm tính nhân văn, với các xung đột gia đình, lãnh đạo, bảo vệ cộng đồng và tín ngưỡng, đây là lựa chọn đáng để thử.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/7CIgd0kPeUI</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/mesdames-thanh-sac</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/mesdames-thanh-sac-thumb.jpg</image:loc>
+      <image:title>Mesdames Thanh Sắc</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/mesdames-thanh-sac-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Mesdames Thanh Sắc</video:title>
+      <video:description>Mesdames Thanh Sắc xoay quanh cuộc đời của đại mỹ nhân Cầm Thanh (Thanh Hằng) và Madame Sắc (Hồng Ánh) - bà chủ vũ trường Kim Đô vô cùng giàu có và sở hữu nhiều kim cương. Dù ở dưới trướng của bà Sắc và từng bước trở thành vũ nữ đình đám nhất Sài Gòn những năm 1960, nhưng Cầm Thanh luôn muốn nổi loạn. Từ đó, hai người phụ nữ bắt đầu cuộc giằng co căng thẳng dẫn đến những sự kiện gây rúng động.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/FIoDvHBZjUs</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/mua-he-cua-ho-ly</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20231219-1/f83c8c2eaad656c311833da826d1aefc.jpg</image:loc>
+      <image:title>Mùa Hè Của Hồ Ly</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20231219-1/f83c8c2eaad656c311833da826d1aefc.jpg</video:thumbnail_loc>
+      <video:title>Trailer Mùa Hè Của Hồ Ly</video:title>
+      <video:description>Thừa Trạch là con nuôi nhà họ Cố. Bà Cố luôn mong con ruột của mình là Cần Quân có thể tiếp quản công ty nhưng Quân không phải người có chí lớn. Ngược lại Thừa Trạch luôn cần mẫn với công việc. Bà Cố giao Quân cho Thừa Trạch đào tạo. Thừa Trạch tình cờ biết Yến Thư là bạn gái cũ của Quân, nên anh mời Yến Thư về công ty làm việc với hy vọng kích thích ý chí của Quân. Nhưng Thừa Trạch dần phát hiện mình cũng bị cô gái lương thiện này thu hút.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/cwgMgPi00kw</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/quan-gia-nguoi-doi-phan-1</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/quan-gia-nguoi-doi-phan-1-thumb.jpg</image:loc>
+      <image:title>Quản Gia Người Dơi (Phần 1)</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/quan-gia-nguoi-doi-phan-1-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Quản Gia Người Dơi (Phần 1)</video:title>
+      <video:description>Pennyworth là serie phim tiền truyện của Batman kể về Alfred Pennyworth, quản gia tại Dinh Thự nhà Wayne, không chỉ thế, Alfred còn được xem như một người thầy, người anh, người cha, và là một trong những trợ thủ đắc lực nhất của Kỵ Sĩ Bóng Đêm. Ông là một con người đa tài - không chỉ giỏi giang trong những việc nhỏ nhắn như bếp núc mà còn thành thạo trong việc chữa thương (vốn là sở trường của ông). Không những thế, điều khiến Alfred nổi bật hơn cả chính quá khứ khá là huy hoàng của ông. Alfred từng là một điệp viên của MI-5 trước khi ông quyết định nghỉ hưu và theo đuổi nghiệp Sân Khấu Điện Ảnh. Sau đó, khi cha ông qua đời, Alfred đã đến Dinh Thự Wayne để nối nghiệp bố trở thành Quản Gia của gia đình nhà Wayne, lúc này Bruce Wayne vẫn chỉ còn là một đứa trẻ.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/cIvOHGIzCd0</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nghich-thien-thanh-tien</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/nghich-thien-thanh-tien-thumb.jpg</image:loc>
+      <image:title>Nghịch Thiên Thành Tiên</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/100-hoang-tu-trong-the-gioi-giac-mo</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/100-hoang-tu-trong-the-gioi-giac-mo-thumb.jpg</image:loc>
+      <image:title>100 Hoàng Tử Trong Thế Giới Giấc Mơ</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/the-100-girlfriends-who-really-really-really-really-really-love-you-2023</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.98</priority>
+    <image:image>
+      <image:loc>https://image.tmdb.org/t/p/w780/shXdGFZIEaSmiOkVW2BeEaPihuA.jpg</image:loc>
+      <image:title>The 100 Girlfriends Who Really, Really, Really, Really, REALLY Love You</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://image.tmdb.org/t/p/w780/shXdGFZIEaSmiOkVW2BeEaPihuA.jpg</video:thumbnail_loc>
+      <video:title>Trailer The 100 Girlfriends Who Really, Really, Really, Really, REALLY Love You</video:title>
+      <video:description>Rentaro Aijo was rejected 100 times in middle school. He visits a shrine and prays for better luck in high school. The God of Love appears and promises that he&apos;ll soon meet 100 people he&apos;s destined to date. But there&apos;s a catch—once destiny introduces someone to him, the two must happily love each other. If they don&apos;t, they&apos;ll die. What will befall Rentaro and his 100 girlfriends in high school?</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/ls2VNcSifi4</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/cau-dung-la-mot-thien-tai</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/cau-dung-la-mot-thien-tai-thumb.jpg</image:loc>
+      <image:title>Cậu Đúng Là Một Thiên Tài</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/cau-dung-la-mot-thien-tai-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Cậu Đúng Là Một Thiên Tài</video:title>
+      <video:description>Bạch Kiêu chàng trai của bộ lạc Tuyết Sơn vì để giải trừ lời nguyền của người yêu là Thanh Nguyệt bị ép phải rời đi. Thế giới xa cách nhau nghìn dặm cùng với người yêu bị mất trí nhớ cũng không thể ngăn cản bước chân của Bạch Kiêu. Cậu ấy mang theo vô số bảo vật một mình đi tới đại lục phía nam, mở ra hành trình tìm kiếm người yêu. Người con trai được định sẵn sẽ trở thành thiên tài này với thiên phú và tài trí hơn người của mình đã làm trấn kinh toàn bộ đế quốc. Con đường tu hành ma đạo của cậu ấy sẽ đi theo hướng nào? Cậu ấy liệu có thể một lần nữa giành được trái tim của Thanh Nguyệt hay không?</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/k-qCBzXQNxY</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/cells-at-work-black</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/cells-at-work-black-thumb.jpg</image:loc>
+      <image:title>Cells at Work! BLACK</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/cau-va-to-la-hai-thai-cuc-doi-lap-seihantai-na-kimi-to-boku-phan-2</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.98</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260706-1/825b10536abaa977ea710bf4cbd4a7e4.jpg</image:loc>
+      <image:title>Cậu Và Tớ Là Hai Thái Cực Đối Lập (Seihantai na Kimi to Boku) (Phần 2)</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260706-1/825b10536abaa977ea710bf4cbd4a7e4.jpg</video:thumbnail_loc>
+      <video:title>Trailer Cậu Và Tớ Là Hai Thái Cực Đối Lập (Seihantai na Kimi to Boku) (Phần 2)</video:title>
+      <video:description>Suzuki, cô nữ sinh trung học sôi nổi và hướng ngoại, trót &amp;quot;cảm nắng&amp;quot; cậu bạn cùng lớp Tani hoàn toàn trái ngược với cô. Liệu cô có vượt qua được cảm giác hồi hộp để ngỏ lời hẹn hò?</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/pbeDDMlT0rI</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nguoi-choi-co</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250325-1/cdf3f8e485345b12668c64d620c08e17.jpg</image:loc>
+      <image:title>Người Chơi Cờ</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250325-1/cdf3f8e485345b12668c64d620c08e17.jpg</video:thumbnail_loc>
+      <video:title>Trailer Người Chơi Cờ</video:title>
+      <video:description>Bộ phim&amp;nbsp;lấy bối cảnh thành phố phía Nam vào đầu thế kỷ, xoay quanh câu chuyện về Thôi Nghiệp - một giáo viên dạy cờ vây bình thường. Một tai nạn bất ngờ đã cuốn anh vào vòng xoáy tội phạm, từng bước sa vào con đường tội lỗi. Người anh trai - trung úy cảnh sát Thôi Vĩ không ngừng truy đuổi em mình, tạo nên câu chuyện kịch tính về hai con đường trắng đen đối lập giữa hai anh em.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/exaXeycxZrQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/thi-tran-dogville</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250414-1/439e136d9f7cc2dd72af6010311b1bb1.jpg</image:loc>
+      <image:title>Thị Trấn Dogville</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250414-1/439e136d9f7cc2dd72af6010311b1bb1.jpg</video:thumbnail_loc>
+      <video:title>Trailer Thị Trấn Dogville</video:title>
+      <video:description>Bộ phim kể về Grace, một người phụ nữ bí ẩn đang chạy trốn khỏi những kẻ truy đuổi, tình cờ đến một thị trấn nhỏ hẻo lánh tên là Dogville. Ban đầu, người dân thị trấn không tin tưởng cô, nhưng sau khi được một thanh niên tên Tom bảo lãnh, họ đồng ý cho cô trú lại — với điều kiện Grace phải làm việc để &amp;quot;xứng đáng&amp;quot; với lòng tốt của họ. Tuy nhiên, khi sự hiện diện của Grace bắt đầu khiến Dogville đối mặt với hiểm nguy, lòng tốt ấy dần biến mất. Dân thị trấn ngày càng đòi hỏi nhiều hơn, bóc lột và đối xử với cô ngày một tàn nhẫn, đến mức phi nhân tính. Cuối cùng, khi thân phận thật của Grace được tiết lộ, cô buộc phải đưa ra quyết định tàn khốc: tha thứ cho Dogville — hay trừng phạt họ vì những điều đã gây ra cho mình.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/dC3UFn5MeCg</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/thoi-mien-bao-thu</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/thoi-mien-bao-thu-thumb.jpg</image:loc>
+      <image:title>Thôi Miên Báo Thù</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/me-cung-cua-cong-chua</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20241225-1/77bfb561f30ac64040fa9c314204400c.jpg</image:loc>
+      <image:title>Mê Cung Của Công Chúa</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/the-bobs-burgers-movie</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/the-bobs-burgers-movie-thumb.jpg</image:loc>
+      <image:title>The Bob&apos;s Burgers Movie</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/upin-and-ipin-phan-15</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/upin-and-ipin-phan-15-thumb.jpg</image:loc>
+      <image:title>Upin &amp; Ipin (Phần 15)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/mien-troi-cao-con-anh-duong</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/mien-troi-cao-con-anh-duong-thumb.jpg</image:loc>
+      <image:title>Miễn Trời Cao Còn Ánh Dương</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/danh-sach-tu-than</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20241101-1/c90add9ff86a98e64bd7aa66b12ca073.jpg</image:loc>
+      <image:title>Danh Sách Tử Thần</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/con-duong-to-lua-huyen-an-tay-han</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250420-1/42d5fcb7e51aa5d933f91cc2207820ba.jpg</image:loc>
+      <image:title>Con Đường Tơ Lụa: Huyền Án Tây Hán</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250420-1/42d5fcb7e51aa5d933f91cc2207820ba.jpg</video:thumbnail_loc>
+      <video:title>Trailer Con Đường Tơ Lụa: Huyền Án Tây Hán</video:title>
+      <video:description>Vào những năm đầu của triều đại Tây Hán, một trận hỏa hoạn kinh hoàng đã thiêu rụi số lụa hoàng gia được định làm cống phẩm cho Hung Nô—một thảm họa đã thổi bùng lên sự hỗn loạn trên khắp Tây Vực. Giang Du, một sứ giả ưu tú của triều đình, được phái đi theo sắc lệnh bí mật để điều tra vụ đốt phá và ngăn chặn một cuộc khủng hoảng ở biên giới. Trong khi đó, Cannu yêu dấu của anh, một thợ dệt lụa trở thành anh hùng dân gian, tập hợp người dân Shiquan để bổ sung số cống phẩm đã mất và cứu đế chế khỏi sự ô nhục. Khi Giang Du một mình mạo hiểm vào Tây Vực đầy hiểm nguy, anh phải đối mặt với một lựa chọn bất khả thi: trung thành với số phận của nhà Hán… hay lời thì thầm của trái tim mình</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/rCJ8MmGO0EQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ba-hoang-phuong-nam-phan-3</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20241011-1/b7ae55603873a2d44dbb20930b509430.jpg</image:loc>
+      <image:title>Bà Hoàng Phương Nam (Phần 3)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/cyberpunk-edgerunners</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20240520-1/3ec4f6aefbe9f49fea0503e69ebb411c.jpg</image:loc>
+      <image:title>Cyberpunk: Edgerunners</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/onlyflix-pillars-of-power-the-hidden-secret-behind-achieving-greatness</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://onlyflix.to/wp-content/uploads/posters/1546744_medium.jpg?t=1785025367</image:loc>
+      <image:title>Pillars of Power: The Hidden Secret Behind Achieving Greatness</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/luoi-dao-hiem-hoc</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250320-1/8232ddc7bd42ea8f8da28f7a72b71331.jpg</image:loc>
+      <image:title>Lưỡi Dao Hiểm Hóc</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250320-1/8232ddc7bd42ea8f8da28f7a72b71331.jpg</video:thumbnail_loc>
+      <video:title>Trailer Lưỡi Dao Hiểm Hóc</video:title>
+      <video:description>Một thế giới y khoa đen tối, nơi lưỡi dao phẫu thuật không chỉ cắt qua da thịt mà còn xẻ sâu vào lòng kiêu hãnh, ân oán và những bí mật kinh hoàng. Choi Deok Hui được mệnh danh là bác sĩ phẫu thuật thần kinh giỏi nhất thế giới. Ông là người thầy từng dẫn dắt Jung Se Ok, một học trò xuất chúng với tiềm năng vô hạn. Tuy nhiên, mối quan hệ giữa họ không hề đơn giản. Trong một ca phẫu thuật định mệnh, Deok Hui đã đuổi Se Ok khỏi phòng mổ vĩnh viễn, đẩy cô vào bờ vực sự nghiệp. Jung Se Ok từng được coi là một thiên tài y khoa, nhưng sau biến cố với Deok Hui, cô bị tước bỏ giấy phép hành nghề và buộc phải trở thành &amp;quot;bác sĩ bóng đêm&amp;quot;, thực hiện những ca phẫu thuật bất hợp pháp trong bí mật. Dù bị xã hội ruồng bỏ, Se Ok vẫn không ngừng khao khát chứng minh năng lực của mình. Số phận run rủi đưa Se Ok và Deok Hui gặp lại nhau. Hai người, một kẻ từng là thầy, một người từng là trò, giờ đây đứng ở hai đầu chiến tuyến. Deok Hui, người từng đẩy Se Ok xuống vực sâu, giờ phải đối mặt với những hậu quả từ quyết định của mình. Còn Se Ok, với lòng tự trọng và sự kiêu hãnh, quyết tâm chứng minh rằng cô xứng đáng được công nhận.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/JY73T7jgex8</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/sau-dat-khong-lo</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/sau-dat-khong-lo-thumb.jpg</image:loc>
+      <image:title>Sâu đất khổng lồ</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/katrina-vuot-qua-bao-to</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250828-1/6169932f03338cd0589c312db10ca589.jpg</image:loc>
+      <image:title>Katrina: Vượt Qua Bão Tố</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250828-1/6169932f03338cd0589c312db10ca589.jpg</video:thumbnail_loc>
+      <video:title>Trailer Katrina: Vượt Qua Bão Tố</video:title>
+      <video:description>Hai mươi năm sau cơn bão Katrina, những người sống sót nhìn lại trận bão thảm khốc đã thay đổi vĩnh viễn cuộc đời họ và phơi bày những bất bình đẳng mang tính hệ thống.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/2gyBK3UMT34</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ong-kinh-kinh-di-phan-1</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/ong-kinh-kinh-di-phan-1-thumb.jpg</image:loc>
+      <image:title>Ống kính kinh dị (Phần 1)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nguoi-ban-mot-tuan-2022</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250410-1/2fc1d159610ab22f8f8728c268699b72.jpg</image:loc>
+      <image:title>Người Bạn Một Tuần</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250410-1/2fc1d159610ab22f8f8728c268699b72.jpg</video:thumbnail_loc>
+      <video:title>Trailer Người Bạn Một Tuần</video:title>
+      <video:description>Lớp học ôn thi lại đại học trường trung học Thắng Hoa vừa có học sinh mới chuyển đến tên Lâm Tương Chi. Cô thông minh, dịu dàng ít nói, nhưng lại luôn cô đơn một mình, không kết bạn với ai. Nhưng như thế lại thu hút sự chú ý của tên học sinh yếu kém Từ Hựu Thụ, Tống Hiểu Nam tinh ranh và chàng học sinh giỏi lạnh lùng Tưởng Ngô. Trong quá trình cố gắng kết bạn với Tương Chi, Hựu Thụ phát hiện ra bí mật của cô. Hóa ra cô mắc một căn bệnh đặc biệt, đó là kí ức về bạn bè của cô chỉ tồn tại trong 7 ngày. Vì giúp đỡ cô nàng cô độc này, Từ Hựu Thụ càng tích cực hơn. Bốn người họp lại thành tiểu đội &amp;quot;sinh tồn ngày tận thế&amp;quot;, không ngừng tạo ra những kỉ niệm bất ngờ chỉ thuộc về riêng họ. Nhưng chẳng thể ngờ, đằng sau căn bệnh của Lâm Tương Chi lại là một bí mật còn đau lòng hơn...</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/YZzA65LK7GQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tig-notaro-hoat-hoa</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/tig-notaro-hoat-hoa-thumb.jpg</image:loc>
+      <image:title>Tig Notaro: Hoạt Họa</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/tig-notaro-hoat-hoa-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Tig Notaro: Hoạt Họa</video:title>
+      <video:description>Chương trình đặc biệt dài một giờ này kết hợp giọng nói đặc trưng của Notaro và cách kể chuyện với nhiều phong cách nghệ thuật khác nhau khi cô kể lại lời cầu hôn trên giường bệnh, một chương trình tài năng ở trường trung học bị hỏng, hậu quả của một thủ thuật nha khoa, vô tình từ chối diễn viên hài Jenny Slate, chuyến đi đường dài với Dolly Parton, v.v.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/CDC_ze4IQXQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/doraemon-nobita-tham-hiem-vung-dat-moi-peko-va-5-nha-tham-hiem</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250521-1/365e9c2d4e292008b4091e5465749217.jpg</image:loc>
+      <image:title>Doraemon: Nobita Thám Hiểm Vùng Đất Mới – Peko và 5 Nhà Thám Hiểm</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250521-1/365e9c2d4e292008b4091e5465749217.jpg</video:thumbnail_loc>
+      <video:title>Trailer Doraemon: Nobita Thám Hiểm Vùng Đất Mới – Peko và 5 Nhà Thám Hiểm</video:title>
+      <video:description>Trong một lần tình cờ, Nobita gặp một chú chó kỳ lạ ở sân bóng và đặt tên cho nó là Peko. Chú chó này đã tìm ra một bức ảnh vệ tinh về một vùng đất bí ẩn ở Châu Phi. Thế là, Doraemon cùng những người bạn quyết định lên đường khám phá vùng đất ấy.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/xBIKrkAG65k</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tinh-than-salsa</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/tinh-than-salsa-thumb.jpg</image:loc>
+      <image:title>Tinh Thần Salsa</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ten-cuop-bien</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/ten-cuop-bien-thumb.jpg</image:loc>
+      <image:title>Tên cướp biển</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/ten-cuop-bien-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Tên cướp biển</video:title>
+      <video:description>Trong Chiến tranh năm 1812 chống lại Anh: Tướng Andrew Jackson chỉ còn lại 1.200 người để bảo vệ New Orleans khi ông biết tin một hạm đội Anh sẽ đến với 60 tàu và 16.000 quân để chiếm thành phố. Trong tình huống này, một hòn đảo gần thành phố trở nên quan trọng về mặt chiến lược đối với cả hai bên, nhưng đó lại là nơi sinh sống của tên cướp biển khét tiếng cuối cùng: Jean Lafitte. Mặc dù Lafitte chưa bao giờ tấn công tàu thuyền Mỹ, nhưng thống đốc lại căm ghét hắn vì tội bán hàng hóa không đóng thuế - và cũng chính vì lý do đó mà hắn được người dân yêu mến. Khi cuộc chiến lớn đến gần, Lafitte bị giằng xé giữa hai phe. Trái tim hắn thuộc về nước Mỹ, nhưng người dân lại thúc giục hắn gia nhập phe nào có nhiều khả năng chiến thắng hơn.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/UICEeSlm2is</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/toi-ac-trong-tu-tuong-vu-an-cua-vien-canh-sat-an-thit-nguoi</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/toi-ac-trong-tu-tuong-vu-an-cua-vien-canh-sat-an-thit-nguoi-thumb.jpg</image:loc>
+      <image:title>Tội Ác Trong Tư Tưởng: Vụ Án Của Viên Cảnh Sát Ăn Thịt Người</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/toi-ac-trong-tu-tuong-vu-an-cua-vien-canh-sat-an-thit-nguoi-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Tội Ác Trong Tư Tưởng: Vụ Án Của Viên Cảnh Sát Ăn Thịt Người</video:title>
+      <video:description>Được mệnh danh là &quot;Cảnh sát ăn thịt người&quot;, cựu cảnh sát NYPD Gilberto Valle bị buộc tội âm mưu bắt cóc và ăn thịt phụ nữ nhưng lập luận rằng tất cả chỉ là tưởng tượng. Câu chuyện của ông đã trở thành tiêu đề vì cả những chi tiết đáng lo ngại và khả năng khởi động xu hướng kiểm soát tư tưởng trên toàn quốc. Với các cuộc phỏng vấn thân mật với Valle và những hiểu biết sâu sắc từ các chuyên gia, Thought Crimes khám phá xem liệu một người có thể bị kết tội vì những suy nghĩ nguy hiểm nhất của họ hay không.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/hyxRLyvGm2A</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/lanh-an-phan-3</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20240609-1/07e60bf8f478c75e4d751657862c7dde.jpg</image:loc>
+      <image:title>Lãnh Án (Phần 3)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/danh-nghia-nhan-dan</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250304-1/102be4732629293210ab3b2bb6705fe8.jpg</image:loc>
+      <image:title>Danh Nghĩa Nhân Dân</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250304-1/102be4732629293210ab3b2bb6705fe8.jpg</video:thumbnail_loc>
+      <video:title>Trailer Danh Nghĩa Nhân Dân</video:title>
+      <video:description>Dù là thể loại chính kịch nhưng bộ phim thu hút sự quan tâm của giới trẻ không thua kém những tác phẩm thần tượng ăn khách. Trong thời đại IP thịnh hành, tại sao lại chọn đề tài khó nhằn như vậy, đạo diễn Lý Lộ cho biết: Một tác phẩm phản ánh hiện thực, đề cập đến những vấn đề được mọi người quan tâm mới có sức sống lâu bền. Thể loại chống tham nhũng đã im lìm nhiều năm nay, một khi trở lại nhất định sẽ trở thành kinh điển.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/a3EyLur3MaI</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/muon-ruou-to-tinh</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/muon-ruou-to-tinh-thumb.jpg</image:loc>
+      <image:title>Mượn Rượu Tỏ Tình</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/dau-si-ngam</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/dau-si-ngam-thumb.jpg</image:loc>
+      <image:title>Đấu sĩ ngầm</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/dau-si-ngam-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Đấu sĩ ngầm</video:title>
+      <video:description>Hai anh em cùng tham gia giải đấu võ thuật ngầm nguy hiểm nhất thế giới, nơi họ phải quyết định xem có nên tuân thủ luật lệ hay gạt bỏ danh dự sang một bên và hợp tác để hạ gục tổ chức tội phạm khét tiếng đang điều hành giải đấu.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/1ssNi5j32cU</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/dia-nguc-hiem-ac</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/dia-nguc-hiem-ac-thumb.jpg</image:loc>
+      <image:title>Địa ngục hiểm ác</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/dia-nguc-hiem-ac-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Địa ngục hiểm ác</video:title>
+      <video:description>Một căn nhà gỗ hẻo lánh bị ám ảnh bởi những vụ giết người rùng rợn, và điều mà những người sống trong đó không hề hay biết là một thế lực siêu nhiên đang ẩn náu bên trong. Liệu cặp đôi có thể giải mã bí ẩn của vùng đất bị nguyền rủa kịp thời hay họ sẽ mở cánh cửa dẫn đến địa ngục?</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/F9TGBNG6qRk</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ho-hac-yeu-su-luc-3d</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250308-1/0fa106591b42e2bf825e7bc43fdc7ae0.jpg</image:loc>
+      <image:title>Hổ Hạc Yêu Sư Lục 3D</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250308-1/0fa106591b42e2bf825e7bc43fdc7ae0.jpg</video:thumbnail_loc>
+      <video:title>Trailer Hổ Hạc Yêu Sư Lục 3D</video:title>
+      <video:description>Một thế giới nơi nhân và yêu cùng tồn tại và đấu đá lẫn nhau. Những người tu luyện thuật pháp để tiêu diệt yêu ma quỷ quái được gọi là các yêu sư. Kỳ Hiểu Hiên do một sự cố nên tình cờ kết giao với Hổ Tử, từ đó hai người đã đồng hành cùng nhau trên con đường diệt trừ yêu ma, bảo vệ chính đạo.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/PaF8gfUiWsk</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ky-hon-hikaru-no-go</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/ky-hon-hikaru-no-go-thumb.jpg</image:loc>
+      <image:title>Kỳ Hồn (Hikaru No Go)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/onlyflix-pompeii-out-of-time-with-tom-hiddleston</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://onlyflix.to/wp-content/uploads/posters/1546727_medium.jpg?t=1784823165</image:loc>
+      <image:title>Pompeii: Out of Time with Tom Hiddleston</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/onlyflix-stuart-fails-to-save-the-universe</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://onlyflix.to/wp-content/uploads/posters/1546723_medium.jpg?t=1784821702</image:loc>
+      <image:title>Stuart Fails to Save the Universe</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/luc-luong-phan-ung-phan-3</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250717-1/437836d67685ab3e72c9e0caf3d1d150.jpg</image:loc>
+      <image:title>Lực Lượng Phản Ứng (Phần 3)</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250717-1/437836d67685ab3e72c9e0caf3d1d150.jpg</video:thumbnail_loc>
+      <video:title>Trailer Lực Lượng Phản Ứng (Phần 3)</video:title>
+      <video:description>Từ nhỏ, Trần Tam Nguyên đã chịu sự ảnh hưởng của chú mình là Trần Tiểu Sanh, cô gia nhập đội cảnh sát làm sư tỉ cầm sung và trở thành bạn tốt của Chu Tố Nga. Sau khi ly hôn, Tố Nga quen biết Trần Tiểu Sanh, hai người từ đôi oan gia đấu khẩu dần trở thành tình nhân. Tam Nguyên vì có biểu hiện xuất sắc nên được điều chuyển qua tổ chống mại dâm, hợp tác cùng Trình Phong, trở thành một đôi “anh em” tốt, nhưng một lần tình cờ, cô phát hiện Trình Phong có tình cảm với mình. Nhưng khi hai người ở bên nhau, Tam Nguyên lại đột nhiên ngừng bước…</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/HQ2KTz1pF_g</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/duoi-bong-moc-mien</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/duoi-bong-moc-mien-thumb.jpg</image:loc>
+      <image:title>Dưới Bóng Mộc Miên</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/duoi-bong-moc-mien-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Dưới Bóng Mộc Miên</video:title>
+      <video:description>Malai được sắp đặt vào cuộc hôn nhân với Wisan Ratchamaitri, một người đàn ông giàu có. Bắt đầu cuộc sống mới trong gia đình hào môn nhưng Malai không hề ngờ rằng chồng mình là một người đồng tính. Và đây cũng là khởi nguồn cho mọi bi kịch.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/oT21S9VecDQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/rock-lee</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/rock-lee-thumb.jpg</image:loc>
+      <image:title>Rock Lee</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/mot-giong-ngoai</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/mot-giong-ngoai-thumb.jpg</image:loc>
+      <image:title>Một giống ngoài</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/mot-giong-ngoai-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Một giống ngoài</video:title>
+      <video:description>Khi Violet nhận lời mời đến một hòn đảo tư nhân cùng với một số người có tầm ảnh hưởng trên mạng xã hội nổi tiếng nhất thế giới, cô kỳ vọng sẽ có một cuối tuần với cơ hội lan truyền thông tin chưa từng có. Nhưng cô nhanh chóng trở thành một phần của chương trình truyền hình thực tế kinh dị của riêng mình khi các vị khách bị buộc phải cạnh tranh với nhau để bắt những con chó ăn thịt người huyền thoại trên đảo trước khi chính họ trở thành nạn nhân của những con thú hung tàn đó.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/MQudR1Gb7m4</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/mat-ma-phu-thuy-phan-3</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/mat-ma-phu-thuy-phan-3-thumb.jpg</image:loc>
+      <image:title>Mật Mã Phù Thủy (Phần 3)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/long-quyen-tieu-tu</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20231219-1/0249317bd1744d64327699cf0c21d674.jpg</image:loc>
+      <image:title>Long Quyền Tiểu Tử</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20231219-1/0249317bd1744d64327699cf0c21d674.jpg</video:thumbnail_loc>
+      <video:title>Trailer Long Quyền Tiểu Tử</video:title>
+      <video:description>Phim kể về một cậu bé người Mỹ gốc Hoa được gửi về Trung Quốc sống cùng cậu của mình. Tại đây, cậu đối mặt với nhiều tình huống khó khăn như bị bắt nạt ở trường, những rắc rối trong gia đình và cả những vụ án bí ẩn. Với niềm đam mê võ thuật và kỹ năng Taekwondo xuất sắc, cậu cùng những người bạn đã vượt qua thử thách và trưởng thành qua từng trận chiến. Phim mang phong cách nhẹ nhàng, hài hước và phù hợp với khán giả trẻ yêu thích võ thuật và những câu chuyện trưởng thành. Đặc biệt, các diễn viên nhí trong phim đều là những võ sĩ Taekwondo thực thụ, từng đạt giải trong các giải đấu quốc tế.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/VepW99HPums</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/su-menh-noi-gian</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20231109-1/3c16ffafb886f9ebe443a1fcf8e4a957.jpg</image:loc>
+      <image:title>Sứ Mệnh Nội Gián</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20231109-1/3c16ffafb886f9ebe443a1fcf8e4a957.jpg</video:thumbnail_loc>
+      <video:title>Trailer Sứ Mệnh Nội Gián</video:title>
+      <video:description>Tiếp nối thành công của phiên bản truyền hình, Line Walker bản điện ảnh đưa Đinh tỷ trở lại thế giới ngầm để truy tìm sáu cảnh sát chìm mất tích. Trong quá trình xâm nhập nguy hiểm, cô bất ngờ chạm trán hai trùm xã hội đen quyền lực, đẩy bản thân vào vòng xoáy hiểm nghèo. Cuộc chiến giữa cảnh sát và tội phạm trở nên căng thẳng hơn bao giờ hết khi danh tính của các điệp viên bị đe dọa. Liệu Đinh tỷ có thể hoàn thành nhiệm vụ và bảo toàn mạng sống giữa những âm mưu và phản bội?</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/DQmjwwQxtHU</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/chuyen-tinh-tren-non-cao</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20231110-1/adb12b427023010145f56cced1cd5f73.jpg</image:loc>
+      <image:title>Chuyện Tình Trên Non Cao</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20231110-1/adb12b427023010145f56cced1cd5f73.jpg</video:thumbnail_loc>
+      <video:title>Trailer Chuyện Tình Trên Non Cao</video:title>
+      <video:description>Sau khi đăng quang ngôi vị Ảnh đế lần thứ ba, ngôi sao điện ảnh Lưu Bách Khiêm cầu hôn bạn gái và nhận được cái gật đầu đồng ý của người đẹp. Thế nhưng, đúng ngày cưới, cô nàng lại bỏ chạy theo người khác, khiến nam diễn viên đau khổ, phải lên cao nguyên Vân Nam để giải sầu và tình cờ gặp Tú - người phụ nữ mang nhiều tổn thương trong quá khứ. Giữa khung cảnh núi non hùng vĩ và khí hậu khắc nghiệt, họ dần xích lại gần nhau, chữa lành những vết thương lòng, viết nên câu chuyện tình nhẹ nhàng nhưng đầy xúc động.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/1wsy_Nx9zzU</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/huyen-thoai-lang-hai-phan-4</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/huyen-thoai-lang-hai-phan-4-thumb.jpg</image:loc>
+      <image:title>Huyền Thoại Làng Hài (Phần 4)</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/huyen-thoai-lang-hai-phan-4-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Huyền Thoại Làng Hài (Phần 4)</video:title>
+      <video:description>Trong phần 4, căng thẳng gia tăng khi Deborah và Ava nỗ lực khởi động chương trình đêm khuya của họ và tạo nên lịch sử khi thực hiện chương trình.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/pJcfoJCCJ50</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/chon-sau</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/bury-em-deep-thumb.jpg</image:loc>
+      <image:title>Bury Em Deep</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/bury-em-deep-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Bury Em Deep</video:title>
+      <video:description>Một tay súng hung bạo nhìn thấy những ảo ảnh về Địa ngục và quyết định rằng để chuộc lỗi, hắn sẽ dùng số tiền bất chính kiếm được để cứu lấy trại trẻ mồ côi của một nữ tu xinh đẹp. Nhưng khi bị phục kích và bỏ mặc cho chết, hắn bắt đầu cuộc hành trình báo thù.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/39kZnHOpsbw</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/dota-dong-mau-rong</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/dota-dong-mau-rong-thumb.jpg</image:loc>
+      <image:title>Dota: Dòng Máu Rồng</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/dota-dong-mau-rong-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Dota: Dòng Máu Rồng</video:title>
+      <video:description>Dota: Dòng Máu Rồng kể về một Hiệp sĩ Rồng dũng cảm. Sau khi chạm trán với một con rồng và một công chúa trong nhiệm vụ của riêng mình, anh bị cuốn vào những sự kiện lớn hơn những gì anh ta có thể tưởng tượng, phải đương đầu với một ác quỷ chết chóc.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/F0evM-hBlcI</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/dep-hon-thien-duong</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/dep-hon-thien-duong-thumb.jpg</image:loc>
+      <image:title>Đẹp Hơn Thiên Đường</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/dep-hon-thien-duong-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Đẹp Hơn Thiên Đường</video:title>
+      <video:description>Sau bao thăng trầm của cuộc đời, một cặp uyên ương từng bị cái chết chia lìa nay đoàn tụ trên thiên đường – nhưng chàng vẫn ở độ tuổi ba mươi, còn nàng thì đã ngoài tám mươi. &amp;nbsp;</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/JVRUmvxIZJs</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nguoc-chieu-anh-sang-noi-loi-yeu-em</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/nguoc-chieu-anh-sang-noi-loi-yeu-em-thumb.jpg</image:loc>
+      <image:title>Ngược Chiều Ánh Sáng, Nói Lời Yêu Em</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/rock-and-soul</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/rock-and-soul-thumb.jpg</image:loc>
+      <image:title>Rock and Soul</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ao-tuong-nhung-van-muon-yeu-soai-ca</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/ao-tuong-nhung-van-muon-yeu-soai-ca-thumb.jpg</image:loc>
+      <image:title>Ảo Tưởng Nhưng Vẫn Muốn Yêu: Soái Ca</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tiem-mi-ramen</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250619-1/f589454c43a769b9866aea05547418b5.jpg</image:loc>
+      <image:title>Tiệm Mì Ramen</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250619-1/f589454c43a769b9866aea05547418b5.jpg</video:thumbnail_loc>
+      <video:title>Trailer Tiệm Mì Ramen</video:title>
+      <video:description>Masato, một đầu bếp trẻ nấu mì ramen, rời quê hương Nhật Bản để bước vào hành trình ẩm thực tới Singapore, nhằm tìm hiểu sự thật về quá khứ của mình.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/oB8PpdeSXRQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
     <loc>https://khophim.org/phim/anh-cuoi-chang-con-vuong-mat-em</loc>
     <lastmod>2026-07-29</lastmod>
     <changefreq>daily</changefreq>
@@ -162,22 +1328,6 @@
       <video:title>Trailer Nhà Trọ Hoàn Hảo (Phần 5)</video:title>
       <video:description>Sau một cử chỉ lôi cuốn bên bờ biển, Abby khám phá những gì sắp đến và chuẩn bị cho thay đổi quan trọng – với sự giúp đỡ từ các thành viên khác trong nhà O’Brien.</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/rq-niTLclB4</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/mesdames-thanh-sac</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/mesdames-thanh-sac-thumb.jpg</image:loc>
-      <image:title>Mesdames Thanh Sắc</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/mesdames-thanh-sac-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Mesdames Thanh Sắc</video:title>
-      <video:description>Mesdames Thanh Sắc xoay quanh cuộc đời của đại mỹ nhân Cầm Thanh (Thanh Hằng) và Madame Sắc (Hồng Ánh) - bà chủ vũ trường Kim Đô vô cùng giàu có và sở hữu nhiều kim cương. Dù ở dưới trướng của bà Sắc và từng bước trở thành vũ nữ đình đám nhất Sài Gòn những năm 1960, nhưng Cầm Thanh luôn muốn nổi loạn. Từ đó, hai người phụ nữ bắt đầu cuộc giằng co căng thẳng dẫn đến những sự kiện gây rúng động.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/FIoDvHBZjUs</video:player_loc>
     </video:video>
   </url>
   <url>
@@ -651,22 +1801,6 @@
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/avengers-cuoc-chien-bi-mat</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/avengers-cuoc-chien-bi-mat-thumb.jpg</image:loc>
-      <image:title>Avengers: Cuộc Chiến Bí Mật</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/avengers-cuoc-chien-bi-mat-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Avengers: Cuộc Chiến Bí Mật</video:title>
-      <video:description>Một bộ phim sắp ra mắt trong Giai đoạn thứ sáu của Vũ trụ Điện ảnh Marvel và là phần cuối của The Multiverse Saga. Âm mưu không rõ. Khởi chiếu ngày 1-5-2026</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/ldGpwnBEMMU</video:player_loc>
-    </video:video>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/hoa-anh-dao-cuoi-dong</loc>
     <lastmod>2026-07-29</lastmod>
     <changefreq>daily</changefreq>
@@ -717,22 +1851,6 @@
       <image:loc>https://img.ophim.live/uploads/movies/derek-phan-1-thumb.jpg</image:loc>
       <image:title>Derek (Phần 1)</image:title>
     </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/avengers-trieu-dai-cua-kang</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/avengers-trieu-dai-cua-kang-thumb.jpg</image:loc>
-      <image:title>Avengers: Triều Đại của Kang</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/avengers-trieu-dai-cua-kang-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Avengers: Triều Đại của Kang</video:title>
-      <video:description>Một bộ phim sắp ra mắt trong Giai đoạn thứ sáu của Vũ trụ Điện ảnh Marvel và là một phần của The Multiverse Saga. Âm mưu không rõ. Avengers: The Kang Dynasty khởi chiếu ngày 2-5-2025</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/3UQN_dgXsHA</video:player_loc>
-    </video:video>
   </url>
   <url>
     <loc>https://khophim.org/phim/tinh-nguoi-kiep-ran-phan-2</loc>
@@ -846,22 +1964,6 @@
       <video:title>Trailer Schitt&apos;s Creek (Phần 4)</video:title>
       <video:description>Alexis vận dụng kiến thức, đời sống tình cảm của David gặp trở ngại, Moira dính tin đồn mình đã qua đời còn Johnny và Stevie dốc sức cho nhà nghỉ.</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/yn0t3XlL1qE</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/lau-chu-hoa</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/lau-chu-hoa-thumb.jpg</image:loc>
-      <image:title>Lầu Chú Hỏa</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/lau-chu-hoa-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Lầu Chú Hỏa</video:title>
-      <video:description>Đầu thế kỷ 20, con gái của một gia đình giàu có ở Sài Gòn đã gặp phải một kết cục bi thảm tại dinh thự rộng lớn của gia đình. Mặc dù cái chết của cô được chính thức tuyên bố là một tai nạn, nhưng những lời đồn về một người phụ nữ mặc đồ trắng, được nhìn thấy khóc bên cửa sổ cũ của dinh thự vào đêm khuya, bắt đầu lan truyền.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/NII9Tdprv3g</video:player_loc>
     </video:video>
   </url>
   <url>
@@ -1480,22 +2582,6 @@
       <video:title>Trailer Khấp Huyết Đao Của Lan Lăng Vương</video:title>
       <video:description>Một danh tướng của triều đại Bắc Tề, Lan Lăng Vương (Cao Trường Cung) đã thể hiện tài nghệ của mình trong trận đấu ở Núi Mang, đẩy lùi quân xâm lược Bắc Chu, nhưng khi trở về triều đình, ông phải đối mặt với một đối thủ nguy hiểm hơn là tên quan lạm quyền- Hòa Sĩ Khai .Cao Trường Cung, huynh trưởng Cao Hiếu Du, và tướng quân Đoàn Thiệu đã thành lập một đội quân chính nghĩa để bảo vệ Hoàng thượng, và chiến đấu hết trận này đến trận khác với Hòa Sĩ Khai và thuộc hạ của ông ta. Đúng lúc này, nữ hiệp dân gian Mộc Lan đột nhiên xuất hiện trong cuộc đời của Cao Trường Cung. Cao Trường Cung đã phải lòng cô gái thẳng thắn vui vẻ này, nhưng Mộc Lan lại ẩn giấu một bí mật kinh hoàng...</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/XGy4FIOlIk8</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nguoi-nhen-khoi-dau-moi</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/nguoi-nhen-khoi-dau-moi-thumb.jpg</image:loc>
-      <image:title>Người Nhện: Khởi Đầu Mới</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/nguoi-nhen-khoi-dau-moi-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Người Nhện: Khởi Đầu Mới</video:title>
-      <video:description>Bốn năm đã trôi qua מאז các sự kiện của No Way Home, và giờ đây Peter đã là một người trưởng thành sống hoàn toàn đơn độc, sau khi tự nguyện xóa mình khỏi cuộc đời và ký ức của những người anh yêu thương. Vừa chiến đấu với tội phạm trong một New York không còn biết đến tên mình, vừa dốc toàn bộ bản thân để bảo vệ thành phố như một Spider-Man toàn thời gian, Peter ngày càng bị dồn đến giới hạn. Nhưng khi áp lực không ngừng gia tăng, nó kích hoạt một biến đổi thể chất đầy bất ngờ đe dọa chính sự tồn tại của anh, đúng lúc một chuỗi tội ác kỳ lạ bắt đầu hé lộ sự xuất hiện của một trong những mối đe dọa hùng mạnh nhất mà anh từng đối mặt.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/8TZMtslA3UY</video:player_loc>
     </video:video>
   </url>
   <url>
@@ -2131,22 +3217,6 @@
     </video:video>
   </url>
   <url>
-    <loc>https://khophim.org/phim/chien-nam-ve-sau-thoat-xac</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260507-1/ea3d4093eb27d4835e09a5ac015f7741.jpg</image:loc>
-      <image:title>Chiến Nam: Ve Sầu Thoát Xác</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260507-1/ea3d4093eb27d4835e09a5ac015f7741.jpg</video:thumbnail_loc>
-      <video:title>Trailer Chiến Nam: Ve Sầu Thoát Xác</video:title>
-      <video:description>Khi nhà báo điều tra Ngọc biến mất cùng bằng chứng chống lại tập đoàn Thái Minh Huyền Thoại, một chiếc USB định mệnh rơi vào tay người bạn thân nhất của cô, Kim. Bị một đế chế tội phạm nhắm đến, người bảo vệ duy nhất của Kim là cảnh sát Chiến Nam. Điều bắt đầu như một nhiệm vụ bảo vệ dần biến thành một cuộc thâm nhập sâu vào tổ chức. Khi K52—đồng nghiệp của Chiến Nam—mất tích và Kim bị bắt cóc, Chiến Nam dấn thân vào mạng lưới âm mưu của Thái Minh. Ngay khi công lý dường như trong tầm tay, tên trùm thực hiện kế hoạch “thoát hiểm bằng vỏ ve sầu”. Cuộc chiến thực sự chỉ mới bắt đầu, buộc Chiến Nam phải dấn thân vào những góc tối nhất để khám phá sự thật đằng sau một màn ảo thuật được dàn dựng hoàn hảo.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/qdiTQ_PZ2Gs</video:player_loc>
-    </video:video>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/no-o-trong-rung</loc>
     <lastmod>2026-07-29</lastmod>
     <changefreq>daily</changefreq>
@@ -2598,22 +3668,6 @@
       <video:title>Trailer Sự kỳ lạ</video:title>
       <video:description>Một bác sĩ điên sử dụng các bệnh nhân tại viện tâm thần biệt lập của mình làm đối tượng thí nghiệm trong nỗ lực kéo dài tuổi thọ bằng cách phẫu thuật cấy ghép một tuyến nhân tạo vào hộp sọ của họ.</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/XYecZ4tB5mE</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ten-cuop-bien</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ten-cuop-bien-thumb.jpg</image:loc>
-      <image:title>Tên cướp biển</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/ten-cuop-bien-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Tên cướp biển</video:title>
-      <video:description>Trong Chiến tranh năm 1812 chống lại Anh: Tướng Andrew Jackson chỉ còn lại 1.200 người để bảo vệ New Orleans khi ông biết tin một hạm đội Anh sẽ đến với 60 tàu và 16.000 quân để chiếm thành phố. Trong tình huống này, một hòn đảo gần thành phố trở nên quan trọng về mặt chiến lược đối với cả hai bên, nhưng đó lại là nơi sinh sống của tên cướp biển khét tiếng cuối cùng: Jean Lafitte. Mặc dù Lafitte chưa bao giờ tấn công tàu thuyền Mỹ, nhưng thống đốc lại căm ghét hắn vì tội bán hàng hóa không đóng thuế - và cũng chính vì lý do đó mà hắn được người dân yêu mến. Khi cuộc chiến lớn đến gần, Lafitte bị giằng xé giữa hai phe. Trái tim hắn thuộc về nước Mỹ, nhưng người dân lại thúc giục hắn gia nhập phe nào có nhiều khả năng chiến thắng hơn.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/UICEeSlm2is</video:player_loc>
     </video:video>
   </url>
   <url>
@@ -3537,22 +4591,6 @@
     </video:video>
   </url>
   <url>
-    <loc>https://khophim.org/phim/dia-nguc-hiem-ac</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/dia-nguc-hiem-ac-thumb.jpg</image:loc>
-      <image:title>Địa ngục hiểm ác</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/dia-nguc-hiem-ac-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Địa ngục hiểm ác</video:title>
-      <video:description>Một căn nhà gỗ hẻo lánh bị ám ảnh bởi những vụ giết người rùng rợn, và điều mà những người sống trong đó không hề hay biết là một thế lực siêu nhiên đang ẩn náu bên trong. Liệu cặp đôi có thể giải mã bí ẩn của vùng đất bị nguyền rủa kịp thời hay họ sẽ mở cánh cửa dẫn đến địa ngục?</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/F9TGBNG6qRk</video:player_loc>
-    </video:video>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/er-phong-cap-cuu-phan-7</loc>
     <lastmod>2026-07-29</lastmod>
     <changefreq>daily</changefreq>
@@ -3697,22 +4735,6 @@
     </video:video>
   </url>
   <url>
-    <loc>https://khophim.org/phim/sinh-vat-than-thoai-phan-1</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/sinh-vat-than-thoai-phan-1-thumb.jpg</image:loc>
-      <image:title>Sinh Vật Thần Thoại (Phần 1)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/sinh-vat-than-thoai-phan-1-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Sinh Vật Thần Thoại (Phần 1)</video:title>
-      <video:description>Với một kẻ giết người hàng loạt thả rông trên Carnival Row, và một chính phủ nhắm mắt làm ngơ trước cái chết của những công dân thuộc tầng lớp thấp hơn, Rycroft Philostrate, một điều tra viên thiện chiến, là người duy nhất sẵn sàng ngăn chặn các vụ giết người và duy trì nền hòa bình mong manh. Nhưng khi Vignette Stonemoss, một tiên nữ tị nạn, xuất hiện ở Burgue, cô buộc Philo phải nhớ lại quá khứ mà anh đã cố quên đi.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/369LHB9N-Ro</video:player_loc>
-    </video:video>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/ly-thuyet-kinh-vo</loc>
     <lastmod>2026-07-29</lastmod>
     <changefreq>daily</changefreq>
@@ -3809,22 +4831,6 @@
     </video:video>
   </url>
   <url>
-    <loc>https://khophim.org/phim/toc-do-sinh-tu</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260505-1/0813e97d8e86e775f38d05b518cb4d4a.jpg</image:loc>
-      <image:title>Tốc Độ Sinh Tử</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260505-1/0813e97d8e86e775f38d05b518cb4d4a.jpg</video:thumbnail_loc>
-      <video:title>Trailer Tốc Độ Sinh Tử</video:title>
-      <video:description>Phim theo chân Ace cùng đội đua đường phố tinh nhuệ của anh khi họ bị một tổ chức bí ẩn ép buộc tham gia vào nhiệm vụ cực kỳ nguy hiểm, sau khi hoàn thành một phi vụ mang tên Four Amigos, cả nhóm tiếp tục bị lôi kéo làm việc cho tổ chức sát thủ ngầm mang danh Church of Assassins, nhưng dần nhận ra rằng ngay từ đầu thất bại đã được sắp đặt sẵn.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/3_iTX9mWMHQ</video:player_loc>
-    </video:video>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/g-dragon-trong-rap-chieu-phim-ubermancy</loc>
     <lastmod>2026-07-29</lastmod>
     <changefreq>daily</changefreq>
@@ -3870,22 +4876,6 @@
       <video:title>Trailer Tối Nay, 8 Giờ!</video:title>
       <video:description>Ước mơ lấy chồng giàu sang để nhanh chống đổi đời là khát vọng của 4 cô gái trẻ nơi chốn làng quê. Trong mắt họ, &quot;đại gia&quot; như những &quot;chú vịt trời&quot; béo bở đang chờ được &quot;săn&quot;, với tất cả vốn liếng, sắc đẹp và tuổi trẻ các cô đã dồn hết vào cuộc đi săn &quot;định mệnh&quot; đời mình. &amp;nbsp; “Ai sẽ là người đi săn&quot; hay &quot;bị săn&quot; đều là những câu hỏi chưa có đáp án. Bí quyết &quot;làm sao lấy chồng đại gia&quot; luôn chờ đón các kiều nữ...khám phá!</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/zmb6OJUYpco</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nguoi-dan-ong-vo-danh</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260505-1/d3ec9487dedf3c5c06dd596634de1e71.jpg</image:loc>
-      <image:title>Người đàn ông Vô Danh</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260505-1/d3ec9487dedf3c5c06dd596634de1e71.jpg</video:thumbnail_loc>
-      <video:title>Trailer Người đàn ông Vô Danh</video:title>
-      <video:description>Louis, một nhà văn người Flemish, quyết định tự cô lập mình ở vùng Côte d’Azur, với hy vọng nơi này sẽ mang lại cho ông nguồn cảm hứng.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/W7x1EJvXHd4</video:player_loc>
     </video:video>
   </url>
   <url>
@@ -4014,22 +5004,6 @@
       <video:title>Trailer Lời Chào Cuối Cùng</video:title>
       <video:description>Một chuyến đi đường bất ngờ đã đưa một gia đình bất hòa lại với nhau trong chuyến hành trình cuối cùng cùng người lớn tuổi, khơi dậy những khoảnh khắc gắn kết, niềm vui và sự hòa giải.</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/4H3HnYFcIPM</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/mot-giong-ngoai</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/mot-giong-ngoai-thumb.jpg</image:loc>
-      <image:title>Một giống ngoài</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/mot-giong-ngoai-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Một giống ngoài</video:title>
-      <video:description>Khi Violet nhận lời mời đến một hòn đảo tư nhân cùng với một số người có tầm ảnh hưởng trên mạng xã hội nổi tiếng nhất thế giới, cô kỳ vọng sẽ có một cuối tuần với cơ hội lan truyền thông tin chưa từng có. Nhưng cô nhanh chóng trở thành một phần của chương trình truyền hình thực tế kinh dị của riêng mình khi các vị khách bị buộc phải cạnh tranh với nhau để bắt những con chó ăn thịt người huyền thoại trên đảo trước khi chính họ trở thành nạn nhân của những con thú hung tàn đó.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/MQudR1Gb7m4</video:player_loc>
     </video:video>
   </url>
   <url>
@@ -4401,22 +5375,6 @@
     </video:video>
   </url>
   <url>
-    <loc>https://khophim.org/phim/huyen-tinh-da-trach</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260505-1/8c5199c76e20e44fdefaf1f2b1484883.jpg</image:loc>
-      <image:title>Huyền Tình Dạ Trạch</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260505-1/8c5199c76e20e44fdefaf1f2b1484883.jpg</video:thumbnail_loc>
-      <video:title>Trailer Huyền Tình Dạ Trạch</video:title>
-      <video:description>Huyền Tình Dạ Trạch không chỉ là một bản tình ca lãng mạn về tình yêu vượt mọi quy tắc giữa chàng trai tận tụy Chử Đồng Tử và công chúa Tiên Dung, mà còn là một cuộc hành trình văn hóa sử thi đưa khán giả trở về với vẻ huy hoàng của Đông Sơ Đông. Cuộc gặp gỡ định mệnh của họ tại đầm lầy Dạ Trạch rộng lớn trở thành biểu tượng của tình yêu bất diệt và là cuộc hành trình chung về sự định cư, sinh tồn và nỗ lực chinh phục thiên nhiên của nhân loại trong thời đại Văn Lang.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/Zh0lGIwgOeQ</video:player_loc>
-    </video:video>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/nhung-dua-con-cua-mua-he</loc>
     <lastmod>2026-07-29</lastmod>
     <changefreq>daily</changefreq>
@@ -4446,22 +5404,6 @@
       <video:title>Trailer O&apos;PENing</video:title>
       <video:description>Wi Da-In (Ha Yoon-Kyung) là một nhà thiết kế tự do nhiệt tình. Cô tham gia vào một dự án và làm việc với Park Hyun-Woo (Lee Hak-Joo). Park Hyun-Woo là trưởng nhóm của một công ty thương hiệu. Park Hyun-Woo và Wi Da-In đã chia sẻ tình một đêm trong quá khứ của họ. Trong thời gian làm việc chung, cả hai bắt đầu có tình cảm với nhau. Vào khoảng thời gian này, bạn trai cũ của Wi Da-In là Jeon Jin-Seok (Jeong Jae-Kwang) bắt đầu hợp tác với Wi Da-In và Park Hyun-Woo trong cùng một dự án.</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/BIPjPyenym8</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/dau-si-ngam</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/dau-si-ngam-thumb.jpg</image:loc>
-      <image:title>Đấu sĩ ngầm</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/dau-si-ngam-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Đấu sĩ ngầm</video:title>
-      <video:description>Hai anh em cùng tham gia giải đấu võ thuật ngầm nguy hiểm nhất thế giới, nơi họ phải quyết định xem có nên tuân thủ luật lệ hay gạt bỏ danh dự sang một bên và hợp tác để hạ gục tổ chức tội phạm khét tiếng đang điều hành giải đấu.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/1ssNi5j32cU</video:player_loc>
     </video:video>
   </url>
   <url>
@@ -4654,38 +5596,6 @@
       <video:title>Trailer Sau Khi Phim Khiêu Dâm Kết Thúc 2</video:title>
       <video:description>After Porn Ends 2 tiếp nối phần trước và không chỉ đưa khán giả quay ngược thời gian để gặp gỡ những ngôi sao phim người lớn lớn tuổi nhất còn sống, mà còn đi sâu vào cuộc sống của một số người mới giải nghệ và so sánh trải nghiệm của họ sau khi rời bỏ ngành công nghiệp phim người lớn. Phim đào sâu hơn vào những định kiến dai dẳng của xã hội về chủng tộc, sự kỳ thị phụ nữ và thực tế về việc giảm bớt cơ hội cho những ngôi sao từng xuất hiện trên bìa hộp băng VHS này. Đối với một số người, sự nghiệp trong ngành giải trí người lớn được họ tự hào đón nhận mà không hề hối tiếc. Trên thực tế, dường như đó là con đường dẫn đến hạnh phúc và sự bình yên nội tâm hiện tại của họ. Tuy nhiên, đối với những người khác, sự nghiệp trong ngành phim người lớn lại là con đường dẫn đến sự tuyệt vọng khi họ phải vật lộn để chôn vùi quá khứ và tìm kiếm một sự nghiệp hoặc hướng đi mới.</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/T9fLBBxjAgM</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/vi-than-dien-loan</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/vi-than-dien-loan-thumb.jpg</image:loc>
-      <image:title>Vị Thần Điên Loạn</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/vi-than-dien-loan-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Vị Thần Điên Loạn</video:title>
-      <video:description>30 năm ấp ủ dự án phim của tài năng huyền thoại Phil Tippett, bộ phim kinh dị stop-motion này, lấy bối cảnh địa ngục, rất rùng rợn và ghê rợnTheo chân The Assassin qua một thế giới cấm đoán của những linh hồn bị tra tấn, những căn hầm mục nát và những con quái vật khốn khổ được rèn giũa từ những nỗi kinh hoàng nguyên thủy nhất của tiềm thức. Mọi bộ, sinh vật và hình nộm trong kiệt tác rùng rợn này đều được làm thủ công và làm hoạt hình cẩn thận bằng kỹ thuật chuyển động dừng truyền thống. MAD GOD là tác phẩm của tình yêu, một minh chứng cho sức mạnh của óc sáng tạo và sự tôn kính đối với nghệ thuật hoạt hình stop-motion vượt thời gian. Sẵn sàng đôi mắt của bạn. Sẵn sàng tinh thần.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/jas8OABbn0Y</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/choi-chet</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260505-1/90c3e72ff324feea76940eba19edb817.jpg</image:loc>
-      <image:title>Chơi Chết</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260505-1/90c3e72ff324feea76940eba19edb817.jpg</video:thumbnail_loc>
-      <video:title>Trailer Chơi Chết</video:title>
-      <video:description>Một người phụ nữ tỉnh dậy trong tầng hầm với nhiều vết thương, xung quanh là xác chết. Để sống sót, cô giả vờ chết trong khi một nghi lễ rùng rợn diễn ra ở ngôi nhà phía trên.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/Ry9pq-ggBS8</video:player_loc>
     </video:video>
   </url>
   <url>
@@ -5006,22 +5916,6 @@
       <video:title>Trailer Dark Web: Cicada 3301</video:title>
       <video:description>Theo dõi Hacker Connor, người bạn thân nhất của ông Avi và một thủ thư xảo quyệt thấy mình trên đầu khi bị buộc phải cạnh tranh trong trò chơi tuyển dụng toàn cầu của Hiệp hội Dark Web Secret.</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/PhTViyWswUU</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thanh-tra</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/thanh-tra-thumb.jpg</image:loc>
-      <image:title>Thanh Tra</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/thanh-tra-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Thanh Tra</video:title>
-      <video:description>Ellis French là một thanh niên da đen đồng tính, bị mẹ từ chối và không có nhiều lựa chọn cho tương lai, quyết định gia nhập Thủy quân lục chiến, làm bất cứ điều gì cần thiết để thành công trong một hệ thống sẽ gạt anh ta sang một bên. Nhưng ngay cả khi chiến đấu với định kiến ăn sâu và thói quen đào tạo cơ bản mệt mỏi, anh vẫn tìm thấy tình bạn thân thiết, sức mạnh và sự hỗ trợ bất ngờ trong cộng đồng mới này, mang lại cho anh cảm giác thân thuộc khó kiếm được sẽ hình thành nên con người anh và thay đổi cuộc đời anh mãi mãi. .</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/wSeprzQM6gk</video:player_loc>
     </video:video>
   </url>
   <url>
@@ -6176,912 +7070,6 @@
     <image:image>
       <image:loc>https://img.ophim.live/uploads/movies/tap-lam-nguoi-xau-phan-5-thumb.jpg</image:loc>
       <image:title>Tập làm người xấu (Phần 5)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/khu-toi-song-phan-2</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20241218-1/17cce3c94ab2d8ff697bbf8cf1199ebf.jpg</image:loc>
-      <image:title>Khu tôi sống (Phần 2)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nhung-ke-xau-xa-phan-1</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251107-1/6ecb1b3c30c8aae3773c6445d30cf9dc.jpg</image:loc>
-      <image:title>Những Kẻ Xấu Xa (Phần 1)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20251107-1/6ecb1b3c30c8aae3773c6445d30cf9dc.jpg</video:thumbnail_loc>
-      <video:title>Trailer Những Kẻ Xấu Xa (Phần 1)</video:title>
-      <video:description>Băng Kẻ Xấu bước chân vào con đường tội phạm bằng cách nào? Hãy cùng tìm hiểu trong loạt phim tiền truyện hài hước này, lấy bối cảnh trước các bộ phim đình đám.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/o6HXxD6CcLg</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thoi-dai-lap-nghiep</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/thoi-dai-lap-nghiep-thumb.jpg</image:loc>
-      <image:title>Thời Đại Lập Nghiệp</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/10-nam-3-thang-30-ngay-thap-nien-tam-nguyet-tam-thap-nhat</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/10-nam-3-thang-30-ngay-thumb.jpg</image:loc>
-      <image:title>10 Năm 3 Tháng 30 Ngày</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/bac-si-trai-giam</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/bac-si-trai-giam-thumb.jpg</image:loc>
-      <image:title>Bác sĩ trại giam</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tom-and-jerry-kids-show-1990-phan-1</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tom-and-jerry-kids-show-1990-phan-1-thumb.jpg</image:loc>
-      <image:title>Tom and Jerry Kids Show (1990) (Phần 1)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/bay-thuong-truong-ke-truyen-thua</loc>
-    <lastmod>2026-07-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20240520-1/a818d6ca7460644df12d3be79670c5fb.jpg</image:loc>
-      <image:title>Bẫy Thương Trường (Kẻ Truyền Thừa)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20240520-1/a818d6ca7460644df12d3be79670c5fb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Bẫy Thương Trường (Kẻ Truyền Thừa)</video:title>
-      <video:description>Sau cái chết bất ngờ của bố mẹ, cuộc sống của hai chị em Tailah và Fahrung bị đảo lộn. Tailah dính líu đến Hiran, con trai của một chủ doanh nghiệp giàu có và quyền lực. Cha con Hiran dùng quyền lực tống Tailah vào tù. Trong tù, Tailah gặp một tù nhân người Hoa họ Yang, ông dạy cho anh nhiều bí quyết kinh doanh. Khi ra tù, Tailah bắt đầu bước vào một cuộc chiến mới, chống lại cái ác và sự bất công.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/iOSc2mgfYlg</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tu-dai-tai-tu</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tu-dai-tai-tu-thumb.jpg</image:loc>
-      <image:title>Tứ Đại Tài Tử</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tan-thien-bao-giam</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tan-thien-bao-giam-thumb.jpg</image:loc>
-      <image:title>Tần Thiên Bảo Giám</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/vu-an-tinh-yeu-vuot-thoi-gian</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/vu-an-tinh-yeu-vuot-thoi-gian-thumb.jpg</image:loc>
-      <image:title>Vụ Án Tình Yêu Vượt Thời Gian</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/truyen-tich-than-ky</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/truyen-tich-than-ky-thumb.jpg</image:loc>
-      <image:title>Truyền Tích Thần Kỳ</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/cuu-giang-thap-nhi-phuong</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/cuu-giang-thap-nhi-phuong-thumb.jpg</image:loc>
-      <image:title>Cửu Giang Thập Nhị Phường</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/bong-ma-nua-dem</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/bong-ma-nua-dem-thumb.jpg</image:loc>
-      <image:title>Bóng Ma Nửa Đêm</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/skyscraper-live</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/skyscraper-live-thumb.jpg</image:loc>
-      <image:title>Skyscraper Live</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/skyscraper-live-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Skyscraper Live</video:title>
-      <video:description>Không có dây thừng. Không sợ hãi. Huyền thoại solo tự do Alex Honnold mạo hiểm tất cả trong cuộc đua trực tiếp đầy rủi ro khi leo lên một trong những tòa nhà chọc trời cao nhất thế giới ở Đài Bắc, Đài Loan. &amp;nbsp;</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/ZXiEp_GGSpg</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/bac-thay-va-margarita</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/bac-thay-va-margarita-thumb.jpg</image:loc>
-      <image:title>Bậc Thầy và Margarita</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/bac-thay-va-margarita-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Bậc Thầy và Margarita</video:title>
-      <video:description>Moscow, thập niên 1930. Một nhà văn bị cấm xuất bản và khai trừ khỏi hội chính thức, mất sạch kế sinh nhai. Anh bắt đầu viết cuốn tiểu thuyết về một vị khách bí ẩn từ bóng tối… và dần không phân biệt nổi giữa câu chuyện mình viết và hiện thực quanh mình.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/Iy8dEW_Jjak</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ke-giet-toi-la-chong-toi-short-drama</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250626-1/acfe5e55b906460b9bc6c1fe37609215.jpg</image:loc>
-      <image:title>Kẻ Giết Tôi Là Chồng Tôi</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/quy-du-phan-3</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/quy-du-phan-3-thumb.jpg</image:loc>
-      <image:title>Quỷ Dữ (Phần 3)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/quy-du-phan-3-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Quỷ Dữ (Phần 3)</video:title>
-      <video:description>Phần ba bắt đầu ngay sau khi phần hai kết thúc: khi David và Kristen mới được thụ phong hôn nhau. Hai người không chỉ phải điều hướng thực tế mới đầy thách thức này mà còn phải đấu tranh với sự tham gia của David với &quot;thực thể&quot;, một đơn vị gián điệp trong nhà thờ Công giáo. Trong khi đó, Ben thấy não mình bị tổn thương vì những vụ án chưa được giải quyết và quay sang nhờ chị gái giúp đỡ.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/WFvo3fS4Zwc</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/khung-bo-quoc-te</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250804-1/c2e912f40ac72baf22221ab89412752f.jpg</image:loc>
-      <image:title>Khủng Bố Quốc Tế</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250804-1/c2e912f40ac72baf22221ab89412752f.jpg</video:thumbnail_loc>
-      <video:title>Trailer Khủng Bố Quốc Tế</video:title>
-      <video:description>Bộ phim là câu chuyện của nhân viên Interpol Louis Salinger và luật sư cố vấn của Manhattan Eleanor Whitman. Cả hai đang cố gắng lập lại công lý bằng cách vạch trần một trong số những ngân hàng có quyền lực nhất thế giới. Khám phá được các hoạt động phi pháp của ngân hàng này, bao gồm rửa tiền, buôn bán vũ khí và góp phần làm mất ổn định chính quyền, Salinger và Whitman bị cuốn vào cuộc điều tra xuyên các thành phố từ Berlin đến Milan, New York và Istanbul.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/HzVktMEvUts</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nhung-bo-phim-lon-len-cung-chung-ta-phan-2</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20241005-1/ee8ad815693cc8735cbf3ea0b9a7861b.jpg</image:loc>
-      <image:title>Những Bộ Phim Lớn Lên Cùng Chúng Ta (Phần 2)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/su-de-thuong-cua-toi-khong-co-tac-dung-voi-kuroiwa-medaka</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250506-1/cbcf553e72a67f139b297410a5a4124a.jpg</image:loc>
-      <image:title>Sự Dễ Thương Của Tôi Không Có Tác Dụng Với Kuroiwa Medaka</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250506-1/cbcf553e72a67f139b297410a5a4124a.jpg</video:thumbnail_loc>
-      <video:title>Trailer Sự Dễ Thương Của Tôi Không Có Tác Dụng Với Kuroiwa Medaka</video:title>
-      <video:description>Xinh đẹp từ đầu đến chân! Vóc dáng hoàn hảo! Với Kawai Mona, việc chinh phục trái tim đàn ông dễ dàng như hơi thở... nhưng sự xuất hiện của Kuroiwa Medaka, một nam sinh mới chuyển trường, người thậm chí không thèm liếc nhìn cô lấy một lần, đã đảo lộn hoàn toàn cuộc sống học đường của cô! Cô đã quen với việc được mọi người vây quanh và tán dương, vậy tại sao cậu ta lại khác biệt? Mona thử mọi cách có thể để chinh phục Medaka, thậm chí đôi khi còn hơi quá trớn!</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/ol3VEokpIi4</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/blood-the-last-vampire</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/blood-the-last-vampire-thumb.jpg</image:loc>
-      <image:title>Blood: The Last Vampire</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/bay-nuot-mang</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20240619-1/3c11262bf23a6c125ef979c4c63f7e72.jpg</image:loc>
-      <image:title>Bẫy Nuốt Mạng</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20240619-1/3c11262bf23a6c125ef979c4c63f7e72.jpg</video:thumbnail_loc>
-      <video:title>Trailer Bẫy Nuốt Mạng</video:title>
-      <video:description>Những vụ án tưởng như chỉ là tai nạn thông thường, nhưng lại là kế hoạch được chuẩn bị vô cùng tinh vi của một tổ chức trong bóng tối. Cho đến một ngày, một thành viên trong tổ chức vô tình mất mạng trong nhiệm vụ. Sự nghi hoặc bắt đầu dấy lên trong nội bộ, là các thành viên gài bẫy nhau hay có người khác đứng sau mọi chuyện?</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/pjpKuRaL3FE</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thien-nhien-hoang-da-trung-quoc</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/thien-nhien-hoang-da-trung-quoc-thumb.jpg</image:loc>
-      <image:title>Thiên Nhiên Hoang Dã Trung Quốc</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/running-point</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/running-point-thumb.jpg</image:loc>
-      <image:title>Running Point</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thieu-nien-chi</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/thieu-nien-chi-thumb.jpg</image:loc>
-      <image:title>Thiếu Niên Chí</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/linh-hon-bac-chuong-mitsuba</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/linh-hon-bac-chuong-mitsuba-thumb.jpg</image:loc>
-      <image:title>Linh Hồn Bạc: Chương Mitsuba</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/black-lagoon-phan-2</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/black-lagoon-phan-2-thumb.jpg</image:loc>
-      <image:title>Black Lagoon (Phần 2)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/black-lagoon-phan-2-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Black Lagoon (Phần 2)</video:title>
-      <video:description>Trong Mùa 2, Rock và bè lũ cướp biển chạm trán cặp sinh đôi sát thủ sau khi vướng vào cuộc chiến giữa các tổ chức tội phạm không đội trời chung.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/-KgtNdG_zfE</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nhat-ky-thuong-ngay-cua-tien-vuong-phan-1</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251207-1/a3b8a3169cb6f5852d361925549b66a8.jpg</image:loc>
-      <image:title>Nhật Ký Thường Ngày Của Tiên Vương (Phần 1)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20251207-1/a3b8a3169cb6f5852d361925549b66a8.jpg</video:thumbnail_loc>
-      <video:title>Trailer Nhật Ký Thường Ngày Của Tiên Vương (Phần 1)</video:title>
-      <video:description>Chuyện nói về một anh chàng với tuổi thơ bắt đầu năm sáu tuổi, anh giết vua quỷ Swallow Sky Clam. Là một phù thủy tu luyện toàn năng, Tiên vương phải che giấu sức mạnh của mình và sống giữa một nhóm sinh viên tu luyện bình thường.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/NYSbgtnXlQg</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/the-gioi-song-song-cua-todome</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/the-gioi-song-song-cua-todome-thumb.jpg</image:loc>
-      <image:title>Thế Giới Song Song Của Todome</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/gia-toc-vinh-dieu</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/gia-toc-vinh-dieu-thumb.jpg</image:loc>
-      <image:title>Gia Tộc Vinh Diệu</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/gia-toc-vinh-dieu-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Gia Tộc Vinh Diệu</video:title>
-      <video:description>&quot;Đám cưới thế kỷ&quot; giữa hai thiếu gia gia tộc họ Mã tài phiệt giàu có với hai chị em hoa hậu là Chân Tâm và Lạc Nghi được diễn ra cùng một ngày trong sự vui mừng của hai cô gái. Tuy nhiên, sau đám cưới hoành tráng xa hoa ấy, ba anh em nhà họ Mã gồm Diệu Tông, Diệu Tổ, Diệu Đường đã bị bắt để điều tra vì nghi ngờ hối lộ quan chức. Và Anh họ của cả ba là Mã Triển Hồng đột nhiên xuất hiện trở thành CEO tạm thời của tập đoàn. Sau đó là những cuộc tranh giành đấu đá giữa các cô gái và thành viên trong gia tộc diễn ra ngày một căng thẳng.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/fBu_ER7p3R0</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ocean-with-david-attenborough</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ocean-with-david-attenborough-thumb.jpg</image:loc>
-      <image:title>Ocean with David Attenborough</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/ocean-with-david-attenborough-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Ocean with David Attenborough</video:title>
-      <video:description>David Attenborough takes viewers on a breathtaking journey showing there is nowhere more vital for our survival, more full of life, wonder, or surprise, than the ocean. Through spectacular sequences featuring coral reefs, kelp forests and the open ocean, Attenborough shares why a healthy ocean keeps the entire planet stable and flourishing.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/cIZAdCtKT_g</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/gia-dinh-song-giua-man-dem</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/gia-dinh-song-giua-man-dem-thumb.jpg</image:loc>
-      <image:title>Gia Đình Sống Giữa Màn Đêm</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/gia-dinh-song-giua-man-dem-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Gia Đình Sống Giữa Màn Đêm</video:title>
-      <video:description>Marigaby ban ngày là sinh viên y khoa, và ban đêm, cô cùng gia đình đi cứu người trong ngành kinh doanh khốc liệt là dịch vụ xe cấp cứu tư nhân ở Mexico City. Khi áp lực từ hai thế giới chực chờ nhấn chìm cô, Mariagby sẵn sàng làm tất cả để vượt qua.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/aGzVn32Stxo</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/kaulitz-and-kaulitz-phan-2</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/kaulitz-and-kaulitz-phan-2-thumb.jpg</image:loc>
-      <image:title>Kaulitz &amp; Kaulitz (Phần 2)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/kaulitz-and-kaulitz-phan-2-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Kaulitz &amp; Kaulitz (Phần 2)</video:title>
-      <video:description>Hai anh em siêu sao sinh đôi Tom và Bill Kaulitz hé lộ cuộc sống riêng tư của họ ở Los Angeles và Đức trong chương trình thực tế hài hước và gần gũi này.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/zEX0buw7VAQ</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tham-hoa-toan-tap-bi-kich-astroworld</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tham-hoa-toan-tap-bi-kich-astroworld-thumb.jpg</image:loc>
-      <image:title>Thảm Họa Toàn Tập: Bi Kịch Astroworld</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/tham-hoa-toan-tap-bi-kich-astroworld-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Thảm Họa Toàn Tập: Bi Kịch Astroworld</video:title>
-      <video:description>Với các cuộc phỏng vấn độc quyền cùng người sống sót, đội ngũ y tế và nhân viên của lễ hội, bộ phim tài liệu này khám phá thảm kịch Astroworld năm 2021 và những hệ lụy sau đó.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/I6h2NrQIGQs</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tay-sung-than-sau-2021</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251126-1/9f9775d6dc65d28090b966e7d1696d1d.jpg</image:loc>
-      <image:title>Tay Súng Thần Sầu</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20251126-1/9f9775d6dc65d28090b966e7d1696d1d.jpg</video:thumbnail_loc>
-      <video:title>Trailer Tay Súng Thần Sầu</video:title>
-      <video:description>“Bàn Tay Quỷ” – kẻ bắn tỉa huyền thoại của Giang Thành bị Hi Hoà Đường truy lùng với danh nghĩa là kẻ phản bội. Lục Lan trong lúc bị Lãnh Phong nữ sát thủ số một của Hi Hoà Đường bắt cóc, biết được anh trai Thẩm Liệt của mình bị “Bàn Tay Quỷ” giết chết, đã sinh lòng thù hận. Hi Hoà Đường đã huấn luyện Lục Lan trở thành sát thủ, Lục Lan cùng Lãnh Phong đã tiêu diệt các thế lực ngầm chuyên bán vũ khí đạn dược, ám sát Mã Văn Xương. “Bàn Tay Quỷ” đã nhiều lần xuất hiện để cản trở nhiệm vụ của hai người, Lục Lan quyết định giết “Bàn Tay Quỷ” để trả thù cho anh trai. Trong cuộc đấu súng sinh tử, Lục Lan phát hiện ra thân phận thật sự của “Bàn Tay Quỷ”, chính là anh trai của mình. Hoá ra, tất cả đều là âm mưu của Hi Hoà Đường…</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/H7ZI65cpg3o</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hau-tay-du-ky</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/hau-tay-du-ky-thumb.jpg</image:loc>
-      <image:title>Hậu Tây Du Ký</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/sat-thu-de-nhat-the-gioi-chuyen-sinh-thanh-quy-toc</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20241102-1/52f851f518c2f6d053d6ef1692cdf7c0.jpg</image:loc>
-      <image:title>Sát thủ đệ nhất thế giới chuyển sinh thành quý tộc</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20241102-1/52f851f518c2f6d053d6ef1692cdf7c0.jpg</video:thumbnail_loc>
-      <video:title>Trailer Sát thủ đệ nhất thế giới chuyển sinh thành quý tộc</video:title>
-      <video:description>&amp;quot;Tôi sẽ sống cho chính mình!&amp;quot; Sát thủ vĩ đại nhất trên Trái đất chỉ biết cách sống như một công cụ cho chủ nhân của mình - cho đến khi họ ngừng để anh ta sống. Được tái sinh bởi ân sủng của một nữ thần vào một thế giới của kiếm và ma thuật, lần này anh ta có cơ hội làm những điều khác đi, nhưng có một cái bắt ... thế giới trừ khi anh ta bị dừng lại. Bây giờ được biết đến với cái tên Lugh Tuatha Dé, sát thủ bậc thầy chắc chắn đã bó tay, đặc biệt là vì toàn những cô gái xinh đẹp luôn vây quanh anh ta. L Dù có thể là một kẻ giết người không thể so sánh được, nhưng anh ta sẽ chống lại kẻ thù bằng phép thuật mạnh mẽ như thế nào?</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/kIubDmuH8Sw</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/mighty-express-phan-5</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/mighty-express-phan-5-thumb.jpg</image:loc>
-      <image:title>Mighty Express (Phần 5)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/chung-quy-bat-ma</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20240616-1/07ba0194ae25e909ef10582eab91906c.jpg</image:loc>
-      <image:title>Chung Quỳ Bắt Ma</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/haikyu-chang-khong-lo-ti-hon-phan-1</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/haikyu-chang-khong-lo-ti-hon-phan-1-thumb.jpg</image:loc>
-      <image:title>Haikyu - Chàng khổng lồ tí hon (Phần 1)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/dai-hiep-trien-chieu</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/dai-hiep-trien-chieu-thumb.jpg</image:loc>
-      <image:title>Đại Hiệp Triển Chiêu</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hoi-chung-tuoi-thanh-xuan-phan-2</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250909-1/6e2a7a492f1f6f180b4f2ca39f16971f.jpg</image:loc>
-      <image:title>Hội Chứng Tuổi Thanh Xuân (Phần 2)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250909-1/6e2a7a492f1f6f180b4f2ca39f16971f.jpg</video:thumbnail_loc>
-      <video:title>Trailer Hội Chứng Tuổi Thanh Xuân (Phần 2)</video:title>
-      <video:description>Hội chứng tuổi thanh xuân — một hội chứng được đồn đại, bí ẩn ảnh hưởng đến những người trong giai đoạn tuổi dậy thì. Điển hình, một cô gái trong hình dạng con thỏ xuất hiện trước mặt Sakuta Azusagawa. Danh tính thực sự của cô gái đó chính là Mai Sakurajima, một học sinh nổi tiếng. đàn chị trong trường Cao Trung. Trong quá trình tìm hiểu bí ẩn đằng sau hội chứng này, Sakuta đã bắt đầu nhận ra cảm xúc của mình đối với Mai và câu chuyện bắt đầu từ đó...</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/WZeyt8KrrqY</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/mai-nha-da-chon</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/mai-nha-da-chon-thumb.jpg</image:loc>
-      <image:title>Mái Nhà Đã Chọn</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ken-chong-quy-toc-phan-1</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ken-chong-quy-toc-phan-1-thumb.jpg</image:loc>
-      <image:title>Kén Chồng Quý Tộc (Phần 1)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/ken-chong-quy-toc-phan-1-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Kén Chồng Quý Tộc (Phần 1)</video:title>
-      <video:description>Một nhóm các cô gái Mỹ ham vui tới London năm 1870 thời phong kiến gò bó, khơi mào cuộc xung đột văn hóa Anh-Mỹ. Đến để tìm kiếm chồng và địa vị, trái tim của những cô nàng này mong nhiều điều hơn thế.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/FaDFty5ipEg</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ke-hoach-nguoi-yeu-cu-4-som-yeu-tre-cuoi</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250508-1/dcbdc009f640322d940363123b467814.jpg</image:loc>
-      <image:title>Kế Hoạch Người Yêu Cũ 4: Sớm Yêu Trễ Cưới</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250508-1/dcbdc009f640322d940363123b467814.jpg</video:thumbnail_loc>
-      <video:title>Trailer Kế Hoạch Người Yêu Cũ 4: Sớm Yêu Trễ Cưới</video:title>
-      <video:description>Là chuỗi phim tình cảm thương hiệu, phần bốn trở lại khi Mạnh Vân đang loay hoay tìm đối tượng, trong khi Dư Phi lại tiến đến bước trải nghiệm trước cuộc sống hôn nhân. Dù đôi bạn nằm ở &amp;quot;hai đầu quả đất&amp;quot;, nhưng thử thách lại cùng đến với mỗi người theo cách khác nhau.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/NqByYeSlE04</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hon-le-cua-em</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250508-1/01be62f6b7666a6febed27aef8c7bc8b.jpg</image:loc>
-      <image:title>Hôn Lễ Của Em</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250508-1/01be62f6b7666a6febed27aef8c7bc8b.jpg</video:thumbnail_loc>
-      <video:title>Trailer Hôn Lễ Của Em</video:title>
-      <video:description>Mười lăm năm, Châu Tiêu Tề luôn giữ trong tim hình bóng của Vưu Vịnh Tử như lần đầu gặp gỡ. Tình yêu thuần khiết thời thanh xuân đưa cả hai trải qua những khoảng thời gian tuyệt đẹp nhất và gian truân nhất của tuổi trẻ. Nhưng tình yêu là thứ khó nắm bắt, sẽ thế nào khi người nắm tay em ở cuối con đường... không phải anh?</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/8HHwMcCdnJA</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hoi-tam-hoang-3-nghia-khi-ngut-troi</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250508-1/400d4a0e803b65577dcd791aa063bf31.jpg</image:loc>
-      <image:title>Hội Tam Hoàng 3: Nghĩa Khí Ngút Trời</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250508-1/400d4a0e803b65577dcd791aa063bf31.jpg</video:thumbnail_loc>
-      <video:title>Trailer Hội Tam Hoàng 3: Nghĩa Khí Ngút Trời</video:title>
-      <video:description>Bộ ba anh em A Hoa, A Phi và Quốc Tử bị phục kích, và nhiệm vụ chuyển tiền thất bại. Sóng gió nối tiếp sóng gió, khi cả ba phải tham gia cuộc chiến quyền lực giữa các băng đảng. Họ sẽ làm gì giữa tiền bạc và đạo lý? Ai sẽ giành chiến thắng trong cuộc đối đầu giữa hai kẻ mạnh?</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/SSLoAXlZWwE</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tro-choi-nan-nhan-the-victims-game-phan-2</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tro-choi-nan-nhan-the-victims-game-phan-2-thumb.jpg</image:loc>
-      <image:title>Trò Chơi Nạn Nhân (Phần 2)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/tro-choi-nan-nhan-the-victims-game-phan-2-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Trò Chơi Nạn Nhân (Phần 2)</video:title>
-      <video:description>Trò Chơi Nạn Nhân là câu chuyện phát hiện cô con gái vốn không thân thiết với mình dính dáng đến những vụ giết người bí ẩn, vị thanh tra pháp y mắc hội chứng Asperger mạo hiểm tất cả để tìm ra lời giải.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/uCGNAHgxWqE</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/sieu-trom-2017</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/sieu-trom-2017-thumb.jpg</image:loc>
-      <image:title>Siêu Trộm</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/sieu-trom-2017-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Siêu Trộm</video:title>
-      <video:description>Phim Siêu Trộm - Bad Thief, Good Thief 2017: Xoay quanh một nhóm những tên trộm chuyên làm thất thoát của cải của một tổ chức bí ẩn. Quy mô không lớn, lại ít xuất đầu lộ diện, chẳng mấy ai biết rằng tổ chức này chính là thế lực ngầm đang vận hành nền kinh tế và chính trị của cả Đại Hàn Dân Quốc. Trong khi đó, nhân vật mà Seohyun đảm nhận sẽ là Kang So Joo, một cảnh sát điều tra đầy nhiệt huyết, sống để theo đuổi công lí. Kang So Joo là một cô gái ấm áp, chu đáo, yêu lẽ phải, bài bất công, luôn đứng về phía những con người bé nhỏ trong xã hội.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/-yE9Dx8T8ls</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/wicked-phan-2</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/wicked-phan-2-thumb.jpg</image:loc>
-      <image:title>Wicked: Phần 2</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/wicked-phan-2-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Wicked: Phần 2</video:title>
-      <video:description>Khi một đám đông giận dữ nổi dậy chống lại Phù thủy độc ác, Glinda và Elphaba sẽ cần phải đoàn kết lại một lần cuối cùng. Với tình bạn đơn độc của họ giờ đây là điểm tựa cho tương lai của họ, họ sẽ cần phải thực sự nhìn nhận nhau, với sự trung thực và đồng cảm, nếu họ muốn thay đổi bản thân và toàn bộ Oz mãi mãi.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/vt98AlBDI9Y</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nen-giao-duc-xau-xi</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/nen-giao-duc-xau-xi-thumb.jpg</image:loc>
-      <image:title>Nền Giáo Dục Xấu Xí</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/nen-giao-duc-xau-xi-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Nền Giáo Dục Xấu Xí</video:title>
-      <video:description>Bad Education xoay quanh câu chuyện có thật về vụ biển thủ công quỹ chấn động nước Mỹ đầu thập niên 2000, tại trường trung học Roslyn (New York). Nhân vật chính là giám đốc trường, tên Frank Tassone - một công chức được đánh giá mẫn cán, hết lòng vì mục tiêu đưa Roslyn thành trường trung học số một nước Mỹ. Pam Gluckin - trợ lý của Frank - bị hội đồng nhà trường phát hiện dùng tiền công quỹ cho việc cá nhân. Frank muốn xử lý sự việc trong yên lặng. Tuy vậy, Rachel Bhargava - nữ sinh làm việc cho tờ báo trường - thấy nhiều điểm đáng ngờ và tự điều tra.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/mk0khHCMTYE</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/cau-chuyen-tren-dinh-nui</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/cau-chuyen-tren-dinh-nui-thumb.jpg</image:loc>
-      <image:title>Câu Chuyện Trên Đỉnh Núi</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/cau-chuyen-tren-dinh-nui-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Câu Chuyện Trên Đỉnh Núi</video:title>
-      <video:description>Một nhóm bạn tỷ phú tụ họp lại trong bối cảnh cuộc khủng hoảng quốc tế đang diễn ra.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/27cN2_k0JF0</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nu-hoang-thang-nam</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260403-1/0b32b21763d951b5d49dc9c28ca4ced1.jpg</image:loc>
-      <image:title>Nữ Hoàng Tháng Năm</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260403-1/0b32b21763d951b5d49dc9c28ca4ced1.jpg</video:thumbnail_loc>
-      <video:title>Trailer Nữ Hoàng Tháng Năm</video:title>
-      <video:description>Nữ Hoàng Tháng 5 là bộ phim kể về câu chuyện của cô gái giàu nghị lực Hae Joo. Cha của Chun Hae Joo đã bị chính bạn thân của mình là Do-Hyun sát hại. Do- Hyun quyết định giết cha cô vì ông yêu mẹ của Chun Hae Joo. Ông ta thậm chí còn ra lệnh cho quản gia Park Gi Chul giết Chun Hae Joo nhỏ bé khi đó mới 2 tuổi nhưng người quản gia không làm được và đã đưa cô đến một gia đình quen biết của ông ấy. Chun Hae Joo may mắn sống sót và lớn lên trong gia đình bố mẹ nuôi. Không biết con gái mình vẫn còn sống, mẹ của Chun Hae Joo kết hôn với Do Hyun. Hae Joo lớn lên trong cơ cực, bị mẹ nuôi ghẻ lạnh. Đến khi lớn chuyện tình cảm của Hae Joo cũng vấp phải nhiều trở ngại.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/khSDeoHGuv0</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nhung-nguoi-ban-thanh-lich</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20241106-1/d0effa40cf6c0d87f47ad067ed3d53e1.jpg</image:loc>
-      <image:title>Những Người Bạn Thanh Lịch</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/bay-gio-chung-ta-dang-chia-tay</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20241013-1/ea70dd089aedced3a8ecb12e82b25716.jpg</image:loc>
-      <image:title>Bây Giờ, Chúng Ta Đang Chia Tay</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/niem-vui-hiem-ac</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/niem-vui-hiem-ac-thumb.jpg</image:loc>
-      <image:title>Niềm Vui Hiểm Ác</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nhat-ky-tu-do-cua-toi</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20240520-1/59fecfad85f554218346fa2e6e387292.jpg</image:loc>
-      <image:title>Nhật Ký Tự Do Của Tôi</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20240520-1/59fecfad85f554218346fa2e6e387292.jpg</video:thumbnail_loc>
-      <video:title>Trailer Nhật Ký Tự Do Của Tôi</video:title>
-      <video:description>Mệt mỏi vì tuổi trưởng thành quá đỗi bình thường và đơn điệu, ba chị em tìm kiếm sự viên mãn và tự do trong cuộc sống tẻ nhạt của họ.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/FQEm4dPZsNo</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/am-thanh-toi-pham-giong-noi-phan-2</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251009-1/5fc6725bb52c6aa31175864dbe229d6c.jpg</image:loc>
-      <image:title>Am Thanh Toi Pham Giong Noi Phan 2</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hai-cuoc-doi-mot-trai-tim-bac-si-tim</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250916-1/7a6e428e33e359ed53abcad724d4ef7a.jpg</image:loc>
-      <image:title>Hai Cuộc Đời Một Trái Tim (Bác Sĩ Tim)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250916-1/7a6e428e33e359ed53abcad724d4ef7a.jpg</video:thumbnail_loc>
-      <video:title>Trailer Hai Cuộc Đời Một Trái Tim (Bác Sĩ Tim)</video:title>
-      <video:description>Bộ phim xoay quanh cuộc sống hỗn loạn của Park Tae Soo (Go Soo), một bác sĩ phẫu thuật tim tận tâm, chăm chỉ nhưng lại luôn bị coi thường chỉ vì tốt nghiệp một trường đại học không mấy danh tiếng. Trong một tình huống đầy cấp bách, Park Tae Soo đã gặp Choi Seok Han (Uhm Ki Joon), một giáo sư phẫu thuật giỏi tay nghề nhưng cũng có một cuộc đời đầy bất hạnh. Cuộc gặp gỡ định mệnh này đã giúp Park Tae Soo có được cơ hội làm việc tại một bệnh viện lớn ngay giữa thủ đô Seoul tráng lệ. Tưởng rằng cuộc đời đã bước sang một trang mới tươi sáng hơn nhưng rốt cuộc, Park Tae Soo liên tục phải đối mặt với vô vàn rắc rối khi anh dần phát hiện ra những góc tối trong công việc lương y mà mình đang theo đuổi.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/xzcN9yenSQE</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/lan-dau-du-dua</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251002-1/fe54ed6dc8775efc7b476d9265eec1a6.jpg</image:loc>
-      <image:title>Lần Đầu Đu Đưa</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nhung-chu-cho-va-do-choi</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250213-1/3049efe21bfcfb34bf235e991328344f.jpg</image:loc>
-      <image:title>Những Chú Chó Và Đồ Chơi</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250213-1/3049efe21bfcfb34bf235e991328344f.jpg</video:thumbnail_loc>
-      <video:title>Trailer Những Chú Chó Và Đồ Chơi</video:title>
-      <video:description>Khi chủ vắng nhà, bé cún dễ thương và tò mò cùng các bạn chó rất thích chơi đùa với hội bạn thân – những món đồ chơi yêu thích của chúng!</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/cqlhRxtr_w8</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tinh-yeu-dam-boc</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tinh-yeu-dam-boc-thumb.jpg</image:loc>
-      <image:title>Chuyện Tình Đấm Bốc</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/tinh-yeu-dam-boc-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Chuyện Tình Đấm Bốc</video:title>
-      <video:description>Võ sĩ thiên tài biến mất Kwon Sook và đặc vụ lạnh lùng Tae Young liều lĩnh chống lại nanh vuốt của bọn dàn xếp tỷ số.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/lE4qA-6AD9Q</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tinh-yeu-chan-that-phan-1</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251230-1/4dd52147f1f7010402354d09322dd595.jpg</image:loc>
-      <image:title>Tình Yêu Chân Thật (Phần 1)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20251230-1/4dd52147f1f7010402354d09322dd595.jpg</video:thumbnail_loc>
-      <video:title>Trailer Tình Yêu Chân Thật (Phần 1)</video:title>
-      <video:description>Sau 10 năm làm bạn thân, họ đã chính thức trở thành một cặp đôi chân thành và tin cậy được 6 tháng. Thế nhưng, chỉ vì một sai lầm mà cả hai phải bắt đầu một mối quan hệ lén lút? Một bộ web-sitcom về tình yêu đích thực của những cô cậu học trò tuổi 19.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/RlpO3NGvMTA</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/su-ji-va-u-ri</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20241018-1/eaad29a381fdc8b499b24c4c663ccc80.jpg</image:loc>
-      <image:title>Su Ji Và U Ri</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/luu-manh</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250717-1/5df03886518387cbc7757adb4bb37afc.jpg</image:loc>
-      <image:title>Lưu Manh (Đáy Xã Hội)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250717-1/5df03886518387cbc7757adb4bb37afc.jpg</video:thumbnail_loc>
-      <video:title>Trailer Lưu Manh (Đáy Xã Hội)</video:title>
-      <video:description>Chuyển thể từ webtoon Fine của tác giả Yoon Tae Ho dựa trên những sự kiện có thật trong thập niên 1970, Low Life kể về những con người sống bằng bản năng và toan tính trên hành trình truy tìm kho báu từ con tàu chở nhiều vật phẩm quý bị chìm ngoài khơi Shinan vào năm 1977. Trung tâm của câu chuyện là Oh Gwan Sok (Ryu Seung Ryong), kẻ đầu sỏ kiếm tiền bất chấp, sống dựa vào các mánh khóe vặt cùng đứa cháu Oh Hee Dong (Yang Se Jong). Khi nghe tin đồn về đồ gốm cổ bị chôn vùi dưới biển Shinan, ông quyết tâm đến Mokpo với hy vọng đổi đời.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/0JgURXn5aAE</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tien-tri-tinh-yeu</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tien-tri-tinh-yeu-thumb.jpg</image:loc>
-      <image:title>Tiên Tri Tình Yêu</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/trang-mo-2023</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250520-1/ca112b6f93d469af28419af7ecb8dae1.jpg</image:loc>
-      <image:title>Trăng Mờ</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250520-1/ca112b6f93d469af28419af7ecb8dae1.jpg</video:thumbnail_loc>
-      <video:title>Trailer Trăng Mờ</video:title>
-      <video:description>Bộ phim&amp;nbsp;kể về Yoo I-hwa – một bà nội trợ sống cuộc đời yên bình và mãn nguyện, không có tham vọng gì, ngoài sự thờ ơ của người chồng. Khi làm việc bán thời gian tại ngân hàng với tư cách là nhân viên hợp đồng, cô tình cờ tiếp xúc với số tiền lớn từ các khách hàng VIP, và từ đó dần rơi vào vòng xoáy sụp đổ không thể cứu vãn.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/E_2A4aeA0N0</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/boboiboy-phan-3</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/boboiboy-phan-3-thumb.jpg</image:loc>
-      <image:title>BoBoiBoy (Phần 3)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/boboiboy-phan-3-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer BoBoiBoy (Phần 3)</video:title>
-      <video:description>BoBoiBoy chiến đấu với Ejo Jo và có được sức mạnh nguyên tố mới. Cả hội kết bạn với kẻ thù cũ và đảm đương những nhiệm vụ quan trọng nhất từ trước đến nay.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/wZEQ68YELxo</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tho-phuc-sinh</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tho-phuc-sinh-thumb.jpg</image:loc>
-      <image:title>Thỏ Phục Sinh</image:title>
     </image:image>
   </url>
 </urlset>
