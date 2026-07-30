@@ -521,13 +521,11 @@ function withHeaders(response, pathname) {
     if (!headers.has(key)) headers.set(key, value);
   }
   const contentType = headers.get('Content-Type') || '';
-  // Pages assets may carry index.html's historical no-store header into SPA
-  // fallbacks. Override only HTML documents; hashed assets keep their own
-  // immutable policy and APIs keep their explicit cache semantics.
+  // A stale SPA document can reference hashed chunks removed by the next Pages
+  // deployment. HTML is tiny and the edge is fast, so always revalidate the
+  // document; hashed assets keep their immutable one-year cache below.
   if (/text\/html/i.test(contentType)) {
-    const edgeTtl = /^\/xem-phim\//.test(pathname) ? 30 : 60;
-    const staleTtl = /^\/xem-phim\//.test(pathname) ? 120 : 300;
-    headers.set('Cache-Control', `public, max-age=0, must-revalidate, s-maxage=${edgeTtl}, stale-while-revalidate=${staleTtl}`);
+    headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   } else if (!headers.has('Cache-Control')) {
     headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
   }

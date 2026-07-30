@@ -18,6 +18,8 @@ const viteConfig = await readFile('vite.config.ts', 'utf8');
 const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 const homeFallback = JSON.parse(await readFile('public/home-fallback.json', 'utf8'));
 const stickyBanner = await readFile('src/components/feature/StickyBanner.tsx', 'utf8');
+const headers = await readFile('public/_headers', 'utf8');
+const pagesWorker = await readFile('functions/[[path]].js', 'utf8');
 const failures = [];
 if (
   stickyBanner.includes('sessionStorage') ||
@@ -43,6 +45,12 @@ if (/getViewerCount|\}\s*xem/.test(trending)) {
 }
 if (lazySection.includes('3200 + Math.min(sectionIndex, 8) * 120')) {
   failures.push('Lazy movie shelves must not all wake on a shared idle timer.');
+}
+if (!lazySection.includes('hasData || propLoading || fallbackAttempted')) {
+  failures.push('Lazy shelves must wait for the parent request before loading the static fallback.');
+}
+if (!lazySection.includes('const sectionLoading = Boolean(propLoading) || fallbackLoading;')) {
+  failures.push('Lazy shelves must preserve skeleton height until the parent request settles.');
 }
 if (!lazySection.includes('rect.top <= viewportH + marginPx') || lazySection.includes('rect.bottom >= -marginPx')) {
   failures.push('Progressive shelves must wake after fast scrolls without requiring current intersection.');
@@ -173,6 +181,16 @@ for (const contract of ['optimized(672, 78)', 'optimized(1680, 82)']) {
     failures.push(`Build-time hero preload is out of sync with HeroBanner: ${contract}.`);
   }
 }
+for (const contract of [
+  'movie?.hero_backdrop_url || movie?.poster_url',
+  "original.replace(/\\/t\\/p\\/[^/]+\\//i, `/t/p/${size}/`)",
+  "'w500'",
+  "'w1280'",
+]) {
+  if (!viteConfig.includes(contract)) {
+    failures.push(`Build-time hero preload does not match the runtime LCP source: ${contract}.`);
+  }
+}
 for (const snippet of [
   'The large hero is a landscape-only surface',
   'if (ratio < 1.2)',
@@ -186,6 +204,32 @@ for (const snippet of [
   if (!hero.includes(snippet)) {
     failures.push(`Homepage hero is missing its portrait-safe image contract: ${snippet}.`);
   }
+}
+if ((hero.match(/backgroundQuality,\s*\n\s*false,/g) ?? []).length < 2) {
+  failures.push('Hero landscape candidates must not retry the same portrait at its multi-megabyte original size.');
+}
+for (const snippet of [
+  "useMediaQuery('(min-width: 768px)')",
+  "useMediaQuery('(min-width: 1024px)')",
+  'showDesktopThumbnails &&',
+  'showDesktopPoster &&',
+]) {
+  if (!hero.includes(snippet)) {
+    failures.push(`Mobile hero still renders a hidden desktop image surface: ${snippet}.`);
+  }
+}
+for (const route of ['/', '/index.html', '/phim/*', '/xem-phim/*']) {
+  const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rule = headers.match(new RegExp(`(?:^|\\n)${escaped}\\r?\\n\\s+Cache-Control:\\s*([^\\r\\n]+)`))?.[1] ?? '';
+  if (!/no-store/.test(rule) || /stale-while-revalidate|s-maxage=[1-9]/.test(rule)) {
+    failures.push(`HTML route ${route} can serve a stale build that references deleted JavaScript chunks.`);
+  }
+}
+if (
+  !pagesWorker.includes("headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');") ||
+  /text\\\/html[\s\S]{0,500}stale-while-revalidate/.test(pagesWorker)
+) {
+  failures.push('The Pages worker can override safe HTML headers with a stale build cache.');
 }
 for (const snippet of [
   'fetchVerifiedTmdbHeroArtwork',

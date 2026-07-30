@@ -25,10 +25,10 @@ function homeHeroPreloadPlugin() {
     transformIndexHtml() {
       try {
         const payload = JSON.parse(readFileSync(resolve(__dirname, 'public/home-fallback.json'), 'utf8')) as {
-          sections?: { trending?: Array<{ poster_url?: string; thumb_url?: string }> };
+          sections?: { trending?: Array<{ hero_backdrop_url?: string; poster_url?: string; thumb_url?: string }> };
         };
         const movie = payload.sections?.trending?.[0];
-        const path = String(movie?.poster_url || movie?.thumb_url || '').trim();
+        const path = String(movie?.hero_backdrop_url || movie?.poster_url || movie?.thumb_url || '').trim();
         if (!path) return [];
         const original = /^https?:\/\//i.test(path)
           ? path
@@ -36,11 +36,16 @@ function homeHeroPreloadPlugin() {
         // Keep these URLs byte-for-byte aligned with HeroBanner. A preload with
         // a different width or quality is a separate request and cannot improve
         // LCP even when it points to the same original poster.
-        const optimized = (width: number, quality: number) => (
-          /^https?:\/\/phimimg\.com\//i.test(original)
-            ? original
-            : `https://wsrv.nl/?url=${encodeURIComponent(original)}&w=${width}&q=${quality}&output=webp&fit=cover&we`
-        );
+        const optimized = (width: number, quality: number) => {
+          if (/^https?:\/\/image\.tmdb\.org\/t\/p\//i.test(original)) {
+            const size = width <= 672 ? 'w500' : 'w1280';
+            return original.replace(/\/t\/p\/[^/]+\//i, `/t/p/${size}/`);
+          }
+          if (/^https?:\/\/phimimg\.com\//i.test(original)) {
+            return `/cdn-cgi/image/width=${width},quality=${quality},format=auto,fit=cover/${original}`;
+          }
+          return `https://wsrv.nl/?url=${encodeURIComponent(original)}&w=${width}&q=${quality}&output=webp&fit=cover&we`;
+        };
         return [
           { tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'image', href: optimized(672, 78), media: '(max-width: 639px)', fetchpriority: 'high' } },
           { tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'image', href: optimized(1680, 82), media: '(min-width: 640px)', fetchpriority: 'high' } },

@@ -454,11 +454,11 @@ export default function Navbar() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Tìm kiếm phim, diễn viên..."
                         aria-label="Tìm kiếm phim"
-                        className="bg-white/[0.08] border border-red-500/40 text-white placeholder-white/35 text-sm rounded-full pl-9 pr-9 py-2 w-64 focus:outline-none focus:border-red-500/70 focus:bg-white/[0.10] transition-all"
+                        className="h-10 bg-white/[0.08] border border-red-500/40 text-white placeholder-white/35 text-sm rounded-full pl-9 pr-10 w-64 focus:outline-none focus:border-red-500/70 focus:bg-white/[0.10] transition-all"
                       />
                       <button type="button" onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
                         aria-label="Đóng tìm kiếm"
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-white/35 hover:text-white transition-colors cursor-pointer">
+                        className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-white/35 hover:text-white transition-colors cursor-pointer">
                         <i className="ri-close-line text-sm" aria-hidden="true" />
                       </button>
                       <SearchSuggestions query={searchQuery} onSelect={() => { setSearchOpen(false); setSearchQuery(''); }} className="w-80" />
@@ -467,7 +467,7 @@ export default function Navbar() {
                     <button
                       type="button"
                       onClick={() => setSearchOpen(true)}
-                      className="flex items-center gap-2.5 bg-white/[0.10] hover:bg-white/[0.15] border border-white/25 hover:border-red-500/60 text-white/75 hover:text-white text-sm rounded-full pl-3.5 pr-4 py-2 w-56 transition-all cursor-pointer group"
+                      className="h-10 flex items-center gap-2.5 bg-white/[0.10] hover:bg-white/[0.15] border border-white/25 hover:border-red-500/60 text-white/75 hover:text-white text-sm rounded-full pl-3.5 pr-4 w-56 transition-all cursor-pointer group"
                     >
                       <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 bg-red-500/20 rounded-full group-hover:bg-red-500/35 transition-colors">
                         <i className="ri-search-line text-[11px] text-red-400 group-hover:text-red-300" aria-hidden="true" />
