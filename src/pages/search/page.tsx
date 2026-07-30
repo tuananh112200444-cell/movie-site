@@ -807,7 +807,7 @@ export default function SearchPage() {
                     type="button"
                     aria-label="Xóa từ khóa tìm kiếm"
                     onClick={() => { setQuery(''); setSuggestions([]); setShowSuggestions(true); inputRef.current?.focus(); }}
-                    className="w-8 h-8 flex items-center justify-center text-white/30 hover:text-white/60 transition-colors cursor-pointer flex-shrink-0"
+                    className="w-10 h-10 flex items-center justify-center text-white/30 hover:text-white/60 transition-colors cursor-pointer flex-shrink-0"
                   >
                     <i className="ri-close-line text-sm" />
                   </button>
@@ -815,7 +815,7 @@ export default function SearchPage() {
                 <button
                   type="submit"
                   aria-label="Tìm kiếm phim"
-                  className="m-1.5 sm:m-2 px-3 sm:px-5 h-9 sm:h-10 flex items-center gap-2 bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-500 hover:to-amber-500 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+                  className="m-1.5 sm:m-2 min-w-11 px-3 sm:px-5 h-11 flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-500 hover:to-amber-500 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
                 >
                   {loadingSug
                     ? <i className="ri-loader-4-line animate-spin" />

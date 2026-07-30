@@ -5,6 +5,7 @@ import { useFavorites } from '../../../hooks/useFavorites';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
 import { Link } from 'react-router-dom';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
 
 interface HeroBannerProps {
   movies: MovieItem[];
@@ -35,6 +36,8 @@ function getMovieDetailHref(movie: MovieItem): string {
 }
 
 function HeroBanner({ movies, loading }: HeroBannerProps) {
+  const showDesktopThumbnails = useMediaQuery('(min-width: 768px)');
+  const showDesktopPoster = useMediaQuery('(min-width: 1024px)');
   const [activeIndex, setActiveIndex] = useState(0);
   const [contentKey, setContentKey] = useState(0);
   const [failedHeroIds, setFailedHeroIds] = useState<Set<string>>(() => new Set());
@@ -99,12 +102,14 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       active.poster_url,
       backgroundWidth,
       backgroundQuality,
+      false,
     ).filter((url) => !url.includes(fallbackMarker)),
     ...getOptimizedImageFallbacks(
       active.thumb_url,
       undefined,
       backgroundWidth,
       backgroundQuality,
+      false,
     ).filter((url) => !url.includes(fallbackMarker)),
     fallbackMarker,
   ]));
@@ -249,14 +254,14 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
           </div>
 
           {/* Right: Poster card */}
-          <div className="hidden flex-shrink-0 lg:block">
+          {showDesktopPoster && <div className="hidden flex-shrink-0 lg:block">
             <MemoHeroPosterCard
               sources={posterSources}
               alt={active.name ?? ''}
               href={activeDetailHref}
               quality={active.quality}
             />
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -287,7 +292,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       </div>
 
       {/* Desktop thumbnails */}
-      <div className="absolute bottom-5 right-6 hidden md:flex gap-2" role="tablist" aria-label="Chọn slide phim">
+      {showDesktopThumbnails && <div className="absolute bottom-5 right-6 hidden md:flex gap-2" role="tablist" aria-label="Chọn slide phim">
         {featured.map((m, i) => (
           <button key={m._id} onClick={() => handleSelectSlide(i)}
             role="tab" aria-selected={i === activeIndex} aria-label={`Xem slide phim: ${m.name}`}
@@ -304,7 +309,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
             {i === activeIndex && <div className="absolute inset-0 bg-red-500/10" />}
           </button>
         ))}
-      </div>
+      </div>}
 
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex rounded-full bg-black/24 md:hidden" role="tablist" aria-label="Điều hướng slide">
         {featured.map((m, i) => (

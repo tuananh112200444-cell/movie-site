@@ -645,7 +645,6 @@ export function getOptimizedImageUrl(path: string, width = 360, quality = 82): s
   // an unnecessary original-sized poster through a third-party proxy.
   const tmdbImage = getTmdbCardImageUrl(original, width);
   if (tmdbImage) return tmdbImage;
-  if (shouldBypassImageProxy(original)) return original;
   // wsrv.nl free image proxy — resize + compress + WebP auto
   const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth || 1440;
   const dpr = typeof window === 'undefined' ? 1.5 : Math.min(window.devicePixelRatio || 1, 2);
@@ -656,6 +655,16 @@ export function getOptimizedImageUrl(path: string, width = 360, quality = 82): s
   const maxQuality = isDesktop ? 88 : 84;
   const safeWidth = Math.max(180, Math.min(Math.round(width * density), maxWidth));
   const safeQuality = Math.max(minQuality, Math.min(quality, maxQuality));
+  // phimimg rejects the shared wsrv proxy, but Cloudflare can resize it
+  // reliably at our own edge before it reaches the browser.
+  if (
+    /^https?:\/\/phimimg\.com\//i.test(original)
+    && typeof window !== 'undefined'
+    && /(^|\.)khophim\.org$/i.test(window.location.hostname)
+  ) {
+    return `/cdn-cgi/image/width=${safeWidth},quality=${safeQuality},format=auto,fit=cover/${original}`;
+  }
+  if (shouldBypassImageProxy(original)) return original;
   const encoded = encodeURIComponent(original);
   return `https://wsrv.nl/?url=${encoded}&w=${safeWidth}&q=${safeQuality}&output=webp&fit=cover&we`;
 }
@@ -714,6 +723,7 @@ export function getOptimizedImageFallbacks(
   altPath?: string,
   width = 620,
   quality = 88,
+  includeOriginalFallback = true,
 ): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
@@ -729,7 +739,7 @@ export function getOptimizedImageFallbacks(
       continue;
     }
     pushUrl(getOptimizedImageUrl(url, width, quality));
-    pushUrl(url);
+    if (includeOriginalFallback) pushUrl(url);
   }
 
   return urls.length ? urls : [FALLBACK_IMG];
@@ -977,11 +987,11 @@ async function fetchMoviesFromSupabaseList(params: {
     const { data, count, error } = response;
     if (error || !data || data.length === 0) return null;
 
-    const items = await enrichMoviesWithSupabaseEpisodeCounts(sortListItems(
+    const items = sortListItems(
       (data as unknown as Record<string, unknown>[]).map(toSupabaseMovieItem),
       params.sortField,
       params.sortType,
-    ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer'));
+    ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer');
     const totalItems = count ?? items.length;
 
     return {
@@ -2009,15 +2019,7 @@ export async function searchMoviesInSupabase(
     }
 
     const baseItems = Array.from(recordsById.values()).map(toSupabaseMovieItem);
-    try {
-      const items = await enrichMoviesWithSupabaseEpisodeCounts(baseItems, controller.signal);
-      return sortMoviesForSearch(mergeMoviesUnique(items), kw, 'relevance').slice(0, limit);
-    } catch (enrichError) {
-      if ((enrichError as Error)?.name !== 'AbortError') {
-        console.warn('[searchMoviesInSupabase] Episode enrich skipped:', enrichError);
-      }
-      return sortMoviesForSearch(mergeMoviesUnique(baseItems), kw, 'relevance').slice(0, limit);
-    }
+    return sortMoviesForSearch(mergeMoviesUnique(baseItems), kw, 'relevance').slice(0, limit);
   } catch (e) {
     if ((e as Error)?.name !== 'AbortError') {
       console.warn('[searchMoviesInSupabase] Exception:', e);

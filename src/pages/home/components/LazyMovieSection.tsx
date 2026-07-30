@@ -144,7 +144,7 @@ export default function LazyMovieSection({
   }, [fetchKey, fetchType]);
 
   useEffect(() => {
-    if (!triggered || hasData || fallbackAttempted) return;
+    if (!triggered || hasData || propLoading || fallbackAttempted) return;
 
     let cancelled = false;
     const safetyTimer = window.setTimeout(() => {
@@ -198,7 +198,7 @@ export default function LazyMovieSection({
       cancelled = true;
       window.clearTimeout(safetyTimer);
     };
-  }, [fallbackAttempted, fetchKey, fetchType, hasData, limit, triggered]);
+  }, [fallbackAttempted, fetchKey, fetchType, hasData, limit, propLoading, triggered]);
 
   useEffect(() => {
     if (!triggered || hasData || fallbackMovies.length > 0) return;
@@ -215,7 +215,9 @@ export default function LazyMovieSection({
 
   const prioritizeFirstRow = sectionIndex === 0 && !isMobileViewport();
   const sectionMovies = hasData ? (propMovies ?? []) : fallbackMovies;
-  const sectionLoading = hasData ? Boolean(propLoading) : fallbackLoading;
+  // Keep the full skeleton height until the parent request settles. Rendering
+  // the compact empty state before parent data arrives shifts every shelf below.
+  const sectionLoading = Boolean(propLoading) || fallbackLoading;
 
   return (
     <div ref={ref}>

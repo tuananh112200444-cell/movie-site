@@ -56,6 +56,7 @@
     "ui:test": "playwright test tests/ui-quality.spec.ts",
     "ui:test:desktop": "playwright test tests/ui-quality.spec.ts --project=desktop-chrome",
     "ui:test:mobile": "playwright test tests/ui-quality.spec.ts --project=mobile-chrome",
+    "devices:test": "playwright test tests/device-compatibility.spec.ts --project=desktop-chrome",
     "movie:data:test": "node scripts/movie-data-quality.mjs",
     "source:brain:test": "node scripts/source-brain-audit.mjs",
     "source:brain:full": "node scripts/source-brain-audit.mjs --full",
