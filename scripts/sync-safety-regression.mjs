@@ -34,11 +34,22 @@ for (const file of connectorFiles) {
 
 const motchill = fs.readFileSync('supabase/functions/sync-motchill-feed/index.ts', 'utf8');
 const onlyflix = fs.readFileSync('supabase/functions/sync-onlyflix-feed/index.ts', 'utf8');
+const ophim = fs.readFileSync('supabase/functions/sync-ophim-movies/index.ts', 'utf8');
 if (!motchill.includes('Additive-only publication contract')) {
   failures.push('Motchill is missing its additive-only publication contract');
 }
 if (!onlyflix.includes('feed response is only positive evidence')) {
   failures.push('OnlyFlix is missing its positive-evidence-only contract');
+}
+if (
+  !ophim.includes('Unnumbered provider rows are legitimate specials/OVAs')
+  || !ophim.includes('if (ep.number > 0)')
+  || !ophim.includes('episode_number: ep.number')
+) {
+  failures.push('OPhim sync must preserve playable special episodes without corrupting numbered episode identity');
+}
+if (!ophim.includes('safeProviderImage') || !ophim.includes("posterUrl = safeProviderImage(movie.poster_url) || thumbUrl")) {
+  failures.push('OPhim sync must reject inline/unsafe poster payloads and fall back to the provider thumbnail');
 }
 
 console.log(JSON.stringify({

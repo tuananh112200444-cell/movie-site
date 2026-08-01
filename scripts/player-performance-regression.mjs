@@ -30,6 +30,7 @@ const checks = [
   [playerBox.includes("function isOnlyflixEmbed(url: string)") && !playerBox.includes('allow-forms allow-popups'), 'OnlyFlix embeds must keep playback capabilities without popup permission'],
   [playerBox.includes("requiresUnsandboxedEmbed(url) || isOnlyflixEmbed(url) || isDailymotion(url)"), 'Sandboxed OnlyFlix embeds must retain the provider Referer required for playback'],
   [playerBox.includes("requiresUnsandboxedEmbed(embedSrc) || isOnlyflixEmbed(embedSrc)"), 'OnlyFlix embeds that reject iframe sandboxing must be rendered without a sandbox'],
+  [playerBox.includes("pickBestEpisodeByPriority(fallbackServers, episode?.slug || episode?.name)"), 'Embed timeout must only assume a fallback when another server has the same logical episode'],
   [playerBox.includes('onSelectEp(fallback.episode, lastPlaybackTimeRef.current)'), 'Automatic server fallback must preserve the current playback position'],
   [lightweightPlayer.includes('const MAX_STREAM_RECOVERY_ATTEMPTS = 2') && lightweightPlayer.includes('const STALL_RECOVERY_DELAY_MS = 2500'), 'A stalled HLS source must fail over promptly instead of retrying five times'],
   [movieApi.includes("healthStatus === 'blocked' && !browserManagedProbeException") && detailProxy.includes("healthStatus === 'blocked' && !browserManagedProbeException"), 'Blocked direct sources must not enter playback while browser-managed probe exceptions remain narrow'],
@@ -63,9 +64,15 @@ const checks = [
   [streamHealth.includes('browserManagedProbeBlocked') && streamHealth.includes('Server probe blocked; browser validation required'), 'Cloud-only StreamC 403s must remain unverified instead of accumulating false failures'],
   [streamHealth.includes('probeStreamRow') && streamHealth.includes('Embed returned an HTML 404/deleted-video page'), 'Health checks must validate both HLS and embed error pages'],
   [detailProxy.includes("healthStatus === 'failed' && failureCount >= 3"), 'The detail API and frontend must suppress a telemetry-failed stream at the same threshold'],
-  [sourceHealth.includes('SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000') && sourceHealth.includes('SOURCE_HEALTH_UPDATED_EVENT'), 'Cross-viewer source penalties must remain active for the advertised window and notify an open player'],
+  [sourceHealth.includes('SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000') && sourceHealth.includes('SOURCE_HEALTH_UPDATED_EVENT') && sourceHealth.includes('function getSourceCluster') && sourceHealth.includes('map[`cluster:${cluster}`]'), 'Cross-viewer host and independently-confirmed cluster penalties must remain active for the advertised window and notify an open player'],
   [main.indexOf("import './polyfills'") >= 0 && main.indexOf("import './polyfills'") < main.indexOf("react-dom/client") && polyfills.includes('Array.prototype.at'), 'The player compatibility shim must run before React and lazy HLS chunks on Safari 14'],
-  [playerBox.includes('hlsCluster !== embedCluster'), 'A fatal HLS source must not fall through to a broken embed from the same provider cluster'],
+  [
+    playerBox.includes('hlsCluster !== embedCluster')
+      && playerBox.includes('if (switchToFallbackServer()) return;')
+      && playerBox.includes('a working iframe')
+      && playerBox.indexOf('if (switchToFallbackServer()) return;') < playerBox.indexOf('a working iframe'),
+    'A fatal HLS source must prefer an independent server, then use a same-provider iframe only as the final playable fallback',
+  ],
   [playerBox.includes('prevSourceIdentityRef') && playerBox.includes('failedSourceKeysRef.current.has(key)'), 'Same-episode fallback must reset player mode and must not loop to an already failed source'],
   [playerBox.includes("effectivePlayerMode === 'embed'") && playerBox.includes('? embedSrc') && playerBox.includes("setPlayerMode(isHlsUrl(episode.link_m3u8) ? 'hls' : 'video')"), 'Telemetry must attribute the active playback path and a blocked iframe must try its direct media path before changing servers'],
   [diagnostics.includes("| 'playback_started'") && lightweightPlayer.includes('onPlaybackStarted?.()') && playerBox.includes("event_type: 'playback_started'"), 'Player telemetry must record one real playing-state success for source health rate calculations'],
@@ -74,6 +81,7 @@ const checks = [
   [sourceHealthBrain.includes('deduplicatePlaybackEvents') && sourceHealthBrain.includes("playbackIdentity}|${normalizeHost(event.source_host)}|${eventClass}") && sourceHealthBrain.includes('balanced_events'), 'Global source health must deduplicate retries by playback session, host and event class'],
   [sourceHealthBrain.includes('summarizeClusterOutages') && sourceHealthBrain.includes('item.affected_hosts >= 3') && sourceHealth.includes('cluster_outages') && sourceHealth.includes('map[`cluster:${cluster}`] = now'), 'A provider cluster may be demoted only after failures span at least three independent hosts'],
   [sourceHealth.includes('SOURCE_HEALTH_FETCH_TTL_MS = 5 * 60 * 1000') && sourceHealth.includes('SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000'), 'Source health must refresh promptly while retaining a bounded anti-flapping penalty'],
+  [page.includes('if (!currentUrl || !isRecentlyBadSourceHost(currentUrl)) return;') && page.includes('if (currentPlaybackTime >= 8) return;') && page.includes('const alternativeServers = filteredEpisodes'), 'A late health response must replace a bad startup URL with an independent same-episode source before meaningful viewing begins'],
   [page.includes("document.addEventListener('visibilitychange', refreshHealth)") && page.includes('window.setInterval(refreshHealth, 5 * 60 * 1000)') && page.includes("document.visibilityState === 'visible'"), 'Long watch sessions must refresh source health without polling in background tabs'],
   [movieApi.includes('map[`cluster:${cluster}`]') && movieApi.includes('getEpisodeFailureCluster(ep)'), 'Source selection must honor a telemetry-confirmed multi-host cluster outage'],
   [sourceHealthBrain.includes('bad_hosts: []') && !sourceHealthBrain.includes('FALLBACK_DEGRADED_HOSTS'), 'A telemetry outage must not inject stale hard-coded provider failures'],
@@ -81,7 +89,7 @@ const checks = [
   [lightweightPlayer.includes('suspendedTimeRef.current = video?.currentTime || 0') && lightweightPlayer.includes('hlsRef.current?.startLoad(resumeAt') && lightweightPlayer.includes('wasPlayingBeforeSuspendRef.current'), 'Returning to a visible tab must resume the existing HLS player at the preserved time instead of rebuilding from zero'],
   [lightweightPlayer.includes('offlineTimeRef.current = video?.currentTime || 0') && lightweightPlayer.includes('hlsRef.current.startLoad(resumeAt > 0 ? resumeAt : -1)') && lightweightPlayer.includes('wasPlayingBeforeOfflineRef.current'), 'Network reconnect must preserve HLS playback time without rebuilding the player from stale initialTime'],
   [playerBox.includes("video.addEventListener('loadedmetadata', restorePlayback, { once: true })") && playerBox.includes('reloadDirectVideoAt(resumeAt, true)'), 'Direct-video recovery must wait for metadata before restoring playback time'],
-  [movieApi.includes('badPaths.length < hosts.length') && page.includes('areAllPlaybackPathsDegraded') && playerBox.includes('getEpisodeSourceKeys(candidate)'), 'An episode with iframe and direct media must remain eligible until every playback path fails, while fallback avoids the exact failed path'],
+  [movieApi.includes('badPaths.length < hosts.length') && page.includes('if (!currentUrl || !isRecentlyBadSourceHost(currentUrl)) return;') && playerBox.includes('getEpisodeSourceKeys(candidate)'), 'An episode with iframe and direct media must remain eligible until every playback path fails, while fallback avoids the exact failed path'],
   [worker.includes("pathname === '/api/movie-detail'") && worker.includes('X-KhoPhim-Detail-Cache'), 'Cloudflare must cache complete movie-detail JSON'],
   [worker.includes('/__circuit/blvietsub/') && worker.includes('/__circuit/movie-detail/') && worker.includes('X-KhoPhim-Circuit'), 'Cloudflare POP circuit breakers must protect detail upstreams'],
   [playerSection.includes("aria-label={cinemaMode ? 'Thoát chế độ Cinema' : 'Bật chế độ Cinema'}"), 'Cinema control must have an accessible name on mobile'],

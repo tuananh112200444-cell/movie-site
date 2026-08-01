@@ -336,6 +336,12 @@ function getCurrentEpisode(movie: OPhimMovie, episodes: OPhimServer[]): number {
   return Math.max(fromText, fromEpisodes);
 }
 
+function safeProviderImage(value: unknown): string {
+  const image = String(value || '').trim();
+  if (!image || /^(?:data:|javascript:|about:|null$|undefined$)/i.test(image)) return '';
+  return image;
+}
+
 function chunks<T>(items: T[], size: number): T[][] {
   const result: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -557,6 +563,8 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
   const totalEpisode = Math.max(currentEpisode, sourceAdvertisedTotal);
   const rawCurrent = firstEpisodeNumber(movie.episode_current || '');
   const sourceCurrentLooksClean = rawCurrent > 0 && rawCurrent === currentEpisode;
+  const thumbUrl = safeProviderImage(movie.thumb_url);
+  const posterUrl = safeProviderImage(movie.poster_url) || thumbUrl;
 
   return {
     slug,
@@ -571,8 +579,8 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
     content: String(movie.content || ''),
     type: String(movie.type || 'phim-le'),
     status: String(movie.status || 'ongoing'),
-    thumb_url: String(movie.thumb_url || ''),
-    poster_url: String(movie.poster_url || ''),
+    thumb_url: thumbUrl,
+    poster_url: posterUrl,
     trailer_url: String(movie.trailer_url || ''),
     time: String(movie.time || ''),
     episode_current: sourceCurrentLooksClean ? String(movie.episode_current || '') : (currentEpisode ? `Tập ${currentEpisode}` : 'Đang cập nhật'),
@@ -800,9 +808,11 @@ async function upsertMovie(
     return { id: String(existing.id), created: false, updated: true };
   }
 
+  // A detail sync may time out after the catalogue row is created. Keep a new
+  // record private until insertEpisodes has persisted a playable source.
   const { data, error } = await supabase
     .from('movies')
-    .insert(payload)
+    .insert({ ...payload, is_published: false })
     .select('id')
     .single();
   if (error) {
@@ -1001,12 +1011,14 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
     const serverName = String(server.server_name || 'OPhim').trim() || 'OPhim';
     for (const ep of server.server_data || []) {
       const number = episodeNumber(ep);
-      if (!number) continue;
       const epName = String(ep.name || (number === 1 ? 'Full' : `Tap ${number}`));
       const epSlug = String(ep.slug || slugify(epName)).trim() || slugify(epName);
       const linkM3u8 = String(ep.link_m3u8 || '');
       const linkEmbed = String(ep.link_embed || '');
       if (!linkM3u8 && !linkEmbed) continue;
+      // Unnumbered provider rows are legitimate specials/OVAs. Store them in
+      // the slug-keyed tables with episode_number=0; movie_episodes remains
+      // numeric-only because its identity is keyed by episode number.
       parsedEpisodes.push({ number, epName, epSlug, serverName, linkM3u8, linkEmbed, raw: ep });
     }
   }
@@ -1054,28 +1066,30 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
   const streamRows = [];
 
   for (const ep of parsedEpisodes) {
-    const adminKey = `${ep.serverName.trim().toLowerCase()}|${ep.number}`;
-    const existingAdminRow = existingAdmin.get(adminKey);
-    const adminUrlChanged = Boolean(existingAdminRow) && (
-      String(existingAdminRow.link_m3u8 || '') !== ep.linkM3u8 ||
-      String(existingAdminRow.link_embed || '') !== ep.linkEmbed
-    );
-    if ((!existingAdminRow || adminUrlChanged) && !plannedAdmin.has(adminKey)) {
-      plannedAdmin.add(adminKey);
-      movieEpisodeRows.push({
-        movie_id: movieId,
-        ophim_id: sourceId,
-        episode_number: ep.number,
-        episode_name: ep.epName,
-        slug: ep.epSlug,
-        server_name: ep.serverName,
-        link_m3u8: ep.linkM3u8,
-        link_embed: ep.linkEmbed,
-        thumbnail_url: '',
-        duration: '',
-        source: provider.sourceSite,
-        is_backup: false,
-      });
+    if (ep.number > 0) {
+      const adminKey = `${ep.serverName.trim().toLowerCase()}|${ep.number}`;
+      const existingAdminRow = existingAdmin.get(adminKey);
+      const adminUrlChanged = Boolean(existingAdminRow) && (
+        String(existingAdminRow.link_m3u8 || '') !== ep.linkM3u8 ||
+        String(existingAdminRow.link_embed || '') !== ep.linkEmbed
+      );
+      if ((!existingAdminRow || adminUrlChanged) && !plannedAdmin.has(adminKey)) {
+        plannedAdmin.add(adminKey);
+        movieEpisodeRows.push({
+          movie_id: movieId,
+          ophim_id: sourceId,
+          episode_number: ep.number,
+          episode_name: ep.epName,
+          slug: ep.epSlug,
+          server_name: ep.serverName,
+          link_m3u8: ep.linkM3u8,
+          link_embed: ep.linkEmbed,
+          thumbnail_url: '',
+          duration: '',
+          source: provider.sourceSite,
+          is_backup: false,
+        });
+      }
     }
 
     const episodeKey = `${ep.serverName.trim().toLowerCase()}|${ep.epSlug.trim().toLowerCase()}`;
@@ -1128,7 +1142,7 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
   await upsertEpisodeRowsSafely(supabase, episodeRows, String(detail.movie.slug || 'movie'));
   await upsertStreamRowsSafely(supabase, streamRows, String(detail.movie.slug || 'movie'));
 
-  return movieEpisodeRows.length;
+  return Math.max(movieEpisodeRows.length, episodeRows.length, streamRows.length);
 }
 
 async function writeLog(supabase: SupabaseClient, stats: SyncStats, elapsedMs: number, metadata: Record<string, unknown>): Promise<void> {
@@ -1330,6 +1344,12 @@ serve(async (req) => {
         const beforeEpisodesInserted = stats.episodesInserted;
         if (includeEpisodes) {
           stats.episodesInserted += await insertEpisodes(supabase, provider, result.id, detail);
+          if (stats.episodesInserted > beforeEpisodesInserted) {
+            await supabase
+              .from('movies')
+              .update({ is_published: true })
+              .eq('id', result.id);
+          }
           // Viewer telemetry is a useful repair signal, but it is not an
           // independent network probe. A targeted identity repair has just
           // re-resolved the provider movie and its current URLs; release rows

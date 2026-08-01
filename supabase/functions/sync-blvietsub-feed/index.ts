@@ -1393,7 +1393,9 @@ async function createMovieFromEntry(
     source_site: SOURCE_SITE,
     source_name: SOURCE_NAME,
     ophim_id: '',
-    is_published: true,
+    // Keep a new record private until syncEntryToMovie has written its
+    // playable episodes successfully.
+    is_published: false,
     last_synced_at: new Date().toISOString(),
     schedule_timezone: 'Asia/Ho_Chi_Minh',
   };
@@ -1677,6 +1679,12 @@ async function syncEntryToMovie(
   }
   const inserted = await insertMissingEpisodes(supabase, movie, entry);
   const updated = await updateMovieMetadata(supabase, movie, entry);
+  if (playableEpisodeCount(entry.episodes) > 0) {
+    await supabase
+      .from('movies')
+      .update({ is_published: true })
+      .eq('id', movie.id);
+  }
   if (inserted > 0 || updated || sourceMaxEpisode !== dbBeforeEpisode) {
     await deleteDetailCache(supabase, [movie.slug]);
   }

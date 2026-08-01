@@ -213,8 +213,8 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
     movie.thumb_url || movie.poster_url,
     movie.poster_url || movie.thumb_url,
     isImagePreloaded(getImageUrl(movie.thumb_url || movie.poster_url)),
-    520,
-    88,
+    280,
+    80,
   );
   const ep = getEpInfo(movie.episode_current);
   const mTime = movie.modified?.time ?? '';

@@ -54,6 +54,18 @@ function normalizeHost(host: string | undefined): string {
   return String(host || '').trim().toLowerCase().replace(/^www\./, '');
 }
 
+function getSourceCluster(urlOrHost?: string): string {
+  let host = normalizeHost(urlOrHost);
+  try {
+    host = normalizeHost(new URL(String(urlOrHost || '')).hostname);
+  } catch {
+    // Callers may already provide a hostname.
+  }
+  if (/opstream|ophim/.test(host)) return 'ophim';
+  if (/phimapi|kkphim/.test(host)) return 'kkphim';
+  return host;
+}
+
 function shouldFetchSourceHealth(): boolean {
   if (!canUseBrowserStorage()) return false;
   const lastFetch = Number(window.localStorage.getItem(SOURCE_HEALTH_LAST_FETCH_KEY) || 0);
@@ -114,8 +126,16 @@ export function isRecentlyBadSourceHost(urlOrHost?: string): boolean {
   } catch {
     // The caller may already provide a hostname.
   }
-  const markedAt = Number(readJsonMap(BAD_SOURCE_HOSTS_KEY)[host] || 0);
-  return markedAt > 0 && Date.now() - markedAt < SOURCE_HEALTH_PENALTY_TTL_MS;
+  const map = readJsonMap(BAD_SOURCE_HOSTS_KEY);
+  const isFreshPenalty = (markedAt: number) =>
+    markedAt > 0 && Date.now() - markedAt < SOURCE_HEALTH_PENALTY_TTL_MS;
+  if (isFreshPenalty(Number(map[host] || 0))) return true;
+
+  // Cluster keys are only written after independent failures across multiple
+  // hosts. Honouring them here closes the short window where a new watch page
+  // could otherwise start on another known-bad OPhim/KKPhim shard.
+  const cluster = getSourceCluster(host);
+  return Boolean(cluster) && isFreshPenalty(Number(map[`cluster:${cluster}`] || 0));
 }
 
 export function markSourcePlaybackHealthy(urlOrHost?: string): void {

@@ -10,6 +10,15 @@ declare const __IS_PREVIEW__: boolean;
 const BASE_URL = 'https://ophim1.com';
 export const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 
+function normalizeRelativeImagePath(path: string): string {
+  return path
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/\?/g, '%3F')
+    .replace(/#/g, '%23')
+    .replace(/\s+/g, '%20');
+}
+
 function isAbortLikeError(error: unknown): boolean {
   const err = error as Error | undefined;
   const message = String(err?.message ?? error ?? '').toLowerCase();
@@ -586,8 +595,7 @@ export function getMovieDisplayName(item: {
 
 export function getImageUrl(path: string): string {
   const normalizedPath = String(path || '').trim();
-  if (!normalizedPath || /^(?:null|undefined|about:blank|javascript:)/i.test(normalizedPath)) return FALLBACK_IMG;
-  if (/^data:/i.test(normalizedPath)) return normalizedPath;
+  if (!normalizedPath || /^(?:null|undefined|about:blank|javascript:|data:)/i.test(normalizedPath)) return FALLBACK_IMG;
   if (/^\/\//.test(normalizedPath)) return `https:${normalizedPath}`;
   const hit = imgUrlCache.get(normalizedPath);
   if (hit) return hit;
@@ -595,11 +603,11 @@ export function getImageUrl(path: string): string {
   if (normalizedPath.startsWith('http')) {
     url = normalizedPath;
   } else if (normalizedPath.startsWith('/')) {
-    url = `https://img.ophim.live${normalizedPath}`;
+    url = `https://img.ophim.live${normalizeRelativeImagePath(normalizedPath)}`;
   } else if (normalizedPath.includes('uploads/movies/')) {
-    url = `https://img.ophim.live/${normalizedPath}`;
+    url = `https://img.ophim.live/${normalizeRelativeImagePath(normalizedPath)}`;
   } else {
-    url = `${IMG_BASE}${normalizedPath}`;
+    url = `${IMG_BASE}${normalizeRelativeImagePath(normalizedPath)}`;
   }
   url = url.replace(/^https?:\/\/rophimk\.online\/upload\//i, 'https://phimimg.com/upload/');
   imgUrlCache.set(normalizedPath, url);
@@ -705,7 +713,7 @@ export function getImageFallbacks(primaryPath?: string, altPath?: string): strin
   };
   const addCandidate = (path?: string) => {
     const trimmed = path?.trim();
-    if (!trimmed) return;
+    if (!trimmed || /^(?:null|undefined|about:blank|javascript:|data:)/i.test(trimmed)) return;
     const normalized = getImageUrl(trimmed);
     pushUrl(normalized);
     pushUrl(getOriginalImageFromProxy(normalized));
