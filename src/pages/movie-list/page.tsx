@@ -10,6 +10,7 @@ import { useLazySection } from '@/hooks/useLazySection';
 import { useMoviesByType } from '@/hooks/useMovies';
 import Pagination from '@/components/base/Pagination';
 import type { Movie } from '../../types/movie';
+import { getImageUrl } from '../../services/movieApi';
 
 interface MovieListPageProps {
   type: 'phim-le' | 'phim-bo' | 'phim-sap-chieu' | 'tv-shows' | 'hoat-hinh' | 'phim-chieu-rap';
@@ -240,7 +241,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
       { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `${countryMeta?.title ?? title} – KhoPhim`, url: `${SITE_URL}${basePath}`, description: seoDesc, inLanguage: 'vi', isPartOf: { '@type': 'WebSite', name: 'KhoPhim', url: SITE_URL } },
     ];
     if (movies.length > 0) {
-      schemas.push({ '@context': 'https://schema.org', '@type': 'ItemList', name: `${countryMeta?.title ?? title} – Danh Sách Phim`, url: `${SITE_URL}${basePath}`, numberOfItems: movies.length, itemListElement: movies.slice(0, 10).map((m, i) => ({ '@type': 'ListItem', position: (page - 1) * PAGE_SIZE + i + 1, url: `${SITE_URL}/phim/${m.slug}`, name: m.name, image: m.thumb_url ? `https://img.ophim.live/uploads/movies/${m.thumb_url}` : undefined })) });
+      schemas.push({ '@context': 'https://schema.org', '@type': 'ItemList', name: `${countryMeta?.title ?? title} – Danh Sách Phim`, url: `${SITE_URL}${basePath}`, numberOfItems: movies.length, itemListElement: movies.slice(0, 10).map((m, i) => ({ '@type': 'ListItem', position: (page - 1) * PAGE_SIZE + i + 1, url: `${SITE_URL}/phim/${m.slug}`, name: m.name, image: m.thumb_url ? getImageUrl(m.thumb_url) : undefined })) });
     }
     return schemas;
   }, [countryMeta, title, basePath, seoDesc, movies, page]);

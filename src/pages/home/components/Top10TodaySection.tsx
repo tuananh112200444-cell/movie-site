@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useImageFallback } from '../../../hooks/useImageFallback';
 import { Link } from 'react-router-dom';
-import { fetchMoviesByType, fetchNewMovies, getOptimizedImageUrl } from '../../../services/movieApi';
+import { fetchMoviesByType, fetchNewMovies, getImageUrl, getOptimizedImageUrl } from '../../../services/movieApi';
 import type { MovieItem } from '../../../types/movie';
 import { ImageOff, Play, Sparkles, Trophy } from 'lucide-react';
 import { trackMovieClick } from '../../../utils/analytics';
@@ -9,7 +9,7 @@ import { trackMovieClick } from '../../../utils/analytics';
 /* ── helpers ── */
 function getThumbUrl(path: string): string {
   if (!path) return '';
-  return path.startsWith('http') ? path : `https://img.ophim.live/uploads/movies/${path}`;
+  return getImageUrl(path);
 }
 
 function getEpBadge(ep?: string): string {

@@ -243,6 +243,8 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
     getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 240, 78),
     getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 240, 78),
     isImagePreloaded(getPosterUrl(movie.thumb_url || movie.poster_url)),
+    240,
+    78,
   );
   const ep = getEpInfo(movie.episode_current);
   const mTime = movie.modified?.time ?? '';

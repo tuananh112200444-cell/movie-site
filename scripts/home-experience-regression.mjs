@@ -14,6 +14,7 @@ const discovery = await readFile('src/pages/home/components/HomeDiscoverySection
 const portalGateway = await readFile('src/pages/home/components/PortalGateway.tsx', 'utf8');
 const movieSection = await readFile('src/pages/home/components/MovieSection.tsx', 'utf8');
 const top10 = await readFile('src/pages/home/components/Top10TodaySection.tsx', 'utf8');
+const topCinema = await readFile('src/pages/home/components/TopCinemaMoviesSection.tsx', 'utf8');
 const viteConfig = await readFile('vite.config.ts', 'utf8');
 const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 const homeFallback = JSON.parse(await readFile('public/home-fallback.json', 'utf8'));
@@ -42,6 +43,9 @@ if (!home.includes('Kho phim được đồng bộ và kiểm tra nguồn phát 
 }
 if (/getViewerCount|\}\s*xem/.test(trending)) {
   failures.push('Trending UI must not show generated viewer counts as real analytics.');
+}
+if (!/isImagePreloaded\(getPosterUrl[\s\S]*?\n\s*240,\s*\n\s*78,\s*\n\s*\);/.test(trending)) {
+  failures.push('Trending posters must pass their measured image budget through the fallback hook.');
 }
 if (lazySection.includes('3200 + Math.min(sectionIndex, 8) * 120')) {
   failures.push('Lazy movie shelves must not all wake on a shared idle timer.');
@@ -164,6 +168,9 @@ if (
 }
 if (!top10.includes('w-[292px]') || top10.includes('className={`${HOME_POSTER_ITEM_CLASS} group cursor-pointer`}')) {
   failures.push('Mobile Top 10 must use readable landscape cards instead of narrow poster-only cards.');
+}
+if (!/isImagePreloaded[\s\S]*?\n\s*280,\s*\n\s*80,\s*\n\s*\);/.test(topCinema)) {
+  failures.push('Cinema posters must stay within the measured card-size image budget.');
 }
 if (!String(packageJson.scripts?.prebuild || '').includes('refresh-home-fallback.mjs')) {
   failures.push('Production builds must refresh the static homepage fallback before packaging.');

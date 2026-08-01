@@ -4,6 +4,15 @@ const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined) ?? 'https
 const BASE_URL = 'https://ophim1.com';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 
+function normalizeRelativeImagePath(path: string): string {
+  return path
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/\?/g, '%3F')
+    .replace(/#/g, '%23')
+    .replace(/\s+/g, '%20');
+}
+
 interface MovieItem {
   slug: string;
   name: string;
@@ -19,7 +28,7 @@ interface ApiResponse {
 
 function getThumbUrl(path?: string): string {
   if (!path) return '';
-  return path.startsWith('http') ? path : `${IMG_BASE}${path}`;
+  return path.startsWith('http') ? path : `${IMG_BASE}${normalizeRelativeImagePath(path)}`;
 }
 
 function escapeXml(str: string): string {

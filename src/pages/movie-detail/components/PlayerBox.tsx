@@ -745,7 +745,10 @@ export default function PlayerBox({
     setIframeLoaded(false);
     setIframeBlocked(false);
     if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
-    const hasFallbackServer = allServers.some((_, index) => index !== activeServer);
+    const fallbackServers = allServers.filter((_, index) => index !== activeServer);
+    const hasFallbackServer = Boolean(
+      pickBestEpisodeByPriority(fallbackServers, episode?.slug || episode?.name),
+    );
     const slowThirdPartyEmbed = requiresUnsandboxedEmbed(embedSrc) || isOnlyflixEmbed(embedSrc);
     iframeTimerRef.current = setTimeout(() => {
       if (slowThirdPartyEmbed) {
@@ -757,7 +760,7 @@ export default function PlayerBox({
     return () => {
       if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
     };
-  }, [activeServer, allServers, effectivePlayerMode, embedSrc, iframeKey]);
+  }, [activeServer, allServers, effectivePlayerMode, embedSrc, episode?.name, episode?.slug, iframeKey]);
 
   /* Auto-next on ended */
   const handleEnded = useCallback(() => {
@@ -860,16 +863,22 @@ export default function PlayerBox({
     const embedUrl = episode?.link_embed;
     const hlsCluster = getSourceFailureClusterFromUrl(episode?.link_m3u8 || '');
     const embedCluster = getSourceFailureClusterFromUrl(embedUrl || '');
-    if (
+    const canUseEmbedFallback = Boolean(
       embedUrl &&
       !isBlvietsubWatchPageUrl(embedUrl) &&
-      effectivePlayerMode === 'hls' &&
-      hlsCluster !== embedCluster
-    ) {
+      effectivePlayerMode === 'hls'
+    );
+    if (canUseEmbedFallback && hlsCluster !== embedCluster) {
       setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
       return;
     }
-    switchToFallbackServer();
+    if (switchToFallbackServer()) return;
+    // Prefer an independent server first. If none exists, a working iframe
+    // from the same provider is still safer than leaving the viewer on a
+    // confirmed-broken HLS path.
+    if (canUseEmbedFallback) {
+      setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
+    }
   }, [effectivePlayerMode, episode?.link_embed, reportIssue, switchToFallbackServer]);
 
   const handleDirectVideoError = useCallback(() => {

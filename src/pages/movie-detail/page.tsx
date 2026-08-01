@@ -36,13 +36,6 @@ function getPlayableSourceUrl(ep: EpisodeData): string {
   return ep.link_m3u8?.trim() || ep.link_embed?.trim() || '';
 }
 
-function areAllPlaybackPathsDegraded(ep: EpisodeData): boolean {
-  const paths = Array.from(new Set([ep.link_m3u8, ep.link_embed]
-    .map((url) => String(url || '').trim())
-    .filter(Boolean)));
-  return paths.length > 0 && paths.every((path) => isRecentlyBadSourceHost(path));
-}
-
 function resolveOriginalServerIndex(targetServer: EpisodeServer, originalServers: EpisodeServer[]): number {
   const directIdx = originalServers.findIndex((server) => server === targetServer);
   if (directIdx >= 0) return directIdx;
@@ -520,22 +513,38 @@ export default function MovieDetailPage() {
     }
   }, [detail?.movie, saveProgress, slug]);
 
-  // A late cross-viewer health update may replace the source while a visitor
-  // is already watching. Persist and carry the live position into the new
-  // player; zero is reserved for an explicit restart or a genuinely new
-  // episode.
+  // Source health arrives shortly after the route data. Before playback has
+  // actually started, replace a proven-bad primary URL with an independent
+  // same-episode source. Do not interrupt a viewer whose video is playing.
   useEffect(() => {
     if (!isWatchPage || sourceHealthVersion === 0 || !activeEp || !detail?.episodes) return;
     const currentUrl = getPlayableSourceUrl(activeEp);
-    if (!areAllPlaybackPathsDegraded(activeEp)) return;
-    const best = pickBestEpisodeByPriority(filteredEpisodes, activeEp.slug || activeEp.name);
-    if (!best || getPlayableSourceUrl(best.episode) === currentUrl) return;
+    if (!currentUrl || !isRecentlyBadSourceHost(currentUrl)) return;
+    const currentPlaybackTime = Math.max(
+      playbackTimeRef.current,
+      pendingProgressRef.current?.time ?? 0,
+    );
+    // Health arrives asynchronously after SPA navigation. Permit one early
+    // same-episode handoff before the viewer has meaningfully started
+    // watching, so a confirmed provider outage cannot keep the initial
+    // selection on a dead CDN shard. Preserve the live seek position.
+    if (currentPlaybackTime >= 8) return;
+    const alternativeServers = filteredEpisodes
+      .map((server) => ({
+        ...server,
+        server_data: (server.server_data ?? []).filter(
+          (candidate) => getPlayableSourceUrl(candidate) !== currentUrl,
+        ),
+      }))
+      .filter((server) => server.server_data.length > 0);
+    const best = pickBestEpisodeByPriority(alternativeServers, activeEp.slug || activeEp.name);
+    if (!best) return;
     const resumeAt = Math.max(
       playbackTimeRef.current,
       pendingProgressRef.current?.time ?? 0,
     );
     flushProgress();
-    const originalIdx = resolveOriginalServerIndex(filteredEpisodes[best.serverIndex], detail.episodes);
+    const originalIdx = resolveOriginalServerIndex(alternativeServers[best.serverIndex], detail.episodes);
     setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
     setActiveEp(best.episode);
     setInitialSeekTime(resumeAt);
