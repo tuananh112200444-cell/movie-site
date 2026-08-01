@@ -24,6 +24,15 @@ interface StreamRow {
   last_checked_at: string | null;
   last_error: string | null;
   response_time_ms: number | null;
+  movies?: { slug?: string } | Array<{ slug?: string }> | null;
+}
+
+interface ProbeResult {
+  ok: boolean;
+  status: number | null;
+  responseMs: number;
+  error: string;
+  directStreamFailed?: boolean;
 }
 
 interface MovieQueueRow {
@@ -94,7 +103,14 @@ function headersFor(url: string) {
   return headers;
 }
 
-async function probe(url: string): Promise<{ ok: boolean; status: number | null; responseMs: number; error: string }> {
+function firstPlaylistUri(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith('#')) || '';
+}
+
+async function probe(url: string): Promise<ProbeResult> {
   const started = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
@@ -111,13 +127,65 @@ async function probe(url: string): Promise<{ ok: boolean; status: number | null;
     if (!okStatus) return { ok: false, status: response.status, responseMs, error: `HTTP ${response.status}` };
 
     if (isHls(url)) {
-      const text = await response.text();
-      const looksLikePlaylist = text.includes('#EXTM3U') || text.includes('#EXT-X-STREAM-INF') || text.includes('#EXTINF');
+      let playlistUrl = url;
+      let playlistText = await response.text();
+      if (!playlistText.includes('#EXTM3U')) {
+        return { ok: false, status: response.status, responseMs, error: 'HLS master playlist invalid' };
+      }
+
+      // A 200 master is not proof of playback. Some expired provider URLs
+      // still return a master whose referenced media playlist is already 404.
+      if (playlistText.includes('#EXT-X-STREAM-INF')) {
+        const childPath = firstPlaylistUri(playlistText);
+        if (!childPath) {
+          return { ok: false, status: response.status, responseMs, error: 'HLS master has no media playlist' };
+        }
+        playlistUrl = new URL(childPath, url).toString();
+        const childResponse = await fetch(playlistUrl, {
+          method: 'GET',
+          headers: headersFor(playlistUrl),
+          redirect: 'follow',
+          signal: controller.signal,
+        });
+        if (!childResponse.ok) {
+          return {
+            ok: false,
+            status: childResponse.status,
+            responseMs: Date.now() - started,
+            error: `HLS media playlist HTTP ${childResponse.status}`,
+          };
+        }
+        playlistText = await childResponse.text();
+      }
+
+      if (!playlistText.includes('#EXTM3U') || !playlistText.includes('#EXTINF')) {
+        return {
+          ok: false,
+          status: response.status,
+          responseMs: Date.now() - started,
+          error: 'HLS media playlist invalid',
+        };
+      }
+
+      const segmentPath = firstPlaylistUri(playlistText);
+      if (!segmentPath) {
+        return { ok: false, status: response.status, responseMs: Date.now() - started, error: 'HLS playlist has no segment' };
+      }
+      const segmentUrl = new URL(segmentPath, playlistUrl).toString();
+      const segmentResponse = await fetch(segmentUrl, {
+        method: 'GET',
+        headers: { ...headersFor(segmentUrl), Range: 'bytes=0-65535' },
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+      const segmentType = segmentResponse.headers.get('content-type') || '';
+      const segmentOk = segmentResponse.ok && !/text\/html/i.test(segmentType);
+      await segmentResponse.body?.cancel().catch(() => undefined);
       return {
-        ok: looksLikePlaylist,
-        status: response.status,
-        responseMs,
-        error: looksLikePlaylist ? '' : 'HLS playlist invalid',
+        ok: segmentOk,
+        status: segmentResponse.status,
+        responseMs: Date.now() - started,
+        error: segmentOk ? '' : `HLS segment HTTP ${segmentResponse.status}`,
       };
     }
 
@@ -150,15 +218,23 @@ async function probe(url: string): Promise<{ ok: boolean; status: number | null;
   }
 }
 
-async function probeStreamRow(row: StreamRow): Promise<{ ok: boolean; status: number | null; responseMs: number; error: string }> {
-  const candidates = unique([
-    String(row.stream_url || '').trim(),
-    String(row.embed_url || '').trim(),
-  ].filter(Boolean));
-  const failures: Array<{ ok: boolean; status: number | null; responseMs: number; error: string }> = [];
+async function probeStreamRow(row: StreamRow): Promise<ProbeResult> {
+  const directUrl = String(row.stream_url || '').trim();
+  const embedUrl = String(row.embed_url || '').trim();
+  const candidates = unique([directUrl, embedUrl].filter(Boolean));
+  const failures: ProbeResult[] = [];
   for (const candidate of candidates) {
     const result = await probe(candidate);
-    if (result.ok) return result;
+    if (result.ok) {
+      if (candidate === embedUrl && directUrl && failures.length > 0) {
+        return {
+          ...result,
+          directStreamFailed: true,
+          error: `Direct stream failed: ${failures[0].error}; embed fallback reachable`,
+        };
+      }
+      return result;
+    }
     failures.push(result);
   }
   return failures.sort((a, b) => {
@@ -171,7 +247,7 @@ async function probeStreamRow(row: StreamRow): Promise<{ ok: boolean; status: nu
 async function logHealth(
   supabase: SupabaseClient,
   row: StreamRow,
-  result: { ok: boolean; status: number | null; responseMs: number; error: string },
+  result: ProbeResult,
 ) {
   await supabase.from('stream_health_logs').insert({
     stream_id: row.id,
@@ -184,14 +260,14 @@ async function logHealth(
   });
 }
 
-function healthStatusFor(result: { ok: boolean; status: number | null; error: string }, failureCount: number) {
-  if (result.ok) return 'ok';
+function healthStatusFor(result: ProbeResult, failureCount: number) {
+  if (result.ok) return result.directStreamFailed ? 'degraded' : 'ok';
   if (result.status === 401 || result.status === 403) return 'blocked';
   if (result.status === 404 || result.status === 410) return failureCount >= 2 ? 'dead' : 'failed';
   return 'failed';
 }
 
-function shouldDeactivate(result: { ok: boolean; status: number | null; error: string }, failureCount: number, deactivateAfter: number) {
+function shouldDeactivate(result: ProbeResult, failureCount: number, deactivateAfter: number) {
   if (result.ok) return false;
   if (result.status === 401 || result.status === 403) return false;
   if (result.status === 404 || result.status === 410) return failureCount >= 2;
@@ -202,7 +278,7 @@ function shouldDeactivate(result: { ok: boolean; status: number | null; error: s
 async function updateStream(
   supabase: SupabaseClient,
   row: StreamRow,
-  result: { ok: boolean; status: number | null; responseMs: number; error: string },
+  result: ProbeResult,
   deactivateAfter: number,
 ) {
   const now = new Date().toISOString();
@@ -252,7 +328,9 @@ async function updateStream(
   };
   if (result.ok) {
     update.last_success_at = now;
-    update.priority = scoreStream(row, result.responseMs);
+    update.priority = result.directStreamFailed
+      ? Math.min(Number(row.priority || 100), 40)
+      : scoreStream(row, result.responseMs);
     update.is_active = true;
   } else {
     update.last_failure_at = now;
@@ -308,15 +386,38 @@ serve(async (req) => {
 
   if (slug) query = query.eq('movies.slug', slug);
   else if (queue === 'unchecked') {
-    query = supabase
-      .from('streams')
-      .select(streamSelect)
-      .eq('is_active', true)
-      .eq('health_status', 'unchecked')
-      .or('stream_url.neq.,embed_url.neq.')
-      .order('last_checked_at', { ascending: true, nullsFirst: true })
-      .order('priority', { ascending: false })
-      .limit(limit);
+    // Split one bounded run between new imports and the historical backlog.
+    // Oldest-first alone made today's streams wait behind hundreds of
+    // thousands of unchecked rows.
+    const recentLimit = Math.ceil(limit / 2);
+    const backlogLimit = Math.max(0, limit - recentLimit);
+    const [recentResult, backlogResult] = await Promise.all([
+      supabase
+        .from('streams')
+        .select(streamSelect)
+        .eq('is_active', true)
+        .eq('health_status', 'unchecked')
+        .or('stream_url.neq.,embed_url.neq.')
+        .order('updated_at', { ascending: false })
+        .limit(recentLimit),
+      backlogLimit > 0
+        ? supabase
+          .from('streams')
+          .select(streamSelect)
+          .eq('is_active', true)
+          .eq('health_status', 'unchecked')
+          .or('stream_url.neq.,embed_url.neq.')
+          .order('last_checked_at', { ascending: true, nullsFirst: true })
+          .order('priority', { ascending: false })
+          .limit(backlogLimit)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (recentResult.error) return json({ success: false, error: recentResult.error.message }, 500);
+    if (backlogResult.error) return json({ success: false, error: backlogResult.error.message }, 500);
+    preselectedRows = [...new Map(
+      [...(recentResult.data || []), ...(backlogResult.data || [])]
+        .map((row) => [String((row as StreamRow).id), row]),
+    ).values()];
   } else if (queue === 'problem') {
     query = supabase
       .from('streams')
@@ -396,15 +497,30 @@ serve(async (req) => {
       return {
         stream_id: row.id,
         movie_id: row.movie_id,
+        movie_slug: Array.isArray(row.movies) ? row.movies[0]?.slug : row.movies?.slug,
         episode_slug: row.episode_slug,
         server_name: row.server_name,
         ok: result.ok,
+        degraded: Boolean(result.directStreamFailed),
         status: result.status,
         response_time_ms: result.responseMs,
         error: result.error,
       };
     }));
     results.push(...batchResults.filter(Boolean));
+  }
+
+  if (!dryRun) {
+    const staleDetailSlugs = unique(results
+      .filter((item) => item && (!item.ok || item.degraded))
+      .map((item) => String(item?.movie_slug || '').trim())
+      .filter(Boolean));
+    for (let index = 0; index < staleDetailSlugs.length; index += 100) {
+      await supabase
+        .from('movie_api_cache')
+        .delete()
+        .in('slug', staleDetailSlugs.slice(index, index + 100));
+    }
   }
 
   return json({
@@ -414,6 +530,7 @@ serve(async (req) => {
     movie_limit: movieLimit,
     checked: results.length,
     ok: results.filter((item) => item.ok).length,
+    degraded: results.filter((item) => item.degraded).length,
     failed: results.filter((item) => !item.ok).length,
     results: results.slice(0, 20),
   });

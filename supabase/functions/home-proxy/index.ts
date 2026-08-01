@@ -281,6 +281,12 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
   const m = raw as Record<string, unknown>;
   if (!m.slug || !m.name) return null;
 
+  // Home sections must never publish a card with no usable artwork. Some
+  // providers leave poster_url empty while thumb_url is valid (or vice versa).
+  const thumbUrl = String(m.thumb_url ?? '').trim();
+  const posterUrl = String(m.poster_url ?? '').trim();
+  if (!thumbUrl && !posterUrl) return null;
+
   // Chỉ giữ fields cần thiết cho trang chủ để giảm payload size
   return {
     _id: String(m._id ?? m.id ?? ''),
@@ -288,8 +294,8 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
     slug: String(m.slug),
     origin_name: String(m.origin_name ?? ''),
     type: String(m.type ?? 'single'),
-    thumb_url: String(m.thumb_url ?? ''),
-    poster_url: String(m.poster_url ?? ''),
+    thumb_url: thumbUrl || posterUrl,
+    poster_url: posterUrl || thumbUrl,
     quality: String(m.quality ?? 'HD'),
     lang: String(m.lang ?? 'Vietsub'),
     year: Number(m.year ?? 0),
