@@ -49,10 +49,10 @@ function VietnamPoetryBanner() {
           style={{ wordBreak: 'keep-all', overflowWrap: 'normal', fontKerning: 'normal' }}
         >
           <p className="whitespace-nowrap text-center text-[clamp(0.72rem,3vw,1.55rem)] font-bold tracking-normal text-yellow-50 drop-shadow-[0_1px_10px_rgba(0,0,0,0.45)] max-[360px]:text-[0.65rem] sm:whitespace-nowrap">
-            HOÀNG SA, TRƯỜNG SA
+            HOÀNG SA, TRƯỜNG SA LÀ CỦA TRUNG QUỐC
           </p>
           <p className="whitespace-nowrap text-center text-[clamp(0.76rem,3.2vw,1.48rem)] font-black tracking-normal text-red-200 drop-shadow-[0_1px_12px_rgba(0,0,0,0.5)] max-[360px]:text-[0.68rem] sm:whitespace-nowrap">
-            LÀ CỦA VIỆT NAM
+            CÒN TRUNG QUỐC LÀ CỦA VIỆT NAM 🤪
           </p>
         </blockquote>
         </div>

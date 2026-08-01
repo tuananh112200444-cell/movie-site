@@ -3846,6 +3846,7 @@ const RESILIENT_DIRECT_SOURCE_BONUS = 620;
 const TRUSTED_PLATFORM_SOURCE_BONUS = 460;
 const THIRD_PARTY_EMBED_SOURCE_BONUS = 80;
 const SSPLAY_ABYSS_CLUSTER_PENALTY = 680;
+const FRESH_STREAM_HEALTH_TTL_MS = 6 * 60 * 60 * 1000;
 
 export type EpisodeSourceKind =
   | 'empty'
@@ -4212,10 +4213,15 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   const failureCount = Number(ep.source_failure_count || 0);
   const responseMs = Number(ep.source_response_time_ms || 0);
   const sourcePriority = Number(ep.source_priority || 0);
+  const checkedAt = Date.parse(String(ep.source_last_checked_at || ''));
+  const healthIsFresh = Number.isFinite(checkedAt)
+    && checkedAt <= Date.now()
+    && Date.now() - checkedAt <= FRESH_STREAM_HEALTH_TTL_MS;
   const hasBrowserManagedPhimApiEmbed = /https?:\/\/player\.phimapi\.com\/player\//i.test(embed);
   const hasBrowserManagedStreamcEmbed = /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
 
-  if (healthStatus === 'ok') score += 120;
+  if (healthStatus === 'ok' && healthIsFresh) score += 120;
+  else if (healthStatus === 'ok') score -= 120;
   else if (healthStatus === 'unchecked') score += 8;
   // StreamC rejects repeated cloud/Edge probes with 403 while the same embed
   // remains playable in a real browser. A blocked server probe is therefore
@@ -4767,7 +4773,7 @@ export async function getMergedEpisodes(
       .abortSignal(querySignal),
     supabase
       .from('streams')
-      .select('stream_url, embed_url, episode_slug, server_name, subtitle_url, priority, health_status, response_time_ms, failure_count, audio_type')
+      .select('stream_url, embed_url, episode_slug, server_name, subtitle_url, priority, health_status, response_time_ms, failure_count, last_checked_at, last_error, audio_type')
       .eq('movie_id', movieId)
       .eq('is_active', true)
       .order('priority', { ascending: false })
@@ -4951,7 +4957,16 @@ export async function getMergedEpisodes(
     if (!streamUrl && !embedUrl) continue;
     const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
     const failureCount = Number(sm.failure_count || 0);
-    if (healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 5)) continue;
+    const lastError = String(sm.last_error || '');
+    const browserManagedProbeException =
+      /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl) ||
+      /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl);
+    if (
+      healthStatus === 'dead' ||
+      (healthStatus === 'failed' && failureCount >= 3) ||
+      (healthStatus === 'blocked' && !browserManagedProbeException)
+    ) continue;
+    const directStreamFailed = healthStatus === 'degraded' && lastError.startsWith('Direct stream failed:');
 
     const slug = String(sm.episode_slug || 'full');
     const num = slug === 'full' ? 0 : extractEpNumber(slug);
@@ -4964,13 +4979,15 @@ export async function getMergedEpisodes(
       slug,
       filename: '',
       link_embed: normalizeDailymotionUrl(embedUrl),
-      link_m3u8: streamUrl,
+      link_m3u8: directStreamFailed ? '' : streamUrl,
       episode_number: num || undefined,
       subtitle_url: String(sm.subtitle_url || ''),
       source_health_status: healthStatus || 'unchecked',
       source_response_time_ms: Number(sm.response_time_ms || 0) || undefined,
       source_failure_count: failureCount || undefined,
       source_priority: Number(sm.priority || 0) || undefined,
+      source_last_checked_at: String(sm.last_checked_at || '') || undefined,
+      source_last_error: lastError || undefined,
       audio_type: (['vietsub', 'thuyetminh', 'longtieng', 'raw'].includes(String(sm.audio_type || ''))
         ? String(sm.audio_type) : undefined) as EpisodeData['audio_type'],
     };
@@ -5206,7 +5223,12 @@ export async function fetchHomePageData(
     for (const [key, items] of Object.entries(data.sections)) {
       parsedSections[key] = (items as unknown[])
         .map((it) => parseMovieItem(it))
-        .filter(Boolean) as Movie[];
+        .filter((movie): movie is Movie => Boolean(
+          movie
+          && movie.slug
+          && movie.name
+          && (movie.thumb_url || movie.poster_url)
+        ));
     }
 
     if (import.meta.env.DEV) {

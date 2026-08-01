@@ -337,7 +337,11 @@ function hasUnverifiedSingleProviderCoverage(
     }
   }
   for (const candidates of episodes.values()) {
-    if (candidates.some((ep) => String(ep.source_health_status || '').toLowerCase() === 'ok')) continue;
+    if (candidates.some((ep) => {
+      if (String(ep.source_health_status || '').toLowerCase() !== 'ok') return false;
+      const checkedAt = Date.parse(String(ep.source_last_checked_at || ''));
+      return Number.isFinite(checkedAt) && Date.now() - checkedAt <= 6 * 60 * 60 * 1000;
+    })) continue;
     const providers = new Set(candidates.map(episodeProviderKey).filter(Boolean));
     if (providers.size < 2) return true;
   }
@@ -346,13 +350,19 @@ function hasUnverifiedSingleProviderCoverage(
 
 function attachStreamHealth(epData: Record<string, unknown>, row: Record<string, unknown> | null): Record<string, unknown> {
   if (!row) return epData;
+  const healthStatus = String(row.health_status || 'unchecked').toLowerCase();
+  const lastError = String(row.last_error || '');
+  const directStreamFailed = healthStatus === 'degraded' && lastError.startsWith('Direct stream failed:');
   return {
     ...epData,
-    source_health_status: String(row.health_status || 'unchecked').toLowerCase(),
+    ...(directStreamFailed ? { link_m3u8: '' } : {}),
+    source_health_status: healthStatus,
     source_response_time_ms: Number(row.response_time_ms || 0) || undefined,
     source_failure_count: Number(row.failure_count || 0) || undefined,
     source_priority: Number(row.priority || 0) || undefined,
     source_provider: String(row.source || epData.source_provider || '') || undefined,
+    source_last_checked_at: String(row.last_checked_at || '') || undefined,
+    source_last_error: lastError || undefined,
   };
 }
 
@@ -1730,7 +1740,7 @@ serve(async (req) => {
           .order('episode_number', { ascending: true }),
         supabase
           .from('streams')
-          .select('server_name, source, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count, audio_type')
+          .select('server_name, source, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count, last_checked_at, last_error, audio_type')
           .eq('movie_id', movieId)
           .order('priority', { ascending: false })
           .order('response_time_ms', { ascending: true, nullsFirst: false }),
@@ -1871,6 +1881,8 @@ serve(async (req) => {
         if (isKnownBlockedEmbedHost(embedUrl || streamUrl)) continue;
         const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
         const failureCount = Number(sm.failure_count || 0);
+        const lastError = String(sm.last_error || '');
+        const directStreamFailed = healthStatus === 'degraded' && lastError.startsWith('Direct stream failed:');
         // Keep the API contract aligned with the frontend. Viewer telemetry
         // raises failure_count by three after repeated fatal playback reports;
         // returning those rows until five failures made a known-bad source
@@ -1888,13 +1900,15 @@ serve(async (req) => {
           slug: slugVal,
           filename: '',
           link_embed: normalizeDailymotionUrl(embedUrl),
-          link_m3u8: streamUrl,
+          link_m3u8: directStreamFailed ? '' : streamUrl,
           subtitle_url: String(sm.subtitle_url || ''),
           source_health_status: healthStatus || 'unchecked',
           source_response_time_ms: Number(sm.response_time_ms || 0) || undefined,
           source_failure_count: failureCount || undefined,
           source_priority: Number(sm.priority || 0) || undefined,
           source_provider: String(sm.source || '') || undefined,
+          source_last_checked_at: String(sm.last_checked_at || '') || undefined,
+          source_last_error: lastError || undefined,
         };
 
         pushEpisode(serverMap, serverName, epData);
