@@ -34,6 +34,18 @@ if (
 if (!movieApi.includes('phimimg\\.com|icdn\\.darkbytes\\.xyz')) {
   failures.push('Image optimization must bypass origins that wsrv.nl rejects with HTTP 400.');
 }
+if (!movieApi.includes('unwrapCloudflareImageOrigin')) {
+  failures.push('The shared image helper must recover an origin from an already-resized Cloudflare image URL.');
+}
+for (const [label, source] of [
+  ['homepage quick cards', home],
+  ['trending cards', trending],
+  ['Top 10 cards', top10],
+]) {
+  if (/useImageFallback\(\s*getOptimizedImageUrl/s.test(source)) {
+    failures.push(`${label} must pass raw provider URLs to the fallback hook instead of optimizing twice.`);
+  }
+}
 
 if (home.includes('idleFallback') || !home.includes("window.addEventListener('pageshow', checkPosition)")) {
   failures.push('Deferred sections must use viewport checks without waking the whole page on an idle timer.');

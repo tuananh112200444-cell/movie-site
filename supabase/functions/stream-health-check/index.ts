@@ -369,6 +369,7 @@ serve(async (req) => {
   const deactivateAfter = clampNumber(url.searchParams.get('deactivate_after'), 4, 2, 10);
   const movieLimit = clampNumber(url.searchParams.get('movie_limit'), 80, 10, 300);
   const slug = String(url.searchParams.get('slug') || '').trim();
+  const episodeSlug = String(url.searchParams.get('episode') || '').trim();
   const queue = String(url.searchParams.get('queue') || 'hot').toLowerCase();
   const dryRun = url.searchParams.get('dry_run') === '1';
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -384,7 +385,20 @@ serve(async (req) => {
     .limit(limit);
   let preselectedRows: unknown[] | null = null;
 
-  if (slug) query = query.eq('movies.slug', slug);
+  if (slug) {
+    // Resolve the indexed movie identity first. Filtering streams through the
+    // embedded movies join timed out on the production stream table even for
+    // a single requested episode.
+    const { data: targetMovie, error: targetMovieError } = await supabase
+      .from('movies')
+      .select('id')
+      .eq('slug', slug)
+      .maybeSingle();
+    if (targetMovieError) return json({ success: false, error: targetMovieError.message }, 500);
+    if (!targetMovie?.id) return json({ success: true, checked: 0, results: [], message: 'Movie not found' });
+    query = query.eq('movie_id', targetMovie.id);
+    if (episodeSlug) query = query.eq('episode_slug', episodeSlug);
+  }
   else if (queue === 'unchecked') {
     // Split one bounded run between new imports and the historical backlog.
     // Oldest-first alone made today's streams wait behind hundreds of

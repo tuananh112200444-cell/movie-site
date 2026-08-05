@@ -1397,25 +1397,6 @@ serve(async (req) => {
               .update({ is_published: persistedPlayableCoverage && result.hasImage })
               .eq('id', result.id);
           }
-          // Viewer telemetry is a useful repair signal, but it is not an
-          // independent network probe. A targeted identity repair has just
-          // re-resolved the provider movie and its current URLs; release rows
-          // stuck solely behind telemetry so the health checker can verify
-          // them again. Independently confirmed dead/blocked rows are kept.
-          if (targetMovie) {
-            await supabase
-              .from('streams')
-              .update({
-                is_active: true,
-                health_status: 'unchecked',
-                failure_count: 0,
-                last_error: 'Targeted provider identity refresh; independent probe pending',
-                last_checked_at: null,
-              })
-              .eq('movie_id', result.id)
-              .eq('source', provider.sourceSite)
-              .ilike('last_error', 'Viewer telemetry:%');
-          }
         }
         if (result.created || result.updated || stats.episodesInserted > beforeEpisodesInserted) {
           changedSlugs.push(String(detail.movie.slug || slug));

@@ -1,6 +1,6 @@
 ﻿import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getOptimizedImageUrl, getPosterUrl } from '../../../services/movieApi';
+import { getPosterUrl } from '../../../services/movieApi';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
 import { useImageFallback } from '../../../hooks/useImageFallback';
@@ -240,8 +240,8 @@ interface TrendingCardProps {
 
 function TrendingCard({ movie, rank }: TrendingCardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 240, 78),
-    getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 240, 78),
+    movie.thumb_url || movie.poster_url,
+    movie.poster_url || movie.thumb_url,
     isImagePreloaded(getPosterUrl(movie.thumb_url || movie.poster_url)),
     240,
     78,

@@ -63,6 +63,12 @@ if (!ophim.includes('safeProviderImage') || !ophim.includes("posterUrl = safePro
   failures.push('OPhim sync must reject inline/unsafe poster payloads and fall back to the provider thumbnail');
 }
 if (
+  ophim.includes('Targeted provider identity refresh; independent probe pending')
+  || /if \(targetMovie\)[\s\S]{0,700}health_status:\s*'unchecked'[\s\S]{0,250}failure_count:\s*0/.test(ophim)
+) {
+  failures.push('Targeted OPhim repair must not erase viewer failure evidence or reactivate an unchanged dead URL');
+}
+if (
   !ophim.includes('if (existing.is_published === false) update.is_published = false')
   || !ophim.includes('detailHasPlayableEpisode(detail) && result.hasImage')
 ) {

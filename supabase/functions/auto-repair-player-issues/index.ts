@@ -449,12 +449,6 @@ serve(async (req) => {
     }
 
     const calls: FunctionCallResult[] = [];
-    const penalizedStreams = await penalizeTelemetryFailedStreams(
-      supabase,
-      movie.id,
-      candidate.hosts,
-      candidate.episodes,
-    );
     if (isBlvietsubMovie(movie)) {
       const movieUrl = getBlvietsubMovieUrl(movie);
       if (movieUrl) {
@@ -506,6 +500,16 @@ serve(async (req) => {
         }));
       }
     }
+
+    // Mark the exact current rows after provider sync. Doing this before sync
+    // allowed a newly inserted provider alias for the same dead URL to enter
+    // as unchecked and bypass the five-minute telemetry probe queue.
+    const penalizedStreams = await penalizeTelemetryFailedStreams(
+      supabase,
+      movie.id,
+      candidate.hosts,
+      candidate.episodes,
+    );
 
     await deleteMovieCaches(supabase, [
       movie.slug,

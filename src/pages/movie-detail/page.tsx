@@ -150,6 +150,15 @@ function getLatestPlayableEpisodeSlug(episodes: EpisodeServer[]): string | undef
   return latest?.slug || latest?.name;
 }
 
+function normalizeRequestedEpisode(routeEpisode?: string): string {
+  if (!routeEpisode) return '';
+  try {
+    return decodeURIComponent(routeEpisode).trim().toLowerCase();
+  } catch {
+    return String(routeEpisode).trim().toLowerCase();
+  }
+}
+
 function getLatestPlayableEpisode(episodes: EpisodeData[]): EpisodeData | null {
   return [...episodes]
     .filter((ep) => hasPlayableUrl(ep) && !ep.is_scheduled)
@@ -459,24 +468,43 @@ export default function MovieDetailPage() {
     return epCurrent === 'trailer' || epCurrent === 'sap chieu' || epCurrent === 'dang cap nhat';
   }, [detail]);
 
+  const requestedEpisode = useMemo(
+    () => normalizeRequestedEpisode(routeEpisode),
+    [routeEpisode],
+  );
+  const requestedEpisodeUnavailable = useMemo(
+    () => Boolean(
+      isWatchPage &&
+      requestedEpisode &&
+      detail &&
+      !isTrailerOnly &&
+      !pickBestEpisodeByPriority(filteredEpisodes, requestedEpisode)
+    ),
+    [detail, filteredEpisodes, isTrailerOnly, isWatchPage, requestedEpisode],
+  );
+
   useEffect(() => {
     if (!isWatchPage || !hasEpisodes || isTrailerOnly || !detail?.episodes) return;
-    let requestedEpisode = '';
-    try {
-      requestedEpisode = routeEpisode ? decodeURIComponent(routeEpisode).toLowerCase() : '';
-    } catch {
-      requestedEpisode = String(routeEpisode || '').toLowerCase();
-    }
     const requestedEpisodeNumber = Number(requestedEpisode.match(/\d+/)?.[0] ?? 0);
     const matchesRequestedEpisode = (episode: EpisodeData) =>
       [episode.slug, episode.name].filter(Boolean).some((value) => String(value).toLowerCase() === requestedEpisode) ||
       (requestedEpisodeNumber > 0 && epSortKey(episode) === requestedEpisodeNumber);
     const activeMatchesRequest = Boolean(activeEp && requestedEpisode &&
       matchesRequestedEpisode(activeEp));
-    if (activeEp && (!requestedEpisode || activeMatchesRequest)) return;
     const requested = requestedEpisode
       ? pickBestEpisodeByPriority(filteredEpisodes, requestedEpisode)
       : null;
+    if (activeEp && (!requestedEpisode || (activeMatchesRequest && requested))) return;
+    // A watch URL is an exact contract. If /25 has no playable source, never
+    // hide that failure by silently starting another episode such as /14.
+    if (requestedEpisode && !requested) {
+      if (activeEp) {
+        playbackTimeRef.current = 0;
+        setActiveEp(null);
+        setInitialSeekTime(0);
+      }
+      return;
+    }
     const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
     const best = requested ?? pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
     if (!best) return;
@@ -485,7 +513,7 @@ export default function MovieDetailPage() {
     setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
     setActiveEp(best.episode);
     setInitialSeekTime(0);
-  }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly, isWatchPage, routeEpisode]);
+  }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly, isWatchPage, requestedEpisode]);
 
   const trailerEmbedUrl = useMemo(
     () => (detail?.movie?.trailer_url ? getTrailerEmbedUrl(detail.movie.trailer_url) : null),
@@ -652,7 +680,7 @@ export default function MovieDetailPage() {
 
   const handleRefetchMovie = useCallback(async () => {
     if (!slug) return;
-    const targetEpisode = activeEpRef.current;
+    const targetEpisode = activeEpRef.current || requestedEpisode;
     const resumeAt = Math.max(
       playbackTimeRef.current,
       pendingProgressRef.current?.time ?? 0,
@@ -672,11 +700,13 @@ export default function MovieDetailPage() {
       }
       setDetail(data);
       const deduped = deduplicateAndLimitServers(data.episodes ?? []);
+      let recoveredSource = false;
       if (deduped.length > 0) {
         const recovered = targetEpisode
           ? pickBestEpisodeByPriority(deduped, targetEpisode)
           : null;
         if (recovered) {
+          recoveredSource = true;
           const originalIdx = resolveOriginalServerIndex(deduped[recovered.serverIndex], data.episodes ?? []);
           playbackTimeRef.current = resumeAt;
           setActiveServer(originalIdx >= 0 ? originalIdx : recovered.serverIndex);
@@ -692,14 +722,17 @@ export default function MovieDetailPage() {
       } else {
         setActiveServer(-1);
       }
-      showToast('Đã tìm thấy nguồn phim mới!', 'success');
+      showToast(
+        recoveredSource ? 'Đã tìm thấy nguồn phim mới!' : 'Tập này vẫn chưa có nguồn phát hoạt động.',
+        recoveredSource ? 'success' : 'error',
+      );
     } catch {
       setError('Không thể tải thông tin phim');
       showToast('Không tìm thấy nguồn phim nào khác.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [flushProgress, showToast, slug]);
+  }, [flushProgress, requestedEpisode, showToast, slug]);
 
   const handleFavToggle = useCallback(() => {
     if (!detail?.movie) return;
@@ -861,6 +894,7 @@ export default function MovieDetailPage() {
         onResume={handleResume}
         onRestart={handleRestart}
         activeEp={activeEp}
+        requestedEpisodeUnavailable={requestedEpisodeUnavailable}
         activeServer={activeFilteredIndex}
         onSwitchServer={handleSwitchServer}
         onRefetchMovie={handleRefetchMovie}

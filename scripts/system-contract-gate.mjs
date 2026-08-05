@@ -204,7 +204,9 @@ if (
   !episodeSequenceRepair.includes("'?movie_id=' || item.movie_id") ||
   !ophimSync.includes('fetchDetailForTarget') ||
   !ophimSync.includes('provider.searchPath(query)') ||
-  !ophimSync.includes(".ilike('last_error', 'Viewer telemetry:%')")
+  !autoRepair.includes('movie_id: movie.id') ||
+  autoRepair.indexOf('const penalizedStreams = await penalizeTelemetryFailedStreams') < autoRepair.indexOf("'sync-ophim-movies'") ||
+  ophimSync.includes('Targeted provider identity refresh; independent probe pending')
 ) {
   failures.push('episode sequence gaps or telemetry-only source recovery are not repaired through stable cross-provider movie identity');
 }
