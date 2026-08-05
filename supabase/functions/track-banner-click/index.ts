@@ -26,12 +26,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    let body: Record<string, unknown> = {};
-    try {
-      body = await req.json();
-    } catch {
-      // ignore parse errors, use empty body
-    }
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
 
     const { url, page_path, user_agent } = body;
 

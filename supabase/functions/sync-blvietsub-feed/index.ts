@@ -1,5 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractImageFromHtml } from '../../../scripts/image-source-utils.mjs';
+import { countPlayableEpisodes, maxPlayableEpisodeNumber as getMaxPlayableEpisodeNumber, shouldPublishMovieFromSync, shouldIncludeMovieForBlvietsubSync } from '../../../scripts/blvietsub-sync-utils.mjs';
 
 const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://blvietsub.com/sitemap_index.xml';
 const BLVIETSUB_PROXY_URL = Deno.env.get('BLVIETSUB_PROXY_URL') || 'https://khophim.org/internal/blvietsub-proxy';
@@ -86,6 +88,7 @@ interface MovieRow {
   episode_total?: string | null;
   current_episode?: number | null;
   total_episodes?: number | null;
+  type?: string | null;
   status?: string | null;
   year?: number | null;
   last_synced_at?: string | null;
@@ -606,11 +609,11 @@ function scoreRoutineRepairMovie(
 }
 
 function playableEpisodeCount(episodes: ParsedEpisode[]): number {
-  return new Set(episodes.map((episode) => episode.episode_number).filter((episode) => episode > 0)).size;
+  return countPlayableEpisodes(episodes as unknown as Array<{ link_embed?: string; link_m3u8?: string; episode_number?: number }>);
 }
 
 function maxPlayableEpisodeNumber(episodes: ParsedEpisode[]): number {
-  return episodes.reduce((max, episode) => Math.max(max, getEpisodeEndNumber(episode)), 0);
+  return getMaxPlayableEpisodeNumber(episodes as unknown as Array<{ link_embed?: string; link_m3u8?: string; episode_number?: number }>);
 }
 
 function isTransientExternalFetchError(error: unknown): boolean {
@@ -762,7 +765,6 @@ async function findGlobalMovieForEntry(
         .from('movies')
         .select(selectFields)
         .eq(column, title)
-        .eq('is_published', true)
         .limit(5);
       if (entry.year) query = query.eq('year', entry.year);
       const { data, error } = await query;
@@ -779,7 +781,6 @@ async function findGlobalMovieForEntry(
   let query = supabase
     .from('movies')
     .select(selectFields)
-    .eq('is_published', true)
     .or(`name.ilike.%${safeTerm}%,origin_name.ilike.%${safeTerm}%,title_vi.ilike.%${safeTerm}%,title_en.ilike.%${safeTerm}%,slug.ilike.%${safeTerm}%`)
     .limit(20);
   if (entry.year) query = query.eq('year', entry.year);
@@ -812,12 +813,11 @@ async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<Movie
     const { data, error } = await supabase
       .from('movies')
       .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year')
-      .eq('is_published', true)
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
       .range(from, from + pageSize - 1);
 
     if (error) throw new Error(`movies select: ${error.message}`);
-    const batch = (data || []) as MovieRow[];
+    const batch = ((data || []) as MovieRow[]).filter((movie) => shouldIncludeMovieForBlvietsubSync(movie));
     rows.push(...batch);
     if (batch.length < pageSize) break;
   }
@@ -1158,7 +1158,7 @@ function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: stri
     .replace(/\s*-\s*BLVietsub\s*$/i, '')
     || decodeHtml(stripTags(firstMatch(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i)))
     || decodeHtml(stripTags(firstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i))).replace(/\s*-\s*BLVietsub\s*$/i, '');
-  const image = getMetaContent(html, 'og:image');
+  const image = extractImageFromHtml(html, movieUrl);
   const content = getMetaContent(html, 'og:description');
   const postId = firstMatch(html, /https?:\/\/blvietsub\.com\/\?p=(\d+)/i) || movieSlug;
   const episodes = parseWordPressEpisodes(`${html}\n${playerHtml}`, movieSlug);
@@ -1504,6 +1504,7 @@ async function insertMissingEpisodes(
   }
   const rows = entry.episodes
     .filter((episode) => !existing.has(`${episode.server_name}|${episode.episode_number}`))
+    .filter((episode) => String(episode.link_embed || episode.link_m3u8 || '').trim() && !isBlvietsubWatchUrl(String(episode.link_embed || episode.link_m3u8 || '')))
     .map((episode) => ({
       movie_id: movie.id,
       episode_number: episode.episode_number,
@@ -1595,11 +1596,13 @@ async function updateMovieMetadata(
   }
 
   if (entry.image) {
-    // The source frequently replaces expired third-party image URLs. Refresh
-    // both fields even when the old value is non-empty, otherwise a dead URL
-    // survives forever and every frontend fallback starts from bad data.
-    assignChanged('thumb_url', entry.image, movie.thumb_url);
-    assignChanged('poster_url', entry.image, movie.poster_url);
+    // Refresh both image fields when a fresh image is discovered. This keeps new
+    // posters visible even if the prior row had an empty or stale value.
+    const nextImage = String(entry.image || '').trim();
+    if (nextImage) {
+      assignChanged('thumb_url', nextImage, movie.thumb_url);
+      assignChanged('poster_url', nextImage, movie.poster_url);
+    }
   }
 
   Object.keys(update).forEach((key) => update[key] === undefined && delete update[key]);
@@ -1631,6 +1634,52 @@ function getBlvietsubMovieUrl(movie: MovieRow): string {
     if (isWordPressMovieUrl(value)) return value;
   }
   return '';
+}
+
+function hasLegacyBlvietsubUrl(movie: MovieRow): boolean {
+  return [movie.source_url, movie.showtimes].some((raw) => {
+    try {
+      const hostname = new URL(normalizeSourceUrl(String(raw || ''))).hostname.toLowerCase();
+      return hostname === 'blvietsub.top' || hostname === 'www.blvietsub.top';
+    } catch {
+      return false;
+    }
+  });
+}
+
+function getLegacyBlvietsubSlug(movie: MovieRow): string {
+  for (const raw of [movie.source_url, movie.showtimes]) {
+    try {
+      const url = new URL(normalizeSourceUrl(String(raw || '')));
+      if (!['blvietsub.top', 'www.blvietsub.top'].includes(url.hostname.toLowerCase())) continue;
+      return url.pathname.split('/').filter(Boolean).at(-1)?.replace(/\.html?$/i, '') || '';
+    } catch {
+      // Try the other stored source URL.
+    }
+  }
+  return '';
+}
+
+function findExactCurrentSourceForLegacyMovie(
+  movie: MovieRow,
+  candidates: WordPressMovieUrl[],
+): WordPressMovieUrl | null {
+  const movieKeys = new Set(getMovieTitleKeys(movie));
+  const exactSlugKeys = new Set(uniqueTextValues([
+    getLegacyBlvietsubSlug(movie),
+    slugify(movie.name || ''),
+    slugify(movie.origin_name || ''),
+    slugify(movie.title_vi || ''),
+    slugify(movie.title_en || ''),
+  ]));
+  if (movieKeys.size === 0 && exactSlugKeys.size === 0) return null;
+  return candidates.find((candidate) => {
+    const exactTitle = [candidate.title, candidate.originName]
+      .map((value) => canonicalDuplicateTitle(value || ''))
+      .some((key) => key && movieKeys.has(key));
+    const candidateSlug = getWordPressMovieSlug(candidate.url);
+    return exactTitle || Boolean(candidateSlug && exactSlugKeys.has(candidateSlug));
+  }) || null;
 }
 
 async function fetchWordPressEntryByUrl(movieUrl: string): Promise<ParsedEntry | null> {
@@ -1679,7 +1728,11 @@ async function syncEntryToMovie(
   }
   const inserted = await insertMissingEpisodes(supabase, movie, entry);
   const updated = await updateMovieMetadata(supabase, movie, entry);
-  if (playableEpisodeCount(entry.episodes) > 0) {
+  const shouldPublish = shouldPublishMovieFromSync({
+    hasPlayableEpisode: playableEpisodeCount(entry.episodes) > 0,
+    hasUsableImage: Boolean(String(entry.image || movie.thumb_url || movie.poster_url || '').trim()),
+  });
+  if (shouldPublish) {
     await supabase
       .from('movies')
       .update({ is_published: true })
@@ -1721,8 +1774,7 @@ async function repairExistingBlvietsubMovies(
   const queryLimit = includeCompleted ? 800 : 1000;
   const { data, error } = await supabase
     .from('movies')
-    .select('id, slug, name, origin_name, title_vi, title_en, title_original, normalized_name, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, episode_total, current_episode, total_episodes, status, year, last_synced_at, updated_at')
-    .eq('is_published', true)
+    .select('id, slug, name, origin_name, title_vi, title_en, title_original, normalized_name, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, episode_total, current_episode, total_episodes, type, status, year, last_synced_at, updated_at')
     .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub.com%,source_url.ilike.%blvietsub.com%')
     .order('last_synced_at', { ascending: true, nullsFirst: true })
     .limit(queryLimit);
@@ -1740,7 +1792,7 @@ async function repairExistingBlvietsubMovies(
   const permanentDetails: string[] = [];
   const drift: Array<{ slug: string; title: string; before: number; after: number; inserted: number }> = [];
   const errors: string[] = [];
-  const pool = (data || []) as MovieRow[];
+  const pool = ((data || []) as MovieRow[]).filter((movie) => shouldIncludeMovieForBlvietsubSync(movie));
   const episodeStats = await fetchLocalEpisodeStats(supabase, pool);
   const movieIndexes = buildMovieIndexes(pool);
   const now = Date.now();
@@ -1748,6 +1800,7 @@ async function repairExistingBlvietsubMovies(
   // source slugs. Repair the preferred public record once, using the known
   // BLVietsub URL from any exact compact-title sibling.
   const repairSources = new Map<string, { movie: MovieRow; sourceUrl: string }>();
+  const legacyResolvedIds = new Set<string>();
   for (const sourceMovie of pool) {
     const sourceUrl = getBlvietsubMovieUrl(sourceMovie);
     if (!sourceUrl) continue;
@@ -1757,12 +1810,46 @@ async function repairExistingBlvietsubMovies(
       repairSources.set(target.id, { movie: target, sourceUrl });
     }
   }
+  // Legacy Blogger records still point at blvietsub.top, while the active
+  // source moved to blvietsub.com. Resolve only exact title matches and only
+  // for one-episode series, so normal films and unrelated results are never
+  // rewritten by a fuzzy search.
+  const legacyTargets = pool
+    .filter((movie) =>
+      !getBlvietsubMovieUrl(movie)
+      && hasLegacyBlvietsubUrl(movie)
+      && ['phim-bo', 'series', 'tvshows', 'hoathinh'].includes(String(movie.type || '').toLowerCase())
+      && getMovieCurrentEpisode(movie) <= 1
+    )
+    .sort((a, b) => toTime(a.last_synced_at) - toTime(b.last_synced_at))
+    .slice(0, cappedLimit);
+  for (let index = 0; index < legacyTargets.length; index += 4) {
+    const resolved = await Promise.all(legacyTargets.slice(index, index + 4).map(async (legacyMovie) => {
+      const keywords = uniqueTextValues([legacyMovie.name, legacyMovie.origin_name, legacyMovie.title_vi, legacyMovie.title_en]).slice(0, 1);
+      if (keywords.length === 0) return null;
+      let candidates = await searchBlvietsubMovieUrls(keywords);
+      let exactSource = findExactCurrentSourceForLegacyMovie(legacyMovie, candidates);
+      if (!exactSource) {
+        const searchUrl = new URL('https://blvietsub.com/');
+        searchUrl.searchParams.set('s', keywords[0]);
+        candidates = parseWordPressMovieUrlsFromHtml(await fetchBlvietsubText(searchUrl.toString(), 18000));
+        exactSource = findExactCurrentSourceForLegacyMovie(legacyMovie, candidates);
+      }
+      return exactSource ? { movie: legacyMovie, sourceUrl: exactSource.url } : null;
+    }));
+    for (const item of resolved) {
+      if (!item || repairSources.has(item.movie.id)) continue;
+      repairSources.set(item.movie.id, item);
+      legacyResolvedIds.add(item.movie.id);
+    }
+  }
   const repairTargets = [...repairSources.values()];
   const rows = repairTargets
     .map((movie) => ({
       movie: movie.movie,
       sourceUrl: movie.sourceUrl,
-      score: scoreRoutineRepairMovie(movie.movie, episodeStats.get(movie.movie.id), includeCompleted, now),
+      score: scoreRoutineRepairMovie(movie.movie, episodeStats.get(movie.movie.id), includeCompleted, now)
+        + (legacyResolvedIds.has(movie.movie.id) ? 20000 : 0),
     }))
     .filter((item) => item.score >= 0)
     .sort((a, b) => b.score - a.score)

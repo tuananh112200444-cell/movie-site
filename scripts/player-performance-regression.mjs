@@ -27,6 +27,8 @@ const diagnostics = fs.readFileSync('src/services/playerDiagnostics.ts', 'utf8')
 const sourceHealthBrain = fs.readFileSync('supabase/functions/player-source-health/index.ts', 'utf8');
 
 const checks = [
+  [!detailProxy.includes('isPlayableEpisodeLink('), 'Movie detail must not call an undefined playback-link helper'],
+  [detailProxy.includes('seo_has_playable_episode: hasEpisodes'), 'Movie detail must expose stored playback truth to SEO prerendering'],
   [playerBox.includes("function isOnlyflixEmbed(url: string)") && !playerBox.includes('allow-forms allow-popups'), 'OnlyFlix embeds must keep playback capabilities without popup permission'],
   [playerBox.includes("requiresUnsandboxedEmbed(url) || isOnlyflixEmbed(url) || isDailymotion(url)"), 'Sandboxed OnlyFlix embeds must retain the provider Referer required for playback'],
   [playerBox.includes("requiresUnsandboxedEmbed(embedSrc) || isOnlyflixEmbed(embedSrc)"), 'OnlyFlix embeds that reject iframe sandboxing must be rendered without a sandbox'],
@@ -54,6 +56,7 @@ const checks = [
   [autoRepair.includes('primaryProviderIncident') && autoRepair.includes('if (!primaryProviderIncident)'), 'A provider-wide outage must not resync the same failing primary CDN for every movie'],
   [autoRepair.includes("'hls_fatal_retry'") && lightweightPlayer.includes('isManifestStartupFailure ? 1 : 3') && lightweightPlayer.includes('startup watchdog exceeded 18 seconds'), 'Manifest startup failures must enter repair telemetry and terminate instead of retrying forever'],
   [detailProxy.includes('knownUnhealthyUrls') && detailProxy.includes('const activeStreams = allStreams.filter'), 'Inactive failed URLs must suppress legacy and freshly fetched copies without hiding unrelated healthy streams'],
+  [detailProxy.includes('is_published: false') && detailProxy.includes('persistedPlayableCoverage') && detailProxy.includes('hasExternalPlayable && hasUsableImage'), 'Lazy detail persistence must keep metadata-only movies private until playback and artwork are stored'],
   [autoRepair.includes('host_counts') && autoRepair.includes('>= threshold'), 'A hostname must independently reach the evidence threshold before persistent penalty'],
   [autoRepair.includes("'sync-motchill-feed'") && autoRepair.includes('candidate.critical >= 3'), 'A repeatedly dead primary source must search one identity-guarded independent provider'],
   [autoRepair.includes('player-repair:') && autoRepair.includes('repair_cooldown') && autoRepair.includes('cooldown_minutes'), 'Automatic repairs must be idempotent within a bounded cooldown window'],
@@ -85,6 +88,7 @@ const checks = [
   [page.includes("document.addEventListener('visibilitychange', refreshHealth)") && page.includes('window.setInterval(refreshHealth, 5 * 60 * 1000)') && page.includes("document.visibilityState === 'visible'"), 'Long watch sessions must refresh source health without polling in background tabs'],
   [movieApi.includes('map[`cluster:${cluster}`]') && movieApi.includes('getEpisodeFailureCluster(ep)'), 'Source selection must honor a telemetry-confirmed multi-host cluster outage'],
   [sourceHealthBrain.includes('bad_hosts: []') && !sourceHealthBrain.includes('FALLBACK_DEGRADED_HOSTS'), 'A telemetry outage must not inject stale hard-coded provider failures'],
+  [sourceHealthBrain.includes("if (value === null || value.trim() === '') return fallback") && sourceHealthBrain.includes("clampNumber(url.searchParams.get('limit'), 2000"), 'Global source health must inspect the configured default telemetry window instead of collapsing missing query parameters to the minimum'],
   [lightweightPlayer.includes('navigator.onLine === false') && playerBox.includes("window.addEventListener('online', onOnline)"), 'Offline mobile transitions must pause failure attribution and retry the same source when connectivity returns'],
   [lightweightPlayer.includes('suspendedTimeRef.current = video?.currentTime || 0') && lightweightPlayer.includes('hlsRef.current?.startLoad(resumeAt') && lightweightPlayer.includes('wasPlayingBeforeSuspendRef.current'), 'Returning to a visible tab must resume the existing HLS player at the preserved time instead of rebuilding from zero'],
   [lightweightPlayer.includes('offlineTimeRef.current = video?.currentTime || 0') && lightweightPlayer.includes('hlsRef.current.startLoad(resumeAt > 0 ? resumeAt : -1)') && lightweightPlayer.includes('wasPlayingBeforeOfflineRef.current'), 'Network reconnect must preserve HLS playback time without rebuilding the player from stale initialTime'],

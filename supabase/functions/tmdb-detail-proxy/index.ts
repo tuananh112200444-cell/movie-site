@@ -20,7 +20,7 @@ serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      /* empty body */
+      body = {};
     }
 
     const id = Number(body.id || 0);

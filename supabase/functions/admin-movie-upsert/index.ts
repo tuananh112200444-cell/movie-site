@@ -831,7 +831,7 @@ serve(async (req) => {
   }
 
   try {
-    const body = (await req.json()) as {
+    const body = await req.json().catch(() => ({})) as {
       token?: string;
       action?: 'insert' | 'update' | 'merge';
       movie?: Record<string, unknown>;

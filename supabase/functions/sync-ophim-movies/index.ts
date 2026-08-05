@@ -342,6 +342,39 @@ function safeProviderImage(value: unknown): string {
   return image;
 }
 
+function hasUsableMovieImage(...records: Array<Record<string, unknown> | null | undefined>): boolean {
+  return records.some((record) => Boolean(
+    safeProviderImage(record?.thumb_url) || safeProviderImage(record?.poster_url),
+  ));
+}
+
+function isTrailerEpisode(episode: OPhimEpisode): boolean {
+  return /\btrailer\b/i.test(`${String(episode.name || '')} ${String(episode.slug || '')} ${String(episode.filename || '')}`);
+}
+
+function detailHasPlayableEpisode(detail: ParsedDetail): boolean {
+  return detail.episodes.some((server) => (server.server_data || []).some((episode) => (
+    !isTrailerEpisode(episode)
+    && Boolean(String(episode.link_m3u8 || '').trim() || String(episode.link_embed || '').trim())
+  )));
+}
+
+async function hasPersistedPlayableCoverage(supabase: SupabaseClient, movieId: string): Promise<boolean> {
+  const [{ data: movieEpisodes }, { data: episodes }, { data: streams }] = await Promise.all([
+    supabase.from('movie_episodes').select('source,link_m3u8,link_embed').eq('movie_id', movieId).limit(50),
+    supabase.from('episodes').select('link_m3u8,link_embed').eq('movie_id', movieId).limit(50),
+    supabase.from('streams').select('is_active,stream_url,embed_url').eq('movie_id', movieId).eq('is_active', true).limit(50),
+  ]);
+  const hasUrl = (row: Record<string, unknown>, directKey: string, embedKey: string) => Boolean(
+    String(row[directKey] || '').trim() || String(row[embedKey] || '').trim(),
+  );
+  return Boolean(
+    (movieEpisodes || []).some((row) => String(row.source || '').toLowerCase() !== 'hidden' && hasUrl(row, 'link_m3u8', 'link_embed'))
+    || (episodes || []).some((row) => hasUrl(row, 'link_m3u8', 'link_embed'))
+    || (streams || []).some((row) => row.is_active !== false && hasUrl(row, 'stream_url', 'embed_url'))
+  );
+}
+
 function chunks<T>(items: T[], size: number): T[][] {
   const result: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -615,7 +648,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
   for (const [column, value] of checks) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq(column as string, value as string)
       .limit(1)
       .maybeSingle();
@@ -636,7 +669,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
     const safe = escapePostgrestIlike(title);
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq('year', year)
       .or(`name.ilike.%${safe}%,origin_name.ilike.%${safe}%,title_vi.ilike.%${safe}%,title_en.ilike.%${safe}%,title_zh.ilike.%${safe}%,title_original.ilike.%${safe}%`)
       .limit(20);
@@ -656,7 +689,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
   if (normalized.length >= 6 && year > 0) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq('year', year)
       .ilike('normalized_name', normalized)
       .limit(10);
@@ -701,13 +734,17 @@ function updatePayloadForExisting(existing: Record<string, unknown>, incoming: R
   const mergedTotal = Math.max(existingTotal, incomingTotal, Number(mergedCurrent || 0)) || null;
 
   if (!managed) {
-    return {
+    const update = {
       ...incoming,
       current_episode: mergedCurrent,
       total_episodes: mergedTotal,
       episode_current: incomingCurrent > current ? incoming.episode_current : existing.episode_current || incoming.episode_current,
       episode_total: incomingTotal >= existingTotal ? incoming.episode_total : existing.episode_total || incoming.episode_total,
     };
+    // A previous run may have created the movie but timed out before writing
+    // its episodes. Metadata refreshes must not publish that incomplete row.
+    if (existing.is_published === false) update.is_published = false;
+    return update;
   }
 
   return {
@@ -769,14 +806,14 @@ async function upsertMovie(
   supabase: SupabaseClient,
   provider: ProviderConfig,
   detail: ParsedDetail,
-): Promise<{ id: string; created: boolean; updated: boolean; retired?: boolean }> {
+): Promise<{ id: string; created: boolean; updated: boolean; hasImage: boolean; retired?: boolean }> {
   const payload = moviePayload(provider, detail);
   const existing = await findExistingMovie(supabase, payload);
 
   if (existing?.id) {
     const existingSource = `${existing.source_site || ''} ${existing.source_name || ''}`.toLowerCase();
     if (existing.is_published === false && existingSource.includes('merged')) {
-      return { id: String(existing.id), created: false, updated: false, retired: true };
+      return { id: String(existing.id), created: false, updated: false, hasImage: hasUsableMovieImage(existing, payload), retired: true };
     }
     let update = protectExistingSlug(existing, updatePayloadForExisting(existing, payload));
     if (!provider.trackOphimIdentity) {
@@ -800,12 +837,12 @@ async function upsertMovie(
         const { error: retryError } = await runDatabaseMutationWithRetry(
           () => supabase.from('movies').update(retryUpdate).eq('id', existing.id as string),
         );
-        if (!retryError) return { id: String(existing.id), created: false, updated: true };
+        if (!retryError) return { id: String(existing.id), created: false, updated: true, hasImage: hasUsableMovieImage(existing, payload) };
         throw new Error(`movies update ${payload.slug}: ${dbErrorMessage(retryError)}`);
       }
       throw new Error(`movies update ${payload.slug}: ${dbErrorMessage(error)}`);
     }
-    return { id: String(existing.id), created: false, updated: true };
+    return { id: String(existing.id), created: false, updated: true, hasImage: hasUsableMovieImage(existing, payload) };
   }
 
   // A detail sync may time out after the catalogue row is created. Keep a new
@@ -823,13 +860,13 @@ async function upsertMovie(
         const { error: updateError } = await runDatabaseMutationWithRetry(
           () => supabase.from('movies').update(update).eq('id', duplicate.id as string),
         );
-        if (!updateError) return { id: String(duplicate.id), created: false, updated: true };
+        if (!updateError) return { id: String(duplicate.id), created: false, updated: true, hasImage: hasUsableMovieImage(duplicate, payload) };
         throw new Error(`movies insert duplicate update ${payload.slug}: ${dbErrorMessage(updateError)}`);
       }
     }
     throw new Error(`movies insert ${payload.slug}: ${dbErrorMessage(error)}`);
   }
-  return { id: String(data.id), created: true, updated: false };
+  return { id: String(data.id), created: true, updated: false, hasImage: hasUsableMovieImage(payload) };
 }
 
 async function upsertMovieEpisodeRowsSafely(
@@ -1010,6 +1047,7 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
   for (const server of detail.episodes) {
     const serverName = String(server.server_name || 'OPhim').trim() || 'OPhim';
     for (const ep of server.server_data || []) {
+      if (isTrailerEpisode(ep)) continue;
       const number = episodeNumber(ep);
       const epName = String(ep.name || (number === 1 ? 'Full' : `Tap ${number}`));
       const epSlug = String(ep.slug || slugify(epName)).trim() || slugify(epName);
@@ -1344,10 +1382,19 @@ serve(async (req) => {
         const beforeEpisodesInserted = stats.episodesInserted;
         if (includeEpisodes) {
           stats.episodesInserted += await insertEpisodes(supabase, provider, result.id, detail);
-          if (stats.episodesInserted > beforeEpisodesInserted) {
+          // Publication is a strict two-part gate: the provider detail must
+          // contain a real playable URL and the movie must have usable artwork.
+          // This also safely releases a private row left by an interrupted run,
+          // even when its episode rows were already written on that prior run.
+          // A targeted repair must also re-evaluate a previously public row.
+          // Provider metadata can move from upcoming/trailer to ongoing while
+          // still exposing no episode; preserving the old public flag would
+          // leak an unwatchable movie back into listings.
+          if (targetMovie || (detailHasPlayableEpisode(detail) && result.hasImage)) {
+            const persistedPlayableCoverage = await hasPersistedPlayableCoverage(supabase, result.id);
             await supabase
               .from('movies')
-              .update({ is_published: true })
+              .update({ is_published: persistedPlayableCoverage && result.hasImage })
               .eq('id', result.id);
           }
           // Viewer telemetry is a useful repair signal, but it is not an

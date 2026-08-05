@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json() as { slug?: string };
+    const body = await req.json().catch(() => ({})) as { slug?: string };
     const slug = body.slug;
     if (!slug) {
       return new Response(JSON.stringify({ error: 'Missing slug' }), {

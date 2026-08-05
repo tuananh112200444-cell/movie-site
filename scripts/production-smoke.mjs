@@ -10,7 +10,7 @@ const checks = [
   { name: 'home-googlebot', path: '/', status: 200, has: ['index, follow','application/ld+json','KhoPhim'], bot: true },
   { name: 'seo-landing-googlebot', path: '/xem-phim-online', status: 200, has: ['index, follow','rel="canonical"','Xem Phim Online'], bot: true },
   { name: 'movie-googlebot', path: '/phim/quyet-chien-tai-mohenjo', status: 200, has: ['rel="canonical"','Movie','role=actor'], bot: true },
-  { name: 'thin-movie-noindex', path: '/phim/cam-on-nguoi-da-thuc-cung-toi', status: 200, has: ['noindex, follow'], bot: true },
+  { name: 'thin-movie-noindex', path: '/phim/bieu-muoi-van-phuc', status: 200, has: ['noindex, follow'], bot: true },
 ];
 
 async function check(item) {

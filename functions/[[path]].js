@@ -5,7 +5,7 @@ const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functio
 const SUPABASE_REST_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/rest/v1';
 // This is Supabase's public browser key (RLS still applies), not a service key.
 const SUPABASE_PUBLIC_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
-const SEO_PRERENDER_VERSION = '20260729-sitewide-trust-v14';
+const SEO_PRERENDER_VERSION = '20260805-playback-truth-v16';
 const CONSOLIDATED_SEO_PATHS = new Map([
   ['/xem-phim', '/xem-phim-online'],
   ['/xem-phim-mien-phi', '/xem-phim-online'],
@@ -1591,7 +1591,7 @@ function renderMoviePrerender(pathname, movie, slug) {
     || (
       !qualityChecked
       && isTrailerOnly
-      && Boolean(name && poster && content.length >= 120)
+      && Boolean(trailerEmbedUrl && name && poster && content.length >= 120)
     )
   );
   const isIndexablePlayable = (
@@ -1605,7 +1605,7 @@ function renderMoviePrerender(pathname, movie, slug) {
       && !isTrailerOnly
       && Boolean(name && poster && content.length >= 80));
   const isIndexableFallback = !qualityChecked
-    && (hasPlayableEpisode || isTrailerOnly)
+    && (hasPlayableEpisode || (isTrailerOnly && Boolean(trailerEmbedUrl)))
     && Boolean(name && poster && content.length >= 20);
   const isIndexable = isIndexableUpcoming || isIndexablePlayable || isIndexableFallback;
   const releaseDateText = formatVietnamDate(movie.release_at);

@@ -1316,7 +1316,9 @@ function buildPersistMoviePayload(
     country: Array.isArray(movie.country) ? movie.country : [],
     source_site: String(movie.source_site || 'ophim'),
     source_name: String(movie.source_name || 'OPhim'),
-    is_published: true,
+    // Lazy detail persistence is not proof that playback exists. Keep a new
+    // row private until persistExternalMovie verifies stored playable coverage.
+    is_published: false,
     last_synced_at: now,
     updated_at: now,
   };
@@ -1429,6 +1431,16 @@ async function persistExternalMovie(
     const externalSource = String(external.movie.source_site || 'ophim').trim().toLowerCase();
     const isAuxiliarySource = externalSource && externalSource !== 'ophim' && externalSource !== 'kkphim' && externalSource !== 'phimapi';
     const externalMaxEpisode = getMaxEpisodeNumberFromServers(external.episodes);
+    const hasExternalPlayable = external.episodes.some((server) =>
+      (server.server_data || []).some((rawEpisode) => {
+        const episode = rawEpisode as Record<string, unknown>;
+        return Boolean(String(episode.link_m3u8 || '').trim() || String(episode.link_embed || '').trim());
+      })
+    );
+    const hasUsableImage = Boolean(
+      String(payload.thumb_url || payload.poster_url || '').trim()
+      && !/^(?:data:|javascript:|about:|null$|undefined$)/i.test(String(payload.thumb_url || payload.poster_url || '').trim())
+    );
 
     if (movieId) {
       const movieUpdate: Record<string, unknown> = {
@@ -1602,6 +1614,33 @@ async function persistExternalMovie(
             })
             .eq('id', existingStream.id);
         }
+      }
+    }
+
+    if (hasExternalPlayable && hasUsableImage) {
+      const [{ data: storedEpisode }, { data: storedStream }] = await Promise.all([
+        supabase
+          .from('episodes')
+          .select('id')
+          .eq('movie_id', movieId)
+          .or('link_m3u8.neq.,link_embed.neq.')
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('streams')
+          .select('id')
+          .eq('movie_id', movieId)
+          .eq('is_active', true)
+          .or('stream_url.neq.,embed_url.neq.')
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      const persistedPlayableCoverage = Boolean(storedEpisode?.id || storedStream?.id);
+      if (persistedPlayableCoverage) {
+        await supabase
+          .from('movies')
+          .update({ is_published: true })
+          .eq('id', movieId);
       }
     }
   } catch (err) {
@@ -2163,6 +2202,7 @@ serve(async (req) => {
       return jsonResponse({ status: false, message: 'Movie not found' }, 404);
     }
 
+    const hasEpisodes = episodeServers.length > 0;
     const m = movieData;
     const response = {
       status: true,
@@ -2216,6 +2256,7 @@ serve(async (req) => {
         tmdb_popularity: Number(m.tmdb_popularity || 0),
         tmdb_vote_count: Number(m.tmdb_vote_count || 0),
         tmdb_vote_average: Number(m.tmdb_vote_average || 0),
+        seo_has_playable_episode: hasEpisodes,
         modified: { time: String(m.updated_at || m.created_at || new Date().toISOString()) },
       },
       episodes: episodeServers,
@@ -2249,7 +2290,6 @@ serve(async (req) => {
     const responseMaxEpisode = getMaxEpisodeNumberFromServers(episodeServers);
     const responseExpectedEpisode = getExpectedEpisodeNumber(response.movie as Record<string, unknown>);
     const isIncomplete = responseExpectedEpisode > 1 && responseMaxEpisode > 0 && responseMaxEpisode < responseExpectedEpisode;
-    const hasEpisodes = episodeServers.length > 0;
     const cacheControl = hasEpisodes
       ? (isIncomplete ? 'no-store' : 'public, max-age=300, stale-while-revalidate=1800, stale-if-error=86400')
       : 'no-store';

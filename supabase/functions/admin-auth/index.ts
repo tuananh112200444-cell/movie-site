@@ -90,7 +90,7 @@ serve(async (req) => {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !isAdminSessionConfigured()) {
       return json({ error: 'Admin authentication is not configured.' }, 503, corsHeaders);
     }
-    const body = (await req.json()) as { pin?: string; action?: string; newPin?: string };
+    const body = await req.json().catch(() => ({})) as { pin?: string; action?: string; newPin?: string };
     const pin = body.pin ?? '';
     const action = body.action ?? 'verify';
 
