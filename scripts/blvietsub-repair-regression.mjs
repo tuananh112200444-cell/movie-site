@@ -7,6 +7,11 @@ const playerBox = fs.readFileSync('src/pages/movie-detail/components/PlayerBox.t
 const checks = [
   ['completed 1/1 is eligible for recheck', /current <= 1 && total <= 1[\s\S]{0,40}return true/],
   ['legacy 1/1 receives starvation-proof priority', /legacySingleEpisode[\s\S]{0,200}score \+= 9000/],
+  ['legacy Blogger series resolve to the current source by exact title only', /hasLegacyBlvietsubUrl[\s\S]{0,1800}findExactCurrentSourceForLegacyMovie[\s\S]{0,1800}movieKeys\.has\(key\)/],
+  ['legacy source discovery stays bounded and series-only', /\['phim-bo', 'series', 'tvshows', 'hoathinh'\][\s\S]{0,400}\.slice\(0, cappedLimit\)/],
+  ['exactly resolved legacy series cannot starve behind current-source rows', /legacyResolvedIds\.add\(item\.movie\.id\)[\s\S]{0,700}legacyResolvedIds\.has\(movie\.movie\.id\) \? 20000 : 0/],
+  ['legacy discovery falls back from disabled AJAX to HTML search', /searchUrl\.searchParams\.set\('s', keywords\[0\]\)[\s\S]{0,180}parseWordPressMovieUrlsFromHtml/],
+  ['legacy mapping accepts only exact historical or title slug', /getLegacyBlvietsubSlug[\s\S]{0,1600}exactSlugKeys\.has\(candidateSlug\)/],
   ['repair updates numeric total and display total together', /update\.episode_total = `\$\{mergedTotal\} Tập`[\s\S]{0,160}update\.total_episodes = mergedTotal/],
   ['WordPress root movie URLs are supported', /parts\[0\]\?\.toLowerCase\(\) === 'phim' \? parts\[1\] : parts\.length === 1 \? parts\[0\]/],
   ['original title is recovered from WordPress metadata', /originName: getWordPressOriginName\(title, content\)/],

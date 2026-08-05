@@ -81,6 +81,7 @@ function json(body: unknown, status: number, corsHeaders: Record<string, string>
 }
 
 function clampNumber(value: string | null, fallback: number, min: number, max: number): number {
+  if (value === null || value.trim() === '') return fallback;
   const num = Number(value);
   if (!Number.isFinite(num)) return fallback;
   return Math.max(min, Math.min(max, Math.floor(num)));

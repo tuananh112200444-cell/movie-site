@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json() as {
+    const body = await req.json().catch(() => ({})) as {
       review: {
         slug: string;
         movie_name: string;

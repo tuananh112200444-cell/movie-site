@@ -461,8 +461,8 @@ if (/\bkeywords="[^"]{250,}"/i.test(homePage)) {
 if (/reviewRating|itemType="https:\/\/schema\.org\/Rating"|ratingValue.*8/.test(movieReview)) {
   addError('Movie editorial content must not publish a fabricated fixed rating.');
 }
-if (!cloudflareFunction.includes("SEO_PRERENDER_VERSION = '20260729-sitewide-trust-v14'")) {
-  addError('SEO prerender cache must use the sitewide trust release after metadata changes.');
+if (!cloudflareFunction.includes("SEO_PRERENDER_VERSION = '20260805-playback-truth-v16'")) {
+  addError('SEO prerender cache must use the playback-truth release after metadata changes.');
 }
 if (!cloudflareFunction.includes("includes('noindex')) return;")) {
   addError('Transient noindex movie prerenders must never be stored in the shared edge cache.');
@@ -473,8 +473,8 @@ if (!cloudflareFunction.includes("if (ep === 'trailer' || ep.includes('trailer')
 if (!cloudflareFunction.includes("qualityTier === 'upcoming'") || !cloudflareFunction.includes('&& hasPlayableEpisode')) {
   addError('Quality-approved playable movies must recover from stale lifecycle labels.');
 }
-if (!cloudflareFunction.includes('!qualityChecked') || !cloudflareFunction.includes('&& isTrailerOnly') || !cloudflareFunction.includes('Boolean(name && poster && content.length >= 120)')) {
-  addError('Substantial trailer information pages must remain indexable when only fallback movie data is available.');
+if (!cloudflareFunction.includes('!qualityChecked') || !cloudflareFunction.includes('&& isTrailerOnly') || !cloudflareFunction.includes('Boolean(trailerEmbedUrl && name && poster && content.length >= 120)')) {
+  addError('Fallback trailer pages must require a real embeddable trailer before indexing.');
 }
 if (!cloudflareFunction.includes('...ophimMovie,')
   || !cloudflareFunction.includes('Object.entries(primaryMovie)')
@@ -482,7 +482,7 @@ if (!cloudflareFunction.includes('...ophimMovie,')
   addError('Secondary title metadata must not overwrite substantive primary movie data.');
 }
 if (!cloudflareFunction.includes('const isIndexableFallback = !qualityChecked')
-  || !cloudflareFunction.includes('(hasPlayableEpisode || isTrailerOnly)')
+  || !cloudflareFunction.includes('(hasPlayableEpisode || (isTrailerOnly && Boolean(trailerEmbedUrl)))')
   || !cloudflareFunction.includes('Boolean(name && poster && content.length >= 20)')) {
   addError('Unverified fallback movie data must use one stable, content-gated indexability rule.');
 }

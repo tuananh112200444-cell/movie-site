@@ -83,7 +83,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const body = (await req.json()) as { currentPin?: string; newPin?: string; action?: string };
+    const body = await req.json().catch(() => ({})) as { currentPin?: string; newPin?: string; action?: string };
     const { currentPin, newPin, action } = body;
 
     const clientIP = getClientIP(req);

@@ -35,6 +35,17 @@ for (const file of connectorFiles) {
 const motchill = fs.readFileSync('supabase/functions/sync-motchill-feed/index.ts', 'utf8');
 const onlyflix = fs.readFileSync('supabase/functions/sync-onlyflix-feed/index.ts', 'utf8');
 const ophim = fs.readFileSync('supabase/functions/sync-ophim-movies/index.ts', 'utf8');
+const episodeRepairPriority = fs.readFileSync('supabase/migrations/20260805170000_prioritize_public_episode_repairs.sql', 'utf8');
+if (!ophim.includes('isTrailerEpisode(episode)') || !ophim.includes('if (isTrailerEpisode(ep)) continue')) {
+  failures.push('OPhim sync must not treat a trailer episode as playable movie coverage');
+}
+if (
+  !ophim.includes('hasPersistedPlayableCoverage')
+  || !ophim.includes('targetMovie || (detailHasPlayableEpisode(detail) && result.hasImage)')
+  || !ophim.includes('is_published: persistedPlayableCoverage && result.hasImage')
+) {
+  failures.push('OPhim sync must publish only after playback is persisted in the database');
+}
 if (!motchill.includes('Additive-only publication contract')) {
   failures.push('Motchill is missing its additive-only publication contract');
 }
@@ -50,6 +61,34 @@ if (
 }
 if (!ophim.includes('safeProviderImage') || !ophim.includes("posterUrl = safeProviderImage(movie.poster_url) || thumbUrl")) {
   failures.push('OPhim sync must reject inline/unsafe poster payloads and fall back to the provider thumbnail');
+}
+if (
+  !ophim.includes('if (existing.is_published === false) update.is_published = false')
+  || !ophim.includes('detailHasPlayableEpisode(detail) && result.hasImage')
+) {
+  failures.push('OPhim sync must keep interrupted imports private until both playback and artwork are ready');
+}
+if (
+  !episodeRepairPriority.includes("issue.issue_type in ('episode_count_mismatch', 'episode_sequence_gap')")
+  || !episodeRepairPriority.includes('limit greatest(1, least(coalesce(p_limit, 3), 6))')
+) {
+  failures.push('Catalog repair must prioritize public episode gaps while keeping dispatch bounded');
+}
+if (
+  !episodeRepairPriority.includes("when item.attempts = 0 and item.source_site = 'phimapi' then 'kkphim'")
+  || !episodeRepairPriority.includes("else 'kkphim'")
+) {
+  failures.push('Catalog repair must preserve alternate-provider retry logic');
+}
+if (
+  !episodeRepairPriority.includes("issue.issue_type = 'episode_sequence_gap'")
+  || !episodeRepairPriority.includes("jsonb_array_elements_text(issue.evidence->'missing')")
+  || !episodeRepairPriority.includes('episode.episode_number = missing.value::integer')
+) {
+  failures.push('Catalog repair must close sequence-gap issues only after every missing playable episode is persisted');
+}
+if (!episodeRepairPriority.includes('select movie.current_episode from public.movies movie where movie.id = issue.movie_id')) {
+  failures.push('Catalog repair must reconcile episode counts against live movie metadata instead of stale issue evidence');
 }
 
 console.log(JSON.stringify({
