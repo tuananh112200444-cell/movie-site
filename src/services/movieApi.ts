@@ -101,6 +101,15 @@ function detailHasPlayableEpisodes(detail: MovieDetailResponse | null): boolean 
   return detail.episodes.some((srv) => srv.server_data?.some((ep) => hasPlayableUrl(ep)) ?? false);
 }
 
+function isAuthoritativeNoPlaybackDetail(detail: MovieDetailResponse | null): boolean {
+  const movie = detail?.movie as unknown as Record<string, unknown> | undefined;
+  return Boolean(
+    movie?._id &&
+    movie.seo_has_playable_episode === false &&
+    !detailHasPlayableEpisodes(detail)
+  );
+}
+
 /* ════════════════════════════════════════════
    STRICT OPHIM MATCH VALIDATION
    Only merge OPhim episodes if EXACT match:
@@ -578,6 +587,21 @@ async function fetchJSON<T>(url: string, timeoutMs = 10000, signal?: AbortSignal
 const imgUrlCache = new Map<string, string>();
 const FALLBACK_IMG = '/images/movie-poster-fallback.svg';
 
+/**
+ * A component may accidentally pass an already-resized Cloudflare URL back to
+ * the shared image helper. Always recover the real origin instead of treating
+ * `/cdn-cgi/image/...` as an OPhim-relative image path.
+ */
+function unwrapCloudflareImageOrigin(value: string): string {
+  let current = value.trim();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const match = current.match(/(?:^https?:\/\/[^/]+)?\/cdn-cgi\/image\/[^/]+\/(https?:\/\/.+)$/i);
+    if (!match?.[1] || match[1] === current) break;
+    current = match[1];
+  }
+  return current;
+}
+
 export function getMovieDisplayName(item: {
   name?: string;
   title_vi?: string;
@@ -594,7 +618,7 @@ export function getMovieDisplayName(item: {
 }
 
 export function getImageUrl(path: string): string {
-  const normalizedPath = String(path || '').trim();
+  const normalizedPath = unwrapCloudflareImageOrigin(String(path || ''));
   if (!normalizedPath || /^(?:null|undefined|about:blank|javascript:|data:)/i.test(normalizedPath)) return FALLBACK_IMG;
   if (/^\/\//.test(normalizedPath)) return `https:${normalizedPath}`;
   const hit = imgUrlCache.get(normalizedPath);
@@ -3615,6 +3639,15 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     }
 
     // ── If OPhim returned data, sync it to Supabase for future dedup ──
+    // The edge proxy already reconciles stream health against the stored
+    // catalogue. When it explicitly confirms that no playable source remains,
+    // a direct provider fallback must not reintroduce the same quarantined
+    // 404 URL into the browser.
+    if (isAuthoritativeNoPlaybackDetail(proxy)) {
+      setCached(cacheKey, proxy!);
+      return proxy;
+    }
+
     if (ophim?.movie?.name) {
       // Background sync to Supabase is handled by edge functions/cron jobs
       // Frontend does not have write access to movies table via RLS
@@ -3649,8 +3682,8 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     }
 
     const candidates = [
-      { src: 'supabase', data: sb },
       { src: 'proxy', data: proxy },
+      { src: 'supabase', data: sb },
       { src: 'blvietsub', data: blvietsub },
       { src: 'ophim', data: ophim },
   

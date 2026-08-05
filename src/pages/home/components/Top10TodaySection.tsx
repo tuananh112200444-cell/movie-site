@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useImageFallback } from '../../../hooks/useImageFallback';
 import { Link } from 'react-router-dom';
-import { fetchMoviesByType, fetchNewMovies, getImageUrl, getOptimizedImageUrl } from '../../../services/movieApi';
+import { fetchMoviesByType, fetchNewMovies, getImageUrl } from '../../../services/movieApi';
 import type { MovieItem } from '../../../types/movie';
 import { ImageOff, Play, Sparkles, Trophy } from 'lucide-react';
 import { trackMovieClick } from '../../../utils/analytics';
@@ -46,8 +46,8 @@ interface CardProps { movie: MovieItem; rank: number }
 
 function Top10Card({ movie, rank }: CardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 520, 88),
-    getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 520, 88),
+    movie.thumb_url || movie.poster_url,
+    movie.poster_url || movie.thumb_url,
   );
   const epBadge  = getEpBadge(movie.episode_current);
   const country  = getCountryLabel(movie);
@@ -197,8 +197,8 @@ function SkeletonCard() {
 
 function MobileTop10Card({ movie, rank }: CardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 420, 88),
-    getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 420, 88),
+    movie.thumb_url || movie.poster_url,
+    movie.poster_url || movie.thumb_url,
   );
   const epBadge = getEpBadge(movie.episode_current);
   const rc = RANK_CFG[rank] ?? DEFAULT_RANK;

@@ -345,8 +345,8 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
 
 function MobileQuickMovieCard({ movie, index }: { movie: MovieItem; index: number }) {
   const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
-    getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 260, 82),
-    getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 260, 82),
+    movie.thumb_url || movie.poster_url,
+    movie.poster_url || movie.thumb_url,
     false,
     260,
     82,

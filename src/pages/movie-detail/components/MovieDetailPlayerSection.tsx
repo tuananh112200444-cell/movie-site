@@ -73,6 +73,7 @@ interface Props {
   onResume: () => void;
   onRestart: () => void;
   activeEp: EpisodeData | null;
+  requestedEpisodeUnavailable?: boolean;
   activeServer: number;
   onSwitchServer: (idx: number) => void;
   onRefetchMovie?: () => void;
@@ -97,6 +98,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       onResume,
       onRestart,
       activeEp,
+      requestedEpisodeUnavailable = false,
       activeServer,
       onSwitchServer,
       onRefetchMovie,
@@ -522,7 +524,23 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
             <>
               {/* Player area: poster if no ep selected, else video player */}
               {!activeEp ? (
-                mergedEpisodes.length === 0 && !isTrailerOnly ? (
+                requestedEpisodeUnavailable ? (
+                  <div className="movie-player-frame aspect-video w-full bg-[#0d0f1a] rounded-2xl flex flex-col items-center justify-center gap-3 px-4 text-center">
+                    <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                      <i className="ri-error-warning-line text-2xl text-red-400" />
+                    </div>
+                    <p className="text-white/80 text-sm font-semibold">Tập này hiện chưa có nguồn phát hoạt động</p>
+                    <p className="text-white/40 text-xs max-w-md">KhoPhim sẽ không tự phát nhầm sang tập khác. Bạn có thể thử tải lại nguồn hoặc chọn một tập đang hoạt động bên dưới.</p>
+                    {onRefetchMovie && (
+                      <button
+                        onClick={onRefetchMovie}
+                        className="mt-1 flex items-center gap-2 px-4 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/20 rounded-xl text-red-400 text-xs font-medium transition-all cursor-pointer whitespace-nowrap"
+                      >
+                        <i className="ri-refresh-line" /> Kiểm tra lại nguồn tập này
+                      </button>
+                    )}
+                  </div>
+                ) : mergedEpisodes.length === 0 && !isTrailerOnly ? (
                   <div className="movie-player-frame aspect-video w-full bg-[#0d0f1a] rounded-2xl flex flex-col items-center justify-center gap-3">
                     <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
                       <i className="ri-time-line text-2xl text-amber-400" />
