@@ -55,10 +55,28 @@ function trendingMoviesFromHome(html: string, limit: number) {
   const raw = html.match(/<script[^>]*data-ofpop-home-json[^>]*>([\s\S]*?)<\/script>/i)?.[1] || '';
   if (!raw) throw new Error('OnlyFlix Trending Movies payload was not found');
   const payload = JSON.parse(raw);
-  const period = String(payload?.defaultPeriod || '24h');
-  const rows = payload?.groups?.movies?.periods?.[period];
-  if (!Array.isArray(rows)) throw new Error(`OnlyFlix Trending Movies period ${period} is invalid`);
-  return rows.slice(0, limit).map((row: Record<string, unknown>, index: number) => {
+  const periods = payload?.groups?.movies?.periods;
+  if (!periods || typeof periods !== 'object') throw new Error('OnlyFlix Trending Movies periods are invalid');
+
+  // OnlyFlix may keep the default period visible while it has no rows (for
+  // example, 24h can be empty while 30d still contains the Trending Movies
+  // rail). Pick the first non-empty published period instead of replacing the
+  // last known-good rail with an empty successful sync.
+  const preferredPeriods = [...new Set([
+    String(payload?.defaultPeriod || '24h'),
+    '24h',
+    '7d',
+    '30d',
+    ...Object.keys(periods),
+  ])];
+  const selected = preferredPeriods
+    .map((key) => ({ period: key, rows: (periods as Record<string, unknown>)[key] }))
+    .find((candidate): candidate is { period: string; rows: Record<string, unknown>[] } => (
+      Array.isArray(candidate.rows) && candidate.rows.length > 0
+    ));
+  if (!selected) throw new Error('OnlyFlix Trending Movies has no published rows');
+
+  return selected.rows.slice(0, limit).map((row: Record<string, unknown>, index: number) => {
     const link = String(row.url || '');
     const slug = link.match(/^https:\/\/onlyflix\.to\/([^/?#]+)\/?$/i)?.[1] || '';
     if (!slug || !link) throw new Error(`OnlyFlix Trending Movies rank ${index + 1} has no valid movie URL`);
@@ -68,7 +86,7 @@ function trendingMoviesFromHome(html: string, limit: number) {
       title: { rendered: String(row.title || slug) },
       trendingRank: index + 1,
       trendingTotal: Number(row.total || 0),
-      trendingPeriod: period,
+      trendingPeriod: selected.period,
     };
   });
 }

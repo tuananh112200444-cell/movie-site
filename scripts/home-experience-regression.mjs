@@ -5,6 +5,7 @@ const hero = await readFile('src/pages/home/components/HeroBanner.tsx', 'utf8');
 const trending = await readFile('src/pages/home/components/TrendingSection.tsx', 'utf8');
 const lazySection = await readFile('src/pages/home/components/LazyMovieSection.tsx', 'utf8');
 const proxy = await readFile('supabase/functions/home-proxy/index.ts', 'utf8');
+const onlyflixSync = await readFile('supabase/functions/sync-onlyflix-feed/index.ts', 'utf8');
 const movieApi = await readFile('src/services/movieApi.ts', 'utf8');
 const searchSuggestions = await readFile('src/components/feature/SearchSuggestions.tsx', 'utf8');
 const app = await readFile('src/App.tsx', 'utf8');
@@ -105,6 +106,24 @@ if (!home.includes("'onlyflix-moi'") || !home.includes('title="Phim Đang Chiế
 }
 if (!proxy.includes("requestedSections.includes('onlyflix-moi')") || !proxy.includes("sectionPromises['onlyflix-moi'] = fetchOnlyflixTrendingMovies")) {
   failures.push('Home proxy is missing the OnlyFlix-only cinema section contract.');
+}
+for (const snippet of [
+  '.limit(8)',
+  '.find((value): value is Record<string, unknown>[] => Array.isArray(value) && value.length > 0)',
+  "readStaticHomeFallback(['onlyflix-moi'])",
+]) {
+  if (!proxy.includes(snippet)) {
+    failures.push(`OnlyFlix cinema home data must retain the latest non-empty successful rail: ${snippet}`);
+  }
+}
+for (const snippet of [
+  'const preferredPeriods = [...new Set([',
+  'Array.isArray(candidate.rows) && candidate.rows.length > 0',
+  "throw new Error('OnlyFlix Trending Movies has no published rows')",
+]) {
+  if (!onlyflixSync.includes(snippet)) {
+    failures.push(`OnlyFlix cinema sync must not replace its rail with an empty default period: ${snippet}`);
+  }
 }
 if (home.indexOf('fetchKey="onlyflix-moi"') > home.indexOf('<HomeDiscoverySection')) {
   failures.push('The OnlyFlix cinema shelf must be the first homepage content section.');

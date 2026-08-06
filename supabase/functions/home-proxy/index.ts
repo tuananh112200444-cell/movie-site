@@ -1069,10 +1069,21 @@ async function fetchOnlyflixTrendingMovies(
       .eq('function_name', 'sync-onlyflix-feed')
       .eq('success', true)
       .order('run_at', { ascending: false })
-      .limit(1)
+      // A source parser can briefly produce an empty "successful" run while
+      // its upstream rail is being refreshed. Keep the most recent usable
+      // rail instead of letting that one empty row remove the cinema shelf.
+      .limit(8)
       .abortSignal(timeoutSignal(1500));
-    const trending = (logs?.[0]?.metadata as Record<string, unknown> | undefined)?.trending;
-    if (logError || !Array.isArray(trending)) return [];
+    const trending = (logs ?? [])
+      .map((log) => (log.metadata as Record<string, unknown> | undefined)?.trending)
+      .find((value): value is Record<string, unknown>[] => Array.isArray(value) && value.length > 0);
+    if (logError || !trending) {
+      // The static snapshot is only a last-resort rail for this optional
+      // source. It keeps the section visible while an upstream parser is
+      // recovering, without changing any of the primary homepage sections.
+      const fallback = await readStaticHomeFallback(['onlyflix-moi']);
+      return (fallback?.['onlyflix-moi'] ?? []).slice(0, Math.min(limit, 10)) as Record<string, unknown>[];
+    }
     const orderedSlugs = trending
       .map((row) => String((row as Record<string, unknown>).slug || ''))
       .filter(Boolean)
