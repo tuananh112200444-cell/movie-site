@@ -35,6 +35,12 @@ const MAX_NON_FATAL_NETWORK_RETRIES = 2;
 const STALL_RECOVERY_DELAY_MS = 2500;
 const STALL_PROGRESS_CHECK_MS = 2500;
 const STALL_MIN_PROGRESS_SECONDS = 0.05;
+// A provider can briefly resume after a fragment timeout, which previously
+// reset the ordinary recovery counter and left viewers in an endless
+// play-buffer-play loop. Treat only a burst of genuine low-buffer waits as a
+// terminal failure; isolated waits remain recoverable.
+const REPEATED_STALL_WINDOW_MS = 25_000;
+const MAX_REPEATED_SHORT_STALLS = 3;
 const PLAYER_LOGO_URL = '/brand/khophim-favicon-v2-96.png';
 
 function getPlaybackProfile() {
@@ -173,6 +179,8 @@ export default function LightweightHlsPlayer({
   const fatalRetryRef = useRef(0);
   const nonFatalNetworkRetryRef = useRef(0);
   const streamRecoveryRef = useRef(0);
+  const repeatedStallTimesRef = useRef<number[]>([]);
+  const repeatedStallEscalatedRef = useRef(false);
   const pageActiveRef = useRef(typeof document === 'undefined' ? true : !document.hidden);
   const wasPageSuspendedRef = useRef(false);
   const suspendedTimeRef = useRef(0);
@@ -720,6 +728,30 @@ export default function LightweightHlsPlayer({
     const onWaiting = () => {
       setIsBuffering(true);
       clearStallTimer();
+      if (!video.paused && !video.ended && !document.hidden && navigator.onLine !== false) {
+        const now = Date.now();
+        repeatedStallTimesRef.current = repeatedStallTimesRef.current
+          .filter((time) => now - time <= REPEATED_STALL_WINDOW_MS);
+        if (getBufferedAhead(video) < 0.75) repeatedStallTimesRef.current.push(now);
+
+        if (
+          !repeatedStallEscalatedRef.current
+          && repeatedStallTimesRef.current.length >= MAX_REPEATED_SHORT_STALLS
+        ) {
+          repeatedStallEscalatedRef.current = true;
+          setHasError(true);
+          setErrorMsg('Nguồn phim bị gián đoạn liên tục');
+          onPlayerIssue?.({
+            event_type: 'stall_fatal',
+            playback_time: video.currentTime,
+            duration: video.duration || 0,
+            buffered_ahead: getBufferedAhead(video),
+            error_message: `repeated short stalls (${repeatedStallTimesRef.current.length} within ${REPEATED_STALL_WINDOW_MS}ms)`,
+          });
+          onFatalError?.();
+          return;
+        }
+      }
       stallTimerRef.current = setTimeout(recoverStalledStream, STALL_RECOVERY_DELAY_MS);
     };
     const onPlaying = () => {
@@ -747,6 +779,7 @@ export default function LightweightHlsPlayer({
         setErrorMsg('');
         streamRecoveryRef.current = 0;
         nonFatalNetworkRetryRef.current = 0;
+        repeatedStallTimesRef.current = [];
       }
     };
     const onVol = () => {

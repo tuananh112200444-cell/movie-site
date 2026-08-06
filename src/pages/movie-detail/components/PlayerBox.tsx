@@ -168,7 +168,17 @@ function isDirectVideo(url: string): boolean {
 }
 
 function isHlsUrl(url: string): boolean {
-  return /\.m3u8(?:[?#].*)?$/i.test(url);
+  const raw = String(url || '').trim();
+  if (!raw) return false;
+  try {
+    // An iframe URL such as player.phimapi.com/player/?url=...index.m3u8 is
+    // an HTML player, not a direct HLS manifest. Inspecting the complete URL
+    // previously discarded that valid fallback because its query happened to
+    // end in `.m3u8`.
+    return /\.m3u8$/i.test(new URL(raw).pathname);
+  } catch {
+    return /\.m3u8(?:[?#].*)?$/i.test(raw);
+  }
 }
 
 function isDailymotion(url: string): boolean {
@@ -222,6 +232,15 @@ function shouldPreferEmbedOverDirectHls(ep: EpisodeData): boolean {
   // independent server instead of treating iframe onLoad as playback success.
   if (/opstream|ophim/i.test(ep.link_m3u8) || /opstream|ophim/i.test(ep.link_embed)) return false;
   return isSingleVariantProviderHls(ep.link_m3u8);
+}
+
+function isBrowserManagedPhimApiEmbed(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return /(^|\.)player\.phimapi\.com$/i.test(parsed.hostname) && /^\/player\/?$/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
 }
 
 function shouldProxyHls(url: string): boolean {
@@ -448,6 +467,7 @@ export default function PlayerBox({
   const directVideoRecoveryAttemptsRef = useRef(0);
   const playbackSuccessIdentityRef = useRef<string | null>(null);
   const sourcePageRecoveryKeyRef = useRef<string | null>(null);
+  const playerModeWasManuallySelectedRef = useRef(false);
   const embedContainerRef = useRef<HTMLDivElement>(null);
   const directVideoRef = useRef<HTMLVideoElement>(null);
   const logicalEpisodeKey = `${movieSlug}:${episode?.slug || episode?.name || ''}`;
@@ -735,9 +755,24 @@ export default function PlayerBox({
       setSsplayVariant(getPreferredSsplayVariant(episode?.link_embed ?? ''));
       setAutoNextActive(false);
       setAutoNextCountdown(5);
+      playerModeWasManuallySelectedRef.current = false;
       setPlayerMode(getPlayerMode(episode));
     }
   }, [activeServer, episode?.link_m3u8, episode?.link_embed, initialTime, logicalEpisodeKey]);
+
+  // Detail data can arrive in stages. If the first response selected HLS
+  // before its verified PhimAPI player URL arrived, correct the automatic
+  // choice once without overriding a viewer who explicitly chose HLS.
+  useEffect(() => {
+    if (
+      !playerModeWasManuallySelectedRef.current
+      && playerMode === 'hls'
+      && episode
+      && shouldPreferEmbedOverDirectHls(episode)
+    ) {
+      setPlayerMode('embed');
+    }
+  }, [episode, playerMode]);
 
   /* Iframe load timeout fallback */
   useEffect(() => {
@@ -863,11 +898,16 @@ export default function PlayerBox({
     const embedUrl = episode?.link_embed;
     const hlsCluster = getSourceFailureClusterFromUrl(episode?.link_m3u8 || '');
     const embedCluster = getSourceFailureClusterFromUrl(embedUrl || '');
+    const isBrowserManagedSameProviderFallback = Boolean(
+      embedUrl
+      && isBrowserManagedPhimApiEmbed(embedUrl)
+      && isSingleVariantProviderHls(episode?.link_m3u8 || ''),
+    );
     const canUseEmbedFallback = Boolean(
       embedUrl &&
       !isBlvietsubWatchPageUrl(embedUrl) &&
       effectivePlayerMode === 'hls' &&
-      hlsCluster !== embedCluster
+      (hlsCluster !== embedCluster || isBrowserManagedSameProviderFallback)
     );
     if (canUseEmbedFallback) {
       setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
@@ -1364,14 +1404,14 @@ export default function PlayerBox({
 
           {streamIsHls && episode?.link_embed && !isBlvietsubWatchPageUrl(episode.link_embed) && (
             <div className="flex items-center gap-0.5 bg-black/25 border border-white/[0.08] rounded-xl p-0.5 ml-1">
-              <button onClick={() => setPlayerMode('hls')}
+              <button onClick={() => { playerModeWasManuallySelectedRef.current = true; setPlayerMode('hls'); }}
                 className={`min-h-11 min-w-11 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
                   effectivePlayerMode === 'hls' ? 'bg-red-500 text-white' : 'text-white/35 hover:text-white/70'
                 }`}>
                 HLS
               </button>
               <button
-                onClick={() => setPlayerMode(isIframeSource(episode.link_embed) ? 'embed' : 'video')}
+                onClick={() => { playerModeWasManuallySelectedRef.current = true; setPlayerMode(isIframeSource(episode.link_embed) ? 'embed' : 'video'); }}
                 disabled={!isIframeSource(episode.link_embed) && !isDirectVideo(episode.link_embed)}
                 className={`min-h-11 min-w-11 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
                   effectivePlayerMode !== 'hls' ? 'bg-white/15 text-white' : 'text-white/35 hover:text-white/70'
