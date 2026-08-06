@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import type { MovieItem } from '@/types/movie';
 import { useImageFallback } from '@/hooks/useImageFallback';
+import { getPortraitImagePaths } from '@/services/movieApi';
 
 interface MovieListItemProps {
   movie: MovieItem;
@@ -9,8 +10,7 @@ interface MovieListItemProps {
 }
 
 function MovieListItem({ movie, rank }: MovieListItemProps) {
-  const posterPath = movie.thumb_url || movie.poster_url;
-  const fallbackPath = movie.poster_url || movie.thumb_url;
+  const { primary: posterPath, fallback: fallbackPath } = getPortraitImagePaths(movie);
   const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
     posterPath,
     fallbackPath,

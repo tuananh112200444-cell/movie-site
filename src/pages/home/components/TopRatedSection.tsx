@@ -145,8 +145,8 @@ const RANK_STYLES = [
 
 function RankedSpotlight({ movie, idx }: RankedCardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.thumb_url || movie.poster_url,
     movie.poster_url || movie.thumb_url,
+    movie.thumb_url || movie.poster_url,
     false,
     520,
     88,
@@ -215,8 +215,8 @@ function RankedSpotlight({ movie, idx }: RankedCardProps) {
 
 function RankedMiniCard({ movie, idx }: RankedCardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.thumb_url || movie.poster_url,
     movie.poster_url || movie.thumb_url,
+    movie.thumb_url || movie.poster_url,
     false,
     360,
     86,

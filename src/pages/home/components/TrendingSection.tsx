@@ -1,6 +1,6 @@
 ﻿import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getPosterUrl } from '../../../services/movieApi';
+import { getPortraitImagePaths, getPosterUrl } from '../../../services/movieApi';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
 import { useImageFallback } from '../../../hooks/useImageFallback';
@@ -239,12 +239,14 @@ interface TrendingCardProps {
 }
 
 function TrendingCard({ movie, rank }: TrendingCardProps) {
+  const { primary: posterPath, fallback: posterFallback } = getPortraitImagePaths(movie);
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.thumb_url || movie.poster_url,
-    movie.poster_url || movie.thumb_url,
-    isImagePreloaded(getPosterUrl(movie.thumb_url || movie.poster_url)),
+    posterPath,
+    posterFallback,
+    isImagePreloaded(getPosterUrl(posterPath || '')),
     240,
     78,
+    { preferredAspect: 'portrait' },
   );
   const ep = getEpInfo(movie.episode_current);
   const mTime = movie.modified?.time ?? '';

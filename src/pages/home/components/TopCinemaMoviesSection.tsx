@@ -210,11 +210,12 @@ interface CinemaCardProps {
 
 function CinemaCard({ movie, rank }: CinemaCardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.thumb_url || movie.poster_url,
     movie.poster_url || movie.thumb_url,
-    isImagePreloaded(getImageUrl(movie.thumb_url || movie.poster_url)),
+    movie.thumb_url || movie.poster_url,
+    isImagePreloaded(getImageUrl(movie.poster_url || movie.thumb_url)),
     280,
     80,
+    { preferredAspect: 'portrait' },
   );
   const ep = getEpInfo(movie.episode_current);
   const mTime = movie.modified?.time ?? '';

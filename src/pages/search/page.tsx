@@ -9,7 +9,7 @@ import SEO, { SITE_URL } from '@/components/base/SEO';
 import SearchResultItem from './components/SearchResultItem';
 import SearchFilterBar from './components/SearchFilterBar';
 import type { MovieItem } from '@/types/movie';
-import { applyImageElementFallback, searchMoviesMultiSource, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, searchMoviesInSupabase } from '@/services/movieApi';
+import { applyImageElementFallback, searchMoviesMultiSource, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, getPortraitImagePaths, searchMoviesInSupabase } from '@/services/movieApi';
 import {
   mergeMoviesUnique,
   parseMovieYear,
@@ -850,6 +850,7 @@ export default function SearchPage() {
                     {suggestions.map((movie, idx) => {
                       const isHighlighted = idx === highlightIndex;
                       const year = parseMovieYear(movie);
+                      const artwork = getPortraitImagePaths(movie);
                       return (
                         <button
                           key={movie._id}
@@ -862,7 +863,7 @@ export default function SearchPage() {
                         >
                           <div className="w-10 h-14 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
                             <img
-                              src={getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 180, 82)}
+                              src={getOptimizedImageUrl(artwork.primary || '', 180, 82)}
                               alt={movie.name}
                               width="40"
                               height="56"

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useImageFallback } from '@/hooks/useImageFallback';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import type { MovieDetail } from '@/types/movie';
-import { getPosterUrl, getThumbUrl, getMovieDisplayName, getOptimizedImageSrcSet } from '@/services/movieApi';
+import { getLandscapeImagePaths, getPortraitImagePaths, getPosterUrl, getThumbUrl, getMovieDisplayName, getOptimizedImageSrcSet } from '@/services/movieApi';
 import AudioLanguageBadges from '@/components/base/AudioLanguageBadges';
 import MovieCountdown from '@/components/base/MovieCountdown';
 
@@ -307,11 +307,13 @@ function buildMovieSchema({
 export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, hasEpisodes, onFavToggle, onWatchNow }: Props) {
   const [showDesc, setShowDesc] = useState(false);
 
-  const posterPath = movie.thumb_url || movie.poster_url;
-  const backdropPath = movie.poster_url || movie.thumb_url;
+  const portraitArtwork = getPortraitImagePaths(movie);
+  const landscapeArtwork = getLandscapeImagePaths(movie);
+  const posterPath = portraitArtwork.primary || '';
+  const backdropPath = movie.hero_backdrop_url || landscapeArtwork.primary || posterPath;
   const poster = useMemo(() => getPosterUrl(posterPath), [posterPath]);
   const thumb = useMemo(() => getThumbUrl(backdropPath), [backdropPath]);
-  const posterFallback = useImageFallback(posterPath, backdropPath, false, 520, 86);
+  const posterFallback = useImageFallback(posterPath, portraitArtwork.fallback, false, 520, 86, { preferredAspect: 'portrait' });
 
   const displayTitle = getMovieDisplayName(movie);
   const displayOrigin = movie.title_en?.trim() || movie.origin_name;

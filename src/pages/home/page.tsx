@@ -9,7 +9,7 @@ import TrendingSection from './components/TrendingSection';
 import Year2026Banner from './components/Year2026Banner';
 import HomeDiscoverySection from './components/HomeDiscoverySection';
 import SEO, { SITE_URL } from '../../components/base/SEO';
-import { fetchHomePageData, getOptimizedImageUrl } from '../../services/movieApi';
+import { fetchHomePageData, getOptimizedImageUrl, getPortraitImagePaths } from '../../services/movieApi';
 import { prefetchCriticalRoutes } from '../../utils/prefetchRoute';
 import { injectPreloadLink, preloadBatch } from '../../utils/imagePreloader';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -344,9 +344,10 @@ function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: 
 }
 
 function MobileQuickMovieCard({ movie, index }: { movie: MovieItem; index: number }) {
+  const { primary: posterPath, fallback: posterFallback } = getPortraitImagePaths(movie);
   const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
-    movie.thumb_url || movie.poster_url,
-    movie.poster_url || movie.thumb_url,
+    posterPath,
+    posterFallback,
     false,
     260,
     82,

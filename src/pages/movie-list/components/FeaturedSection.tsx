@@ -86,7 +86,7 @@ function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PA
   // thumb_url for the portrait cover and poster_url for the wide backdrop.
   // Preferring thumb_url here enlarged a vertical poster into a 16:9 frame on
   // every list page that uses this shared section.
-  const imagePath = movie.hero_backdrop_url || movie.poster_url || movie.thumb_url;
+  const imagePath = movie.hero_backdrop_url || movie.thumb_url || movie.poster_url;
   const fallbackPath = movie.hero_backdrop_url
     ? (movie.poster_url || movie.thumb_url)
     : movie.thumb_url;
@@ -187,7 +187,7 @@ function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PA
 
 /* ─── Side Card (horizontal list item) ─── */
 function FeaturedSideCard({ movie, palette }: { movie: Movie; palette: typeof PALETTE['phim-le'] }) {
-  const imagePath = movie.hero_backdrop_url || movie.poster_url || movie.thumb_url;
+  const imagePath = movie.hero_backdrop_url || movie.thumb_url || movie.poster_url;
   const fallbackPath = movie.hero_backdrop_url
     ? (movie.poster_url || movie.thumb_url)
     : movie.thumb_url;

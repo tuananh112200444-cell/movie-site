@@ -46,8 +46,8 @@ interface CardProps { movie: MovieItem; rank: number }
 
 function Top10Card({ movie, rank }: CardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.thumb_url || movie.poster_url,
     movie.poster_url || movie.thumb_url,
+    movie.thumb_url || movie.poster_url,
   );
   const epBadge  = getEpBadge(movie.episode_current);
   const country  = getCountryLabel(movie);
@@ -197,8 +197,8 @@ function SkeletonCard() {
 
 function MobileTop10Card({ movie, rank }: CardProps) {
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.thumb_url || movie.poster_url,
     movie.poster_url || movie.thumb_url,
+    movie.thumb_url || movie.poster_url,
   );
   const epBadge = getEpBadge(movie.episode_current);
   const rc = RANK_CFG[rank] ?? DEFAULT_RANK;
