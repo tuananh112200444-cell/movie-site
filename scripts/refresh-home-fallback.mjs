@@ -54,7 +54,7 @@ try {
   HOME_PROXY_URL.searchParams.set('sections', REQUIRED_SECTIONS.join(','));
   const response = await fetch(HOME_PROXY_URL, {
     headers: { accept: 'application/json' },
-    signal: AbortSignal.timeout(9000),
+    signal: AbortSignal.timeout(25_000),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

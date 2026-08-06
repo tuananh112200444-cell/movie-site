@@ -398,6 +398,7 @@ const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
 const HOME_FALLBACK_URL = '/home-fallback.json';
 const HOME_CACHE_TTL = 15 * 60 * 1000;
 const HOME_REFRESH_ON_RETURN_MS = 60 * 1000;
+const MAX_STATIC_HOME_FALLBACK_AGE_MS = 6 * 60 * 60 * 1000;
 const EMPTY_MOVIES: MovieItem[] = [];
 
 function normalizeHomeSections(sections?: Record<string, MovieItem[]>): Record<string, MovieItem[]> {
@@ -460,12 +461,16 @@ function writeWarmHomeCache(sections: Record<string, MovieItem[]>): void {
 
 async function loadStaticHomeFallback(signal?: AbortSignal, allowedSections?: string[]): Promise<Record<string, MovieItem[]>> {
   const res = await fetch(HOME_FALLBACK_URL, {
-    cache: 'force-cache',
+    cache: 'no-store',
     signal,
   });
   if (!res.ok) return {};
 
-  const data = await res.json() as { sections?: Record<string, unknown[]> };
+  const data = await res.json() as { generated_at?: string; sections?: Record<string, unknown[]> };
+  const generatedAt = Date.parse(data.generated_at ?? '');
+  if (!Number.isFinite(generatedAt) || Date.now() - generatedAt > MAX_STATIC_HOME_FALLBACK_AGE_MS) {
+    return {};
+  }
   const parsedSections: Record<string, MovieItem[]> = {};
   const allowed = allowedSections?.length ? new Set(allowedSections) : null;
   for (const [key, items] of Object.entries(data.sections ?? {})) {

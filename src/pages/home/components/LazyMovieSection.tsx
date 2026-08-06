@@ -8,6 +8,7 @@ import { Film } from 'lucide-react';
 
 const carouselItemClass = HOME_POSTER_ITEM_CLASS;
 const HOME_FALLBACK_URL = '/home-fallback.json';
+const MAX_STATIC_HOME_FALLBACK_AGE_MS = 6 * 60 * 60 * 1000;
 let staticHomeFallbackPromise: Promise<Record<string, Movie[]>> | null = null;
 
 function isMobileViewport() {
@@ -35,9 +36,13 @@ function withSectionTimeout<T>(promise: Promise<T>, timeoutMs = 8000): Promise<T
 
 async function loadStaticHomeFallback(): Promise<Record<string, Movie[]>> {
   if (!staticHomeFallbackPromise) {
-    staticHomeFallbackPromise = withSectionTimeout(fetch(HOME_FALLBACK_URL, { cache: 'force-cache' }), 3000)
+    staticHomeFallbackPromise = withSectionTimeout(fetch(HOME_FALLBACK_URL, { cache: 'no-store' }), 3000)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('home fallback unavailable'))))
-      .then((data: { sections?: Record<string, unknown[]> }) => {
+      .then((data: { generated_at?: string; sections?: Record<string, unknown[]> }) => {
+        const generatedAt = Date.parse(data.generated_at ?? '');
+        if (!Number.isFinite(generatedAt) || Date.now() - generatedAt > MAX_STATIC_HOME_FALLBACK_AGE_MS) {
+          return {};
+        }
         const sections: Record<string, Movie[]> = {};
         for (const [key, items] of Object.entries(data.sections ?? {})) {
           sections[key] = (items ?? []).filter((item) => {
