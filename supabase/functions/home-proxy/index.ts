@@ -1363,8 +1363,9 @@ serve(async (req) => {
 
   /* 1. Try cache first */
   let cacheRow: { sections: Record<string, unknown>; updated_at: string; expires_at: string } | null = null;
+  let cacheReadUnavailable = false;
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('home_page_cache')
       .select('sections, updated_at, expires_at')
       .eq('id', CACHE_KEY)
@@ -1373,8 +1374,9 @@ serve(async (req) => {
     if (data) {
       cacheRow = data as unknown as typeof cacheRow;
     }
+    cacheReadUnavailable = Boolean(error);
   } catch {
-    /* ignore cache read errors */
+    cacheReadUnavailable = true;
   }
 
   const now = new Date().toISOString();
@@ -1432,6 +1434,23 @@ serve(async (req) => {
       'Cache-Control': homeCacheControl(60),
       'X-Cache': 'STALE',
     });
+  }
+
+  /*
+     A degraded database must not turn a homepage visit into a long-running
+     catalogue rebuild.  The static snapshot has the same section contract and
+     is served only when the primary cache itself cannot be read.  Scheduled
+     warmers continue to restore the primary cache; normal traffic never waits
+     behind that recovery work.
+  */
+  if (cacheReadUnavailable && !forceRefresh) {
+    const staticFallback = await readStaticHomeFallback(requestedSections);
+    if (staticFallback) {
+      return jsonResponse({ status: true, source: 'static-fallback', sections: staticFallback }, 200, {
+        'Cache-Control': homeCacheControl(45),
+        'X-Cache': 'STATIC-FALLBACK',
+      });
+    }
   }
 
   /* 3. Build requested sections in parallel with 3s timeout each */

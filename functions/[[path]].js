@@ -2206,16 +2206,11 @@ async function proxySearch(request, context) {
   try {
     // Call PostgREST directly to avoid a second serverless cold start. The
     // response is still cached at the Cloudflare POP below.
-    let attempt = 1;
-    let upstream;
-    try {
-      upstream = await fetchSearchRpc(3500);
-    } catch {
-      // Supabase/PostgREST occasionally stalls on the first pooled connection.
-      // One bounded retry is faster and safer than returning an empty search.
-      attempt = 2;
-      upstream = await fetchSearchRpc(2500);
-    }
+    // This endpoint is an accelerator, not the only way a visitor can search.
+    // A slow database used to keep the request open for six seconds before a
+    // retry failed.  Fail fast so the browser can use its independent mirrors.
+    const attempt = 1;
+    const upstream = await fetchSearchRpc(1600);
     const upstreamPayload = await upstream.json().catch(() => null);
     if (!upstream.ok) {
       throw new Error(upstreamPayload?.message || `Search RPC returned ${upstream.status}`);

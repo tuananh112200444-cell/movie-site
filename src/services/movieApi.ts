@@ -1985,6 +1985,10 @@ export async function searchMoviesInSupabase(
         ).slice(0, limit);
         if (edgeMovies.length > 0 && hasStrongSearchHit(edgeMovies)) return edgeMovies;
       }
+      // The edge endpoint and the direct RPC use the same database. Retrying
+      // the RPC after a 5xx only duplicates a known failing request and delays
+      // the independent source fallback on the search page.
+      if (edgeResponse.status >= 500) return [];
     }
 
     if (ENABLE_SUPABASE_SEARCH_RPC && !supabaseSearchRpcUnavailable) {
