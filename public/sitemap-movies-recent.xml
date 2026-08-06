@@ -3,6 +3,188 @@
   xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
   xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
   <url>
+    <loc>https://khophim.org/phim/ho-so-tuyet-mat-phan-5</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/uploads/movies/20260730/ho-so-tuyet-mat-phan-5-thumb.webp</image:loc>
+      <image:title>Hồ Sơ Tuyệt Mật (Phần 5)</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/uploads/movies/20260730/ho-so-tuyet-mat-phan-5-thumb.webp</video:thumbnail_loc>
+      <video:title>Trailer Hồ Sơ Tuyệt Mật (Phần 5)</video:title>
+      <video:description>Trong bộ phim, đặc vụ FBI Fox Mulder (David Duchovny) do muốn tìm lại người em gái mất tích của mình, đã dấn thân vào điều tra tại &quot;X-files&quot; với niềm tin rằng em gái của anh đã bị bắt cóc bởi người ngoài Trái Đất. Mulder rất tin tưởng vào sự tồn tại của người ngoài Trái Đất trong khi người tham gia điều tra cùng Fox Mulder là đặc vụ Dana Scully (Gillian Anderson). Ban đầu, Scully không tin vào những điều mà Fox Mulder nói, nhưng với những bằng chứng cụ thể cùng với những vụ án thực tế cô và Mulder trải qua, dần dần Scully đã tin vào những hiện tượng kỳ bí. Tuy nhiên, tới cuối phim thì nhân vật Fox Mulder xuất hiện ít hơn và có thêm sự xuất hiện của một nhân vật chính khác là đặc vụ John Doggett (Robert Patrick). Tới phiên mình, John Doggett lại nghi ngờ tính xác thực của các vụ án trong X-files và lúc này, chính đặc vụ Scully là người đã khiến cho John Doggett dần dần tin vào X-files</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/_HTByz4RlqI</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/vi-sao-vut-sang</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/vi-sao-vut-sang-thumb.jpg</image:loc>
+      <image:title>Vì Sao Vụt Sáng</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ho-so-tuyet-mat-phan-7</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/uploads/movies/20260730/ho-so-tuyet-mat-phan-7-thumb.webp</image:loc>
+      <image:title>Hồ Sơ Tuyệt Mật (Phần 7)</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://phimimg.com/uploads/movies/20260730/ho-so-tuyet-mat-phan-7-thumb.webp</video:thumbnail_loc>
+      <video:title>Trailer Hồ Sơ Tuyệt Mật (Phần 7)</video:title>
+      <video:description>Trong bộ phim, đặc vụ FBI Fox Mulder (David Duchovny) do muốn tìm lại người em gái mất tích của mình, đã dấn thân vào điều tra tại &quot;X-files&quot; với niềm tin rằng em gái của anh đã bị bắt cóc bởi người ngoài Trái Đất. Mulder rất tin tưởng vào sự tồn tại của người ngoài Trái Đất trong khi người tham gia điều tra cùng Fox Mulder là đặc vụ Dana Scully (Gillian Anderson). Ban đầu, Scully không tin vào những điều mà Fox Mulder nói, nhưng với những bằng chứng cụ thể cùng với những vụ án thực tế cô và Mulder trải qua, dần dần Scully đã tin vào những hiện tượng kỳ bí. Tuy nhiên, tới cuối phim thì nhân vật Fox Mulder xuất hiện ít hơn và có thêm sự xuất hiện của một nhân vật chính khác là đặc vụ John Doggett (Robert Patrick). Tới phiên mình, John Doggett lại nghi ngờ tính xác thực của các vụ án trong X-files và lúc này, chính đặc vụ Scully là người đã khiến cho John Doggett dần dần tin vào X-files</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/_HTByz4RlqI</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/em-khong-phai-co-ay</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20241203-1/e6df80f2840ead5c6d0e12440fc35c83.jpg</image:loc>
+      <image:title>Em Không Phải Cô Ấy</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/saw-iv</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/saw-iv-thumb.jpg</image:loc>
+      <image:title>Saw IV</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/loi-song-sai-lam</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/loi-song-sai-lam-thumb.jpg</image:loc>
+      <image:title>Lối Sống Sai Lầm</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/little-busters</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/little-busters-thumb.jpg</image:loc>
+      <image:title>Little Busters</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/saw-vi</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/saw-vi-thumb.jpg</image:loc>
+      <image:title>Saw VI</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/x-men-97-2024</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://image.tmdb.org/t/p/w780/jIyEmnBrZtl6SEWyBoMO2hZnzMa.jpg</image:loc>
+      <image:title>X-Men &apos;97</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://image.tmdb.org/t/p/w780/jIyEmnBrZtl6SEWyBoMO2hZnzMa.jpg</video:thumbnail_loc>
+      <video:title>Trailer X-Men &apos;97</video:title>
+      <video:description>The X-Men, a band of mutants who use their uncanny gifts to protect a world that hates and fears them, are challenged like never before, forced to face a dangerous and unexpected new future.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/pv3Ss8o9gGQ</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/dr-stone-2019</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://image.tmdb.org/t/p/w780/lN13BPAEnc5iXmoxxBQHOZ1ScfZ.jpg</image:loc>
+      <image:title>Dr. STONE</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://image.tmdb.org/t/p/w780/lN13BPAEnc5iXmoxxBQHOZ1ScfZ.jpg</video:thumbnail_loc>
+      <video:title>Trailer Dr. STONE</video:title>
+      <video:description>One fateful day, all of humanity was petrified by a blinding flash of light. After several millennia, high schooler Taiju awakens and finds himself lost in a world of statues. However, he’s not alone! His science-loving friend Senku’s been up and running for a few months and he&apos;s got a grand plan in mind—to kickstart civilization with the power of science!</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/kKBZFM89xYM</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tran-chien-o-mat-tran-phia-tay</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/battle-for-the-western-front-thumb.jpg</image:loc>
+      <image:title>Battle for the Western Front</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/battle-for-the-western-front-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Battle for the Western Front</video:title>
+      <video:description>Inspired by Canuck WWI flying ace Billy Bishop, two young soldiers crash the front lines in August 1918. With the Allies detained, their platoon must desperately hold out alongside legendary Anishinaabe sniper Francis &quot;Peggy&quot; Pegahmagabow.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/FPV25AZr-SY</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tuoi-tre-muon-mau</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/tuoi-tre-muon-mau-thumb.jpg</image:loc>
+      <image:title>Tuổi Trẻ Muôn Màu</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/doi-dac-nhiem-say-xin</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/doi-dac-nhiem-say-xin-thumb.jpg</image:loc>
+      <image:title>Đội đặc nhiệm say xỉn</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/doi-dac-nhiem-say-xin-thumb.jpg</video:thumbnail_loc>
+      <video:title>Trailer Đội đặc nhiệm say xỉn</video:title>
+      <video:description>Một đội lực lượng đặc biệt ngăn chặn một âm mưu chết chóc ở Thành phố tội lỗi và các phe liên quan. Nhưng khi mối đe dọa thực sự xuất hiện, họ phải tỉnh táo để cứu Las Vegas.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/6MNfBHFhnNs</video:player_loc>
+    </video:video>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/silo-2023</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://image.tmdb.org/t/p/w780/uTWhbLc7Bj4qNSdW3ZvZKL8cOHv.jpg</image:loc>
+      <image:title>Silo</image:title>
+    </image:image>
+    <video:video>
+      <video:thumbnail_loc>https://image.tmdb.org/t/p/w780/uTWhbLc7Bj4qNSdW3ZvZKL8cOHv.jpg</video:thumbnail_loc>
+      <video:title>Trailer Silo</video:title>
+      <video:description>In a ruined and toxic future, thousands live in a giant silo deep underground. After its sheriff breaks a cardinal rule and residents die mysteriously, engineer Juliette starts to uncover shocking secrets and the truth about the silo.</video:description>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/8ZYhuvIv1pA</video:player_loc>
+    </video:video>
+  </url>
+  <url>
     <loc>https://khophim.org/phim/vuon-sao-bang-phan-2</loc>
     <lastmod>2026-08-06</lastmod>
     <changefreq>daily</changefreq>
@@ -6313,175 +6495,5 @@
       <video:description>Tất cả các tập của phần 2 đều dựa trên truyện của Sir Arthur Conan Doyle, được xuất bản lần đầu trên tạp chí The Strand và trong tuyển tập truyện ngắn Sherlock Holmes đầu tiên của Doyle có tựa đề &quot;Những cuộc phiêu lưu của Sherlock Holmes&quot;</video:description>
       <video:player_loc allow_embed="yes">https://www.youtube.com/embed/LMAroBYfJxs</video:player_loc>
     </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/karol-g-ngay-mai-that-dep</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/karol-g-ngay-mai-that-dep-thumb.jpg</image:loc>
-      <image:title>Karol G: Ngày Mai Thật Đẹp</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://img.ophim.live/uploads/movies/karol-g-ngay-mai-that-dep-thumb.jpg</video:thumbnail_loc>
-      <video:title>Trailer Karol G: Ngày Mai Thật Đẹp</video:title>
-      <video:description>Karol G vén màn bí mật về hành trình vươn lên thành ngôi sao trong khi thực hiện chuyến lưu diễn cháy vé tại sân vận động, sáng tác bài hát mới và phát hành album mới. &amp;nbsp;</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/qE6Lez9aGHA</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/bi-mat-noi-goc-toi</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/bi-mat-noi-goc-toi-thumb.jpg</image:loc>
-      <image:title>Bí Mật Nơi Góc Tối</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/quan-chua-may-man-cua-ta-quan-chua-van-phuc</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/quan-chua-may-man-cua-ta-quan-chua-van-phuc-thumb.jpg</image:loc>
-      <image:title>Quận Chúa May Mắn Của Ta (Quận Chúa Vạn Phúc)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/dem-kho-khan-iii-1998</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/dem-kho-khan-iii-1998-thumb.jpg</image:loc>
-      <image:title>Đêm khó khăn III 1998</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/luat-hai-giai-oan</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/law-with-two-phases-thumb.jpg</image:loc>
-      <image:title>Luật hai giai đoạn</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/danh-sach-tu-thu-soi-hac-am</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250829-1/66364212e2c4d5d6bef202e4e9b86970.jpg</image:loc>
-      <image:title>Danh Sách Tử Thù: Sói Hắc Ám</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250829-1/66364212e2c4d5d6bef202e4e9b86970.jpg</video:thumbnail_loc>
-      <video:title>Trailer Danh Sách Tử Thù: Sói Hắc Ám</video:title>
-      <video:description>Trước sự kiện The Terminal List, đặc nhiệm SEAL Ben Edwards bị cuốn vào thế giới ngầm của các chiến dịch tuyệt mật CIA. Càng dấn sâu vào “vùng xám”, anh càng khó thoát khỏi bóng tối trong chính bản thân. Trong mỗi con người đều tồn tại hai con sói – ánh sáng và bóng tối – luôn tranh giành quyền kiểm soát. Ben Edwards sẽ nuôi dưỡng con sói nào?</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/pelvo5TBD-M</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/eva-mai-mai-phan-2-la-primera-vez</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250608-1/1d030c49ca28f9347353781880280ec5.jpg</image:loc>
-      <image:title>Eva Mãi Mãi (Phần 2) (La primera vez)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20250608-1/1d030c49ca28f9347353781880280ec5.jpg</video:thumbnail_loc>
-      <video:title>Trailer Eva Mãi Mãi (Phần 2) (La primera vez)</video:title>
-      <video:description>Một thiếu nữ bí ẩn đến một trường nam sinh ở Colombia những năm 1970, phá vỡ những định kiến, quy tắc... và khiến vài trái tim điên đảo.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/TyVmSfgsNKY</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/phong-xa-nguy-cap</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260319-1/8fc8c84ced1c063b9e16cc4f19f49aa2.jpg</image:loc>
-      <image:title>Phóng Xạ Nguy Cấp (Emergência Radioativa)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20260319-1/8fc8c84ced1c063b9e16cc4f19f49aa2.jpg</video:thumbnail_loc>
-      <video:title>Trailer Phóng Xạ Nguy Cấp (Emergência Radioativa)</video:title>
-      <video:description>Trong loạt phim lấy cảm hứng từ những sự kiện có thật, các nhà vật lý và bác sĩ chạy đua với thời gian nhằm ngăn chặn một thảm họa phóng xạ quy mô lớn và cứu sống hàng nghìn người.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/s0wVghg4vS4</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/a-tale-of-love-and-darkness</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/a-tale-of-love-and-darkness-thumb.jpg</image:loc>
-      <image:title>A Tale of Love and Darkness</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/balls-of-fury</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/balls-of-fury-thumb.jpg</image:loc>
-      <image:title>Balls of Fury</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/sup-do-phan-1</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251218-1/6ae81867a846aa28f534796ebe2f8a88.jpg</image:loc>
-      <image:title>Sụp Đổ (Phần 1)</image:title>
-    </image:image>
-    <video:video>
-      <video:thumbnail_loc>https://phimimg.com/upload/vod/20251218-1/6ae81867a846aa28f534796ebe2f8a88.jpg</video:thumbnail_loc>
-      <video:title>Trailer Sụp Đổ (Phần 1)</video:title>
-      <video:description>Dựa trên một trong những loạt trò chơi điện tử ăn khách nhất mọi thời đại, Sụp đổ là câu chuyện về những thứ người ta có và không có trong một thế giới gần như chẳng còn lại gì. 200 năm sau ngày tận thế, một cư dân ôn hòa sống trong hầm tránh phóng xạ ấm cúng buộc phải quay trở lên mặt đất – và bị sốc khi phát hiện vùng hoang tàn này đang chờ đợi cô.</video:description>
-      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/7h8zJHywjAw</video:player_loc>
-    </video:video>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ban-bao-cao-thieu-so</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ban-bao-cao-thieu-so-thumb.jpg</image:loc>
-      <image:title>Bản Báo Cáo Thiểu Số</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/cau-chuyen-cam-dong-nhat</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/cau-chuyen-cam-dong-nhat-thumb.jpg</image:loc>
-      <image:title>Câu chuyện cảm động nhất</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/giao-thoa-thoi-gian</loc>
-    <lastmod>2026-08-05</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.98</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/giao-thoa-thoi-gian-thumb.jpg</image:loc>
-      <image:title>Giao Thoa Thời Gian</image:title>
-    </image:image>
   </url>
 </urlset>

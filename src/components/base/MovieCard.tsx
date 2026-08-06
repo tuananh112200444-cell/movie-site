@@ -2,7 +2,7 @@ import { memo, useMemo, useState, useCallback, useRef } from 'react';
 import { useImageFallback } from '../../hooks/useImageFallback';
 import { Link } from 'react-router-dom';
 import type { MovieItem } from '../../types/movie';
-import { getImageUrl, getMovieDisplayName } from '../../services/movieApi';
+import { getImageUrl, getMovieDisplayName, getPortraitImagePaths } from '../../services/movieApi';
 import { movieDetailUrl } from '../../utils/slugEncoder';
 import { prefetchMovieDetail, cancelPrefetchMovieDetail } from '../../utils/prefetchRoute';
 import { isImagePreloaded, markImagePreloaded } from '../../utils/imagePreloader';
@@ -73,10 +73,7 @@ function getDisplayTime(movie: MovieItem): string | null {
    DEFAULT CARD
 ───────────────────────────────────────── */
 function getVerticalPosterPaths(movie: MovieItem): { primary?: string; fallback?: string } {
-  // Most sources store portrait covers in thumb_url and wide backdrops in poster_url.
-  const primary = movie.thumb_url || movie.poster_url;
-  const fallback = movie.poster_url && movie.poster_url !== primary ? movie.poster_url : undefined;
-  return { primary, fallback };
+  return getPortraitImagePaths(movie);
 }
 
 function DefaultCard({ movie, priority }: MovieCardProps) {

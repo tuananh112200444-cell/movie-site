@@ -8,6 +8,7 @@ import { movieDetailUrl } from '@/utils/slugEncoder';
 import { cancelPrefetchMovieDetail, prefetchMovieDetail } from '@/utils/prefetchRoute';
 import MovieCountdown from '@/components/base/MovieCountdown';
 import { getSearchReleaseMeta } from '@/utils/searchPresentation';
+import { getPortraitImagePaths } from '@/services/movieApi';
 
 
 interface Props {
@@ -32,8 +33,7 @@ export default function SearchResultItem({ movie, query, viewMode }: Props) {
 /* ── Grid Card ── */
 function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
   const href = getMovieHref(movie);
-  const posterPath = movie.thumb_url || movie.poster_url;
-  const fallbackPath = movie.poster_url || movie.thumb_url;
+  const { primary: posterPath, fallback: fallbackPath } = getPortraitImagePaths(movie);
   const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
     posterPath,
     fallbackPath,
@@ -144,8 +144,7 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
 /* ── List Card (ngang, info nhiều hơn) ── */
 function ListItem({ movie, query }: { movie: MovieItem; query: string }) {
   const href = getMovieHref(movie);
-  const posterPath = movie.thumb_url || movie.poster_url;
-  const fallbackPath = movie.poster_url || movie.thumb_url;
+  const { primary: posterPath, fallback: fallbackPath } = getPortraitImagePaths(movie);
   const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
     posterPath,
     fallbackPath,

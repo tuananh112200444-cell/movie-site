@@ -166,7 +166,7 @@ function QueerUniverseHero({ movies, loading }: QueerUniverseHeroProps) {
             }`}
           >
             <img
-              src={getOptimizedImageUrl(movie.thumb_url || movie.poster_url, 220, 76)}
+              src={getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 220, 76)}
               alt={movie.name}
               className="absolute inset-0 h-full w-full object-cover object-top"
               loading={index === 0 ? 'eager' : 'lazy'}

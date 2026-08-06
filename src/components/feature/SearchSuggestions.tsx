@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { applyImageElementFallback, getOptimizedImageUrl, searchMoviesInSupabase } from '../../services/movieApi';
+import { applyImageElementFallback, getOptimizedImageUrl, getPortraitImagePaths, searchMoviesInSupabase } from '../../services/movieApi';
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -263,7 +263,8 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
           {!loading && suggestions.length > 0 && (
             <ul ref={(node) => { listRef.current = node; }}>
               {suggestions.map((movie, idx) => {
-                const thumb = getOptimizedImageUrl(movie.thumb_url || movie.poster_url || '', 180, 82);
+                const artwork = getPortraitImagePaths(movie);
+                const thumb = getOptimizedImageUrl(artwork.primary || '', 180, 82);
                 const typeLabel = movie.type === 'series'
                   ? 'Phim Bộ'
                   : movie.type === 'single'

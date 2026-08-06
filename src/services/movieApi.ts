@@ -617,6 +617,40 @@ export function getMovieDisplayName(item: {
     || 'Không tên';
 }
 
+type MovieArtworkFields = {
+  thumb_url?: string;
+  poster_url?: string;
+  source_site?: string;
+  source_name?: string;
+};
+
+/**
+ * Old OPhim records use thumb as the portrait cover and poster as the wide
+ * artwork. TMDB, phimapi/phimimg and the other importers use the conventional
+ * opposite roles. Keep that provider difference in one place.
+ */
+function usesLegacyOphimArtworkRoles(movie: MovieArtworkFields): boolean {
+  const thumb = String(movie.thumb_url || '').trim();
+  const poster = String(movie.poster_url || '').trim();
+  if (/image\.tmdb\.org|phimimg\.com/i.test(`${thumb} ${poster}`)) return false;
+  const source = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
+  return source.includes('ophim') || /(?:^|\/)img\.ophim\.live\//i.test(`${thumb} ${poster}`) || (!/^https?:\/\//i.test(thumb) && !/^https?:\/\//i.test(poster));
+}
+
+export function getPortraitImagePaths(movie: MovieArtworkFields): { primary?: string; fallback?: string } {
+  const legacy = usesLegacyOphimArtworkRoles(movie);
+  const primary = (legacy ? movie.thumb_url : movie.poster_url) || (legacy ? movie.poster_url : movie.thumb_url);
+  const secondary = (legacy ? movie.poster_url : movie.thumb_url);
+  return { primary, fallback: secondary && secondary !== primary ? secondary : undefined };
+}
+
+export function getLandscapeImagePaths(movie: MovieArtworkFields): { primary?: string; fallback?: string } {
+  const legacy = usesLegacyOphimArtworkRoles(movie);
+  const primary = (legacy ? movie.poster_url : movie.thumb_url) || (legacy ? movie.thumb_url : movie.poster_url);
+  const secondary = (legacy ? movie.thumb_url : movie.poster_url);
+  return { primary, fallback: secondary && secondary !== primary ? secondary : undefined };
+}
+
 export function getImageUrl(path: string): string {
   const normalizedPath = unwrapCloudflareImageOrigin(String(path || ''));
   if (!normalizedPath || /^(?:null|undefined|about:blank|javascript:|data:)/i.test(normalizedPath)) return FALLBACK_IMG;

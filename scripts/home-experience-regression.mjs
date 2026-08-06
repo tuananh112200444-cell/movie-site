@@ -56,7 +56,7 @@ if (!home.includes('Kho phim được đồng bộ và kiểm tra nguồn phát 
 if (/getViewerCount|\}\s*xem/.test(trending)) {
   failures.push('Trending UI must not show generated viewer counts as real analytics.');
 }
-if (!/isImagePreloaded\(getPosterUrl[\s\S]*?\n\s*240,\s*\n\s*78,\s*\n\s*\);/.test(trending)) {
+if (!/getPortraitImagePaths\(movie\)[\s\S]*?posterPath,[\s\S]*?posterFallback,[\s\S]*?isImagePreloaded\(getPosterUrl\(posterPath \|\| ''\)\)[\s\S]*?\n\s*240,\s*\n\s*78,\s*\n\s*\{ preferredAspect: 'portrait' \},\s*\n\s*\);/.test(trending)) {
   failures.push('Trending posters must pass their measured image budget through the fallback hook.');
 }
 if (lazySection.includes('3200 + Math.min(sectionIndex, 8) * 120')) {
@@ -181,7 +181,7 @@ if (
 if (!top10.includes('w-[292px]') || top10.includes('className={`${HOME_POSTER_ITEM_CLASS} group cursor-pointer`}')) {
   failures.push('Mobile Top 10 must use readable landscape cards instead of narrow poster-only cards.');
 }
-if (!/isImagePreloaded[\s\S]*?\n\s*280,\s*\n\s*80,\s*\n\s*\);/.test(topCinema)) {
+if (!/isImagePreloaded[\s\S]*?\n\s*280,\s*\n\s*80,\s*\n\s*\{ preferredAspect: 'portrait' \},\s*\n\s*\);/.test(topCinema)) {
   failures.push('Cinema posters must stay within the measured card-size image budget.');
 }
 if (!String(packageJson.scripts?.prebuild || '').includes('refresh-home-fallback.mjs')) {
