@@ -88,6 +88,16 @@ function getHost(url: string) {
   }
 }
 
+function isBrowserManagedPhimApiProbeBlocked(row: StreamRow, result: ProbeResult) {
+  const directUrl = String(row.stream_url || '').trim();
+  const embedUrl = String(row.embed_url || '').trim();
+  return Boolean(
+    /https?:\/\/[^/]*phim1280\.tv\//i.test(directUrl)
+    && /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl)
+    && (result.status === 401 || result.status === 403 || result.status === 404),
+  );
+}
+
 function scoreStream(row: StreamRow, responseMs: number) {
   const url = streamUrl(row).toLowerCase();
   const host = getHost(url);
@@ -279,14 +289,17 @@ async function logHealth(
   row: StreamRow,
   result: ProbeResult,
 ) {
+  const browserManagedProbeBlocked = isBrowserManagedPhimApiProbeBlocked(row, result);
   await supabase.from('stream_health_logs').insert({
     stream_id: row.id,
     movie_id: row.movie_id,
-    status: result.ok ? 'ok' : 'failed',
+    status: browserManagedProbeBlocked ? 'unchecked' : result.ok ? 'ok' : 'failed',
     http_code: result.status,
     response_time_ms: result.responseMs,
-    error_message: result.error,
-    is_reachable: result.ok,
+    error_message: browserManagedProbeBlocked
+      ? 'Server probe blocked; browser validation required'
+      : result.error,
+    is_reachable: browserManagedProbeBlocked ? null : result.ok,
   });
 }
 
@@ -316,9 +329,11 @@ async function updateStream(
   const now = new Date().toISOString();
   const embedUrl = String(row.embed_url || '').trim();
   const browserManagedProbeBlocked =
-    !String(row.stream_url || '').trim()
-    && /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl)
-    && (result.status === 401 || result.status === 403);
+    (
+      !String(row.stream_url || '').trim()
+      && /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl)
+      && (result.status === 401 || result.status === 403)
+    ) || isBrowserManagedPhimApiProbeBlocked(row, result);
   if (browserManagedProbeBlocked) {
     const viewerReportedFailure = String(row.last_error || '').startsWith('Viewer telemetry:');
     const providerVerificationPending = String(row.last_error || '').startsWith('Provider verification pending:');
@@ -529,23 +544,30 @@ serve(async (req) => {
     } else {
       const { data: hotMovies, error: hotMovieError } = await supabase
         .from('movies')
-        .select('id')
+        .select('id,slug')
         .eq('is_published', true)
         .order('updated_at', { ascending: false })
         .limit(movieLimit);
 
       if (hotMovieError) return json({ success: false, error: hotMovieError.message }, 500);
-      const movieIds = unique(((hotMovies || []) as MovieQueueRow[]).map((movie) => movie.id).filter(Boolean));
+      const hotMovieRows = (hotMovies || []) as Array<MovieQueueRow & { slug?: string }>;
+      const movieIds = unique(hotMovieRows.map((movie) => movie.id).filter(Boolean));
       if (movieIds.length > 0) {
-        query = supabase
-          .from('streams')
-          .select(streamSelect)
-          .eq('is_active', true)
-          .in('movie_id', movieIds)
-          .or('stream_url.neq.,embed_url.neq.')
-          .order('last_checked_at', { ascending: true, nullsFirst: true })
-          .order('priority', { ascending: false })
-          .limit(limit);
+        // This is preventive verification for freshly changed catalogue
+        // entries. Do not spend this viewer-facing budget rechecking an
+        // already verified source while another new movie is still unchecked.
+        // Pull a bounded candidate set first, then spread the actual probes
+        // across movies so a long series cannot consume the whole run.
+        const { data: freshRows, error: freshRowsError } = await supabase.rpc(
+          'pick_unchecked_stream_health_candidates',
+          { p_movie_ids: movieIds, p_limit: limit },
+        );
+        if (freshRowsError) return json({ success: false, error: freshRowsError.message }, 500);
+        const slugByMovieId = new Map(hotMovieRows.map((movie) => [movie.id, String(movie.slug || '')]));
+        preselectedRows = ((freshRows || []) as unknown as StreamRow[]).map((row) => ({
+          ...row,
+          movies: { slug: slugByMovieId.get(row.movie_id) || '' },
+        }));
       }
     }
   }

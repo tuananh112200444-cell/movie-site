@@ -75,6 +75,8 @@ const checks = [
   [autoRepair.includes('updated_at: new Date().toISOString()'), 'Fresh viewer telemetry must outrank stale repair backlog rows'],
   [sourceHealth.includes('phim1280') && sourceHealthBrain.includes('phim1280') && movieApi.includes("host.includes('phim1280')"), 'All player layers must group Phim1280 shards with the KKPhim provider incident'],
   [streamHealth.includes('browserManagedProbeBlocked') && streamHealth.includes('Server probe blocked; browser validation required'), 'Cloud-only StreamC 403s must remain unverified instead of accumulating false failures'],
+  [streamHealth.includes('isBrowserManagedPhimApiProbeBlocked') && streamHealth.includes("status: browserManagedProbeBlocked ? 'unchecked'"), 'Browser-playable PhimAPI sources must not be quarantined from a server-only 404 probe'],
+  [streamHealth.includes("pick_unchecked_stream_health_candidates") && streamHealth.includes('p_movie_ids: movieIds'), 'Fresh health checks must choose at most one unchecked stream per movie'],
   [streamHealth.includes('probeStreamRow') && streamHealth.includes('Embed returned an HTML 404/deleted-video page'), 'Health checks must validate both HLS and embed error pages'],
   [streamHealth.includes("url.searchParams.get('episode')") && streamHealth.includes("query.eq('movie_id', targetMovie.id)") && streamHealth.includes("query.eq('episode_slug', episodeSlug)"), 'Targeted source recovery must resolve indexed movie identity and independently probe only the reported episode'],
   [detailProxy.includes("healthStatus === 'failed' && failureCount >= 3"), 'The detail API and frontend must suppress a telemetry-failed stream at the same threshold'],
