@@ -60,6 +60,22 @@ function unique<T>(items: T[]) {
   return Array.from(new Set(items));
 }
 
+function spreadAcrossMovies(rows: unknown[], limit: number): unknown[] {
+  const onePerMovie: unknown[] = [];
+  const overflow: unknown[] = [];
+  const seenMovies = new Set<string>();
+  for (const row of rows) {
+    const movieId = String((row as StreamRow).movie_id || '');
+    if (movieId && !seenMovies.has(movieId)) {
+      seenMovies.add(movieId);
+      onePerMovie.push(row);
+    } else {
+      overflow.push(row);
+    }
+  }
+  return [...onePerMovie, ...overflow].slice(0, limit);
+}
+
 function isHls(url: string) {
   return /\.m3u8($|[?#])/i.test(url);
 }
@@ -227,6 +243,13 @@ async function probeStreamRow(row: StreamRow): Promise<ProbeResult> {
     const result = await probe(candidate);
     if (result.ok) {
       if (candidate === embedUrl && directUrl && failures.length > 0) {
+        if (String(row.last_error || '').startsWith('Viewer telemetry:')) {
+          const directFailure = failures[0];
+          return {
+            ...directFailure,
+            error: `Viewer telemetry confirmed direct failure: ${directFailure.error}; embed page reachability is not playback proof`,
+          };
+        }
         return {
           ...result,
           directStreamFailed: true,
@@ -237,11 +260,18 @@ async function probeStreamRow(row: StreamRow): Promise<ProbeResult> {
     }
     failures.push(result);
   }
-  return failures.sort((a, b) => {
+  const selectedFailure = failures.sort((a, b) => {
     const severity = (status: number | null) =>
       status === 404 || status === 410 ? 4 : status !== null && status >= 500 ? 3 : status === 401 || status === 403 ? 2 : 1;
     return severity(b.status) - severity(a.status);
   })[0] ?? { ok: false, status: null, responseMs: 0, error: 'No stream or embed URL' };
+  if (String(row.last_error || '').startsWith('Viewer telemetry:')) {
+    return {
+      ...selectedFailure,
+      error: `Viewer telemetry confirmed source failure: ${selectedFailure.error}`,
+    };
+  }
+  return selectedFailure;
 }
 
 async function logHealth(
@@ -262,6 +292,7 @@ async function logHealth(
 
 function healthStatusFor(result: ProbeResult, failureCount: number) {
   if (result.ok) return result.directStreamFailed ? 'degraded' : 'ok';
+  if (result.error.startsWith('Viewer telemetry confirmed')) return 'dead';
   if (result.status === 401 || result.status === 403) return 'blocked';
   if (result.status === 404 || result.status === 410) return failureCount >= 2 ? 'dead' : 'failed';
   return 'failed';
@@ -269,6 +300,7 @@ function healthStatusFor(result: ProbeResult, failureCount: number) {
 
 function shouldDeactivate(result: ProbeResult, failureCount: number, deactivateAfter: number) {
   if (result.ok) return false;
+  if (result.error.startsWith('Viewer telemetry confirmed')) return true;
   if (result.status === 401 || result.status === 403) return false;
   if (result.status === 404 || result.status === 410) return failureCount >= 2;
   if (/playlist invalid|name not resolved|connection refused/i.test(result.error)) return failureCount >= 2;
@@ -289,6 +321,7 @@ async function updateStream(
     && (result.status === 401 || result.status === 403);
   if (browserManagedProbeBlocked) {
     const viewerReportedFailure = String(row.last_error || '').startsWith('Viewer telemetry:');
+    const providerVerificationPending = String(row.last_error || '').startsWith('Provider verification pending:');
     await supabase.from('streams').update({
       last_checked_at: now,
       response_time_ms: result.responseMs,
@@ -296,7 +329,9 @@ async function updateStream(
       ...(!viewerReportedFailure ? {
         health_status: 'unchecked',
         failure_count: 0,
-        last_error: 'Server probe blocked; browser validation required',
+        last_error: providerVerificationPending
+          ? row.last_error
+          : 'Server probe blocked; browser validation required',
       } : {}),
     }).eq('id', row.id);
     return;
@@ -311,6 +346,7 @@ async function updateStream(
     && telemetryFailureAge < 30 * 60 * 1000;
   if (telemetryEmbedCooldown) {
     await supabase.from('streams').update({
+      last_checked_at: now,
       response_time_ms: result.responseMs,
       priority: Math.min(Number(row.priority || 100), 20),
       updated_at: now,
@@ -413,7 +449,7 @@ serve(async (req) => {
         .eq('health_status', 'unchecked')
         .or('stream_url.neq.,embed_url.neq.')
         .order('updated_at', { ascending: false })
-        .limit(recentLimit),
+        .limit(Math.min(recentLimit * 4, 300)),
       backlogLimit > 0
         ? supabase
           .from('streams')
@@ -423,17 +459,18 @@ serve(async (req) => {
           .or('stream_url.neq.,embed_url.neq.')
           .order('last_checked_at', { ascending: true, nullsFirst: true })
           .order('priority', { ascending: false })
-          .limit(backlogLimit)
+          .limit(Math.min(backlogLimit * 4, 300))
         : Promise.resolve({ data: [], error: null }),
     ]);
     if (recentResult.error) return json({ success: false, error: recentResult.error.message }, 500);
     if (backlogResult.error) return json({ success: false, error: backlogResult.error.message }, 500);
-    preselectedRows = [...new Map(
+    const distinctRows = [...new Map(
       [...(recentResult.data || []), ...(backlogResult.data || [])]
         .map((row) => [String((row as StreamRow).id), row]),
     ).values()];
+    preselectedRows = spreadAcrossMovies(distinctRows, limit);
   } else if (queue === 'problem') {
-    query = supabase
+    const { data: problemRows, error: problemError } = await supabase
       .from('streams')
       .select(streamSelect)
       .eq('is_active', true)
@@ -441,7 +478,9 @@ serve(async (req) => {
       .or('stream_url.neq.,embed_url.neq.')
       .order('last_checked_at', { ascending: true, nullsFirst: true })
       .order('priority', { ascending: false })
-      .limit(limit);
+      .limit(Math.min(limit * 4, 600));
+    if (problemError) return json({ success: false, error: problemError.message }, 500);
+    preselectedRows = spreadAcrossMovies(problemRows || [], limit);
   } else if (queue === 'stale') {
     const staleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     query = supabase
@@ -456,15 +495,34 @@ serve(async (req) => {
   } else if (queue === 'hot') {
     // Viewer telemetry is advisory until this queue independently probes the
     // exact stored source. It must outrank merely recent catalogue updates.
-    const { data: telemetryRows, error: telemetryError } = await supabase
+    const hotRetryBefore = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const hotCandidateQuery = (pattern: string) => supabase
       .from('streams')
       .select(streamSelect)
       .eq('is_active', true)
-      .like('last_error', 'Viewer telemetry:%')
+      .like('last_error', pattern)
+      .or(`last_checked_at.is.null,last_checked_at.lt.${hotRetryBefore}`)
       .or('stream_url.neq.,embed_url.neq.')
       .order('updated_at', { ascending: false })
-      .limit(limit);
+      .limit(Math.min(limit * 4, 600));
+    const [telemetryResult, verificationResult] = await Promise.all([
+      hotCandidateQuery('Viewer telemetry:%'),
+      hotCandidateQuery('Provider verification pending:%'),
+    ]);
+    const telemetryError = telemetryResult.error || verificationResult.error;
     if (telemetryError) return json({ success: false, error: telemetryError.message }, 500);
+    const verificationRows = verificationResult.data || [];
+    const viewerRows = telemetryResult.data || [];
+    const verificationBudget = verificationRows.length > 0 ? Math.ceil(limit / 2) : 0;
+    const prioritizedHotRows = [
+      ...spreadAcrossMovies(verificationRows, verificationBudget),
+      ...spreadAcrossMovies(viewerRows, limit - verificationBudget),
+      ...verificationRows,
+      ...viewerRows,
+    ];
+    const telemetryRows = [...new Map(
+      prioritizedHotRows.map((row) => [String((row as StreamRow).id), row]),
+    ).values()].slice(0, limit);
 
     if ((telemetryRows || []).length > 0) {
       preselectedRows = telemetryRows;

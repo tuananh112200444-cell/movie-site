@@ -161,6 +161,7 @@ async function penalizeTelemetryFailedStreams(
       // after an independent probe.
       priority: Math.max(-2, Number(row.priority || 0) - 1),
       last_error: 'Viewer telemetry: repair requested; independent probe required',
+      updated_at: new Date().toISOString(),
     }).eq('id', row.id);
     if (!error) penalized += 1;
   }

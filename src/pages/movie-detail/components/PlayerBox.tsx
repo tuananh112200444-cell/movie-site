@@ -866,19 +866,19 @@ export default function PlayerBox({
     const canUseEmbedFallback = Boolean(
       embedUrl &&
       !isBlvietsubWatchPageUrl(embedUrl) &&
-      effectivePlayerMode === 'hls'
+      effectivePlayerMode === 'hls' &&
+      hlsCluster !== embedCluster
     );
-    if (canUseEmbedFallback && hlsCluster !== embedCluster) {
+    if (canUseEmbedFallback) {
       setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
       return;
     }
     if (switchToFallbackServer()) return;
-    // Prefer an independent server first. If none exists, a working iframe
-    // from the same provider is still safer than leaving the viewer on a
-    // confirmed-broken HLS path.
-    if (canUseEmbedFallback) {
-      setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
-    }
+    // Do not turn a fatal media URL into an infinite loader by opening an
+    // iframe from the same provider cluster. Cross-origin 404/504 pages still
+    // fire iframe onLoad, so the parent cannot treat that as playback proof.
+    // LightweightHlsPlayer now keeps its terminal error + retry UI when no
+    // genuinely independent path exists.
   }, [effectivePlayerMode, episode?.link_embed, reportIssue, switchToFallbackServer]);
 
   const handleDirectVideoError = useCallback(() => {
@@ -891,7 +891,15 @@ export default function PlayerBox({
       error_message: 'direct video element error',
     });
     const embedUrl = episode?.link_embed ?? '';
-    if (embedUrl && !isBlvietsubWatchPageUrl(embedUrl) && isIframeSource(embedUrl) && effectivePlayerMode !== 'embed') {
+    const directCluster = getSourceFailureClusterFromUrl(episode?.link_m3u8 || '');
+    const embedCluster = getSourceFailureClusterFromUrl(embedUrl);
+    if (
+      embedUrl &&
+      !isBlvietsubWatchPageUrl(embedUrl) &&
+      isIframeSource(embedUrl) &&
+      effectivePlayerMode !== 'embed' &&
+      directCluster !== embedCluster
+    ) {
       setPlayerMode('embed');
       return;
     }

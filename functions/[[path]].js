@@ -2106,7 +2106,7 @@ async function proxyMovieDetail(request, context) {
   const upstreamUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
   upstreamUrl.searchParams.set('slug', slug);
   if (refresh) upstreamUrl.searchParams.set('refresh', '1');
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}?rev=canonical-v4`, { method: 'GET' });
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}?rev=canonical-v5`, { method: 'GET' });
   const failureKey = new Request(`${SITE_URL}/__circuit/movie-detail/${encodeURIComponent(slug)}`, { method: 'GET' });
 
   try {
@@ -2132,15 +2132,16 @@ async function proxyMovieDetail(request, context) {
           ? { 'X-KhoPhim-Proxy-Secret': context.env.MOVIE_DETAIL_PROXY_SECRET }
           : {}),
       },
-      cf: refresh ? undefined : { cacheTtl: 300, cacheEverything: true },
-      // Viewer requests must fail fast to the browser's Supabase/provider
-      // fallbacks. Waiting ten seconds here caused a 15–20 second blank page.
-      signal: AbortSignal.timeout(4000),
+      cf: refresh ? undefined : { cacheTtl: 30, cacheEverything: true },
+      // Large catalogues can finish just after four seconds. Keep this below
+      // the browser's bounded fallback window, but do not kill a valid response
+      // at 4.1s before it can populate the shared edge cache.
+      signal: AbortSignal.timeout(7000),
     });
     const headers = new Headers(upstream.headers);
     headers.delete('Set-Cookie');
     headers.set('Content-Type', 'application/json; charset=utf-8');
-    headers.set('Cache-Control', refresh ? 'no-store' : 'public, max-age=300, s-maxage=300, stale-while-revalidate=1800, stale-if-error=86400');
+    headers.set('Cache-Control', refresh ? 'no-store' : 'public, max-age=30, s-maxage=30, stale-while-revalidate=30, stale-if-error=300');
     headers.set('X-KhoPhim-Detail-Cache', refresh ? 'REFRESH' : 'MISS');
     for (const [key, value] of Object.entries(SECURITY_HEADERS)) headers.set(key, value);
     const response = new Response(upstream.body, { status: upstream.status, headers });

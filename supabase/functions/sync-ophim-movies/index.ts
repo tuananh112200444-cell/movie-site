@@ -361,17 +361,79 @@ function detailHasPlayableEpisode(detail: ParsedDetail): boolean {
 
 async function hasPersistedPlayableCoverage(supabase: SupabaseClient, movieId: string): Promise<boolean> {
   const [{ data: movieEpisodes }, { data: episodes }, { data: streams }] = await Promise.all([
-    supabase.from('movie_episodes').select('source,link_m3u8,link_embed').eq('movie_id', movieId).limit(50),
-    supabase.from('episodes').select('link_m3u8,link_embed').eq('movie_id', movieId).limit(50),
-    supabase.from('streams').select('is_active,stream_url,embed_url').eq('movie_id', movieId).eq('is_active', true).limit(50),
+    supabase.from('movie_episodes').select('source,server_name,slug,episode_number,link_m3u8,link_embed').eq('movie_id', movieId).limit(1000),
+    supabase.from('episodes').select('server_name,episode_slug,episode_number,link_m3u8,link_embed').eq('movie_id', movieId).limit(1000),
+    supabase.from('streams').select('is_active,server_name,episode_slug,stream_url,embed_url,health_status,failure_count,last_error').eq('movie_id', movieId).limit(2000),
   ]);
-  const hasUrl = (row: Record<string, unknown>, directKey: string, embedKey: string) => Boolean(
-    String(row[directKey] || '').trim() || String(row[embedKey] || '').trim(),
-  );
+
+  const normalizeUrl = (value: unknown) => {
+    const normalized = String(value || '').trim().replace(/&amp;/g, '&').replace(/\/+$/, '');
+    return /^https?:\/\//i.test(normalized) ? normalized : '';
+  };
+  const streamRows = (streams || []) as Array<Record<string, unknown>>;
+  const streamIsSuppressed = (row: Record<string, unknown>) => {
+    if (row.is_active === false) return true;
+    const status = String(row.health_status || '').trim().toLowerCase();
+    const failures = Number(row.failure_count || 0);
+    if (String(row.last_error || '').startsWith('Provider verification pending:')) return true;
+    const embed = String(row.embed_url || '').trim();
+    const browserManagedException =
+      /https?:\/\/player\.phimapi\.com\/player\//i.test(embed)
+      || /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
+    if (status === 'blocked' && !browserManagedException) return true;
+    return status === 'dead' || (status === 'failed' && failures >= 3);
+  };
+  const usableByUrl = new Map<string, boolean>();
+  const usableByServerSlug = new Map<string, boolean>();
+  for (const stream of streamRows) {
+    const usable = !streamIsSuppressed(stream);
+    for (const url of [stream.stream_url, stream.embed_url].map(normalizeUrl).filter(Boolean)) {
+      usableByUrl.set(url, Boolean(usableByUrl.get(url)) || usable);
+    }
+    const server = String(stream.server_name || '').trim().toLowerCase();
+    const slug = String(stream.episode_slug || '').trim().toLowerCase();
+    if (server && slug) {
+      const key = `${server}|${slug}`;
+      usableByServerSlug.set(key, Boolean(usableByServerSlug.get(key)) || usable);
+    }
+  }
+  const matchingHealthState = (
+    row: Record<string, unknown>,
+    directKey: string,
+    embedKey: string,
+    slugKey: string,
+  ) => {
+    const urls = [row[directKey], row[embedKey]].map(normalizeUrl).filter(Boolean);
+    for (const url of urls) {
+      if (usableByUrl.has(url)) return usableByUrl.get(url);
+    }
+    const server = String(row.server_name || '').trim().toLowerCase();
+    const slug = String(row[slugKey] || '').trim().toLowerCase();
+    const key = server && slug ? `${server}|${slug}` : '';
+    return key && usableByServerSlug.has(key) ? usableByServerSlug.get(key) : undefined;
+  };
+  const legacyRowIsUsable = (
+    row: Record<string, unknown>,
+    directKey: string,
+    embedKey: string,
+    slugKey: string,
+  ) => {
+    if (!normalizeUrl(row[directKey]) && !normalizeUrl(row[embedKey])) return false;
+    const healthState = matchingHealthState(row, directKey, embedKey, slugKey);
+    return healthState === undefined || healthState;
+  };
+
   return Boolean(
-    (movieEpisodes || []).some((row) => String(row.source || '').toLowerCase() !== 'hidden' && hasUrl(row, 'link_m3u8', 'link_embed'))
-    || (episodes || []).some((row) => hasUrl(row, 'link_m3u8', 'link_embed'))
-    || (streams || []).some((row) => row.is_active !== false && hasUrl(row, 'stream_url', 'embed_url'))
+    (movieEpisodes || []).some((row) => (
+      String(row.source || '').toLowerCase() !== 'hidden'
+      && legacyRowIsUsable(row, 'link_m3u8', 'link_embed', 'slug')
+    ))
+    || (episodes || []).some((row) => legacyRowIsUsable(row, 'link_m3u8', 'link_embed', 'episode_slug'))
+    || streamRows.some((row) => (
+      row.is_active !== false
+      && !streamIsSuppressed(row)
+      && Boolean(normalizeUrl(row.stream_url) || normalizeUrl(row.embed_url))
+    ))
   );
 }
 
@@ -1170,8 +1232,13 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
         is_active: true,
         health_status: 'unchecked',
         failure_count: 0,
-        last_error: '',
+        // A provider response is not proof that its media URL plays. Keep a
+        // newly introduced URL out of public playback until stream-health-check
+        // validates its playlist/embed independently. Unchanged rows never
+        // reach this branch, so prior success/failure evidence is preserved.
+        last_error: `Provider verification pending: ${provider.sourceSite}`,
         last_checked_at: null,
+        priority: 1,
       });
     }
   }

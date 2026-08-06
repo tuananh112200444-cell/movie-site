@@ -70,7 +70,7 @@ if (ophimSync.includes("delete().neq('slug', '__never__')") || ophimSync.include
 if (!homeProxy.includes('stale-if-error=86400') || !searchProxy.includes('stale-if-error=86400') || !detailProxy.includes('stale-if-error=86400')) {
   failures.push('critical read APIs do not preserve last-known-good data during upstream failure');
 }
-if (!cloudflareWorker.includes('?rev=canonical-v4')) {
+if (!cloudflareWorker.includes('?rev=canonical-v5')) {
   failures.push('Cloudflare detail cache was not versioned after the canonical alias contract changed');
 }
 if (
@@ -120,6 +120,19 @@ if (!detailProxy.includes('hasUnhealthyExpectedCoverage') || !detailProxy.includ
 if (!detailProxy.includes('hasUnverifiedSingleProviderCoverage') || !detailProxy.includes('shouldRepairUnverifiedCoverage')) {
   failures.push('unchecked single-provider catalogues cannot request an independent playback backup');
 }
+if (
+  !detailProxy.includes('hasOnlyFullPlaceholderCoverage') ||
+  !detailProxy.includes('shouldRepairPlaceholderSeries') ||
+  !detailProxy.includes('initialExternalMax < expectedEpisode || shouldRepairPlaceholderSeries')
+) {
+  failures.push('multi-episode TV catalogues can still be mistaken for a complete single `full` stream');
+}
+if (
+  !playerBox.includes('hlsCluster !== embedCluster') ||
+  !playerBox.includes('Cross-origin 404/504 pages still')
+) {
+  failures.push('fatal media can still fall into an infinite-loading iframe from the same provider cluster');
+}
 if (!streamHealth.includes('streamc\\.xyz') || !streamHealth.includes("Referer = 'https://khophim.org/'")) {
   failures.push('StreamC health probes do not use the production playback referer');
 }
@@ -130,7 +143,8 @@ if (!streamHealth.includes('probeStreamRow') || !streamHealth.includes('HTML 404
   failures.push('stream health does not validate both stored playback URLs and HTML error pages');
 }
 if (
-  !streamHealth.includes(".like('last_error', 'Viewer telemetry:%')") ||
+  !streamHealth.includes("hotCandidateQuery('Viewer telemetry:%')") ||
+  !streamHealth.includes("hotCandidateQuery('Provider verification pending:%')") ||
   !streamHealth.includes('It must outrank merely recent catalogue updates') ||
   !telemetryHotQueue.includes('streams_viewer_telemetry_hot_queue_idx') ||
   !telemetryHotQueue.includes('stream-health-hot-every-5-minutes') ||

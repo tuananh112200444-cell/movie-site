@@ -4,6 +4,7 @@ const SOURCE_HEALTH_FETCH_TTL_MS = 5 * 60 * 1000;
 const SOURCE_HEALTH_TIMEOUT_MS = 3500;
 const SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000;
 export const SOURCE_HEALTH_UPDATED_EVENT = 'kp:source-health-updated';
+let sourceHealthInflight: Promise<void> | null = null;
 
 type SourceHealthHost = {
   host?: string;
@@ -62,7 +63,7 @@ function getSourceCluster(urlOrHost?: string): string {
     // Callers may already provide a hostname.
   }
   if (/opstream|ophim/.test(host)) return 'ophim';
-  if (/phimapi|kkphim/.test(host)) return 'kkphim';
+  if (/phimapi|kkphim|phim1280/.test(host)) return 'kkphim';
   return host;
 }
 
@@ -72,7 +73,7 @@ function shouldFetchSourceHealth(): boolean {
   return !lastFetch || Date.now() - lastFetch > SOURCE_HEALTH_FETCH_TTL_MS;
 }
 
-export async function warmPlayerSourceHealth(): Promise<void> {
+async function fetchPlayerSourceHealth(): Promise<void> {
   if (!shouldFetchSourceHealth()) return;
   const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined;
   if (!supabaseUrl) return;
@@ -116,6 +117,15 @@ export async function warmPlayerSourceHealth(): Promise<void> {
   } finally {
     window.clearTimeout(timeout);
   }
+}
+
+export function warmPlayerSourceHealth(): Promise<void> {
+  if (!shouldFetchSourceHealth()) return Promise.resolve();
+  if (sourceHealthInflight) return sourceHealthInflight;
+  sourceHealthInflight = fetchPlayerSourceHealth().finally(() => {
+    sourceHealthInflight = null;
+  });
+  return sourceHealthInflight;
 }
 
 export function isRecentlyBadSourceHost(urlOrHost?: string): boolean {
