@@ -413,10 +413,15 @@ export default function SearchPage() {
     }
 
     try {
+      // Start the independent mirrors immediately.  The canonical index is
+      // still preferred when it answers, but a stalled Supabase request must
+      // not postpone the only usable results for several seconds.
+      const externalSearch = searchMoviesMultiSource(normalizedKeyword, pg, searchCtrl.signal)
+        .catch(() => ({ status: false, items: [], pagination: { currentPage: pg, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } }));
       const directSupabaseItems = pg === 1
         ? await searchMoviesInSupabase(normalizedKeyword, {
             limit: 24,
-            timeoutMs: 7500,
+            timeoutMs: 1400,
             minLength: 2,
             signal: searchCtrl.signal,
           }).catch(() => [])
@@ -432,8 +437,7 @@ export default function SearchPage() {
       // truth. External mirrors run only when Supabase has no answer (or for
       // explicit pagination), so common searches never wait 2.8s for them.
       if (items.length === 0 || pg > 1) {
-        const external = await searchMoviesMultiSource(normalizedKeyword, pg, searchCtrl.signal)
-          .catch(() => ({ status: false, items: [], pagination: { currentPage: pg, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } }));
+        const external = await externalSearch;
         items = pg === 1
           ? mergeMoviesUnique([...knownAliasItems, ...(external.items ?? [])])
           : (external.items ?? []);
