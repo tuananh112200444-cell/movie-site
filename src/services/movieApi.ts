@@ -1076,22 +1076,37 @@ async function fetchMoviesFromSupabaseList(params: {
 }
 
 export async function fetchNewMovies(page = 1): Promise<MovieListResponse> {
-  const supabaseResult = await fetchMoviesFromSupabaseList({ page, sortField: 'modified.time', sortType: 'desc' });
-  if (supabaseResult) return supabaseResult;
-  return fetchNewMoviesMultiSource(page);
+  return fetchFreshMovieList(page);
 }
 
 export async function fetchLatestReleaseMovies(page = 1): Promise<MovieListResponse> {
   // "Phim mới" means titles with the most recently synced release/episode, not
   // the highest release year. The source sync updates updated_at when its
   // episode list changes, so keep that ordering intact all the way to the UI.
-  const supabaseResult = await fetchMoviesFromSupabaseList({ page, sortField: 'modified.time', sortType: 'desc' });
-  if (supabaseResult) return supabaseResult;
-  const result = await fetchNewMoviesMultiSource(page);
+  const result = await fetchFreshMovieList(page);
   return {
     ...result,
     items: sortListItems(result.items ?? [], 'modified.time', 'desc'),
   };
+}
+
+/**
+ * Start the primary catalog and existing upstream fallback together. During a
+ * database slowdown, visitors receive the first valid current list rather
+ * than waiting for the catalog timeout before fallback work even begins.
+ */
+async function fetchFreshMovieList(page: number): Promise<MovieListResponse> {
+  const supabasePromise = fetchMoviesFromSupabaseList({ page, sortField: 'modified.time', sortType: 'desc' });
+  const upstreamPromise = fetchNewMoviesMultiSource(page);
+  const winner = await raceFirstValidWithTimeout<MovieListResponse>([
+    supabasePromise.then((result) => ((result?.items?.length ?? 0) > 0 ? result : null)).catch(() => null),
+    upstreamPromise.then((result) => ((result.items?.length ?? 0) > 0 ? result : null)).catch(() => null),
+  ], 5_500);
+
+  if (winner) return winner;
+
+  const [supabaseResult, upstreamResult] = await Promise.all([supabasePromise, upstreamPromise]);
+  return supabaseResult ?? upstreamResult;
 }
 
 export async function fetchMoviesByType(
@@ -5372,7 +5387,7 @@ export async function fetchHomePageData(
   const abortFromCaller = () => controller.abort(options.signal?.reason);
   if (options.signal?.aborted) controller.abort(options.signal.reason);
   else options.signal?.addEventListener('abort', abortFromCaller, { once: true });
-  const timer = setTimeout(() => controller.abort(), 12000);
+  const timer = setTimeout(() => controller.abort(), 20_000);
 
   try {
     const res = await fetch(url.toString(), {

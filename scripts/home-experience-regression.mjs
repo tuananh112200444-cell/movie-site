@@ -83,6 +83,23 @@ if (!smartCache.includes("prefix: 'kp_home_proxy_', ttl: 30 * MINUTE")) {
 if (!home.includes('loadStaticHomeFallback(fallbackController.signal, DESKTOP_HOME_SECTIONS)')) {
   failures.push('Mobile static fallback must include every shelf for fast scrolling.');
 }
+for (const [label, source] of [
+  ['homepage fallback', home],
+  ['lazy shelf fallback', lazySection],
+]) {
+  if (!source.includes('MAX_STATIC_HOME_FALLBACK_AGE_MS') || !source.includes("cache: 'no-store'")) {
+    failures.push(`${label} must reject an old static snapshot and bypass the browser cache.`);
+  }
+}
+for (const snippet of [
+  'const timer = setTimeout(() => controller.abort(), 20_000);',
+  'const upstreamPromise = fetchNewMoviesMultiSource(page);',
+  'raceFirstValidWithTimeout<MovieListResponse>',
+]) {
+  if (!movieApi.includes(snippet)) {
+    failures.push(`Fresh movie lists must not wait on a slow primary source: ${snippet}`);
+  }
+}
 if (!home.includes("'onlyflix-moi'") || !home.includes('title="Phim Đang Chiếu Rạp"')) {
   failures.push('Homepage is missing the dedicated OnlyFlix cinema shelf.');
 }

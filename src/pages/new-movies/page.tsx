@@ -14,7 +14,7 @@ import { movieDetailUrl } from '@/utils/slugEncoder';
 import type { Movie } from '@/types/movie';
 
 const PAGE_SIZE = 36;
-const NEW_MOVIES_INITIAL_TIMEOUT_MS = 4500;
+const NEW_MOVIES_INITIAL_TIMEOUT_MS = 6000;
 const NEW_MOVIES_TYPES = ['phim-le', 'phim-bo', 'phim-chieu-rap', 'hoat-hinh', 'tv-shows'] as const;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
