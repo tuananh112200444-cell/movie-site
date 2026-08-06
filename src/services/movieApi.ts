@@ -4108,7 +4108,7 @@ export function getSourceFailureClusterFromUrl(value = ''): string {
   if (host === 'player.blvietsub.com') return 'stable_embed';
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) return 'khophim_direct';
   if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) return 'ophim';
-  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) {
+  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || host.includes('phim1280') || lower.includes('kkphimplayer')) {
     return 'kkphim';
   }
   if (host.includes('versondd.top') || host.includes('short.icu')) return 'known_bad';
@@ -4132,7 +4132,7 @@ export function getEpisodeSourceKind(ep?: EpisodeData | null): EpisodeSourceKind
   if (host.includes('versondd.top') || host.includes('short.icu')) return 'known_bad';
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) return 'own_direct';
   if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) return 'ophim';
-  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) {
+  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || host.includes('phim1280') || lower.includes('kkphimplayer')) {
     return 'kkphim';
   }
   if (host.includes('dailymotion.com') || host === 'dai.ly') return 'dailymotion';
@@ -4763,6 +4763,95 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 }
 
+function normalizeStoredPlaybackUrl(value: unknown): string {
+  const normalized = String(value || '').trim().replace(/&amp;/g, '&').replace(/\/+$/, '');
+  return /^https?:\/\//i.test(normalized) ? normalized : '';
+}
+
+function hasStoredPlaybackHttpUrl(episode: EpisodeData): boolean {
+  return Boolean(
+    normalizeStoredPlaybackUrl(episode.link_m3u8)
+    || normalizeStoredPlaybackUrl(episode.link_embed),
+  );
+}
+
+function buildStoredStreamHealthIndex(rows: Array<Record<string, unknown>>): Map<string, Record<string, unknown>> {
+  const index = new Map<string, Record<string, unknown>>();
+  const setPreferred = (key: string, row: Record<string, unknown>) => {
+    const existing = index.get(key);
+    if (!existing || (shouldSuppressStoredStream(existing) && !shouldSuppressStoredStream(row))) {
+      index.set(key, row);
+    }
+  };
+  for (const row of rows) {
+    const urls = [row.stream_url, row.embed_url]
+      .map(normalizeStoredPlaybackUrl)
+      .filter(Boolean);
+    for (const url of urls) setPreferred(`url:${url}`, row);
+
+    const server = normalizeEpisodeKeyPart(String(row.server_name || 'Nguá»“n'));
+    const slug = normalizeEpisodeKeyPart(String(row.episode_slug || ''));
+    if (!server || !slug) continue;
+    setPreferred(`server:${server}|slug:${slug}`, row);
+    const episodeNumber = extractEpNumber(slug);
+    if (Number.isFinite(episodeNumber)) setPreferred(`server:${server}|num:${episodeNumber}`, row);
+  }
+  return index;
+}
+
+function getStoredEpisodeHealthRow(
+  index: Map<string, Record<string, unknown>>,
+  serverName: string,
+  slug: string,
+  episodeNumber: number,
+  episode: EpisodeData,
+): Record<string, unknown> | null {
+  for (const value of [episode.link_m3u8, episode.link_embed]) {
+    const url = normalizeStoredPlaybackUrl(value);
+    if (url && index.has(`url:${url}`)) return index.get(`url:${url}`) || null;
+  }
+  const server = normalizeEpisodeKeyPart(serverName || 'Nguá»“n');
+  const normalizedSlug = normalizeEpisodeKeyPart(slug || '');
+  if (server && normalizedSlug && index.has(`server:${server}|slug:${normalizedSlug}`)) {
+    return index.get(`server:${server}|slug:${normalizedSlug}`) || null;
+  }
+  if (server && Number.isFinite(episodeNumber) && index.has(`server:${server}|num:${episodeNumber}`)) {
+    return index.get(`server:${server}|num:${episodeNumber}`) || null;
+  }
+  return null;
+}
+
+function shouldSuppressStoredStream(row: Record<string, unknown> | null): boolean {
+  if (!row) return false;
+  if (String(row.last_error || '').startsWith('Provider verification pending:')) return true;
+  const healthStatus = String(row.health_status || '').trim().toLowerCase();
+  const failureCount = Number(row.failure_count || 0);
+  const embedUrl = String(row.embed_url || '').trim();
+  const browserManagedProbeException =
+    /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl) ||
+    /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl);
+  if (healthStatus === 'blocked' && !browserManagedProbeException) return true;
+  return healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 3);
+}
+
+function attachStoredStreamHealth(episode: EpisodeData, row: Record<string, unknown> | null): EpisodeData {
+  if (!row) return episode;
+  const healthStatus = String(row.health_status || 'unchecked').trim().toLowerCase();
+  const lastError = String(row.last_error || '');
+  return {
+    ...episode,
+    link_m3u8: healthStatus === 'degraded' && lastError.startsWith('Direct stream failed:')
+      ? ''
+      : episode.link_m3u8,
+    source_health_status: healthStatus || 'unchecked',
+    source_response_time_ms: Number(row.response_time_ms || 0) || undefined,
+    source_failure_count: Number(row.failure_count || 0) || undefined,
+    source_priority: Number(row.priority || 0) || undefined,
+    source_last_checked_at: String(row.last_checked_at || '') || undefined,
+    source_last_error: lastError || undefined,
+  };
+}
+
 /**
  * Query & merge episodes from ALL three tables:
  * - movie_episodes (admin manual)
@@ -4806,9 +4895,8 @@ export async function getMergedEpisodes(
       .abortSignal(querySignal),
     supabase
       .from('streams')
-      .select('stream_url, embed_url, episode_slug, server_name, subtitle_url, priority, health_status, response_time_ms, failure_count, last_checked_at, last_error, audio_type')
+      .select('stream_url, embed_url, episode_slug, server_name, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count, last_checked_at, last_error, audio_type')
       .eq('movie_id', movieId)
-      .eq('is_active', true)
       .order('priority', { ascending: false })
       .order('response_time_ms', { ascending: true, nullsFirst: false })
       .abortSignal(querySignal),
@@ -4828,6 +4916,9 @@ export async function getMergedEpisodes(
   const serverMap = new Map<string, EpisodeData[]>();
   const seen = new Set<string>();
   let maxEpisodeNumber = 0;
+  const allStreamRows = (streams ?? []) as Array<Record<string, unknown>>;
+  const activeStreamRows = allStreamRows.filter((row) => row.is_active !== false);
+  const storedStreamHealthIndex = buildStoredStreamHealthIndex(allStreamRows);
 
   const movieEpisodeRows = [...(meRows ?? [])].sort((a, b) => {
     const aHidden = isHiddenEpisodeSource(a.source);
@@ -4850,7 +4941,7 @@ export async function getMergedEpisodes(
     const isHidden = isHiddenEpisodeSource(source);
     const sourceOrigin: 'admin' | 'ophim' = ['ophim', 'phimapi', 'kkphim'].includes(source.toLowerCase()) ? 'ophim' : 'admin';
     if (!isHidden && num > maxEpisodeNumber) maxEpisodeNumber = num;
-    const epData: EpisodeData = {
+    let epData: EpisodeData = {
       name: ep.episode_name || `Tập ${num}`,
       slug,
       filename: '',
@@ -4879,8 +4970,15 @@ export async function getMergedEpisodes(
       is_hidden: isHidden,
     });
     const alreadySeen = hasSeenEpisode(seen, serverName, slug, num, epData.name);
+    if (isHidden) {
+      markSeenEpisode(seen, serverName, slug, num, epData.name);
+      continue;
+    }
+    if (!hasStoredPlaybackHttpUrl(epData)) continue;
+    const healthRow = getStoredEpisodeHealthRow(storedStreamHealthIndex, serverName, slug, num, epData);
+    if (shouldSuppressStoredStream(healthRow) || alreadySeen) continue;
+    epData = attachStoredStreamHealth(epData, healthRow);
     markSeenEpisode(seen, serverName, slug, num, epData.name);
-    if (isHidden || alreadySeen) continue;
 
     if (!serverMap.has(serverName)) serverMap.set(serverName, []);
     serverMap.get(serverName)!.push(epData);
@@ -4924,6 +5022,10 @@ export async function getMergedEpisodes(
         if (epNum > maxEpisodeNumber && epNum !== Infinity) maxEpisodeNumber = epNum;
         const epSlug = ep.slug || ep.name || '';
         const numericEp = epNum === Infinity ? 0 : epNum;
+        if (!hasStoredPlaybackHttpUrl(ep)) continue;
+        const healthRow = getStoredEpisodeHealthRow(storedStreamHealthIndex, serverName, epSlug, numericEp, ep);
+        if (shouldSuppressStoredStream(healthRow)) continue;
+        const healthyEpisode = attachStoredStreamHealth(ep, healthRow);
         if (hasSeenEpisode(seen, serverName, epSlug, numericEp, ep.name || '')) continue;
         markSeenEpisode(seen, serverName, epSlug, numericEp, ep.name || '');
 
@@ -4933,8 +5035,8 @@ export async function getMergedEpisodes(
           episode_name: ep.name || '',
           slug: epSlug,
           server_name: serverName,
-          link_m3u8: ep.link_m3u8 || '',
-          link_embed: ep.link_embed || '',
+          link_m3u8: healthyEpisode.link_m3u8 || '',
+          link_embed: healthyEpisode.link_embed || '',
           subtitle_url: ep.subtitle_url || '',
           thumbnail_url: '',
           duration: '',
@@ -4945,8 +5047,8 @@ export async function getMergedEpisodes(
 
         if (!serverMap.has(serverName)) serverMap.set(serverName, []);
         serverMap.get(serverName)!.push({
-          ...ep,
-          link_embed: normalizeDailymotionUrl(ep.link_embed || ''),
+          ...healthyEpisode,
+          link_embed: normalizeDailymotionUrl(healthyEpisode.link_embed || ''),
           episode_number: numericEp || ep.episode_number,
         });
       }
@@ -4957,6 +5059,10 @@ export async function getMergedEpisodes(
 
     if (num > maxEpisodeNumber) maxEpisodeNumber = num;
 
+    if (!hasStoredPlaybackHttpUrl(epData)) continue;
+    const healthRow = getStoredEpisodeHealthRow(storedStreamHealthIndex, serverName, slug, num, epData);
+    if (shouldSuppressStoredStream(healthRow)) continue;
+    epData = attachStoredStreamHealth(epData, healthRow);
     if (hasSeenEpisode(seen, serverName, slug, num, epData.name)) continue;
     markSeenEpisode(seen, serverName, slug, num, epData.name);
 
@@ -4981,13 +5087,14 @@ export async function getMergedEpisodes(
   }
 
   // 3. Streams table (legacy auto-sync) — ONLY include if stream_url or embed_url is non-empty
-  for (const s of streams ?? []) {
+  for (const s of activeStreamRows) {
     const sm = s as Record<string, unknown>;
+    if (shouldSuppressStoredStream(sm)) continue;
     const streamUrl = String(sm.stream_url || '').trim();
     const embedUrl = String(sm.embed_url || '').trim();
 
     // STRICT: skip dead streams — no playable URL
-    if (!streamUrl && !embedUrl) continue;
+    if (!normalizeStoredPlaybackUrl(streamUrl) && !normalizeStoredPlaybackUrl(embedUrl)) continue;
     const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
     const failureCount = Number(sm.failure_count || 0);
     const lastError = String(sm.last_error || '');

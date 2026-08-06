@@ -131,7 +131,32 @@ function getAdvertisedCurrentEpisode(detail: MovieDetailResponse): number {
   }, 0);
 }
 
+function isClearlyEpisodicMovie(movie: MovieDetailResponse['movie']): boolean {
+  const typedMovie = movie as MovieDetailResponse['movie'] & {
+    total_episodes?: number | string;
+    tmdb_media_type?: string;
+  };
+  const kind = `${typedMovie.type || ''} ${typedMovie.tmdb_media_type || ''}`.toLowerCase();
+  const advertisedTotal = Math.max(
+    Number(typedMovie.total_episodes || 0) || 0,
+    Number(String(typedMovie.episode_total || '').match(/\d+/)?.[0] || 0),
+  );
+  return advertisedTotal > 1 && /phim-bo|series|tv/.test(kind);
+}
+
+function hasOnlyFullPlaceholderEpisodes(detail: MovieDetailResponse): boolean {
+  if (!isClearlyEpisodicMovie(detail.movie)) return false;
+  const playable = (detail.episodes ?? [])
+    .flatMap((server) => server.server_data ?? [])
+    .filter((episode) => hasPlayableUrl(episode) && !episode.is_scheduled);
+  return playable.length > 0 && playable.every((episode) => {
+    const label = `${episode.slug || ''} ${episode.name || ''}`.trim().toLowerCase();
+    return /\bfull\b/.test(label);
+  });
+}
+
 function shouldRefreshEpisodeDetail(detail: MovieDetailResponse): boolean {
+  if (hasOnlyFullPlaceholderEpisodes(detail)) return true;
   const displayedCurrent = getAdvertisedCurrentEpisode(detail);
   if (displayedCurrent < 2) return false;
   const playableCurrent = getHighestEpisodeFromServers(deduplicateAndLimitServers(detail.episodes ?? []));
@@ -157,6 +182,17 @@ function normalizeRequestedEpisode(routeEpisode?: string): string {
   } catch {
     return String(routeEpisode).trim().toLowerCase();
   }
+}
+
+function warmSourceHealthWithinStartupBudget(): Promise<void> {
+  const health = warmPlayerSourceHealth();
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(resolve, 900);
+    health.finally(() => {
+      window.clearTimeout(timer);
+      resolve();
+    });
+  });
 }
 
 function getLatestPlayableEpisode(episodes: EpisodeData[]): EpisodeData | null {
@@ -281,8 +317,16 @@ export default function MovieDetailPage() {
     setRelated([]);
     window.scrollTo({ top: 0, behavior: 'auto' });
 
-    fetchMovieDetail(slug, isFresh, source)
-      .then((data) => {
+    // Start detail and global source-health requests together. On a watch URL,
+    // spend at most 900ms waiting for known provider outages before selecting
+    // the first source; a slow health endpoint can never block the page longer.
+    const detailRequest = fetchMovieDetail(slug, isFresh, source);
+    const initialSourceHealth = isWatchPage
+      ? warmSourceHealthWithinStartupBudget()
+      : Promise.resolve();
+
+    Promise.all([detailRequest, initialSourceHealth])
+      .then(([data]) => {
         if (cancelled) return;
         if (!data) {
           setError(`Không thể tải thông tin phim "${slug}". Phim không tồn tại hoặc đang được cập nhật.`);
@@ -379,7 +423,11 @@ export default function MovieDetailPage() {
         return /\bfull\b/.test(label) && !label.includes('trailer');
       })
     );
-    if (hasPlayableFullMovie && String(detail.movie.episode_current || '').trim().toLowerCase() !== 'full') {
+    if (
+      hasPlayableFullMovie &&
+      !isClearlyEpisodicMovie(detail.movie) &&
+      String(detail.movie.episode_current || '').trim().toLowerCase() !== 'full'
+    ) {
       return {
         ...detail.movie,
         current_episode: 1,
@@ -472,6 +520,20 @@ export default function MovieDetailPage() {
     () => normalizeRequestedEpisode(routeEpisode),
     [routeEpisode],
   );
+
+  // Some old TMDB TV rows were incorrectly stored as a single `full` movie.
+  // Once verified numbered episodes are available, keep legacy links working
+  // by canonically moving `/full` to episode 1 instead of replaying the stale
+  // placeholder stream.
+  useEffect(() => {
+    if (!isWatchPage || requestedEpisode !== 'full' || !slug || !detail?.movie) return;
+    if (!isClearlyEpisodicMovie(detail.movie)) return;
+    const numberedEpisodes = detailEpisodeLinks.filter((episode) => getEpisodeNumber(episode) > 0);
+    if (numberedEpisodes.length < 2) return;
+    const firstEpisode = numberedEpisodes[0];
+    const episodePath = encodeURIComponent(firstEpisode.slug || firstEpisode.name || 'tap-1');
+    navigate(`/xem-phim/${slug}/${episodePath}`, { replace: true });
+  }, [detail?.movie, detailEpisodeLinks, isWatchPage, navigate, requestedEpisode, slug]);
   const requestedEpisodeUnavailable = useMemo(
     () => Boolean(
       isWatchPage &&

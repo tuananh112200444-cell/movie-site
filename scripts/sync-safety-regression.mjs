@@ -36,6 +36,7 @@ const motchill = fs.readFileSync('supabase/functions/sync-motchill-feed/index.ts
 const onlyflix = fs.readFileSync('supabase/functions/sync-onlyflix-feed/index.ts', 'utf8');
 const ophim = fs.readFileSync('supabase/functions/sync-ophim-movies/index.ts', 'utf8');
 const episodeRepairPriority = fs.readFileSync('supabase/migrations/20260805170000_prioritize_public_episode_repairs.sql', 'utf8');
+const unifiedPlaybackHealth = fs.readFileSync('supabase/migrations/20260805205000_unify_public_playback_health.sql', 'utf8');
 if (!ophim.includes('isTrailerEpisode(episode)') || !ophim.includes('if (isTrailerEpisode(ep)) continue')) {
   failures.push('OPhim sync must not treat a trailer episode as playable movie coverage');
 }
@@ -45,6 +46,29 @@ if (
   || !ophim.includes('is_published: persistedPlayableCoverage && result.hasImage')
 ) {
   failures.push('OPhim sync must publish only after playback is persisted in the database');
+}
+if (
+  !ophim.includes("select('is_active,server_name,episode_slug,stream_url,embed_url,health_status,failure_count,last_error')")
+  || !ophim.includes('matchingHealthState')
+  || !ophim.includes('streamIsSuppressed')
+) {
+  failures.push('OPhim sync can republish a legacy episode URL already suppressed by stream health');
+}
+if (
+  !ophim.includes('Provider verification pending:')
+  || !ophim.includes("last_error: `Provider verification pending: ${provider.sourceSite}`")
+  || !unifiedPlaybackHealth.includes("stream.last_error not like 'Provider verification pending:%'")
+) {
+  failures.push('A newly introduced provider URL can become public before independent playback verification');
+}
+if (
+  !unifiedPlaybackHealth.includes('movie_has_usable_persisted_playback')
+  || !unifiedPlaybackHealth.includes('create or replace function public.reconcile_catalog_source_repairs()')
+  || !unifiedPlaybackHealth.includes('create or replace function public.quarantine_exhausted_catalog_playback()')
+  || !unifiedPlaybackHealth.includes('No usable persisted playback candidate')
+  || !unifiedPlaybackHealth.includes("~* '^https?://'")
+) {
+  failures.push('Catalogue repair and publication do not share one persisted playback-health truth');
 }
 if (!motchill.includes('Additive-only publication contract')) {
   failures.push('Motchill is missing its additive-only publication contract');

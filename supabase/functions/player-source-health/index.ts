@@ -99,7 +99,7 @@ function getSourceCluster(host: string): string {
   if (host.includes('dailymotion.com') || host === 'dai.ly') return 'dailymotion';
   if (host.includes('video.khophim.org') || host.includes('supabase.co')) return 'khophim_direct';
   if (host.includes('opstream') || host.includes('ophim')) return 'ophim';
-  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim')) return 'kkphim';
+  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || host.includes('phim1280')) return 'kkphim';
   if (host.includes('versondd.top')) return 'known_bad';
   return host;
 }

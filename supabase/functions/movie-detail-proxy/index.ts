@@ -143,6 +143,79 @@ function getMaxEpisodeNumberFromServerMap(serverMap: Map<string, unknown[]>): nu
   return max;
 }
 
+function isClearlyEpisodicMovie(movie: Record<string, unknown> | null | undefined): boolean {
+  if (!movie) return false;
+  const kind = `${movie.type || ''} ${movie.tmdb_media_type || ''}`.toLowerCase();
+  const advertisedTotal = Math.max(
+    Number(movie.total_episodes || 0) || 0,
+    extractMaxEpNumber(String(movie.episode_total || '')),
+  );
+  return advertisedTotal > 1 && /phim-bo|series|tv/.test(kind);
+}
+
+function hasOnlyFullPlaceholderCoverage(
+  movie: Record<string, unknown> | null | undefined,
+  serverMap: Map<string, unknown[]>,
+): boolean {
+  if (!isClearlyEpisodicMovie(movie)) return false;
+  // Without a stable external identity, `Full` may be a legitimate manual
+  // compilation or special. Do not replace it from a title-only guess.
+  if (!String(movie?.tmdb_id || '').trim()) return false;
+  const playableLabels: string[] = [];
+  for (const rows of serverMap.values()) {
+    for (const raw of rows) {
+      const ep = raw as Record<string, unknown>;
+      if (!String(ep.link_m3u8 || '').trim() && !String(ep.link_embed || '').trim()) continue;
+      playableLabels.push(`${ep.slug || ''} ${ep.name || ''}`.trim().toLowerCase());
+    }
+  }
+  return playableLabels.length > 0 && playableLabels.every((label) => /\bfull\b/.test(label));
+}
+
+function removeLegacyUncheckedFullPlaceholders(
+  movie: Record<string, unknown> | null | undefined,
+  serverMap: Map<string, unknown[]>,
+): void {
+  if (!isClearlyEpisodicMovie(movie)) return;
+  const numberedEpisodes = new Set<number>();
+  for (const rows of serverMap.values()) {
+    for (const raw of rows) {
+      const ep = raw as Record<string, unknown>;
+      const number = extractEpNumber(String(ep.slug || ep.name || ''));
+      if (number > 0) numberedEpisodes.add(number);
+    }
+  }
+  if (numberedEpisodes.size < 2) return;
+
+  for (const [serverName, rows] of serverMap) {
+    const filtered = rows.filter((raw) => {
+      const ep = raw as Record<string, unknown>;
+      const label = `${ep.slug || ''} ${ep.name || ''}`.trim().toLowerCase();
+      const provider = String(ep.source_provider || '').trim().toLowerCase();
+      const health = String(ep.source_health_status || '').trim().toLowerCase();
+      // Keep manual/special Full editions. Only hide the old OPhim placeholder
+      // pattern that was never independently checked and conflicts with the
+      // verified numbered series catalogue.
+      return !(/\bfull\b/.test(label) && provider === 'ophim' && health === 'unchecked');
+    });
+    if (filtered.length > 0) serverMap.set(serverName, filtered);
+    else serverMap.delete(serverName);
+  }
+}
+
+function isPlaceholderSeriesDetail(payload: Record<string, unknown>): boolean {
+  const movie = payload.movie as Record<string, unknown> | undefined;
+  if (!isClearlyEpisodicMovie(movie)) return false;
+  const episodes = Array.isArray(payload.episodes)
+    ? payload.episodes as Array<{ server_data?: unknown[] }>
+    : [];
+  const labels = episodes.flatMap((server) => (server.server_data ?? []).map((raw) => {
+    const ep = raw as Record<string, unknown>;
+    return `${ep.slug || ''} ${ep.name || ''}`.trim().toLowerCase();
+  }));
+  return labels.length > 0 && labels.every((label) => /\bfull\b/.test(label));
+}
+
 function isDetailEpisodeIncomplete(payload: Record<string, unknown>): boolean {
   const movie = payload.movie as Record<string, unknown> | undefined;
   const expected = getExpectedEpisodeNumber(movie);
@@ -261,6 +334,7 @@ function getEpisodeHealthRow(
 
 function shouldSuppressUnhealthyStream(row: Record<string, unknown> | null): boolean {
   if (!row) return false;
+  if (String(row.last_error || '').startsWith('Provider verification pending:')) return true;
   const healthStatus = String(row.health_status || '').toLowerCase();
   const failureCount = Number(row.failure_count || 0);
   const embedUrl = String(row.embed_url || row.link_embed || '').trim();
@@ -272,6 +346,7 @@ function shouldSuppressUnhealthyStream(row: Record<string, unknown> | null): boo
 }
 
 function episodeHealthIsUsable(ep: Record<string, unknown>): boolean {
+  if (String(ep.source_last_error || '').startsWith('Provider verification pending:')) return false;
   const status = String(ep.source_health_status || '').trim().toLowerCase();
   const failures = Number(ep.source_failure_count || 0);
   if (status === 'dead') return false;
@@ -448,25 +523,19 @@ function isKnownBlockedEmbedHost(value = ''): boolean {
 async function readCachedDetail(
   supabase: ReturnType<typeof createClient>,
   slug: string,
+  liveMovie: Record<string, unknown> | null,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const [{ data }, { data: liveMovie }] = await Promise.all([
-      supabase
-        .from('movie_api_cache')
-        .select('detail_json, expires_at')
-        .eq('slug', slug)
-        .abortSignal(timeoutSignal(1500))
-        .maybeSingle(),
-      supabase
-        .from('movies')
-        .select('current_episode,episode_current')
-        .eq('slug', slug)
-        .abortSignal(timeoutSignal(1500))
-        .maybeSingle(),
-    ]);
+    const { data } = await supabase
+      .from('movie_api_cache')
+      .select('detail_json, expires_at')
+      .eq('slug', slug)
+      .abortSignal(timeoutSignal(1500))
+      .maybeSingle();
 
     const row = data as { detail_json?: unknown; expires_at?: string } | null;
     if (!row?.detail_json || !row.expires_at) return null;
+    if (liveMovie && liveMovie.is_published !== true) return null;
     // An expired detail is still the last-known-good publication. Keep serving
     // it during database/upstream incidents; a newer movies.current_episode
     // below invalidates it as soon as verified episode coverage advances.
@@ -829,7 +898,7 @@ async function searchOphimForSlug(keyword: string): Promise<string | null> {
   return candidates[0] ?? null;
 }
 
-async function searchOphimCandidateSlugs(keyword: string, limit = 6): Promise<string[]> {
+async function searchOphimCandidateSlugs(keyword: string, limit = 6, preferredYear = 0): Promise<string[]> {
   const cleanKeyword = String(keyword || '').trim();
   if (!cleanKeyword) return [];
   const urls = [
@@ -837,25 +906,34 @@ async function searchOphimCandidateSlugs(keyword: string, limit = 6): Promise<st
     `https://phimapi.com/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
     `https://ophim.tv/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
   ];
-  const slugs: string[] = [];
-  for (const url of urls) {
+  const providerResults = await Promise.all(urls.map(async (url) => {
     try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => { try { ctrl.abort(); } catch { /* noop */ } }, 4000);
-      const r = await fetch(url, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (!r.ok) continue;
+      const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return [] as string[];
       const data = await r.json() as Record<string, unknown>;
       const d = data as Record<string, unknown>;
       const items = (d?.data as Record<string, unknown>)?.items ?? d?.items ?? [];
-      if (Array.isArray(items) && items.length > 0) {
-        for (const item of items) {
-          const slug = String((item as Record<string, unknown>).slug || '').trim();
-          if (slug && !slugs.includes(slug)) slugs.push(slug);
-          if (slugs.length >= limit) return slugs;
-        }
-      }
-    } catch { /* ignore */ }
+      if (!Array.isArray(items)) return [] as string[];
+      const rankedItems = [...items].sort((a, b) => {
+        if (preferredYear <= 0) return 0;
+        const aYear = Number((a as Record<string, unknown>).year || 0) || 0;
+        const bYear = Number((b as Record<string, unknown>).year || 0) || 0;
+        return Number(bYear === preferredYear) - Number(aYear === preferredYear);
+      });
+      return rankedItems
+        .map((item) => String((item as Record<string, unknown>).slug || '').trim())
+        .filter(Boolean)
+        .slice(0, limit);
+    } catch {
+      return [] as string[];
+    }
+  }));
+  const slugs: string[] = [];
+  for (const providerSlugs of providerResults) {
+    for (const slug of providerSlugs) {
+      if (!slugs.includes(slug)) slugs.push(slug);
+      if (slugs.length >= limit) return slugs;
+    }
   }
   return slugs;
 }
@@ -886,9 +964,26 @@ function isSafeAuxiliaryExternalMatch(
   external: Record<string, unknown> | null | undefined,
 ): boolean {
   if (!primary || !external) return false;
-  const primaryTmdb = String(primary.tmdb_id || '').trim();
-  const externalTmdb = String(external.tmdb_id || '').trim();
-  if (primaryTmdb && externalTmdb && primaryTmdb === externalTmdb) return true;
+  const primaryTmdbObject = primary.tmdb && typeof primary.tmdb === 'object'
+    ? primary.tmdb as Record<string, unknown>
+    : null;
+  const externalTmdbObject = external.tmdb && typeof external.tmdb === 'object'
+    ? external.tmdb as Record<string, unknown>
+    : null;
+  const primaryTmdb = String(primary.tmdb_id || primaryTmdbObject?.id || '').trim();
+  const externalTmdb = String(external.tmdb_id || externalTmdbObject?.id || '').trim();
+  if (primaryTmdb && externalTmdb && primaryTmdb === externalTmdb) {
+    const mediaType = `${primary.tmdb_media_type || primaryTmdbObject?.type || ''} ${external.tmdb_media_type || externalTmdbObject?.type || ''} ${external.type || ''}`.toLowerCase();
+    const primaryYear = Number(primary.year || 0) || 0;
+    const externalYear = Number(external.year || 0) || 0;
+    // TMDB uses one series ID across all seasons. The release year prevents a
+    // season-1 catalogue shell from importing season 2/3 merely because the
+    // series-level TMDB ID is identical.
+    if (/tv|series/.test(mediaType) && primaryYear > 0 && externalYear > 0 && primaryYear !== externalYear) {
+      return false;
+    }
+    return true;
+  }
   return sameMovieYearOrUnknown(primary, external) && hasSharedTitle(primary, external);
 }
 
@@ -913,7 +1008,8 @@ async function fetchVerifiedAuxiliaryExternalDetail(
 
   for (const query of candidates) {
     const directSlugs = /^[a-z0-9-]+$/i.test(query) ? [query] : [];
-    const searchSlugs = await searchOphimCandidateSlugs(query, 5);
+    const preferredYear = Number(movie.year || 0) || 0;
+    const searchSlugs = await searchOphimCandidateSlugs(query, 5, preferredYear);
     for (const candidateSlug of Array.from(new Set([...directSlugs, ...searchSlugs]))) {
       const detail = await fetchExternalMovieDetail(candidateSlug);
       if (!detail || !detailHasPlayableEpisodes(detail)) continue;
@@ -1672,11 +1768,33 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    // An exact private catalogue row is an authoritative quarantine/tombstone.
+    // Do this before either cache lookup or provider fallback so a dead upstream
+    // URL cannot make an intentionally unpublished movie playable again.
+    const { data: exactCatalogMovie, error: exactCatalogError } = await supabase
+      .from('movies')
+      .select('id,is_published,current_episode,episode_current')
+      .eq('slug', slug)
+      .abortSignal(timeoutSignal(1500))
+      .maybeSingle();
+    if (!exactCatalogError && exactCatalogMovie && exactCatalogMovie.is_published !== true) {
+      await supabase.from('movie_api_cache').delete().eq('slug', slug);
+      return jsonResponse({ status: false, message: 'Movie is not currently available' }, 404, {
+        'Cache-Control': 'no-store',
+        'X-Catalog-Quarantine': '1',
+      });
+    }
+
     if (!forceRefresh) {
-      const cachedDetail = await readCachedDetail(supabase, slug);
+      const cachedDetail = await readCachedDetail(
+        supabase,
+        slug,
+        exactCatalogMovie as Record<string, unknown> | null,
+      );
       if (
         cachedDetail?.status &&
         !isDetailEpisodeIncomplete(cachedDetail) &&
+        !isPlaceholderSeriesDetail(cachedDetail) &&
         !hasUntrustedQueerEpisodeServer(cachedDetail)
       ) {
         return jsonResponse(cachedDetail, 200, {
@@ -1913,6 +2031,7 @@ serve(async (req) => {
       // 2c. Streams table — skip dead streams
       for (const s of activeStreams) {
         const sm = s as Record<string, unknown>;
+        if (shouldSuppressUnhealthyStream(sm)) continue;
         if (isQueerSourceMovie && !isTrustedQueerEpisodeSource(sm.source, sm.server_name)) continue;
         const streamUrl = String(sm.stream_url || '').trim();
         const embedUrl = String(sm.embed_url || '').trim();
@@ -1984,6 +2103,14 @@ serve(async (req) => {
       expectedEpisode > 0 && hasUnhealthyExpectedCoverage(serverMap, expectedEpisode);
     const shouldRepairUnverifiedCoverage =
       expectedEpisode > 0 && hasUnverifiedSingleProviderCoverage(serverMap, expectedEpisode);
+    // A TV/series record advertised as multiple episodes must not be accepted
+    // as complete when its only playable row is a legacy `full` placeholder.
+    // Search by stable movie metadata (TMDB/title/year) and require the normal
+    // safe-match check before merging a numbered provider catalogue.
+    const shouldRepairPlaceholderSeries = hasOnlyFullPlaceholderCoverage(
+      (movieData || movie) as Record<string, unknown> | null,
+      serverMap,
+    );
     // A manual refresh is an explicit request to re-check the known BLVietsub
     // source. It lets a completed series catch its final episode even when
     // its old database badge was internally consistent.
@@ -1991,12 +2118,26 @@ serve(async (req) => {
       forceRefresh && isBlvietsubMovieRecord((movieData || movie) as Record<string, unknown>) &&
       Boolean(getBlvietsubMovieUrl((movieData || movie) as Record<string, unknown>));
     let repairTriggered = false;
-    if (shouldRepairOnDemand || shouldForceKnownBlvietsubSync) {
+    const shouldRepairInBackground =
+      shouldRepairOnDemand ||
+      shouldForceKnownBlvietsubSync ||
+      shouldRepairUnhealthyCoverage ||
+      shouldRepairUnverifiedCoverage ||
+      shouldRepairPlaceholderSeries ||
+      shouldCheckFreshOngoingExternal ||
+      shouldCheckRequestedSlugAlias;
+    if (shouldRepairInBackground) {
       repairTriggered = triggerOnDemandEpisodeRepair(
         supabase,
         (movieData || movie) as Record<string, unknown>,
         slug,
-        shouldForceKnownBlvietsubSync ? 'movie_detail_force_refresh' : 'movie_detail_episode_mismatch',
+        shouldForceKnownBlvietsubSync
+          ? 'movie_detail_force_refresh'
+          : shouldRepairUnhealthyCoverage
+            ? 'movie_detail_unhealthy_playback'
+            : shouldRepairUnverifiedCoverage
+              ? 'movie_detail_unverified_playback'
+              : 'movie_detail_episode_mismatch',
       );
     }
 
@@ -2044,23 +2185,25 @@ serve(async (req) => {
       );
     }
 
+    // Never make a usable database-backed player wait for third-party repair.
+    // Provider search can exceed the Cloudflare 4s gateway budget and used to
+    // trip the movie-detail circuit repeatedly for large catalogues. The
+    // repair request above runs in the background; synchronous external lookup
+    // is reserved for the true no-episode/no-database fallback.
     const shouldFetchExternal =
-      !isQueerSourceMovie && (
-        serverMap.size === 0 ||
-        !useSupabase ||
-        shouldRepairOnDemand ||
-        shouldRepairUnhealthyCoverage ||
-        shouldRepairUnverifiedCoverage ||
-        shouldCheckFreshOngoingExternal ||
-        shouldCheckRequestedSlugAlias
-      );
+      !isQueerSourceMovie && (serverMap.size === 0 || !useSupabase || shouldRepairPlaceholderSeries);
 
     if (shouldFetchExternal) {
       let detailSlug = slug;
-      let external = await fetchExternalMovieDetail(detailSlug);
+      // A `full` placeholder has already proven that the requested legacy slug
+      // is not a valid episodic catalogue. Skip that redundant upstream round
+      // trip and resolve a verified title/TMDB/year alias directly.
+      let external = shouldRepairPlaceholderSeries
+        ? null
+        : await fetchExternalMovieDetail(detailSlug);
 
       const initialExternalMax = external ? getMaxEpisodeNumberFromServers(external.episodes) : 0;
-      if (movieData && initialExternalMax < expectedEpisode) {
+      if (movieData && (initialExternalMax < expectedEpisode || shouldRepairPlaceholderSeries)) {
         const verifiedAlias = await fetchVerifiedAuxiliaryExternalDetail(movieData as Record<string, unknown>);
         const verifiedMax = verifiedAlias ? getMaxEpisodeNumberFromServers(verifiedAlias.episodes) : 0;
         if (verifiedAlias && verifiedMax > initialExternalMax) {
@@ -2132,6 +2275,8 @@ serve(async (req) => {
     }
 
     /* ── 4. Sort episodes ── */
+    removeLegacyUncheckedFullPlaceholders(movieData, serverMap);
+
     for (const [, eps] of serverMap) {
       eps.sort((a: { slug?: string; name?: string }, b: { slug?: string; name?: string }) => epSortKey(a) - epSortKey(b));
     }
@@ -2295,11 +2440,12 @@ serve(async (req) => {
       : 'no-store';
 
     if (hasEpisodes && !isIncomplete) {
-      await writeCachedDetail(supabase, slug, response);
       const responseSlug = String(response.movie.slug || '');
-      if (responseSlug && responseSlug !== slug) {
-        await writeCachedDetail(supabase, responseSlug, response);
-      }
+      const cacheWrites = [writeCachedDetail(supabase, slug, response)];
+      if (responseSlug && responseSlug !== slug) cacheWrites.push(writeCachedDetail(supabase, responseSlug, response));
+      // Cache persistence is best-effort and must never consume the viewer's
+      // four-second Cloudflare gateway budget after the response is ready.
+      edgeWaitUntil(Promise.allSettled(cacheWrites));
     }
 
     return jsonResponse(response, 200, {
