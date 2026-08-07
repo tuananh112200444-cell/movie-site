@@ -1337,21 +1337,6 @@ function movieUrlsFromSlugs(slugs: string[]): string[] {
   return uniqueSlugs(slugs).map((slug) => `https://khophim.org/phim/${encodeURIComponent(slug)}`);
 }
 
-async function refreshSearchIndex(supabaseUrl: string, serviceKey: string): Promise<boolean> {
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/search-index-proxy?limit=5000&refresh=1`, {
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        apikey: serviceKey,
-      },
-      signal: AbortSignal.timeout(30000),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function pingChangedMovieUrls(
   supabaseUrl: string,
   serviceKey: string,
@@ -1388,15 +1373,15 @@ async function runSeoAutomation(
   }
 
   await clearCaches(supabase, slugs);
-  const [searchIndexRefreshed, googlePing] = await Promise.all([
-    refreshSearchIndex(supabaseUrl, serviceKey),
-    pingChangedMovieUrls(supabaseUrl, serviceKey, cronSecret, slugs),
-  ]);
+  // movie_search_documents has a per-movie trigger, so changed titles are
+  // searchable immediately. Rebuilding all 5,000 rows here overloaded the
+  // same database that serves viewers during busy hours.
+  const googlePing = await pingChangedMovieUrls(supabaseUrl, serviceKey, cronSecret, slugs);
 
   return {
     changed_urls: slugs.length,
     caches_cleared: true,
-    search_index_refreshed: searchIndexRefreshed,
+    search_index_refreshed: false,
     google_ping: googlePing,
   };
 }

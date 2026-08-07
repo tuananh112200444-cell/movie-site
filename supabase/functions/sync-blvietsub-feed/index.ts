@@ -1939,21 +1939,6 @@ async function writeSyncLog(
   }
 }
 
-async function refreshSearchIndex(supabaseUrl: string, serviceKey = ''): Promise<boolean> {
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/search-index-proxy?limit=5000&refresh=1`, {
-      headers: serviceKey ? {
-        Authorization: `Bearer ${serviceKey}`,
-        apikey: serviceKey,
-      } : undefined,
-      signal: AbortSignal.timeout(60000),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
 function uniqueSlugs(slugs: string[]): string[] {
   return Array.from(new Set(slugs.map((slug) => String(slug || '').trim()).filter(Boolean))).slice(0, 100);
 }
@@ -2013,15 +1998,14 @@ async function runSeoAutomation(
   }
 
   const cachesCleared = await clearSeoCaches(supabase, slugs);
-  const [searchIndexRefreshed, googlePing] = await Promise.all([
-    refreshSearchIndex(supabaseUrl, serviceKey),
-    pingChangedMovieUrls(supabaseUrl, serviceKey, cronSecret, slugs),
-  ]);
+  // movie_search_documents is updated per changed movie by database trigger.
+  // A complete index rebuild after every feed run caused database contention.
+  const googlePing = await pingChangedMovieUrls(supabaseUrl, serviceKey, cronSecret, slugs);
 
   return {
     changed_urls: slugs.length,
     caches_cleared: cachesCleared,
-    search_index_refreshed: searchIndexRefreshed,
+    search_index_refreshed: false,
     google_ping: googlePing,
   };
 }

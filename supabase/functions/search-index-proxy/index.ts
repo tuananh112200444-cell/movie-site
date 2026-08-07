@@ -6,6 +6,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 const CACHE_ID = 'search_index_v4_rows';
 const CACHE_TTL_MIN = 240;
 const REFRESH_LOCK_MS = 90 * 1000;
+// Full rebuilds write the whole search cache. Do not repeat them for every
+// importer that finishes in the same short period.
+const FORCE_REFRESH_COOLDOWN_MS = 30 * 60 * 1000;
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -169,6 +172,11 @@ serve(async (req) => {
   const cacheMetaCount = Number(cacheRow?.sections?.count ?? 0);
   const cacheExpiresAt = parsePostgresTimestamp(cacheRow?.expires_at);
   const cacheValid = cacheRow && Number.isFinite(cacheExpiresAt) && cacheExpiresAt > now.getTime() && cacheMetaCount >= limit;
+  const cacheRecentlyRebuilt = Boolean(
+    cacheRow
+    && cacheMetaCount >= Math.min(limit, 800)
+    && now.getTime() - parsePostgresTimestamp(cacheRow.updated_at) < FORCE_REFRESH_COOLDOWN_MS,
+  );
 
   if (forceRefresh && isRefreshLocked(cacheRow)) {
     const cached = await readCachedRows(supabase, limit);
@@ -177,6 +185,17 @@ serve(async (req) => {
         { status: true, source: 'refresh-locked', items: cached.items.slice(0, limit), updated_at: cacheRow?.updated_at },
         200,
         cacheHeaders('STALE'),
+      );
+    }
+  }
+
+  if (forceRefresh && cacheRecentlyRebuilt) {
+    const cached = await readCachedRows(supabase, limit);
+    if (cached.items.length >= Math.min(limit, 100)) {
+      return jsonResponse(
+        { status: true, source: 'refresh-cooled', items: cached.items.slice(0, limit), updated_at: cacheRow?.updated_at },
+        200,
+        cacheHeaders('HIT'),
       );
     }
   }
@@ -224,6 +243,10 @@ serve(async (req) => {
       );
     }
     cacheReadError = cached.error ?? `cache rows returned ${cached.items.length} items`;
+  }
+
+  if (forceRefresh && cacheRow && !isRefreshLocked(cacheRow)) {
+    await lockRefresh(supabase, cacheRow);
   }
 
   const fetchLimit = Math.max(limit, 3000);

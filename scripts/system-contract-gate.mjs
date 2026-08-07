@@ -60,6 +60,12 @@ if (!cronStagger.includes("cron.unschedule('cobephim-smart-sync')") || !cronStag
   failures.push('heavy sync jobs are not deduplicated and staggered');
 }
 if (!searchCronTuning.includes("'17,47 * * * *'")) failures.push('full search-index safety rebuild runs too frequently');
+if (!searchProxy.includes('FORCE_REFRESH_COOLDOWN_MS') || !searchProxy.includes("source: 'refresh-cooled'")) {
+  failures.push('search-index proxy does not cool down repeated full rebuild requests');
+}
+if (ophimSync.includes('search-index-proxy?limit=5000&refresh=1') || blvietsubSync.includes('search-index-proxy?limit=5000&refresh=1')) {
+  failures.push('source sync still rebuilds the complete search index after every import');
+}
 if (!indexingCronCleanup.includes("cron.unschedule('auto-ping-google-daily')")) failures.push('deprecated Google Indexing API cron is still part of the control plane');
 if (!ophimSync.includes(".eq('id', 'homepage_v3')") || !ophimSync.includes(".update({ expires_at: new Date().toISOString() }).in('slug', targets)")) {
   failures.push('OPhim sync must invalidate only changed movie caches and preserve stale homepage data');
