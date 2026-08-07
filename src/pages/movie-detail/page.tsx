@@ -619,7 +619,7 @@ export default function MovieDetailPage() {
     // watching, so a confirmed provider outage cannot keep the initial
     // selection on a dead CDN shard. Preserve the live seek position.
     if (currentPlaybackTime >= 8) return;
-    const alternativeServers = filteredEpisodes
+    const allAlternativeServers = filteredEpisodes
       .map((server) => ({
         ...server,
         server_data: (server.server_data ?? []).filter(
@@ -627,6 +627,20 @@ export default function MovieDetailPage() {
         ),
       }))
       .filter((server) => server.server_data.length > 0);
+    // Prefer an independent server that is not currently in the global
+    // outage set. Keep the full list as a last resort: a title may only have
+    // mirrors on the same provider and must remain playable when one recovers.
+    const healthyAlternativeServers = allAlternativeServers
+      .map((server) => ({
+        ...server,
+        server_data: (server.server_data ?? []).filter(
+          (candidate) => !isRecentlyBadSourceHost(getPlayableSourceUrl(candidate)),
+        ),
+      }))
+      .filter((server) => server.server_data.length > 0);
+    const alternativeServers = healthyAlternativeServers.length > 0
+      ? healthyAlternativeServers
+      : allAlternativeServers;
     const best = pickBestEpisodeByPriority(alternativeServers, activeEp.slug || activeEp.name);
     if (!best) return;
     const resumeAt = Math.max(
