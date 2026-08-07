@@ -11,6 +11,7 @@ const autoRepair = read('supabase/functions/auto-repair-player-issues/index.ts')
 const identityPolicy = read('supabase/functions/_shared/movie-identity.ts');
 const cronStagger = read('supabase/migrations/20260721162000_stagger_heavy_system_crons.sql');
 const searchCronTuning = read('supabase/migrations/20260721164500_reduce_search_cache_rebuild_pressure.sql');
+const peakAwareScheduling = read('supabase/migrations/20260808003000_move_batch_work_outside_viewing_peaks.sql');
 const indexingCronCleanup = read('supabase/migrations/20260721171000_remove_deprecated_google_indexing_cron.sql');
 const viewerSourceRecovery = read('supabase/migrations/20260722213000_prioritize_viewer_source_recovery.sql');
 const streamHealth = read('supabase/functions/stream-health-check/index.ts');
@@ -60,6 +61,13 @@ if (!cronStagger.includes("cron.unschedule('cobephim-smart-sync')") || !cronStag
   failures.push('heavy sync jobs are not deduplicated and staggered');
 }
 if (!searchCronTuning.includes("'17,47 * * * *'")) failures.push('full search-index safety rebuild runs too frequently');
+if (
+  !peakAwareScheduling.includes("'50 0-3,8-11,17-23 * * *'")
+  || !peakAwareScheduling.includes('stream-health-hot-peak-guard')
+  || !peakAwareScheduling.includes('process-movie-refresh-queue-peak-guard')
+) {
+  failures.push('peak-hour scheduler does not protect viewers while moving batch work off-peak');
+}
 if (!searchProxy.includes('FORCE_REFRESH_COOLDOWN_MS') || !searchProxy.includes("source: 'refresh-cooled'")) {
   failures.push('search-index proxy does not cool down repeated full rebuild requests');
 }
