@@ -410,6 +410,49 @@ async function fetchEligibleOngoingMovies(limit = 5000): Promise<MovieItem[]> {
     });
 }
 
+// The recent sitemap publishes at most 500 URLs.  Reading the whole quality
+// catalogue here made a cold request do tens of sequential database pages
+// before it could emit those URLs.  Use the persisted episode-freshness order
+// and retain a bounded candidate pool for the final in-memory tie breakers.
+async function fetchEligibleRecentMovies(limit = 5000): Promise<MovieItem[]> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+  const { data, error } = await supabase
+    .from('movie_seo_quality_status')
+    .select(`
+      movie_id,
+      index_tier,
+      quality_score,
+      freshness_score,
+      last_episode_change_at,
+      movies!inner(
+        id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,
+        total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,
+        release_at,tmdb_popularity,trailer_url,status,year
+      )
+    `)
+    .eq('eligible_for_index', true)
+    .in('index_tier', ['playable', 'ongoing', 'upcoming'])
+    .order('last_episode_change_at', { ascending: false, nullsFirst: false })
+    .order('freshness_score', { ascending: false })
+    .order('quality_score', { ascending: false })
+    .limit(Math.min(5000, Math.max(1, limit)));
+  if (error) throw error;
+  return (data || []).flatMap((row) => {
+    const movies = Array.isArray(row.movies) ? row.movies : [row.movies];
+    return movies.filter(Boolean).map((movie) => ({
+      ...(movie as unknown as MovieItem),
+      seo_index_tier: String(row.index_tier || ''),
+      seo_eligible_for_index: true,
+      seo_quality_score: Number(row.quality_score || 0),
+      seo_freshness_score: Number(row.freshness_score || 0),
+      seo_last_episode_change_at: String(row.last_episode_change_at || ''),
+    }));
+  });
+}
+
 async function fetchEligibleMovies(offset = 0, limit = 50000): Promise<MovieItem[]> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -494,7 +537,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       : options.mode === 'ongoing'
         ? fetchEligibleOngoingMovies(options.outputLimit)
         : options.mode === 'recent'
-          ? fetchEligibleMovies(0, 50000)
+          ? fetchEligibleRecentMovies(Math.max(2000, options.outputLimit * 10))
           : options.mode === 'all'
           ? fetchEligibleMovies(options.offset, options.limit)
           : fetchSupabaseMovies(options.offset, options.limit, options.mode),

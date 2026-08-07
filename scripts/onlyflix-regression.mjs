@@ -11,7 +11,7 @@ const checks = [
   [source.includes("action: 'mcp_get_available_players'"), 'OnlyFlix player endpoint is missing'],
   [source.includes('consecutiveFailures >= 3'), 'OnlyFlix circuit breaker is missing'],
   [source.includes("mode: 'trending-movies-only'"), 'OnlyFlix trending-only mode is missing'],
-  [source.includes('data-ofpop-home-json') && source.includes('groups?.movies?.periods?.[period]'), 'OnlyFlix must read the exact homepage Trending Movies payload'],
+  [source.includes('data-ofpop-home-json') && source.includes('payload?.groups?.movies?.periods') && source.includes('selected.rows.slice(0, limit)'), 'OnlyFlix must read the exact homepage Trending Movies payload'],
   [!source.includes('onlyflix-feed-backfill') && !source.includes('next_page: nextPage'), 'OnlyFlix must not backfill the historical catalog'],
   [source.includes('trendingRank: index + 1') && source.includes('trending.push({'), 'OnlyFlix rank must be preserved for the homepage'],
   [source.includes('const links = item.trendingRank ? [] : episodeLinks(html)'), 'Trending movie pages must ignore unrelated episode links'],

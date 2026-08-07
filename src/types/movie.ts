@@ -112,6 +112,8 @@ export interface MovieDetail {
   status: string;
   thumb_url: string;
   poster_url: string;
+  hero_backdrop_url?: string;
+  hero_poster_url?: string;
   is_copyright: boolean;
   sub_docquyen: boolean;
   chieurap: boolean;
