@@ -132,8 +132,9 @@ if (!cloudflareFunction.includes('apikey: SUPABASE_PUBLIC_KEY')
   || !cloudflareFunction.includes('Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`')) {
   addError('Movie prerender must authenticate to the JWT-protected published-data endpoint with the public key.');
 }
-if (!cloudflareFunction.includes("pathname === '/feed.xml' ? 5000 : 30000")) {
-  addError('RSS upstream timeout must fail over quickly instead of holding crawlers for 30 seconds.');
+if (!cloudflareFunction.includes("pathname === '/feed.xml' || pathname === '/sitemap-movies-recent.xml'")
+  || !cloudflareFunction.includes(') ? 5000 : 30000')) {
+  addError('RSS and recent sitemap upstream calls must fail over quickly instead of holding crawlers for 30 seconds.');
 }
 if (!cloudflareFunction.includes('renderMovieTemporarilyUnavailable')
   || !cloudflareFunction.includes("'Retry-After': '300'")) {

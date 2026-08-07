@@ -1987,7 +1987,9 @@ async function proxySitemap(pathname, request, context) {
     // An RSS feed is supplementary discovery data. Do not make crawlers wait
     // for a congested database: the valid emergency feed below is preferable
     // to a 30-second timeout and keeps the endpoint crawlable.
-    const upstreamTimeoutMs = pathname === '/feed.xml' ? 5000 : 30000;
+    const upstreamTimeoutMs = (
+      pathname === '/feed.xml' || pathname === '/sitemap-movies-recent.xml'
+    ) ? 5000 : 30000;
     const response = await fetch(target, {
       headers: { 'Accept': 'application/xml', 'User-Agent': request.headers.get('user-agent') || 'KhoPhimBot/1.0' },
       cf: { cacheTtl: isOngoingSitemap ? 600 : 1800, cacheEverything: true },
