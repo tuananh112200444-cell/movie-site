@@ -1513,16 +1513,28 @@ async function fetchSupabaseMovie(slug, context) {
         },
         signal: AbortSignal.timeout(attempt.timeoutMs),
       });
-      if (!response.ok) return null;
+      if (!response.ok) {
+        // A 404 is a definitive lookup miss. Other failures are temporary:
+        // callers must not convert a database outage into a 404 for Google.
+        return { movie: null, unavailable: response.status !== 404 };
+      }
       const data = await response.json();
-      return data && data.status && data.movie && data.movie.slug ? data.movie : null;
+      return {
+        movie: data && data.status && data.movie && data.movie.slug ? data.movie : null,
+        unavailable: !(data && data.status && data.movie && data.movie.slug),
+      };
     } catch {
-      return null;
+      return { movie: null, unavailable: true };
     }
   }));
-  return results
-    .map((result) => result.status === 'fulfilled' ? result.value : null)
-    .find(Boolean) || null;
+  const attemptsResult = results
+    .map((result) => result.status === 'fulfilled'
+      ? result.value
+      : { movie: null, unavailable: true });
+  return {
+    movie: attemptsResult.map((result) => result.movie).find(Boolean) || null,
+    unavailable: attemptsResult.some((result) => result.unavailable),
+  };
 }
 
 function renderEmergencyRss() {
@@ -1859,6 +1871,27 @@ function renderMovieNotFound(pathname, slug) {
       'Cache-Control': 'no-store',
       'X-Prerendered': 'cloudflare-movie-not-found',
       'X-Robots-Tag': 'noindex, follow',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
+function renderMovieTemporarilyUnavailable(pathname, slug) {
+  const cleanPath = pathname.replace(/\/+$/, '') || `/phim/${slug}`;
+  const canonical = `${SITE_URL}${cleanPath}`;
+  return new Response(renderHtml({
+    title: 'Dữ liệu phim đang tạm thời cập nhật | KhoPhim',
+    description: 'Dữ liệu phim đang tạm thời cập nhật. Vui lòng thử lại sau ít phút.',
+    canonical,
+    h1: 'Dữ liệu phim đang tạm thời cập nhật',
+    body: '<p>KhoPhim đang khôi phục dữ liệu phim. Vui lòng thử lại sau ít phút.</p>',
+  }), {
+    status: 503,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Retry-After': '300',
+      'X-Prerendered': 'cloudflare-movie-unavailable',
       ...SECURITY_HEADERS,
     },
   });
@@ -2499,7 +2532,10 @@ export async function onRequest(context) {
         fetchSupabaseMovie(slug, context),
         fetchOphimMovie(slug),
       ]);
-      let movie = supabaseResult.status === 'fulfilled' ? supabaseResult.value : null;
+      const supabaseLookup = supabaseResult.status === 'fulfilled'
+        ? supabaseResult.value
+        : { movie: null, unavailable: true };
+      let movie = supabaseLookup.movie;
       const ophimMovie = ophimResult.status === 'fulfilled' ? ophimResult.value : null;
       if (shouldPreferOphimMovieName(movie, slug)) {
         movie = mergeMovieForPrerender(movie, ophimMovie);
@@ -2507,7 +2543,9 @@ export async function onRequest(context) {
       if (!movie) movie = ophimMovie;
       const movieResponse = movie
         ? renderMoviePrerender(pathname, movie, slug)
-        : renderMovieNotFound(pathname, slug);
+        : (supabaseLookup.unavailable
+          ? renderMovieTemporarilyUnavailable(pathname, slug)
+          : renderMovieNotFound(pathname, slug));
       putCachedPrerender(context, cacheKey, movieResponse, request);
       return movieResponse;
     }
