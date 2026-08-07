@@ -12,6 +12,7 @@ const identityPolicy = read('supabase/functions/_shared/movie-identity.ts');
 const cronStagger = read('supabase/migrations/20260721162000_stagger_heavy_system_crons.sql');
 const searchCronTuning = read('supabase/migrations/20260721164500_reduce_search_cache_rebuild_pressure.sql');
 const peakAwareScheduling = read('supabase/migrations/20260808003000_move_batch_work_outside_viewing_peaks.sql');
+const runtimeCapacityController = read('supabase/migrations/20260808010000_add_runtime_capacity_controller.sql');
 const indexingCronCleanup = read('supabase/migrations/20260721171000_remove_deprecated_google_indexing_cron.sql');
 const viewerSourceRecovery = read('supabase/migrations/20260722213000_prioritize_viewer_source_recovery.sql');
 const streamHealth = read('supabase/functions/stream-health-check/index.ts');
@@ -67,6 +68,15 @@ if (
   || !peakAwareScheduling.includes('process-movie-refresh-queue-peak-guard')
 ) {
   failures.push('peak-hour scheduler does not protect viewers while moving batch work off-peak');
+}
+if (
+  !runtimeCapacityController.includes('evaluate_runtime_capacity')
+  || !runtimeCapacityController.includes('runtime_capacity_managed_jobs')
+  || runtimeCapacityController.includes("('stream-health-hot-every-5-minutes')")
+  || runtimeCapacityController.includes("('sync-ophim-priority-every-15-minutes')")
+  || runtimeCapacityController.includes("('sync-kkphim-priority-every-15-minutes')")
+) {
+  failures.push('runtime capacity controller does not isolate background work from viewer-critical jobs');
 }
 if (!searchProxy.includes('FORCE_REFRESH_COOLDOWN_MS') || !searchProxy.includes("source: 'refresh-cooled'")) {
   failures.push('search-index proxy does not cool down repeated full rebuild requests');
