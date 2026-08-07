@@ -13,6 +13,7 @@ const cronStagger = read('supabase/migrations/20260721162000_stagger_heavy_syste
 const searchCronTuning = read('supabase/migrations/20260721164500_reduce_search_cache_rebuild_pressure.sql');
 const peakAwareScheduling = read('supabase/migrations/20260808003000_move_batch_work_outside_viewing_peaks.sql');
 const runtimeCapacityController = read('supabase/migrations/20260808010000_add_runtime_capacity_controller.sql');
+const peakCapacityResponse = read('supabase/migrations/20260808013000_harden_capacity_controller_peak_response.sql');
 const indexingCronCleanup = read('supabase/migrations/20260721171000_remove_deprecated_google_indexing_cron.sql');
 const viewerSourceRecovery = read('supabase/migrations/20260722213000_prioritize_viewer_source_recovery.sql');
 const streamHealth = read('supabase/functions/stream-health-check/index.ts');
@@ -77,6 +78,13 @@ if (
   || runtimeCapacityController.includes("('sync-kkphim-priority-every-15-minutes')")
 ) {
   failures.push('runtime capacity controller does not isolate background work from viewer-critical jobs');
+}
+if (
+  !peakCapacityResponse.includes('evaluate-runtime-capacity-peak-every-minute')
+  || !peakCapacityResponse.includes("'* 4-7,12-16 * * *'")
+  || !peakCapacityResponse.includes("interval '15 minutes'")
+) {
+  failures.push('capacity controller does not react promptly at peak or recover with real-time hysteresis');
 }
 if (!searchProxy.includes('FORCE_REFRESH_COOLDOWN_MS') || !searchProxy.includes("source: 'refresh-cooled'")) {
   failures.push('search-index proxy does not cool down repeated full rebuild requests');
