@@ -5,6 +5,11 @@ const PROPERTY_URI = 'sc-domain:khophim.org';
 const SITE_URL = 'https://khophim.org';
 const CANONICAL_SITEMAP = `${SITE_URL}/sitemap.xml`;
 const GA_PROPERTY_ID = '541432210';
+// URL Inspection is a monitoring task, not a viewer-facing dependency.  Keep
+// it bounded so one slow Google response cannot leave the daily SEO run open
+// indefinitely and hide current coverage data from the operations dashboard.
+const INSPECTION_CONCURRENCY = 5;
+const INSPECTION_TIMEOUT_MS = 12_000;
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/webmasters',
   'https://www.googleapis.com/auth/analytics.readonly',
@@ -156,7 +161,7 @@ async function inspectUrl(token:string, candidate:Candidate) {
   const response = await fetch('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect', {
     method:'POST', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
     body:JSON.stringify({ inspectionUrl, siteUrl:PROPERTY_URI, languageCode:'vi-VN' }),
-    signal:AbortSignal.timeout(20000),
+    signal:AbortSignal.timeout(INSPECTION_TIMEOUT_MS),
   });
   const data = await response.json();
   if (!response.ok) throw new Error(`URL Inspection ${response.status}: ${data.error?.message || inspectionUrl}`);
@@ -173,8 +178,49 @@ async function inspectUrl(token:string, candidate:Candidate) {
   };
 }
 
+async function inspectCandidates(token:string, candidates:Candidate[]) {
+  const inspections: Record<string, unknown>[] = [];
+  const inspectionErrors: string[] = [];
+  let cursor = 0;
+  let stop = false;
+
+  const worker = async () => {
+    while (!stop) {
+      const candidate = candidates[cursor];
+      cursor += 1;
+      if (!candidate) return;
+      try {
+        inspections.push(await inspectUrl(token, candidate));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        inspectionErrors.push(message);
+        // Stop dispatching after an API quota or credential failure. Other
+        // candidates must wait for the next daily run rather than multiplying
+        // a known failure.
+        if (/429|403|disabled/i.test(message)) stop = true;
+      }
+    }
+  };
+
+  await Promise.all(Array.from(
+    { length: Math.min(INSPECTION_CONCURRENCY, candidates.length) },
+    () => worker(),
+  ));
+  return { inspections, inspectionErrors };
+}
+
+function normalizedQuery(value: string): string {
+  return value
+    .toLocaleLowerCase('vi-VN')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function queryClass(value: string): 'khophim_brand'|'legacy_brand'|'generic_movie'|'other' {
-  const query = value.toLowerCase();
+  const query = normalizedQuery(value);
   if (/kho[ ._-]*phim|khophim|khopim|khphim|khohim|khophom|khophum/.test(query)) return 'khophim_brand';
   if (/mho[ ._-]*phim|mhophim|mhop|mhphim|hophim/.test(query)) return 'legacy_brand';
   if (/xem phim|phim online|phim vietsub|phim mới|phim moi|phim bộ|phim bo|phim lẻ|phim le|phim chiếu rạp|phim chieu rap|anime|hoạt hình|hoat hinh/.test(query)) return 'generic_movie';
@@ -299,16 +345,7 @@ Deno.serve(async (req) => {
         return b.freshness - a.freshness || b.score - a.score || b.updatedAt - a.updatedAt;
       })
       .slice(0,inspectionLimit);
-    const inspections=[];
-    const inspectionErrors:string[]=[];
-    for (const candidate of candidateRows) {
-      try { inspections.push(await inspectUrl(token,candidate)); }
-      catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        inspectionErrors.push(message);
-        if (/429|403|disabled/i.test(message)) break;
-      }
-    }
+    const { inspections, inspectionErrors } = await inspectCandidates(token, candidateRows);
     if (inspections.length) {
       const {error} = await supabase.from('seo_url_inspections').upsert(inspections,{onConflict:'url'});
       if (error) throw error;
