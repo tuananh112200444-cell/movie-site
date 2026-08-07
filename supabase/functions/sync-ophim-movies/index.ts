@@ -576,6 +576,8 @@ interface TargetMovieIdentity {
   year?: number | null;
   tmdb_id?: number | string | null;
   ophim_slug?: string | null;
+  source_site?: string | null;
+  source_name?: string | null;
 }
 
 function sourceCandidateScore(item: OPhimMovie, target: TargetMovieIdentity): number {
@@ -605,10 +607,39 @@ async function fetchDetailForTarget(
   provider: ProviderConfig,
   target: TargetMovieIdentity,
 ): Promise<ParsedDetail | null> {
+  const isSafeTargetDetail = (detail: ParsedDetail): boolean => {
+    const movie = detail.movie as Record<string, unknown>;
+    const targetTmdb = String(target.tmdb_id || '').trim();
+    const detailTmdbObject = movie.tmdb && typeof movie.tmdb === 'object'
+      ? movie.tmdb as Record<string, unknown>
+      : null;
+    const detailTmdb = String(movie.tmdb_id || detailTmdbObject?.id || '').trim();
+    const targetYear = Number(target.year || 0) || 0;
+    const detailYear = Number(movie.year || 0) || 0;
+
+    // A matching TMDB id is authoritative, except that a different release
+    // year must not cross-wire separate seasons sharing one series-level id.
+    if (targetTmdb && detailTmdb && targetTmdb === detailTmdb) {
+      return !(targetYear > 0 && detailYear > 0 && targetYear !== detailYear);
+    }
+
+    // Without a shared external id, require both an exact normalized title
+    // and matching year. A similar name or a shared slug alone is never
+    // sufficient to attach another provider's episodes to this movie.
+    if (!(targetYear > 0 && detailYear > 0 && targetYear === detailYear)) return false;
+    const targetTitles = [target.name, target.origin_name, target.title_vi, target.title_en, target.title_original]
+      .map((value) => slugify(String(value || '')))
+      .filter(Boolean);
+    const detailTitles = [movie.name, movie.origin_name, movie.title_vi, movie.title_en, movie.title_original]
+      .map((value) => slugify(String(value || '')))
+      .filter(Boolean);
+    return detailTitles.some((title) => targetTitles.includes(title));
+  };
+
   const directSlugs = [...new Set([target.ophim_slug, target.slug].map((value) => String(value || '').trim()).filter(Boolean))];
   for (const slug of directSlugs) {
     const detail = await fetchDetail(provider, slug);
-    if (detail) return detail;
+    if (detail && isSafeTargetDetail(detail)) return detail;
   }
 
   const queries = [...new Set([
@@ -638,7 +669,7 @@ async function fetchDetailForTarget(
   const candidates = [...ranked.values()].sort((a, b) => b.score - a.score).slice(0, 3);
   for (const candidate of candidates) {
     const detail = await fetchDetail(provider, String(candidate.item.slug || ''));
-    if (detail) return detail;
+    if (detail && isSafeTargetDetail(detail)) return detail;
   }
   return null;
 }
@@ -1094,7 +1125,13 @@ async function upsertEpisodeRowsSafely(
   }
 }
 
-async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig, movieId: string, detail: ParsedDetail): Promise<number> {
+async function insertEpisodes(
+  supabase: SupabaseClient,
+  provider: ProviderConfig,
+  movieId: string,
+  detail: ParsedDetail,
+  labelAsBackup = false,
+): Promise<number> {
   const sourceId = provider.trackOphimIdentity ? String(detail.movie._id || detail.movie.id || '') : '';
   const parsedEpisodes: Array<{
     number: number;
@@ -1107,7 +1144,11 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
   }> = [];
 
   for (const server of detail.episodes) {
-    const serverName = String(server.server_name || 'OPhim').trim() || 'OPhim';
+    const sourceServerName = String(server.server_name || 'OPhim').trim() || 'OPhim';
+    // movie_episodes and episodes historically use a server-name key that
+    // does not include the provider. Give an independently verified backup a
+    // distinct label so it can never overwrite the primary provider's row.
+    const serverName = labelAsBackup ? `${provider.sourceName} - ${sourceServerName}` : sourceServerName;
     for (const ep of server.server_data || []) {
       if (isTrailerEpisode(ep)) continue;
       const number = episodeNumber(ep);
@@ -1187,7 +1228,7 @@ async function insertEpisodes(supabase: SupabaseClient, provider: ProviderConfig
           thumbnail_url: '',
           duration: '',
           source: provider.sourceSite,
-          is_backup: false,
+          is_backup: labelAsBackup,
         });
       }
     }
@@ -1397,7 +1438,7 @@ serve(async (req) => {
     if (targetMovieId) {
       const { data, error } = await supabase
         .from('movies')
-        .select('id,slug,name,origin_name,title_vi,title_en,title_original,year,tmdb_id,ophim_slug')
+        .select('id,slug,name,origin_name,title_vi,title_en,title_original,year,tmdb_id,ophim_slug,source_site,source_name')
         .eq('id', targetMovieId)
         .maybeSingle();
       if (error) throw new Error(`target movie lookup ${targetMovieId}: ${error.message}`);
@@ -1448,7 +1489,17 @@ serve(async (req) => {
         if (result.updated) stats.updated += 1;
         const beforeEpisodesInserted = stats.episodesInserted;
         if (includeEpisodes) {
-          stats.episodesInserted += await insertEpisodes(supabase, provider, result.id, detail);
+          const primarySource = String(targetMovie?.source_site || targetMovie?.source_name || '').toLowerCase();
+          const isIndependentProvider = provider.sourceSite === 'phimapi'
+            ? !/(kkphim|phimapi)/.test(primarySource)
+            : !/ophim/.test(primarySource);
+          stats.episodesInserted += await insertEpisodes(
+            supabase,
+            provider,
+            result.id,
+            detail,
+            Boolean(targetMovie && isIndependentProvider),
+          );
           // Publication is a strict two-part gate: the provider detail must
           // contain a real playable URL and the movie must have usable artwork.
           // This also safely releases a private row left by an interrupted run,

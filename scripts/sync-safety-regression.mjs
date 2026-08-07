@@ -35,6 +35,7 @@ for (const file of connectorFiles) {
 const motchill = fs.readFileSync('supabase/functions/sync-motchill-feed/index.ts', 'utf8');
 const onlyflix = fs.readFileSync('supabase/functions/sync-onlyflix-feed/index.ts', 'utf8');
 const ophim = fs.readFileSync('supabase/functions/sync-ophim-movies/index.ts', 'utf8');
+const providerBackups = fs.readFileSync('supabase/functions/sync-provider-backups/index.ts', 'utf8');
 const episodeRepairPriority = fs.readFileSync('supabase/migrations/20260805170000_prioritize_public_episode_repairs.sql', 'utf8');
 const unifiedPlaybackHealth = fs.readFileSync('supabase/migrations/20260805205000_unify_public_playback_health.sql', 'utf8');
 if (!ophim.includes('isTrailerEpisode(episode)') || !ophim.includes('if (isTrailerEpisode(ep)) continue')) {
@@ -91,6 +92,21 @@ if (
   || /if \(targetMovie\)[\s\S]{0,700}health_status:\s*'unchecked'[\s\S]{0,250}failure_count:\s*0/.test(ophim)
 ) {
   failures.push('Targeted OPhim repair must not erase viewer failure evidence or reactivate an unchanged dead URL');
+}
+if (
+  !ophim.includes('if (detail && isSafeTargetDetail(detail)) return detail;')
+  || !ophim.includes('targetYear > 0 && detailYear > 0 && targetYear === detailYear')
+  || !ophim.includes('labelAsBackup')
+) {
+  failures.push('Cross-provider episode import must verify identity and keep its server rows separate from the primary source');
+}
+if (
+  !providerBackups.includes("const limit = clamp(requestUrl.searchParams.get('limit'), 3, 1, 4)")
+  || !providerBackups.includes("strict_missing_detail: '1'")
+  || !providerBackups.includes('needsPartnerCoverage')
+  || !providerBackups.includes("const cursorKey = 'sync-provider-backups:published:v1'")
+) {
+  failures.push('Provider-backup sync must be bounded, identity-checked and resumable');
 }
 if (
   !ophim.includes('if (existing.is_published === false) update.is_published = false')
