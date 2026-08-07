@@ -1500,6 +1500,13 @@ async function fetchSupabaseMovie(slug, context) {
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'KhoPhimBot/1.0 SEO-Prerender',
+          // This function is deployed with JWT verification. The public key is
+          // deliberately used here (never a service-role key): it authorizes
+          // the Worker as the same public client that can read published data.
+          ...(attempt.url === seoUrl ? {
+            apikey: SUPABASE_PUBLIC_KEY,
+            Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
+          } : {}),
           ...(attempt.url === detailUrl && context?.env?.MOVIE_DETAIL_PROXY_SECRET
             ? { 'X-KhoPhim-Proxy-Secret': context.env.MOVIE_DETAIL_PROXY_SECRET }
             : {}),
@@ -1944,10 +1951,14 @@ async function proxySitemap(pathname, request, context) {
     }
 
     const isOngoingSitemap = pathname === '/sitemap-movies-ongoing.xml';
+    // An RSS feed is supplementary discovery data. Do not make crawlers wait
+    // for a congested database: the valid emergency feed below is preferable
+    // to a 30-second timeout and keeps the endpoint crawlable.
+    const upstreamTimeoutMs = pathname === '/feed.xml' ? 5000 : 30000;
     const response = await fetch(target, {
       headers: { 'Accept': 'application/xml', 'User-Agent': request.headers.get('user-agent') || 'KhoPhimBot/1.0' },
       cf: { cacheTtl: isOngoingSitemap ? 600 : 1800, cacheEverything: true },
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(upstreamTimeoutMs),
     });
     if (!response.ok) throw new Error(`Sitemap upstream ${response.status}`);
     const headers = new Headers(response.headers);
