@@ -139,6 +139,10 @@ if (!cloudflareFunction.includes('renderMovieTemporarilyUnavailable')
   || !cloudflareFunction.includes("'Retry-After': '300'")) {
   addError('A temporary movie data outage must return retryable 503, not a noindex 404.');
 }
+if (!cloudflareFunction.includes("pathname === '/sitemap-movies-recent.xml'")
+  || !cloudflareFunction.includes('cloudflare-pages-static-recent-fallback')) {
+  addError('Recent movie sitemap must retain a validated static fallback during a data outage.');
+}
 
 const llms = await read('public/llms.txt').catch(() => '');
 if (!/^#\s+\S+/m.test(llms)) {
