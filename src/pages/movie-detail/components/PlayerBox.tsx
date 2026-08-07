@@ -6,7 +6,7 @@ import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
 import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
 import { isPortraitPhoneViewport, tryLockPlayerLandscape, unlockPlayerOrientation } from '@/utils/playerFullscreen';
-import { markSourcePlaybackHealthy } from '@/services/playerSourceHealth';
+import { isRecentlyBadSourceHost, markSourcePlaybackHealthy, SOURCE_HEALTH_UPDATED_EVENT } from '@/services/playerSourceHealth';
 /* ─── URL helpers ─── */
 const SSPLAY_VARIANTS = ['SU', 'SG', 'SD', 'HY'] as const;
 type SsplayVariant = typeof SSPLAY_VARIANTS[number];
@@ -234,6 +234,10 @@ function shouldPreferEmbedOverDirectHls(ep: EpisodeData): boolean {
   return isSingleVariantProviderHls(ep.link_m3u8);
 }
 
+function shouldAvoidEmbedForCurrentOutage(ep: EpisodeData | null): boolean {
+  return Boolean(ep?.link_embed && isRecentlyBadSourceHost(ep.link_embed));
+}
+
 function isBrowserManagedPhimApiEmbed(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -265,7 +269,12 @@ function getPlayerMode(ep: EpisodeData | null): 'hls' | 'embed' | 'video' {
   if (ep?.link_m3u8) {
     if (ep.link_embed && isStreamVsmovEmbedUrl(ep.link_embed)) return 'embed';
     if (!isHlsUrl(ep.link_m3u8)) return 'video';
-    if (shouldPreferEmbedOverDirectHls(ep)) return 'embed';
+    // The browser health feed has already seen independent viewers fail this
+    // iframe. Start its direct manifest immediately instead of showing the
+    // same broken embed and waiting for its timeout.
+    if (shouldPreferEmbedOverDirectHls(ep)) {
+      return shouldAvoidEmbedForCurrentOutage(ep) ? 'hls' : 'embed';
+    }
     if (shouldProxyHls(ep.link_m3u8)) return 'hls';
     if (ep.link_embed && isKnownCorsBlockedHls(ep.link_m3u8)) {
       return isIframeSource(ep.link_embed) ? 'embed' : 'video';
@@ -468,6 +477,7 @@ export default function PlayerBox({
   const playbackSuccessIdentityRef = useRef<string | null>(null);
   const sourcePageRecoveryKeyRef = useRef<string | null>(null);
   const playerModeWasManuallySelectedRef = useRef(false);
+  const [sourceHealthRevision, setSourceHealthRevision] = useState(0);
   const embedContainerRef = useRef<HTMLDivElement>(null);
   const directVideoRef = useRef<HTMLVideoElement>(null);
   const logicalEpisodeKey = `${movieSlug}:${episode?.slug || episode?.name || ''}`;
@@ -760,6 +770,12 @@ export default function PlayerBox({
     }
   }, [activeServer, episode?.link_m3u8, episode?.link_embed, initialTime, logicalEpisodeKey]);
 
+  useEffect(() => {
+    const refresh = () => setSourceHealthRevision((revision) => revision + 1);
+    window.addEventListener(SOURCE_HEALTH_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(SOURCE_HEALTH_UPDATED_EVENT, refresh);
+  }, []);
+
   // Detail data can arrive in stages. If the first response selected HLS
   // before its verified PhimAPI player URL arrived, correct the automatic
   // choice once without overriding a viewer who explicitly chose HLS.
@@ -770,9 +786,24 @@ export default function PlayerBox({
       && episode
       && shouldPreferEmbedOverDirectHls(episode)
     ) {
-      setPlayerMode('embed');
+      setPlayerMode(shouldAvoidEmbedForCurrentOutage(episode) ? 'hls' : 'embed');
     }
-  }, [episode, playerMode]);
+  }, [episode, playerMode, sourceHealthRevision]);
+
+  // Health can arrive after the detail response. Do not interrupt a viewer
+  // who has already been watching; before meaningful playback, bypass a
+  // provider iframe that the global signal has confirmed unhealthy.
+  useEffect(() => {
+    if (
+      playerModeWasManuallySelectedRef.current
+      || playerMode !== 'embed'
+      || !episode?.link_m3u8
+      || !shouldPreferEmbedOverDirectHls(episode)
+      || !shouldAvoidEmbedForCurrentOutage(episode)
+      || lastPlaybackTimeRef.current >= 8
+    ) return;
+    setPlayerMode('hls');
+  }, [episode, playerMode, sourceHealthRevision]);
 
   /* Iframe load timeout fallback */
   useEffect(() => {
@@ -907,6 +938,7 @@ export default function PlayerBox({
       embedUrl &&
       !isBlvietsubWatchPageUrl(embedUrl) &&
       effectivePlayerMode === 'hls' &&
+      !shouldAvoidEmbedForCurrentOutage(episode) &&
       (hlsCluster !== embedCluster || isBrowserManagedSameProviderFallback)
     );
     if (canUseEmbedFallback) {
