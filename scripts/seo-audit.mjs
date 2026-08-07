@@ -128,6 +128,13 @@ if (!/['\"]@type['\"]:\s*['\"]VideoObject['\"]/.test(cloudflareFunction)
   || !cloudflareFunction.includes('embedUrl: trailerEmbedUrl')) {
   addError('Movie detail prerender must expose a real trailer VideoObject for eligible upcoming pages.');
 }
+if (!cloudflareFunction.includes('apikey: SUPABASE_PUBLIC_KEY')
+  || !cloudflareFunction.includes('Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`')) {
+  addError('Movie prerender must authenticate to the JWT-protected published-data endpoint with the public key.');
+}
+if (!cloudflareFunction.includes("pathname === '/feed.xml' ? 5000 : 30000")) {
+  addError('RSS upstream timeout must fail over quickly instead of holding crawlers for 30 seconds.');
+}
 
 const llms = await read('public/llms.txt').catch(() => '');
 if (!/^#\s+\S+/m.test(llms)) {
