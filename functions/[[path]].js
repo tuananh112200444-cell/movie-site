@@ -2035,6 +2035,20 @@ async function proxySitemap(pathname, request, context) {
         },
       });
     }
+    // The build carries a validated, last-known-good snapshot of the newest
+    // movie URLs. Keeping this one priority sitemap available during a
+    // Supabase incident protects discovery without inventing catalogue URLs.
+    if (pathname === '/sitemap-movies-recent.xml') {
+      const fallback = await serveAsset(context, '/sitemap-movies-recent.xml');
+      const headers = new Headers(fallback.headers);
+      headers.set('X-Sitemap-Proxy', 'cloudflare-pages-static-recent-fallback');
+      headers.set('X-Upstream-Degraded', '1');
+      return new Response(request.method === 'HEAD' ? null : fallback.body, {
+        status: fallback.status,
+        statusText: fallback.statusText,
+        headers,
+      });
+    }
     const message = escapeHtml(error instanceof Error ? error.message : 'Sitemap upstream failed');
     return new Response(`<?xml version="1.0" encoding="UTF-8"?><error>${message}</error>`, {
       status: 503,
