@@ -135,6 +135,10 @@ if (!cloudflareFunction.includes('apikey: SUPABASE_PUBLIC_KEY')
 if (!cloudflareFunction.includes("pathname === '/feed.xml' ? 5000 : 30000")) {
   addError('RSS upstream timeout must fail over quickly instead of holding crawlers for 30 seconds.');
 }
+if (!cloudflareFunction.includes('renderMovieTemporarilyUnavailable')
+  || !cloudflareFunction.includes("'Retry-After': '300'")) {
+  addError('A temporary movie data outage must return retryable 503, not a noindex 404.');
+}
 
 const llms = await read('public/llms.txt').catch(() => '');
 if (!/^#\s+\S+/m.test(llms)) {
