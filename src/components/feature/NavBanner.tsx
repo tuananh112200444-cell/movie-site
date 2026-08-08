@@ -11,6 +11,12 @@ interface BannerItem {
 
 function optimizedBannerImage(image: string): string {
   const absolute = image.startsWith('/') ? `https://khophim.org${image}` : image;
+  const pathname = absolute.split('?')[0].toLowerCase();
+
+  // Animated banners must keep their original GIF bytes. The image proxy is
+  // useful for static images but can turn an animated creative into one frame.
+  if (pathname.endsWith('.gif')) return absolute;
+
   return `https://wsrv.nl/?url=${encodeURIComponent(absolute)}&w=728&q=76&output=webp&we`;
 }
 

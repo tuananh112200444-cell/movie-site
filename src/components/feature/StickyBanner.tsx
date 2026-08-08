@@ -3,7 +3,9 @@ import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
 const BANNER_URL = 'https://winaz.it.com/?utm_source=Khophim&utm_medium=facebook&utm_campaign=booking';
-const BANNER_IMAGE = `https://wsrv.nl/?url=${encodeURIComponent('https://khophim.org/banners/winaz-top-20260722.gif?v=20260722')}&w=728&q=76&output=webp&we`;
+// Keep the advertiser's animated GIF intact. Re-encoding it as WebP through
+// an image proxy can reduce it to a still frame.
+const BANNER_IMAGE = '/banners/winaz-top-20260722.gif?v=20260722';
 function trackBannerClick(pagePath: string) {
   const payload = {
     url: BANNER_URL,

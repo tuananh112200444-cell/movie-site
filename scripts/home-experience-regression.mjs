@@ -20,6 +20,7 @@ const viteConfig = await readFile('vite.config.ts', 'utf8');
 const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 const homeFallback = JSON.parse(await readFile('public/home-fallback.json', 'utf8'));
 const stickyBanner = await readFile('src/components/feature/StickyBanner.tsx', 'utf8');
+const navBanner = await readFile('src/components/feature/NavBanner.tsx', 'utf8');
 const headers = await readFile('public/_headers', 'utf8');
 const pagesWorker = await readFile('functions/[[path]].js', 'utf8');
 const failures = [];
@@ -30,6 +31,12 @@ if (
   !stickyBanner.includes('[location.pathname]')
 ) {
   failures.push('WinAZ close state must reset on route navigation and must not persist for the browser session.');
+}
+if (stickyBanner.includes('wsrv.nl') || !stickyBanner.includes("const BANNER_IMAGE = '/banners/winaz-top-20260722.gif?v=20260722'")) {
+  failures.push('The sticky WinAZ banner must load its original animated GIF, not a converted WebP.');
+}
+if (!navBanner.includes("if (pathname.endsWith('.gif')) return absolute;")) {
+  failures.push('Navigation banners must bypass image conversion for animated GIF creatives.');
 }
 
 if (!movieApi.includes('phimimg\\.com|icdn\\.darkbytes\\.xyz')) {
