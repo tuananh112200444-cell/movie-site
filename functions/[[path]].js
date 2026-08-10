@@ -1950,14 +1950,18 @@ ${files.map((file) => `  <sitemap>
 async function proxySitemap(pathname, request, context) {
   if (pathname === '/sitemap.xml' || isLegacySitemapAlias(pathname)) {
     try {
-      const response = await fetch(`${SUPABASE_FUNCTION_BASE}/sitemap-index?v=20260810-bounded-chunks-v1`, {
+      const response = await fetch(`${SUPABASE_FUNCTION_BASE}/sitemap-index?v=20260810-dynamic-chunks-v5`, {
         headers: { 'Accept': 'application/xml', 'User-Agent': request.headers.get('user-agent') || 'KhoPhimBot/1.0' },
         cf: { cacheTtl: 3600, cacheEverything: true },
         signal: AbortSignal.timeout(5000),
       });
       const xml = await response.text();
       const movieChunkCount = (xml.match(/sitemap-movies-\d+\.xml/g) || []).length;
-      if (!response.ok || !xml.includes('<sitemapindex') || movieChunkCount < EDGE_FALLBACK_MOVIE_CHUNKS) {
+      const advertisedChunkCount = Number(response.headers.get('X-Movie-Chunk-Count') || '0');
+      if (!response.ok
+        || !xml.includes('<sitemapindex')
+        || advertisedChunkCount < 1
+        || movieChunkCount !== advertisedChunkCount) {
         throw new Error(`Sitemap index upstream ${response.status}, chunks=${movieChunkCount}`);
       }
       return new Response(request.method === 'HEAD' ? null : xml, {
@@ -1983,7 +1987,7 @@ async function proxySitemap(pathname, request, context) {
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  const sitemapVersion = '20260810-bounded-chunks-v4';
+  const sitemapVersion = '20260810-dynamic-chunks-v5';
   let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=5000&v=${sitemapVersion}`;
