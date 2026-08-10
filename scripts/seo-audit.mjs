@@ -70,6 +70,9 @@ if (routesConfig.includes('"/sitemap*.xml"')) {
 if (!redirects.includes('/* /index.html 200')) {
   addError('public/_redirects must keep the SPA fallback after canonical redirects.');
 }
+if (/^\/sitemap[^\s]*\s+https:\/\//m.test(redirects) || /^\/feed\.xml\s+https:\/\//m.test(redirects)) {
+  addError('public/_redirects must not bypass the single sitemap handler in functions/[[path]].js.');
+}
 
 const cloudflareFunction = await read('functions/[[path]].js').catch(() => '');
 const consolidatedSeoPaths = [
@@ -115,8 +118,27 @@ for (const requiredSnippet of [
 if (cloudflareFunction.includes("'X-Sitemap-Retired': 'index-bloat-cleanup'")) {
   addError('Cloudflare SEO worker must not retire quality-gated numbered movie sitemaps.');
 }
-if (!cloudflareFunction.includes('page_size=50000')) {
-  addError('Cloudflare SEO worker must expose the complete quality-gated movie sitemap chunk.');
+if (!cloudflareFunction.includes('EDGE_SITEMAP_CHUNK_SIZE = 1000')
+  || cloudflareFunction.includes('page_size=50000')) {
+  addError('Cloudflare SEO worker must split the quality-gated movie sitemap into bounded 1,000-URL chunks.');
+}
+for (const requiredDiscoverySnippet of [
+  'fetchStaticMovieLinks(context, cleanPath)',
+  '/home-fallback.json',
+  "'@type': 'ItemList'",
+  'await renderStaticPrerender(pathname, context)',
+  'movieChunkCount < EDGE_FALLBACK_MOVIE_CHUNKS',
+  'repairSitemapMojibake(await response.text())',
+  'const maxAttempts = movieChunkMatch ? 2 : 1',
+  "movieChunkMatch && cachedCount === '0'",
+]) {
+  if (!cloudflareFunction.includes(requiredDiscoverySnippet)) {
+    addError(`Cloudflare SEO worker is missing server-rendered movie discovery: ${requiredDiscoverySnippet}`);
+  }
+}
+if (cloudflareFunction.includes('<h2>Cụm từ khóa liên quan</h2>')
+  || cloudflareFunction.includes('Googlebot có thể đi từ trang này')) {
+  addError('Cloudflare SEO worker must not render search-engine-first copy or keyword lists to users.');
 }
 if (!cloudflareFunction.includes('the-loai|quoc-gia|danh-sach')) {
   addError('MHoPhim legacy catalogue URLs must consolidate into khophim.org.');
@@ -233,20 +255,17 @@ const ongoingMovieSitemap = `${SITE_URL}/sitemap-movies-ongoing.xml`;
 if (!childSitemaps.includes(ongoingMovieSitemap)) {
   addError(`sitemap.xml is missing the freshness-ranked ongoing movie sitemap: ${ongoingMovieSitemap}`);
 }
-const qualityMovieChunk = `${SITE_URL}/sitemap-movies-1.xml`;
-if (!childSitemaps.includes(qualityMovieChunk)) {
-  addError(`sitemap.xml is missing the complete quality-gated movie chunk: ${qualityMovieChunk}`);
+const movieChunks = childSitemaps.filter((loc) => /\/sitemap-movies-\d+\.xml$/.test(loc));
+if (movieChunks.length < 18) {
+  addError(`sitemap.xml must expose all bounded quality-gated movie chunks; found ${movieChunks.length}, expected at least 18.`);
 }
 if (!childSitemaps.includes(`${SITE_URL}/feed.xml`)) {
   addError('sitemap.xml is missing the curated recent-movie RSS feed.');
 }
-for (let page = 2; page <= 8; page += 1) {
+for (let page = 1; page <= 18; page += 1) {
   const chunkLoc = `${SITE_URL}/sitemap-movies-${page}.xml`;
-  if (childSitemaps.includes(chunkLoc)) {
-    addError(`sitemap.xml must not expose unneeded movie chunks: ${chunkLoc}`);
-  }
-  if (await exists(resolve('public', `sitemap-movies-${page}.xml`))) {
-    addError(`Unused public/sitemap-movies-${page}.xml must not be shipped.`);
+  if (!childSitemaps.includes(chunkLoc)) {
+    addError(`sitemap.xml is missing bounded movie chunk: ${chunkLoc}`);
   }
 }
 

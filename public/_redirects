@@ -1,22 +1,8 @@
 # Cloudflare Pages _redirects is path-only for this project.
 # Host-specific canonical behavior is handled in functions/[[path]].js.
 
-# Dynamic XML endpoints for Google. Keep these above the SPA fallback.
-/sitemap.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-index 200!
-/sitemap-movies.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml 200!
-/sitemap-movies-dynamic https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml 200!
-/feed.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/movie-rss-feed 200!
-/sitemap-movies-recent.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?recent=1&page_size=2000 200!
-/sitemap-movies-upcoming.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?upcoming=1&page_size=5000 200!
-/sitemap-movies-ongoing.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?ongoing=1&page_size=5000 200!
-/sitemap-movies-1.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?page=1&page_size=50000 200!
-/sitemap-movies-2.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?page=2&page_size=5000 200!
-/sitemap-movies-3.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?page=3&page_size=5000 200!
-/sitemap-movies-4.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?page=4&page_size=5000 200!
-/sitemap-movies-5.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?page=5&page_size=5000 200!
-/sitemap-movies-6.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?page=6&page_size=5000 200!
-/sitemap-movies-7.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?page=7&page_size=5000 200!
-/sitemap-movies-8.xml https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sitemap-movies-xml?page=8&page_size=5000 200!
+# Dynamic XML endpoints are handled once in functions/[[path]].js. Keeping a
+# second rewrite layer here bypasses timeout, fallback and cache safeguards.
 
 # Never let missing JS/CSS assets fall through to index.html.
 # A stale browser requesting an old chunk must receive a real 404, not HTML

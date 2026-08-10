@@ -5,6 +5,7 @@ const API_BASE = 'https://ophim1.com';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const SITEMAP_CHUNK_SIZE = 1000;
 
 const XML_HEADERS = {
   'Content-Type': 'application/xml; charset=utf-8',
@@ -66,14 +67,19 @@ function escapeXml(value: string): string {
 }
 
 function repairMojibake(value = ''): string {
-  if (!/(?:Ã|Â|Ä|Æ|áº|á»)/.test(value)) return value;
-  try {
-    const bytes = Uint8Array.from(Array.from(value), (char) => char.charCodeAt(0) & 255);
-    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    return decoded.replace(/\s+/g, ' ').trim() || value;
-  } catch {
-    return value;
+  const looksBroken = (text: string) => /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(text);
+  let repaired = String(value || '');
+  for (let attempt = 0; attempt < 2 && looksBroken(repaired); attempt += 1) {
+    try {
+      const bytes = Uint8Array.from(Array.from(repaired), (char) => char.charCodeAt(0) & 255);
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      if (!decoded || decoded === repaired) break;
+      repaired = decoded;
+    } catch {
+      break;
+    }
   }
+  return repaired.replace(/\s+/g, ' ').trim() || value;
 }
 
 function titleFromSlug(slug = ''): string {
@@ -87,7 +93,7 @@ function titleFromSlug(slug = ''): string {
 
 function cleanImageTitle(name = '', slug = ''): string {
   const repaired = repairMojibake(name);
-  if (/(?:Ã|Â|Ä|Æ|áº|á»)/.test(repaired)) return titleFromSlug(slug) || repaired;
+  if (/(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(repaired)) return titleFromSlug(slug) || repaired;
   return repaired || titleFromSlug(slug) || slug;
 }
 
@@ -356,6 +362,7 @@ async function fetchEligibleUpcomingMovies(limit = 5000): Promise<MovieItem[]> {
     `)
     .eq('eligible_for_index', true)
     .eq('index_tier', 'upcoming')
+    .eq('movies.is_published', true)
     .order('quality_score', { ascending: false })
     .order('checked_at', { ascending: false })
     .limit(Math.min(5000, Math.max(1, limit)));
@@ -391,6 +398,7 @@ async function fetchEligibleOngoingMovies(limit = 5000): Promise<MovieItem[]> {
     `)
     .eq('eligible_for_index', true)
     .eq('index_tier', 'ongoing')
+    .eq('movies.is_published', true)
     .order('freshness_score', { ascending: false })
     .order('last_episode_change_at', { ascending: false, nullsFirst: false })
     .order('quality_score', { ascending: false })
@@ -435,6 +443,7 @@ async function fetchEligibleRecentMovies(limit = 5000): Promise<MovieItem[]> {
     `)
     .eq('eligible_for_index', true)
     .in('index_tier', ['playable', 'ongoing', 'upcoming'])
+    .eq('movies.is_published', true)
     .order('last_episode_change_at', { ascending: false, nullsFirst: false })
     .order('freshness_score', { ascending: false })
     .order('quality_score', { ascending: false })
@@ -479,6 +488,7 @@ async function fetchEligibleMovies(offset = 0, limit = 50000): Promise<MovieItem
       `)
       .eq('eligible_for_index', true)
       .in('index_tier', ['playable', 'ongoing', 'upcoming'])
+      .eq('movies.is_published', true)
       .order('quality_score', { ascending: false })
       .order('movie_id', { ascending: true })
       .range(from, Math.min(from + pageSize - 1, endExclusive - 1));
@@ -504,7 +514,7 @@ async function fetchEligibleMovies(offset = 0, limit = 50000): Promise<MovieItem
 function getSitemapOptions(req: Request): { offset: number; limit: number; outputLimit: number; includeOphim: boolean; mode: 'all' | 'recent' | 'upcoming' | 'ongoing' } {
   const url = new URL(req.url);
   const page = Number(url.searchParams.get('page') || '0');
-  const pageSize = Math.min(50000, Math.max(100, Number(url.searchParams.get('page_size') || '50000')));
+  const pageSize = Math.min(SITEMAP_CHUNK_SIZE, Math.max(100, Number(url.searchParams.get('page_size') || String(SITEMAP_CHUNK_SIZE))));
   const recent = url.searchParams.get('recent') === '1';
   const upcoming = url.searchParams.get('upcoming') === '1';
   const ongoing = url.searchParams.get('ongoing') === '1';
@@ -525,7 +535,7 @@ function getSitemapOptions(req: Request): { offset: number; limit: number; outpu
     return { offset: (Math.floor(page) - 1) * pageSize, limit: pageSize, outputLimit: pageSize, includeOphim: false, mode: 'all' };
   }
 
-  return { offset: 0, limit: 50000, outputLimit: 50000, includeOphim: false, mode: 'all' };
+  return { offset: 0, limit: SITEMAP_CHUNK_SIZE, outputLimit: SITEMAP_CHUNK_SIZE, includeOphim: false, mode: 'all' };
 }
 
 async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: number }> {
@@ -589,7 +599,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     movies = movies.sort(compareMovieSeoOrder);
   }
 
-  movies = movies.slice(0, options.mode === 'all' ? 50000 : options.outputLimit);
+  movies = movies.slice(0, options.outputLimit);
 
   const urls = movies.map((movie) => {
     const slug = movie.slug ?? '';
@@ -598,7 +608,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     const title = cleanImageTitle(movie.name || slug, slug);
     const modifiedTime = movie.seo_last_episode_change_at || movie.updated_at || movie.release_at || movie.modified?.time;
     const trailerPlayer = toTrailerPlayerUrl(movie.trailer_url);
-    const description = String(movie.content || '')
+    const description = repairMojibake(String(movie.content || ''))
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
