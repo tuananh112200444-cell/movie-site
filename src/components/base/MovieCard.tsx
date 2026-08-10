@@ -116,10 +116,7 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
     if (movie.slug) cancelPrefetchMovieDetail(movie.slug);
   }, [movie.slug]);
 
-  const isOphimSource = movie.source_site === 'ophim' || movie.source_name === 'OPhim';
-  const detailUrl = isOphimSource
-    ? `${movieDetailUrl(movie.slug)}?source=ophim`
-    : movieDetailUrl(movie.slug);
+  const detailUrl = movieDetailUrl(movie.slug);
 
   return (
     <Link
@@ -286,8 +283,7 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
     if (movie.slug) cancelPrefetchMovieDetail(movie.slug);
   }, [movie.slug]);
 
-  const isOphimSource = movie.source_site === 'ophim' || movie.source_name === 'OPhim';
-  const detailUrl = isOphimSource ? `${movieDetailUrl(movie.slug)}?source=ophim` : movieDetailUrl(movie.slug);
+  const detailUrl = movieDetailUrl(movie.slug);
 
   return (
     <Link
@@ -394,10 +390,8 @@ function RankCard({ movie, rank, priority }: MovieCardProps) {
   );
   const altText = buildAlt(movie);
 
-  const isOphimSource = movie.source_site === 'ophim' || movie.source_name === 'OPhim';
-
   return (
-    <Link to={isOphimSource ? `${movieDetailUrl(movie.slug)}?source=ophim` : movieDetailUrl(movie.slug)} className="group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
+    <Link to={movieDetailUrl(movie.slug)} className="group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
       <div>
         {/* Poster */}
         <div
@@ -480,10 +474,8 @@ function WideCard({ movie, priority }: MovieCardProps) {
   );
   const altText = buildAlt(movie);
 
-  const isOphimSource = movie.source_site === 'ophim' || movie.source_name === 'OPhim';
-
   return (
-    <Link to={isOphimSource ? `${movieDetailUrl(movie.slug)}?source=ophim` : movieDetailUrl(movie.slug)} className="group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
+    <Link to={movieDetailUrl(movie.slug)} className="group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
       <div className="relative">
         {/* Poster */}
         <div

@@ -18,9 +18,7 @@ interface Props {
 }
 
 function getMovieHref(movie: MovieItem): string {
-  const href = movieDetailUrl(movie.slug);
-  const isOphimSource = movie.source_site === 'ophim' || movie.source_name === 'OPhim';
-  return isOphimSource ? `${href}?source=ophim` : href;
+  return movieDetailUrl(movie.slug);
 }
 
 export default function SearchResultItem({ movie, query, viewMode }: Props) {

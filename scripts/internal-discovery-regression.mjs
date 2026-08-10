@@ -4,6 +4,15 @@ import { pathToFileURL } from 'node:url';
 
 const workerSource = fs.readFileSync('functions/[[path]].js', 'utf8');
 const sitemapGenerator = fs.readFileSync('scripts/generate-static-sitemap.mjs', 'utf8');
+const internalLinkSources = [
+  'src/components/base/MovieCard.tsx',
+  'src/components/feature/SearchSuggestions.tsx',
+  'src/pages/search/components/SearchResultItem.tsx',
+  'src/pages/home/components/HeroBanner.tsx',
+  'src/pages/home/components/QueerUniverseHero.tsx',
+  'src/pages/home/components/QueerUniverseHome.tsx',
+  'src/pages/home/components/TrendingSection.tsx',
+];
 
 for (const [needle, message] of [
   ['renderMovieCatalogIndex', 'missing crawlable movie-catalog index'],
@@ -15,6 +24,10 @@ for (const [needle, message] of [
   assert.ok(workerSource.includes(needle), message);
 }
 assert.ok(sitemapGenerator.includes("{ path: '/kho-phim'"), 'catalog root is missing from the static sitemap');
+for (const sourcePath of internalLinkSources) {
+  const source = fs.readFileSync(sourcePath, 'utf8');
+  assert.ok(!source.includes('?source=ophim'), `${sourcePath} emits a duplicate movie-detail URL variant`);
+}
 
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input) => {
@@ -69,6 +82,14 @@ try {
   const redirectResponse = await worker.onRequest(contextFor('/kho-phim/trang/1?utm_source=test'));
   assert.equal(redirectResponse.status, 301);
   assert.equal(redirectResponse.headers.get('Location'), 'https://khophim.org/kho-phim/trang/1');
+
+  const sourceVariantResponse = await worker.onRequest(contextFor('/phim/phim-thu-nhat?source=ophim'));
+  assert.equal(sourceVariantResponse.status, 301);
+  assert.equal(sourceVariantResponse.headers.get('Location'), 'https://khophim.org/phim/phim-thu-nhat');
+
+  const genreFilterResponse = await worker.onRequest(contextFor('/filter?genre=hanh-dong'));
+  assert.equal(genreFilterResponse.status, 301);
+  assert.equal(genreFilterResponse.headers.get('Location'), 'https://khophim.org/the-loai/hanh-dong');
 } finally {
   globalThis.fetch = originalFetch;
 }
