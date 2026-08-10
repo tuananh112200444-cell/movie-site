@@ -39,7 +39,7 @@ requireText(worker, "qualityTier === 'upcoming'", 'Cloudflare prerender does not
 requireText(worker, '!qualityChecked', 'legacy playable pages lose indexing before asynchronous quality coverage reaches them');
 requireText(worker, "'@type': 'VideoObject'", 'eligible trailer pages lack VideoObject schema');
 requireText(worker, 'embedUrl: trailerEmbedUrl', 'VideoObject does not identify the actual trailer');
-requireText(worker, '<loc>${SITE_URL}/sitemap-movies-upcoming.xml</loc>', 'root sitemap index omits upcoming movies');
+requireText(worker, "'sitemap-movies-upcoming.xml'", 'root sitemap index omits upcoming movies');
 if (worker.includes("|| pathname === '/sitemap-movies-upcoming.xml'")) {
   throw new Error('upcoming sitemap is incorrectly retired by the legacy chunk cleanup route');
 }

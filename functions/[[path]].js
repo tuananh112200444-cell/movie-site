@@ -1255,66 +1255,83 @@ const STATIC_TOPIC_CONTENT = {
 };
 
 function getTopicContent(cleanPath) {
-  if (STATIC_TOPIC_CONTENT[cleanPath]) return STATIC_TOPIC_CONTENT[cleanPath];
+  const fallback = {
+    intro: ['Trang này giúp người xem khám phá nhanh các phim phù hợp theo chủ đề, quốc gia, thể loại hoặc trạng thái phát hành.'],
+    highlights: ['Danh sách phim được cập nhật thường xuyên.', 'Có liên kết tới các danh mục phim liên quan.', 'Có thể tìm phim theo tên, thể loại và quốc gia.'],
+    faq: [['Trang này dùng để làm gì?', 'Trang giúp người xem tìm đúng nhóm phim và chuyển nhanh tới nội dung muốn xem.']],
+  };
+  const topic = STATIC_TOPIC_CONTENT[cleanPath] || fallback;
+  const isSearchEngineCopy = (text) => /(?:\bSEO\b|Googlebot|topical authority|canonical|công cụ tìm kiếm|cụm từ khóa|tăng tín hiệu|ưu tiên crawl|sitemap)/i.test(String(text || ''));
+  const intro = (topic.intro || []).filter((text) => !isSearchEngineCopy(text));
+  const highlights = (topic.highlights || []).filter((text) => !isSearchEngineCopy(text));
+  const faq = (topic.faq || []).filter(([question, answer]) => !isSearchEngineCopy(question) && !isSearchEngineCopy(answer));
   return {
-    intro: ['Trang này là một phần trong cụm nội dung xem phim online của KhoPhim, được tối ưu để người xem và Google hiểu rõ chủ đề, danh mục và liên kết nội bộ liên quan.'],
-    highlights: ['Có canonical riêng.', 'Liên kết về các danh mục phim chính.', 'Hỗ trợ truy vấn tiếng Việt có dấu và không dấu.'],
-    faq: [['Trang này dùng để làm gì?', 'Trang giúp người xem khám phá đúng nhóm phim cần tìm và giúp công cụ tìm kiếm hiểu cấu trúc nội dung của KhoPhim.']],
+    intro: intro.length ? intro : fallback.intro,
+    highlights: highlights.length ? highlights : fallback.highlights,
+    faq: faq.length ? faq : fallback.faq,
   };
 }
 
-function getKeywordCluster(cleanPath, meta) {
-  const base = [
-    'xem phim',
-    'xem phim online',
-    'xem phim miễn phí',
-    'xem phim HD',
-    'xem phim Vietsub',
-    'phim mới nhất',
-    'phim hay',
-    'phim hot 2026',
-    'phim lẻ',
-    'phim bộ',
-    'phim chiếu rạp',
-    'phim Việt Nam',
-    'phim Hàn Quốc',
-    'phim Trung Quốc',
-    'phim Âu Mỹ',
-    'anime Vietsub',
-    'web xem phim',
-    'kho phim online',
-  ];
+const STATIC_MOVIE_SECTIONS = {
+  '/': ['trending', 'onlyflix-moi'],
+  '/phim-moi-cap-nhat': ['trending'],
+  '/phim-moi-nhat': ['trending'],
+  '/phim-hot-2026': ['trending'],
+  '/phim-le': ['phim-le'],
+  '/phim-bo': ['phim-bo'],
+  '/tv-shows': ['phim-bo'],
+  '/phim-chieu-rap': ['phim-chieu-rap'],
+  '/hoat-hinh': ['hoat-hinh'],
+  '/anime': ['hoat-hinh'],
+  '/phim-han-quoc': ['han-quoc'],
+  '/phim-trung-quoc': ['trung-quoc'],
+  '/phim-thai-lan': ['thai-lan'],
+  '/phim-au-my': ['au-my'],
+};
 
-  const byPath = {
-    '/xem-phim': ['xem phim hay', 'xem phim mới', 'xem phim online hay', 'xem phim nhanh', 'trang xem phim', 'web phim hay'],
-    '/xem-phim-online': ['xem phim online miễn phí', 'xem phim online Vietsub', 'xem phim không cần tải app', 'xem phim trên điện thoại', 'xem phim trên máy tính'],
-    '/xem-phim-mien-phi': ['xem phim mien phi', 'phim miễn phí', 'phim online miễn phí', 'xem phim miễn phí HD', 'xem phim miễn phí Vietsub'],
-    '/xem-phim-hd': ['xem phim HD online', 'phim Full HD', 'phim chất lượng cao', 'xem phim nét', 'phim HD Vietsub', 'phim 4K'],
-    '/xem-phim-vietsub': ['xem phim vietsub', 'phim phụ đề Việt', 'phim phu de Viet', 'phim Vietsub online', 'phim Vietsub HD'],
-    '/web-xem-phim': ['web xem phim online', 'website xem phim', 'trang xem phim online', 'web phim Vietsub', 'web phim HD'],
-    '/kho-phim-online': ['kho phim', 'kho phim HD', 'kho phim Vietsub', 'kho phim mới', 'thư viện phim online', 'tổng hợp phim hay'],
-    '/phim-chieu-rap': ['xem phim chiếu rạp', 'phim chieu rap', 'phim rạp Vietsub', 'bom tấn chiếu rạp', 'phim điện ảnh mới', 'phim rạp Việt Nam'],
-    '/phim-viet-nam': ['xem phim Việt Nam', 'phim Viet Nam', 'phim Việt Nam mới', 'phim chiếu rạp Việt', 'phim bộ Việt Nam', 'web drama Việt'],
-    '/phim-han-quoc': ['xem phim Hàn Quốc', 'phim Han Quoc', 'drama Hàn', 'phim Hàn mới', 'phim Hàn Vietsub', 'phim bộ Hàn Quốc'],
-    '/phim-trung-quoc': ['xem phim Trung Quốc', 'phim Trung Quoc', 'phim cổ trang', 'phim tiên hiệp', 'phim ngôn tình', 'phim Trung Vietsub'],
-    '/phim-au-my': ['xem phim Âu Mỹ', 'phim Au My', 'phim Hollywood', 'phim hành động Mỹ', 'phim bom tấn', 'phim viễn tưởng'],
-    '/anime': ['xem anime', 'anime Vietsub', 'anime mới', 'anime mùa mới', 'hoạt hình Nhật Bản', 'xem anime online'],
-    '/phim-bo': ['xem phim bộ', 'phim bộ Vietsub', 'phim bộ hay', 'phim trọn bộ', 'phim full', 'series mới'],
-    '/phim-le': ['xem phim lẻ', 'phim lẻ Vietsub', 'phim lẻ hay', 'phim điện ảnh', 'phim lẻ mới', 'phim lẻ HD'],
-    '/phim-vietsub': ['phim Vietsub', 'xem phim Vietsub', 'phim phụ đề Việt', 'phim vietsub hd', 'anime Vietsub', 'drama Vietsub'],
-    '/phim-hay': ['phim hay nên xem', 'xem phim hay', 'phim đáng xem', 'phim hot', 'phim hay cuối tuần', 'gợi ý phim hay'],
-    '/phim-moi-nhat': ['phim mới', 'phim mới cập nhật', 'phim mới hôm nay', 'phim vừa ra tập', 'phim mới Vietsub', 'phim cập nhật nhanh'],
-    '/phim-dang-chieu': ['phim đang chiếu', 'phim đang cập nhật', 'phim tập mới', 'phim bộ đang chiếu', 'anime đang chiếu', 'lịch ra tập'],
-    '/vu-tru-dam-my': ['phim đam mỹ', 'phim dam my', 'BL Vietsub', 'phim BL Thái', 'GL bách hợp', 'phim bách hợp'],
-  };
+async function fetchStaticMovieLinks(context, cleanPath) {
+  if (!context?.env?.ASSETS || typeof context.env.ASSETS.fetch !== 'function') return [];
+  try {
+    const response = await context.env.ASSETS.fetch(new Request(`${SITE_URL}/home-fallback.json`, {
+      headers: { Accept: 'application/json' },
+    }));
+    if (!response.ok) return [];
+    const payload = await response.json();
+    const sections = payload && payload.sections && typeof payload.sections === 'object' ? payload.sections : {};
+    const sectionKeys = STATIC_MOVIE_SECTIONS[cleanPath] || ['trending'];
+    const seen = new Set();
+    const movies = [];
+    for (const sectionKey of sectionKeys) {
+      for (const movie of Array.isArray(sections[sectionKey]) ? sections[sectionKey] : []) {
+        const slug = String(movie?.slug || '').trim();
+        const name = String(movie?.name || '').trim();
+        if (!slug || !name || seen.has(slug)) continue;
+        seen.add(slug);
+        movies.push({ slug, name, year: movie.year, episode: movie.episode_current });
+        if (movies.length >= 18) return movies;
+      }
+    }
+    return movies;
+  } catch {
+    return [];
+  }
+}
 
-  const extra = byPath[cleanPath] || [];
-  return keywordVariants([meta.h1, meta.title, meta.description, ...base, ...extra]).slice(0, 42);
+function renderStaticMovieDiscovery(movies) {
+  if (!movies.length) return '';
+  return `<section aria-labelledby="movie-discovery-heading">
+      <h2 id="movie-discovery-heading">Phim nổi bật đang có trên KhoPhim</h2>
+      <ul>
+        ${movies.map((movie) => {
+          const details = [movie.year, movie.episode].filter(Boolean).join(' · ');
+          return `<li><a href="${SITE_URL}/phim/${encodeURIComponent(movie.slug)}">${escapeHtml(movie.name)}</a>${details ? ` <span>${escapeHtml(details)}</span>` : ''}</li>`;
+        }).join('')}
+      </ul>
+    </section>`;
 }
 
 function renderTopicBody(cleanPath, meta, canonical) {
   const topic = getTopicContent(cleanPath);
-  const keywordCluster = getKeywordCluster(cleanPath, meta);
   const isFreshHub = cleanPath === '/phim-moi-nhat' || cleanPath === '/phim-moi-cap-nhat';
   const relatedLinks = [
     ['/xem-phim-online', 'Xem phim online'],
@@ -1345,23 +1362,16 @@ function renderTopicBody(cleanPath, meta, canonical) {
     </section>
     ${isFreshHub ? `<section>
       <h2>Ưu tiên phim và tập mới cập nhật</h2>
-      <p>KhoPhim đặt các phim vừa ra tập, phim mới thêm nguồn xem và phim có cập nhật gần nhất vào luồng ưu tiên crawl. Googlebot có thể đi từ trang này sang sitemap phim mới để phát hiện URL phim vừa đổi tập nhanh hơn.</p>
+      <p>KhoPhim ưu tiên hiển thị phim vừa ra tập, phim mới thêm nguồn xem và phim có cập nhật gần nhất để người xem tìm nội dung mới nhanh hơn.</p>
       <ul>
-        <li>Phim vừa cập nhật được ghi rõ trạng thái tập mới trong title, mô tả, H1 và schema.</li>
-        <li>Sitemap phim mới cập nhật được đặt trong sitemap index để Google đọc nhóm URL mới trước.</li>
-        <li>Các trang phim mới liên kết ngược về phim mới cập nhật, phim mới nhất và sitemap recent để tăng tín hiệu freshness.</li>
+        <li>Trạng thái tập mới được ghi rõ ngay trên danh sách phim.</li>
+        <li>Phim mới cập nhật được tách riêng để người xem không phải tìm lại toàn bộ thư viện.</li>
+        <li>Các danh mục liên quan giúp chuyển nhanh giữa phim mới, phim đang chiếu và phim theo thể loại.</li>
       </ul>
     </section>` : ''}
     <section>
       <h2>Câu hỏi thường gặp</h2>
       ${topic.faq.map(([question, answer]) => `<article><h3>${escapeHtml(question)}</h3><p>${escapeHtml(answer)}</p></article>`).join('')}
-    </section>
-    <section>
-      <h2>Cụm từ khóa liên quan</h2>
-      <p>KhoPhim tối ưu các biến thể tìm kiếm tự nhiên theo tiếng Việt có dấu và không dấu để người xem dễ tìm đúng phim cần xem.</p>
-      <ul>
-        ${keywordCluster.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
-      </ul>
     </section>
     <nav aria-label="Danh mục phim liên quan">
       ${relatedLinks.map(([href, label]) => `<a href="${SITE_URL}${href}">${escapeHtml(label)}</a>`).join('')}
@@ -1369,29 +1379,16 @@ function renderTopicBody(cleanPath, meta, canonical) {
     </nav>`;
 }
 
-function renderStaticPrerender(pathname) {
+async function renderStaticPrerender(pathname, context) {
   const cleanPath = getCanonicalPath(pathname);
   const meta = CLEAN_STATIC_META[cleanPath] || dynamicStaticMeta(cleanPath);
   if (!meta) return null;
   const noIndex = isNoIndexPath(cleanPath);
 
   const canonical = `${SITE_URL}${cleanPath === '/' ? '/' : cleanPath}`;
-  const keywords = keywordVariants([
-    meta.h1,
-    meta.title.replace(/\s*\|\s*KhoPhim$/i, ''),
-    meta.description,
-    'xem phim online',
-    'xem phim',
-    'xem phim HD',
-    'xem phim Vietsub',
-    'xem phim miễn phí',
-    'xem phim chiếu rạp',
-    'xem phim Việt Nam',
-    'phim HD',
-    'KhoPhim',
-  ]).join(', ');
   const topic = getTopicContent(cleanPath);
   const isFreshHub = cleanPath === '/phim-moi-nhat' || cleanPath === '/phim-moi-cap-nhat';
+  const staticMovies = await fetchStaticMovieLinks(context, cleanPath);
   const schema = [
     {
       '@context': 'https://schema.org',
@@ -1402,7 +1399,6 @@ function renderStaticPrerender(pathname) {
       description: meta.description,
       url: canonical,
       inLanguage: 'vi-VN',
-      keywords,
       isPartOf: {
         '@type': 'WebSite',
         name: 'KhoPhim',
@@ -1432,8 +1428,20 @@ function renderStaticPrerender(pathname) {
         acceptedAnswer: { '@type': 'Answer', text: answer },
       })),
     },
+    ...(staticMovies.length ? [{
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      name: `Phim nổi bật - ${meta.h1}`,
+      numberOfItems: staticMovies.length,
+      itemListElement: staticMovies.map((movie, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: movie.name,
+        url: `${SITE_URL}/phim/${encodeURIComponent(movie.slug)}`,
+      })),
+    }] : []),
   ];
-  const body = renderTopicBody(cleanPath, meta, canonical);
+  const body = `${renderStaticMovieDiscovery(staticMovies)}${renderTopicBody(cleanPath, meta, canonical)}`;
   return new Response(renderHtml({
     title: meta.title,
     description: meta.description,
@@ -1441,7 +1449,6 @@ function renderStaticPrerender(pathname) {
     h1: meta.h1,
     body,
     schema,
-    keywords,
     robots: noIndex
       ? 'noindex, follow'
       : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
@@ -1897,53 +1904,86 @@ function renderMovieTemporarilyUnavailable(pathname, slug) {
   });
 }
 
-async function proxySitemap(pathname, request, context) {
-  if (pathname === '/sitemap.xml' || isLegacySitemapAlias(pathname)) {
-    const today = currentVietnamDate();
-    const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
+const EDGE_SITEMAP_CHUNK_SIZE = 1000;
+const EDGE_FALLBACK_MOVIE_CHUNKS = 18;
+
+function repairSitemapMojibake(value = '') {
+  const looksBroken = (text) => /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(text);
+  const repairText = (text) => {
+    let repaired = text;
+    for (let attempt = 0; attempt < 2 && looksBroken(repaired); attempt += 1) {
+      try {
+        const bytes = Uint8Array.from(Array.from(repaired), (character) => character.charCodeAt(0) & 255);
+        const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        if (!decoded || decoded === repaired) break;
+        repaired = decoded;
+      } catch {
+        break;
+      }
+    }
+    return repaired;
+  };
+  return String(value || '').replace(/>([^<>]+)</g, (match, text) => `>${repairText(text)}<`);
+}
+
+function renderSitemapIndexXml(movieChunkCount = EDGE_FALLBACK_MOVIE_CHUNKS) {
+  const today = currentVietnamDate();
+  const files = [
+    'sitemap-static.xml',
+    'sitemap-seo-landing.xml',
+    'sitemap-movies-recent.xml',
+    'sitemap-movies-upcoming.xml',
+    'sitemap-movies-ongoing.xml',
+    ...Array.from({ length: movieChunkCount }, (_, index) => `sitemap-movies-${index + 1}.xml`),
+    'feed.xml',
+  ];
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <!-- khophim.org Sitemap Index - Last updated: ${today} -->
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-static.xml</loc>
+${files.map((file) => `  <sitemap>
+    <loc>${SITE_URL}/${file}</loc>
     <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-seo-landing.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-movies-recent.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-movies-upcoming.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-movies-ongoing.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-movies-1.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/feed.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
+  </sitemap>`).join('\n')}
 </sitemapindex>`;
-    return new Response(request.method === 'HEAD' ? null : sitemapIndex, {
-      headers: {
-        'Content-Type': 'application/xml; charset=utf-8',
-        'Cache-Control': 'public, max-age=1800, s-maxage=3600',
-        'X-Sitemap-Proxy': 'cloudflare-pages-static-index',
-        ...SECURITY_HEADERS,
-      },
-    });
+}
+
+async function proxySitemap(pathname, request, context) {
+  if (pathname === '/sitemap.xml' || isLegacySitemapAlias(pathname)) {
+    try {
+      const response = await fetch(`${SUPABASE_FUNCTION_BASE}/sitemap-index?v=20260810-bounded-chunks-v1`, {
+        headers: { 'Accept': 'application/xml', 'User-Agent': request.headers.get('user-agent') || 'KhoPhimBot/1.0' },
+        cf: { cacheTtl: 3600, cacheEverything: true },
+        signal: AbortSignal.timeout(5000),
+      });
+      const xml = await response.text();
+      const movieChunkCount = (xml.match(/sitemap-movies-\d+\.xml/g) || []).length;
+      if (!response.ok || !xml.includes('<sitemapindex') || movieChunkCount < EDGE_FALLBACK_MOVIE_CHUNKS) {
+        throw new Error(`Sitemap index upstream ${response.status}, chunks=${movieChunkCount}`);
+      }
+      return new Response(request.method === 'HEAD' ? null : xml, {
+        headers: {
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400',
+          'X-Sitemap-Proxy': 'cloudflare-pages-dynamic-index',
+          ...SECURITY_HEADERS,
+        },
+      });
+    } catch {
+      const sitemapIndex = renderSitemapIndexXml();
+      return new Response(request.method === 'HEAD' ? null : sitemapIndex, {
+        headers: {
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400',
+          'X-Sitemap-Proxy': 'cloudflare-pages-fallback-index',
+          'X-Upstream-Degraded': '1',
+          ...SECURITY_HEADERS,
+        },
+      });
+    }
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  const sitemapVersion = '20260723-ongoing-quality-v9';
+  const sitemapVersion = '20260810-bounded-chunks-v4';
   let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies.xml' || pathname === '/sitemap-movies-dynamic') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=5000&v=${sitemapVersion}`;
@@ -1956,7 +1996,7 @@ async function proxySitemap(pathname, request, context) {
   } else if (pathname === '/feed.xml') {
     target = `${SUPABASE_FUNCTION_BASE}/movie-rss-feed?v=${sitemapVersion}`;
   } else if (movieChunkMatch) {
-    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=50000&v=${sitemapVersion}`;
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=${EDGE_SITEMAP_CHUNK_SIZE}&v=${sitemapVersion}`;
   }
   const cacheKey = new Request(target, { method: 'GET' });
 
@@ -1967,8 +2007,8 @@ async function proxySitemap(pathname, request, context) {
         const headers = new Headers(cached.headers);
         headers.set('X-Sitemap-Proxy', 'cloudflare-pages');
         headers.set('X-Sitemap-Cache', 'HIT');
-        const cachedCount = Number(headers.get('X-Movie-Count') || '0');
-        if (movieChunkMatch && cachedCount === 0) {
+        const cachedCount = headers.get('X-Movie-Count');
+        if (movieChunkMatch && cachedCount === '0') {
           headers.set('Cache-Control', 'no-store');
           return new Response(null, {
             status: 404,
@@ -1987,15 +2027,26 @@ async function proxySitemap(pathname, request, context) {
     // An RSS feed is supplementary discovery data. Do not make crawlers wait
     // for a congested database: the valid emergency feed below is preferable
     // to a 30-second timeout and keeps the endpoint crawlable.
-    const upstreamTimeoutMs = (
-      pathname === '/feed.xml' || pathname === '/sitemap-movies-recent.xml'
-    ) ? 5000 : 30000;
-    const response = await fetch(target, {
-      headers: { 'Accept': 'application/xml', 'User-Agent': request.headers.get('user-agent') || 'KhoPhimBot/1.0' },
-      cf: { cacheTtl: isOngoingSitemap ? 600 : 1800, cacheEverything: true },
-      signal: AbortSignal.timeout(upstreamTimeoutMs),
-    });
-    if (!response.ok) throw new Error(`Sitemap upstream ${response.status}`);
+    const upstreamTimeoutMs = movieChunkMatch
+      ? 8000
+      : ((pathname === '/feed.xml' || pathname === '/sitemap-movies-recent.xml') ? 5000 : 30000);
+    const maxAttempts = movieChunkMatch ? 2 : 1;
+    let response = null;
+    let upstreamError = null;
+    for (let attempt = 0; attempt < maxAttempts && !response; attempt += 1) {
+      try {
+        const candidate = await fetch(target, {
+          headers: { 'Accept': 'application/xml', 'User-Agent': request.headers.get('user-agent') || 'KhoPhimBot/1.0' },
+          cf: { cacheTtl: isOngoingSitemap ? 600 : 1800, cacheEverything: true },
+          signal: AbortSignal.timeout(upstreamTimeoutMs),
+        });
+        if (candidate.ok) response = candidate;
+        else upstreamError = new Error(`Sitemap upstream ${candidate.status}`);
+      } catch (error) {
+        upstreamError = error;
+      }
+    }
+    if (!response) throw upstreamError || new Error('Sitemap upstream unavailable');
     const headers = new Headers(response.headers);
     headers.set('Content-Type', 'application/xml; charset=utf-8');
     headers.set(
@@ -2007,15 +2058,19 @@ async function proxySitemap(pathname, request, context) {
     headers.set('X-Sitemap-Proxy', 'cloudflare-pages');
     headers.set('X-Sitemap-Cache', 'MISS');
     headers.delete('Set-Cookie');
-    const movieCount = Number(headers.get('X-Movie-Count') || '0');
-    if (movieChunkMatch && movieCount === 0) {
+    headers.delete('Content-Length');
+    const movieCount = headers.get('X-Movie-Count');
+    if (movieChunkMatch && movieCount === '0') {
       headers.set('Cache-Control', 'no-store');
       return new Response(request.method === 'HEAD' ? null : '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
         status: 404,
         headers,
       });
     }
-    const sitemapResponse = new Response(response.body, {
+    const sitemapBody = request.method === 'HEAD'
+      ? null
+      : repairSitemapMojibake(await response.text());
+    const sitemapResponse = new Response(sitemapBody, {
       status: response.status,
       statusText: response.statusText,
       headers,
@@ -2565,7 +2620,7 @@ export async function onRequest(context) {
       putCachedPrerender(context, cacheKey, movieResponse, request);
       return movieResponse;
     }
-    const staticResponse = renderStaticPrerender(pathname);
+    const staticResponse = await renderStaticPrerender(pathname, context);
     if (staticResponse) return staticResponse;
   }
 

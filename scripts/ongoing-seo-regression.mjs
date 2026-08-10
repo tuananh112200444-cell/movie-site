@@ -85,11 +85,14 @@ requireText(worker, 'Phim đang chiếu và cập nhật tập mới', 'ongoing 
 requireText(worker, "'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'", 'ongoing prerender cache can hide new episode metadata for too long');
 requireText(worker, "'@type': 'Episode'", 'ongoing structured data lacks Episode information');
 requireText(worker, '/sitemap-movies-ongoing.xml', 'Cloudflare sitemap routing omits ongoing movies');
-requireText(worker, '<loc>${SITE_URL}/sitemap-movies-1.xml</loc>', 'root sitemap omits the complete quality-gated movie chunk');
-requireText(worker, 'page_size=50000', 'numbered sitemap cannot expose the complete approved catalogue');
+requireText(worker, 'renderSitemapIndexXml', 'root sitemap has no bounded fallback index');
+requireText(worker, 'EDGE_FALLBACK_MOVIE_CHUNKS = 18', 'root sitemap fallback omits approved catalogue chunks');
+requireText(worker, 'EDGE_SITEMAP_CHUNK_SIZE = 1000', 'numbered sitemap chunks are too large for stable production requests');
 requireText(sitemapGenerator, "'sitemap-movies-ongoing.xml'", 'generated root sitemap omits ongoing movies');
 requireText(movieSitemapGenerator, 'fetchSitemapWithLastKnownGood', 'a transient Supabase outage can break the entire frontend build');
-requireText(redirects, '/sitemap-movies-ongoing.xml', 'static fallback routing omits ongoing movies');
+if (/^\/sitemap[^\s]*\s+https:\/\//m.test(redirects)) {
+  failures.push('a duplicate _redirects sitemap proxy bypasses Cloudflare timeout and fallback safeguards');
+}
 
 requireText(gsc, "item.tier === 'ongoing' && item.episodeChangedAt > lastInspection", 'GSC does not re-inspect a movie after a new episode');
 requireText(gsc, "item.tier === 'ongoing' ? 3", 'GSC does not prioritize actively airing movies');
