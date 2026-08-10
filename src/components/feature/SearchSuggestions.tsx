@@ -45,9 +45,7 @@ function addToHistory(term: string): void {
 }
 
 function getMovieHref(movie: Movie): string {
-  const href = movieDetailUrl(movie.slug);
-  const isOphimSource = movie.source_site === 'ophim' || movie.source_name === 'OPhim';
-  return isOphimSource ? `${href}?source=ophim` : href;
+  return movieDetailUrl(movie.slug);
 }
 
 /* ── Trending searches (static only — no direct OPhim calls) ── */

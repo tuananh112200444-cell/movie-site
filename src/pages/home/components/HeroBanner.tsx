@@ -28,11 +28,7 @@ function getDisplayTime(value?: string): string | null {
   return time;
 }
 function getMovieDetailHref(movie: MovieItem): string {
-  const href = movieDetailUrl(movie.slug);
-  const isOphimSource =
-    movie.source_site === 'ophim' ||
-    movie.source_name === 'OPhim';
-  return isOphimSource ? `${href}?source=ophim` : href;
+  return movieDetailUrl(movie.slug);
 }
 
 function HeroBanner({ movies, loading }: HeroBannerProps) {

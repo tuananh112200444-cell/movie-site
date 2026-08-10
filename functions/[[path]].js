@@ -420,6 +420,7 @@ const NOINDEX_PATHS = [
   /^\/admin-seo/,
   /^\/admin-reviews/,
   /^\/search/,
+  /^\/filter(?:\/|$)/,
   /^\/yeu-thich/,
   /^\/login/,
   /^\/dang-ky/,
@@ -2796,6 +2797,14 @@ export async function onRequest(context) {
     return canonicalRedirect(url, pathname);
   }
 
+  // Historical cards emitted ?source=ophim even though the canonical detail
+  // pipeline now selects healthy sources itself. Redirect those variants so
+  // Google and browser caches converge on one movie-detail URL.
+  if (/^\/phim\/[^/]+\/?$/.test(pathname) && url.searchParams.has('source')) {
+    url.searchParams.delete('source');
+    return canonicalRedirect(url, pathname);
+  }
+
   const consolidatedSeoPath = CONSOLIDATED_SEO_PATHS.get(pathname.replace(/\/+$/, '') || '/');
   if (consolidatedSeoPath) {
     url.search = '';
@@ -2811,6 +2820,14 @@ export async function onRequest(context) {
   }
 
   if (pathname === '/filter') {
+    const genre = String(url.searchParams.get('genre') || '').toLowerCase();
+    const onlyGenreFilter = /^[a-z0-9-]+$/.test(genre)
+      && [...url.searchParams.keys()].every((key) => key === 'genre');
+    if (onlyGenreFilter) {
+      url.search = '';
+      return canonicalRedirect(url, `/the-loai/${genre}`);
+    }
+
     const countryCanonical = new Map([
       ['viet-nam', '/phim-viet-nam'],
       ['han-quoc', '/phim-han-quoc'],

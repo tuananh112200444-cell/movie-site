@@ -286,7 +286,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
 
   return (
     <div data-tcard className={`${HOME_POSTER_ITEM_CLASS} contain-layout`}>
-      <Link to={`${movieDetailUrl(movie.slug || '')}?source=ophim`} className="block cursor-pointer group">
+      <Link to={movieDetailUrl(movie.slug || '')} className="block cursor-pointer group">
         {/* Poster frame â€” all hover via CSS group-hover, zero JS re-renders */}
         <div
           className={`
