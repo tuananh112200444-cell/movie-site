@@ -35,8 +35,8 @@ if (
 if (stickyBanner.includes('wsrv.nl') || !stickyBanner.includes("const BANNER_IMAGE = '/banners/winaz-top-20260722.gif?v=20260722'")) {
   failures.push('The sticky WinAZ banner must load its original animated GIF, not a converted WebP.');
 }
-if (!navBanner.includes("if (pathname.endsWith('.gif')) return absolute;")) {
-  failures.push('Navigation banners must bypass image conversion for animated GIF creatives.');
+if (!navBanner.includes('format=auto,anim=true') || !navBanner.includes('restoreOriginalBanner')) {
+  failures.push('Navigation GIF banners must preserve animation through Cloudflare and retain an original-GIF fallback.');
 }
 
 if (!movieApi.includes('phimimg\\.com|icdn\\.darkbytes\\.xyz')) {

@@ -1677,6 +1677,10 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
     && Boolean(name && poster && content.length >= 20);
   const isIndexable = isIndexableUpcoming || isIndexablePlayable || isIndexableFallback;
   const releaseDateText = formatVietnamDate(movie.release_at);
+  const releaseDateValue = String(movie.release_at || '').trim();
+  const releaseDateIso = /^\d{4}-\d{2}-\d{2}/.test(releaseDateValue)
+    ? releaseDateValue.slice(0, 10)
+    : (year ? `${year}-01-01` : undefined);
   const episodeChangedAt = Date.parse(String(movie.seo_last_episode_change_at || '')) || 0;
   const modifiedAt = Math.max(getMovieModifiedAt(movie), episodeChangedAt);
   const modifiedIso = modifiedAt ? new Date(modifiedAt).toISOString() : undefined;
@@ -1686,7 +1690,6 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
   const latestEpisodeNumber = Number(movie.seo_latest_episode_number || movie.current_episode || 0);
   const totalEpisodeCount = Number(movie.seo_declared_total_episodes || parseEpisodeCount(movie.episode_total) || 0);
   const episodeProgress = Number(movie.seo_episode_progress_percent || 0);
-  const freshnessScore = Number(movie.seo_freshness_score || 0);
   const nextEpisodeText = formatVietnamDateTime(movie.seo_next_episode_at || movie.next_episode_at);
   const updateIntentText = (isOngoing || isFreshUpdate) && episodeText && !isUpcoming && !isTrailerOnly
     ? `Tập mới cập nhật: ${episodeText}.`
@@ -1741,7 +1744,7 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
       image: poster,
       thumbnailUrl: poster,
       description,
-      datePublished: year ? `${year}-01-01` : undefined,
+      datePublished: releaseDateIso,
       dateModified: modifiedIso,
       numberOfEpisodes: totalEpisodeCount,
       episode: episodeText ? {
@@ -1840,8 +1843,7 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
     ${episodeText ? `<p>Trạng thái hiện tại: ${escapeHtml(episodeText)}</p>` : ''}
     ${isOngoing && totalEpisodeCount ? `<p>Tiến độ phát sóng: ${latestEpisodeNumber}/${totalEpisodeCount} tập (${episodeProgress}%).</p>` : ''}
     ${isOngoing && nextEpisodeText ? `<p>Tập tiếp theo dự kiến: ${escapeHtml(nextEpisodeText)}</p>` : ''}
-    ${isOngoing ? `<p>Độ mới của cập nhật tập: ${freshnessScore}/100. <a href="${SITE_URL}/phim-dang-chieu">Xem các phim đang chiếu khác</a>.</p>` : ''}
-    ${isFreshUpdate && modifiedText ? `<p>Ưu tiên cập nhật mới: ${escapeHtml(name)} ${episodeText ? `${escapeHtml(episodeText)} ` : ''}được làm mới lúc ${escapeHtml(modifiedText)}.</p>` : ''}
+    ${modifiedText ? `<p>Dữ liệu phim được cập nhật lúc ${escapeHtml(modifiedText)}.</p>` : ''}
     ${actorLinks ? `<p>Diễn viên: ${actorLinks}</p>` : ''}
     ${directorLinks ? `<p>Đạo diễn: ${directorLinks}</p>` : ''}
     <p>${escapeHtml(description)}</p>
