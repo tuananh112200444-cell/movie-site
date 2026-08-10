@@ -497,8 +497,8 @@ if (/\bkeywords="[^"]{250,}"/i.test(homePage)) {
 if (/reviewRating|itemType="https:\/\/schema\.org\/Rating"|ratingValue.*8/.test(movieReview)) {
   addError('Movie editorial content must not publish a fabricated fixed rating.');
 }
-if (!cloudflareFunction.includes("SEO_PRERENDER_VERSION = '20260805-playback-truth-v16'")) {
-  addError('SEO prerender cache must use the playback-truth release after metadata changes.');
+if (!cloudflareFunction.includes("SEO_PRERENDER_VERSION = '20260810-internal-discovery-v17'")) {
+  addError('SEO prerender cache must use the internal-discovery release after link-graph changes.');
 }
 if (!cloudflareFunction.includes("includes('noindex')) return;")) {
   addError('Transient noindex movie prerenders must never be stored in the shared edge cache.');

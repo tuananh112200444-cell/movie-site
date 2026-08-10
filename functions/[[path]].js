@@ -5,7 +5,7 @@ const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functio
 const SUPABASE_REST_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/rest/v1';
 // This is Supabase's public browser key (RLS still applies), not a service key.
 const SUPABASE_PUBLIC_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
-const SEO_PRERENDER_VERSION = '20260805-playback-truth-v16';
+const SEO_PRERENDER_VERSION = '20260810-internal-discovery-v17';
 const CONSOLIDATED_SEO_PATHS = new Map([
   ['/xem-phim', '/xem-phim-online'],
   ['/xem-phim-mien-phi', '/xem-phim-online'],
@@ -1317,6 +1317,46 @@ async function fetchStaticMovieLinks(context, cleanPath) {
   }
 }
 
+function relatedHomeSectionKeys(movie) {
+  const categorySlugs = new Set(taxonomyItems(movie?.category).map((item) => item.slug));
+  const countrySlugs = new Set(taxonomyItems(movie?.country).map((item) => item.slug));
+  const keys = [];
+  if (categorySlugs.has('hoat-hinh') || categorySlugs.has('anime')) keys.push('hoat-hinh');
+  if (countrySlugs.has('han-quoc')) keys.push('han-quoc');
+  if (countrySlugs.has('trung-quoc')) keys.push('trung-quoc');
+  if (countrySlugs.has('thai-lan')) keys.push('thai-lan');
+  if (countrySlugs.has('au-my')) keys.push('au-my');
+  keys.push(String(movie?.type || '') === 'series' ? 'phim-bo' : 'phim-le', 'trending');
+  return [...new Set(keys)];
+}
+
+async function fetchContextualMovieLinks(context, movie, currentSlug) {
+  if (!context?.env?.ASSETS || typeof context.env.ASSETS.fetch !== 'function') return [];
+  try {
+    const response = await context.env.ASSETS.fetch(new Request(`${SITE_URL}/home-fallback.json`, {
+      headers: { Accept: 'application/json' },
+    }));
+    if (!response.ok) return [];
+    const payload = await response.json();
+    const sections = payload && payload.sections && typeof payload.sections === 'object' ? payload.sections : {};
+    const seen = new Set([String(currentSlug || '').trim()]);
+    const related = [];
+    for (const sectionKey of relatedHomeSectionKeys(movie)) {
+      for (const candidate of Array.isArray(sections[sectionKey]) ? sections[sectionKey] : []) {
+        const slug = String(candidate?.slug || '').trim();
+        const name = String(candidate?.name || '').trim();
+        if (!slug || !name || seen.has(slug)) continue;
+        seen.add(slug);
+        related.push({ slug, name, year: candidate.year, episode: candidate.episode_current });
+        if (related.length >= 8) return related;
+      }
+    }
+    return related;
+  } catch {
+    return [];
+  }
+}
+
 function renderStaticMovieDiscovery(movies) {
   if (!movies.length) return '';
   return `<section aria-labelledby="movie-discovery-heading">
@@ -1347,6 +1387,7 @@ function renderTopicBody(cleanPath, meta, canonical) {
     ['/phim-trung-quoc', 'Phim Trung Quốc'],
     ['/phim-au-my', 'Phim Âu Mỹ'],
     ['/anime', 'Anime Vietsub'],
+    ['/kho-phim', 'Toàn bộ kho phim'],
     ['/search', 'Tìm kiếm phim'],
   ].filter(([href]) => href !== cleanPath);
   return `<p>${escapeHtml(meta.description)}</p>
@@ -1572,7 +1613,7 @@ function renderEmergencyRss() {
 </rss>`;
 }
 
-function renderMoviePrerender(pathname, movie, slug) {
+function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
   const name = String(movie.name || slug);
   const origin = String(movie.origin_name || '');
   const titleVariants = keywordVariants([
@@ -1755,6 +1796,19 @@ function renderMoviePrerender(pathname, movie, slug) {
         `${SITE_URL}/sitemap-movies-recent.xml`,
       ],
     },
+    ...(relatedMovies.length ? [{
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      '@id': `${canonical}#related-movies`,
+      name: `Phim liên quan đến ${name}`,
+      numberOfItems: relatedMovies.length,
+      itemListElement: relatedMovies.map((relatedMovie, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: relatedMovie.name,
+        url: `${SITE_URL}/phim/${encodeURIComponent(relatedMovie.slug)}`,
+      })),
+    }] : []),
   ];
   const genreLinks = genreItems.slice(0, 4)
     .map((genre) => genre.slug
@@ -1807,9 +1861,19 @@ function renderMoviePrerender(pathname, movie, slug) {
       <a href="${SITE_URL}/phim-moi-cap-nhat">Phim mới cập nhật</a>
       <a href="${SITE_URL}/phim-moi-nhat">Phim mới nhất</a>
       <a href="${SITE_URL}/phim-sap-chieu">Phim sắp chiếu</a>
+      <a href="${SITE_URL}/kho-phim">Toàn bộ kho phim</a>
       ${genreLinks}
       ${countryLinks}
     </nav>
+    ${relatedMovies.length ? `<section aria-labelledby="related-movies-heading">
+      <h2 id="related-movies-heading">Phim liên quan và cùng nhóm nội dung</h2>
+      <ul>
+        ${relatedMovies.map((relatedMovie) => {
+          const details = [relatedMovie.year, relatedMovie.episode].filter(Boolean).join(' · ');
+          return `<li><a href="${SITE_URL}/phim/${encodeURIComponent(relatedMovie.slug)}">${escapeHtml(relatedMovie.name)}</a>${details ? ` <span>${escapeHtml(details)}</span>` : ''}</li>`;
+        }).join('')}
+      </ul>
+    </section>` : ''}
     <section>
       <h2>Thông tin phim ${escapeHtml(name)}</h2>
       ${content ? `<p>${escapeHtml(content)}</p>` : '<p>Thông tin nội dung đang được biên tập và sẽ cập nhật khi có dữ liệu xác thực.</p>'}
@@ -2121,6 +2185,208 @@ async function proxySitemap(pathname, request, context) {
       },
     });
   }
+}
+
+function decodeXmlValue(value = '') {
+  return String(value || '')
+    .replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/i, '$1')
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+function parseCatalogMovies(xml = '') {
+  const movies = [];
+  const seen = new Set();
+  for (const match of repairSitemapMojibake(xml).matchAll(/<url>([\s\S]*?)<\/url>/gi)) {
+    const block = match[1];
+    const locMatch = block.match(/<loc>([\s\S]*?)<\/loc>/i);
+    if (!locMatch) continue;
+    try {
+      const movieUrl = new URL(decodeXmlValue(locMatch[1]).trim());
+      const slugMatch = /^\/phim\/([^/]+)\/?$/.exec(movieUrl.pathname);
+      if (movieUrl.origin !== SITE_URL || !slugMatch) continue;
+      const slug = decodeURIComponent(slugMatch[1]);
+      if (!slug || seen.has(slug)) continue;
+      const titleMatch = block.match(/<image:title>([\s\S]*?)<\/image:title>/i);
+      const lastmodMatch = block.match(/<lastmod>([\s\S]*?)<\/lastmod>/i);
+      const imageMatch = block.match(/<image:loc>([\s\S]*?)<\/image:loc>/i);
+      seen.add(slug);
+      movies.push({
+        slug,
+        name: decodeXmlValue(titleMatch?.[1] || '').trim() || titleCaseFromSlug(slug),
+        lastmod: decodeXmlValue(lastmodMatch?.[1] || '').trim(),
+        image: decodeXmlValue(imageMatch?.[1] || '').trim(),
+      });
+    } catch {
+      // Ignore malformed entries; the sitemap remains the source of truth.
+    }
+  }
+  return movies;
+}
+
+function parseCatalogChunkNumbers(xml = '') {
+  return [...new Set([...String(xml || '').matchAll(/sitemap-movies-(\d+)\.xml/gi)]
+    .map((match) => Number(match[1]))
+    .filter((value) => Number.isInteger(value) && value > 0))]
+    .sort((a, b) => a - b);
+}
+
+function catalogResponse(request, html, { status = 200, cache = true, source = 'catalog' } = {}) {
+  return new Response(request.method === 'HEAD' ? null : html, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': cache
+        ? 'public, max-age=900, s-maxage=3600, stale-while-revalidate=86400'
+        : 'no-store',
+      'X-Prerendered': `cloudflare-${source}`,
+      'X-Robots-Tag': status === 200
+        ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+        : 'noindex, follow',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
+async function renderMovieCatalogIndex(request, context) {
+  const internalRequest = request.method === 'HEAD'
+    ? new Request(request.url, { method: 'GET', headers: request.headers })
+    : request;
+  const sitemapResponse = await proxySitemap('/sitemap.xml', internalRequest, context);
+  const sitemapXml = sitemapResponse?.ok ? await sitemapResponse.text() : '';
+  const chunks = parseCatalogChunkNumbers(sitemapXml);
+  if (!chunks.length) {
+    return catalogResponse(request, renderHtml({
+      title: 'Kho phim đang tạm thời cập nhật | KhoPhim',
+      description: 'Danh mục phim đang tạm thời cập nhật. Vui lòng thử lại sau ít phút.',
+      canonical: `${SITE_URL}/kho-phim`,
+      h1: 'Kho phim đang tạm thời cập nhật',
+      body: `<p>Danh mục đang được phục hồi. Bạn vẫn có thể xem <a href="${SITE_URL}/phim-moi-cap-nhat">phim mới cập nhật</a>.</p>`,
+      robots: 'noindex, follow',
+    }), { status: 503, cache: false, source: 'catalog-unavailable' });
+  }
+
+  const canonical = `${SITE_URL}/kho-phim`;
+  const title = 'Kho Phim Vietsub HD - Danh Mục Phim Đầy Đủ | KhoPhim';
+  const description = `Duyệt toàn bộ phim đủ điều kiện hiển thị trên KhoPhim qua ${chunks.length} trang danh mục HTML, giúp người xem và công cụ tìm kiếm tìm tới từng phim.`;
+  const schema = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      '@id': `${canonical}#webpage`,
+      name: title,
+      description,
+      url: canonical,
+      inLanguage: 'vi-VN',
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+      numberOfItems: chunks.length,
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'KhoPhim', item: `${SITE_URL}/` },
+        { '@type': 'ListItem', position: 2, name: 'Kho phim', item: canonical },
+      ],
+    },
+  ];
+  const body = `<p>${escapeHtml(description)}</p>
+    <nav aria-label="Các trang trong kho phim">
+      <ol>
+        ${chunks.map((page) => `<li><a href="${SITE_URL}/kho-phim/trang/${page}">Kho phim - trang ${page}</a></li>`).join('')}
+      </ol>
+    </nav>
+    <p><a href="${SITE_URL}/phim-moi-cap-nhat">Xem phim mới cập nhật</a> · <a href="${SITE_URL}/phim-dang-chieu">Xem phim đang chiếu</a></p>`;
+  return catalogResponse(request, renderHtml({
+    title,
+    description,
+    canonical,
+    h1: 'Kho phim Vietsub HD',
+    body,
+    schema,
+  }));
+}
+
+async function renderMovieCatalogPage(request, context, page) {
+  const internalRequest = request.method === 'HEAD'
+    ? new Request(request.url, { method: 'GET', headers: request.headers })
+    : request;
+  const sitemapResponse = await proxySitemap(`/sitemap-movies-${page}.xml`, internalRequest, context);
+  if (!sitemapResponse?.ok) {
+    const status = sitemapResponse?.status === 404 ? 404 : 503;
+    const canonical = `${SITE_URL}/kho-phim/trang/${page}`;
+    return catalogResponse(request, renderHtml({
+      title: status === 404 ? 'Không tìm thấy trang kho phim | KhoPhim' : 'Kho phim đang tạm thời cập nhật | KhoPhim',
+      description: status === 404 ? 'Trang kho phim này không tồn tại.' : 'Danh mục phim đang tạm thời cập nhật. Vui lòng thử lại sau ít phút.',
+      canonical,
+      h1: status === 404 ? 'Không tìm thấy trang kho phim' : 'Kho phim đang tạm thời cập nhật',
+      body: `<p><a href="${SITE_URL}/kho-phim">Trở về toàn bộ kho phim</a>.</p>`,
+      robots: 'noindex, follow',
+    }), { status, cache: status === 404, source: status === 404 ? 'catalog-not-found' : 'catalog-unavailable' });
+  }
+
+  const movies = parseCatalogMovies(await sitemapResponse.text());
+  if (!movies.length) {
+    return catalogResponse(request, renderHtml({
+      title: 'Không tìm thấy trang kho phim | KhoPhim',
+      description: 'Trang kho phim này không có phim hợp lệ.',
+      canonical: `${SITE_URL}/kho-phim/trang/${page}`,
+      h1: 'Không tìm thấy trang kho phim',
+      body: `<p><a href="${SITE_URL}/kho-phim">Trở về toàn bộ kho phim</a>.</p>`,
+      robots: 'noindex, follow',
+    }), { status: 404, source: 'catalog-not-found' });
+  }
+
+  const canonical = `${SITE_URL}/kho-phim/trang/${page}`;
+  const title = `Kho Phim Vietsub HD - Trang ${page} | KhoPhim`;
+  const description = `Danh mục ${movies.length} phim đủ điều kiện hiển thị trên KhoPhim, trang ${page}. Mỗi phim dẫn trực tiếp tới trang thông tin chính thức và dữ liệu cập nhật gần nhất.`;
+  const schema = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      '@id': `${canonical}#webpage`,
+      name: title,
+      description,
+      url: canonical,
+      inLanguage: 'vi-VN',
+      isPartOf: { '@id': `${SITE_URL}/#website` },
+      numberOfItems: movies.length,
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'KhoPhim', item: `${SITE_URL}/` },
+        { '@type': 'ListItem', position: 2, name: 'Kho phim', item: `${SITE_URL}/kho-phim` },
+        { '@type': 'ListItem', position: 3, name: `Trang ${page}`, item: canonical },
+      ],
+    },
+  ];
+  const body = `<p>${escapeHtml(description)}</p>
+    <nav aria-label="Điều hướng kho phim">
+      <a href="${SITE_URL}/kho-phim">Toàn bộ kho phim</a>
+      ${page > 1 ? `<a rel="prev" href="${SITE_URL}/kho-phim/trang/${page - 1}">Trang trước</a>` : ''}
+      ${movies.length === EDGE_SITEMAP_CHUNK_SIZE ? `<a rel="next" href="${SITE_URL}/kho-phim/trang/${page + 1}">Trang sau</a>` : ''}
+    </nav>
+    <section aria-labelledby="catalog-movies-heading">
+      <h2 id="catalog-movies-heading">Danh sách phim - trang ${page}</h2>
+      <ol>
+        ${movies.map((movie) => `<li><a href="${SITE_URL}/phim/${encodeURIComponent(movie.slug)}">${escapeHtml(movie.name)}</a>${movie.lastmod ? ` <span>· cập nhật ${escapeHtml(movie.lastmod)}</span>` : ''}</li>`).join('')}
+      </ol>
+    </section>`;
+  return catalogResponse(request, renderHtml({
+    title,
+    description,
+    canonical,
+    h1: `Kho phim Vietsub HD - trang ${page}`,
+    body,
+    schema,
+  }));
 }
 
 async function proxyBlvietsub(request, context) {
@@ -2591,6 +2857,39 @@ export async function onRequest(context) {
     return resolveSsplayEmbed(request);
   }
 
+  const catalogIndexMatch = /^\/kho-phim\/?$/.exec(pathname);
+  const catalogPageMatch = /^\/kho-phim\/trang\/(\d+)\/?$/.exec(pathname);
+  if (catalogIndexMatch || catalogPageMatch) {
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return new Response('Method Not Allowed', {
+        status: 405,
+        headers: { Allow: 'GET, HEAD', ...SECURITY_HEADERS },
+      });
+    }
+    const canonicalPath = catalogPageMatch
+      ? `/kho-phim/trang/${Number(catalogPageMatch[1])}`
+      : '/kho-phim';
+    if (pathname !== canonicalPath || url.search) {
+      url.search = '';
+      return canonicalRedirect(url, canonicalPath);
+    }
+    if (catalogPageMatch) {
+      const page = Number(catalogPageMatch[1]);
+      if (!Number.isInteger(page) || page < 1 || page > 1000) {
+        return catalogResponse(request, renderHtml({
+          title: 'Không tìm thấy trang kho phim | KhoPhim',
+          description: 'Trang kho phim này không tồn tại.',
+          canonical: `${SITE_URL}${canonicalPath}`,
+          h1: 'Không tìm thấy trang kho phim',
+          body: `<p><a href="${SITE_URL}/kho-phim">Trở về toàn bộ kho phim</a>.</p>`,
+          robots: 'noindex, follow',
+        }), { status: 404, source: 'catalog-not-found' });
+      }
+      return renderMovieCatalogPage(request, context, page);
+    }
+    return renderMovieCatalogIndex(request, context);
+  }
+
   if (isStaticAsset(pathname)) {
     return context.next();
   }
@@ -2616,8 +2915,11 @@ export async function onRequest(context) {
         movie = mergeMovieForPrerender(movie, ophimMovie);
       }
       if (!movie) movie = ophimMovie;
+      const relatedMovies = movie
+        ? await fetchContextualMovieLinks(context, movie, slug)
+        : [];
       const movieResponse = movie
-        ? renderMoviePrerender(pathname, movie, slug)
+        ? renderMoviePrerender(pathname, movie, slug, relatedMovies)
         : (supabaseLookup.unavailable
           ? renderMovieTemporarilyUnavailable(pathname, slug)
           : renderMovieNotFound(pathname, slug));
