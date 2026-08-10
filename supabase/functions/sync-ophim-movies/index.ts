@@ -183,17 +183,36 @@ function canonicalCandidateScore(record: Record<string, unknown>): number {
 function sameMovieByTitle(existing: Record<string, unknown>, incoming: Record<string, unknown>): boolean {
   const existingYear = Number(existing.year || 0);
   const incomingYear = Number(incoming.year || 0);
-  if (existingYear > 0 && incomingYear > 0 && existingYear !== incomingYear) return false;
+  if (!(existingYear > 0 && incomingYear > 0 && existingYear === incomingYear)) return false;
 
-  const existingTitles = titleCandidates(existing);
-  const incomingTitles = titleCandidates(incoming);
-  return incomingTitles.some((incomingTitle) =>
-    existingTitles.some((existingTitle) =>
-      incomingTitle === existingTitle ||
-      (incomingTitle.length >= 10 && existingTitle.includes(incomingTitle)) ||
-      (existingTitle.length >= 10 && incomingTitle.includes(existingTitle))
-    )
-  );
+  const strictTitles = (record: Record<string, unknown>) => Array.from(new Set([
+    record.name,
+    record.origin_name,
+    record.title_vi,
+    record.title_en,
+    record.title_zh,
+    record.title_original,
+  ].map((value) => normalizeText(String(value || ''))).filter((value) => value.length >= 3)));
+  const existingTitles = strictTitles(existing);
+  const incomingTitles = strictTitles(incoming);
+  return incomingTitles.some((incomingTitle) => existingTitles.includes(incomingTitle));
+}
+
+function normalizedMovieType(value: unknown): 'single' | 'series' | '' {
+  const type = normalizeText(String(value || ''));
+  if (['single', 'movie', 'phim le', 'phim chieu rap'].includes(type)) return 'single';
+  if (['series', 'tv', 'phim bo', 'hoathinh'].includes(type)) return 'series';
+  return '';
+}
+
+function detailMatchesExpected(expected: OPhimMovie, detail: ParsedDetail): boolean {
+  const expectedRecord = expected as Record<string, unknown>;
+  const detailRecord = detail.movie as Record<string, unknown>;
+  if (!sameMovieByTitle(expectedRecord, detailRecord)) return false;
+
+  const expectedType = normalizedMovieType(expected.type);
+  const detailType = normalizedMovieType(detail.movie.type);
+  return !(expectedType && detailType && expectedType !== detailType);
 }
 
 function escapePostgrestIlike(value: string): string {
@@ -574,6 +593,7 @@ interface TargetMovieIdentity {
   title_en?: string | null;
   title_original?: string | null;
   year?: number | null;
+  type?: string | null;
   tmdb_id?: number | string | null;
   ophim_slug?: string | null;
   source_site?: string | null;
@@ -616,6 +636,9 @@ async function fetchDetailForTarget(
     const detailTmdb = String(movie.tmdb_id || detailTmdbObject?.id || '').trim();
     const targetYear = Number(target.year || 0) || 0;
     const detailYear = Number(movie.year || 0) || 0;
+    const targetType = normalizedMovieType(target.type);
+    const detailType = normalizedMovieType(movie.type);
+    if (targetType && detailType && targetType !== detailType) return false;
 
     // A matching TMDB id is authoritative, except that a different release
     // year must not cross-wire separate seasons sharing one series-level id.
@@ -741,7 +764,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
   for (const [column, value] of checks) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq(column as string, value as string)
       .limit(1)
       .maybeSingle();
@@ -762,7 +785,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
     const safe = escapePostgrestIlike(title);
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq('year', year)
       .or(`name.ilike.%${safe}%,origin_name.ilike.%${safe}%,title_vi.ilike.%${safe}%,title_en.ilike.%${safe}%,title_zh.ilike.%${safe}%,title_original.ilike.%${safe}%`)
       .limit(20);
@@ -782,7 +805,7 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
   if (normalized.length >= 6 && year > 0) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq('year', year)
       .ilike('normalized_name', normalized)
       .limit(10);
@@ -796,7 +819,12 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
         canonicalCandidateScore(match) >= canonicalCandidateScore(exactMatch) + 40)
     ) return match;
   }
-  return exactMatch;
+  if (exactMatch && sameMovieByTitle(exactMatch, payload)) return exactMatch;
+  if (exactMatch) {
+    const providerPrefix = String(payload.source_site || '').toLowerCase() === 'phimapi' ? 'phimapi' : 'ophim';
+    payload.slug = `${providerPrefix}-${String(payload.slug || 'movie')}`;
+  }
+  return null;
 }
 
 function updatePayloadForExisting(existing: Record<string, unknown>, incoming: Record<string, unknown>): Record<string, unknown> {
@@ -1291,6 +1319,145 @@ async function insertEpisodes(
   return Math.max(movieEpisodeRows.length, episodeRows.length, streamRows.length);
 }
 
+type StoredEpisodeIdentityRow = {
+  id: string;
+  ophim_id?: string | null;
+  link_m3u8?: string | null;
+  link_embed?: string | null;
+  server_data?: Record<string, unknown> | null;
+};
+
+function structuredFilenameIdentity(filename: string): { names: string[]; rawNames: string[]; year: number } | null {
+  const parts = filename.split(/\s+-\s+/).map((value) => value.trim()).filter(Boolean);
+  if (parts.length < 3) return null;
+  const yearMatch = parts[2].match(/\b([12]\d{3})\b/);
+  const year = Number(yearMatch?.[1] || 0);
+  const rawNames = Array.from(new Set(parts.slice(0, 2).filter((value) => normalizeText(value).length >= 3)));
+  const names = Array.from(new Set(rawNames.map(normalizeText)));
+  return year > 0 && names.length ? { names, rawNames, year } : null;
+}
+
+async function quarantineVerifiedForeignEpisodes(
+  supabase: SupabaseClient,
+  movieId: string,
+  detail: ParsedDetail,
+): Promise<number> {
+  // Verified foreign-identity quarantine contract: rows are removable only
+  // after the target detail passes strict title/year/type verification and a
+  // different same-year canonical movie exactly matches the stored filename.
+  const detailTitles = [detail.movie.name, detail.movie.origin_name, ...(detail.movie.alternative_names || [])]
+    .map((value) => normalizeText(String(value || '')))
+    .filter((value) => value.length >= 3);
+  const detailYear = Number(detail.movie.year || 0);
+  if (!detailYear || detailTitles.length === 0) return 0;
+
+  const { data, error } = await supabase
+    .from('episodes')
+    .select('id,ophim_id,link_m3u8,link_embed,server_data')
+    .eq('movie_id', movieId)
+    .limit(2000);
+  if (error) throw new Error(`episode identity audit ${detail.movie.slug}: ${error.message}`);
+
+  const groups = new Map<string, { identity: { names: string[]; rawNames: string[]; year: number }; rows: StoredEpisodeIdentityRow[] }>();
+  for (const rawRow of data || []) {
+    const row = rawRow as StoredEpisodeIdentityRow;
+    const filename = String(row.server_data?.filename || '');
+    const identity = structuredFilenameIdentity(filename);
+    if (!identity) continue;
+    if (identity.year === detailYear && identity.names.some((name) => detailTitles.includes(name))) continue;
+    const key = `${identity.year}|${identity.names.join('|')}`;
+    const group = groups.get(key) || { identity, rows: [] };
+    group.rows.push(row);
+    groups.set(key, group);
+  }
+
+  const foreignRows: StoredEpisodeIdentityRow[] = [];
+  const relatedMovieIds = new Set<string>();
+  for (const group of groups.values()) {
+    const candidates = new Map<string, Record<string, unknown>>();
+    for (const name of group.identity.rawNames) {
+      const exact = escapePostgrestIlike(name);
+      for (const column of ['name', 'origin_name', 'title_vi', 'title_en', 'title_original']) {
+        const { data: matches } = await supabase
+          .from('movies')
+          .select('id,slug,name,origin_name,title_vi,title_en,title_original,year,source_site,source_name,current_episode,total_episodes,is_published')
+          .eq('year', group.identity.year)
+          .ilike(column, exact)
+          .neq('id', movieId)
+          .limit(3);
+        for (const match of matches || []) candidates.set(String(match.id), match as Record<string, unknown>);
+      }
+    }
+    if (candidates.size === 0) continue;
+    const relatedId = [...candidates.values()].sort((a, b) => canonicalCandidateScore(b) - canonicalCandidateScore(a))[0].id as string;
+    relatedMovieIds.add(relatedId);
+    foreignRows.push(...group.rows);
+  }
+
+  if (foreignRows.length === 0) return 0;
+  const episodeIds = foreignRows.map((row) => row.id);
+  const m3u8Urls = foreignRows.map((row) => String(row.link_m3u8 || '')).filter(Boolean);
+  const embedUrls = foreignRows.map((row) => String(row.link_embed || '')).filter(Boolean);
+  const sourceIds = foreignRows.map((row) => String(row.ophim_id || '')).filter(Boolean);
+
+  const deleteIdsByUrls = async (table: 'streams' | 'movie_episodes') => {
+    const idSet = new Set<string>();
+    const fields = table === 'streams' ? ['stream_url', 'embed_url'] : ['link_m3u8', 'link_embed'];
+    const urlsByField = [m3u8Urls, embedUrls];
+    for (let index = 0; index < fields.length; index += 1) {
+      for (const urlBatch of chunks(urlsByField[index], 100)) {
+        if (!urlBatch.length) continue;
+        const { data: matches } = await supabase.from(table).select('id').eq('movie_id', movieId).in(fields[index], urlBatch);
+        for (const match of matches || []) idSet.add(String(match.id));
+      }
+    }
+    if (sourceIds.length) {
+      const { data: matches } = await supabase.from(table).select('id').eq('movie_id', movieId).in('ophim_id', sourceIds);
+      for (const match of matches || []) idSet.add(String(match.id));
+    }
+    for (const idBatch of chunks([...idSet], 100)) {
+      if (idBatch.length) await supabase.from(table).delete().in('id', idBatch);
+    }
+  };
+
+  await deleteIdsByUrls('streams');
+  await deleteIdsByUrls('movie_episodes');
+  for (const idBatch of chunks(episodeIds, 100)) {
+    const { error: deleteError } = await supabase.from('episodes').delete().in('id', idBatch);
+    if (deleteError) throw new Error(`foreign episode quarantine ${detail.movie.slug}: ${deleteError.message}`);
+  }
+
+  const verified = moviePayload(PROVIDERS.ophim, detail);
+  await supabase.from('movies').update({
+    current_episode: verified.current_episode,
+    total_episodes: verified.total_episodes,
+    episode_current: verified.episode_current,
+    episode_total: verified.episode_total,
+    last_synced_at: new Date().toISOString(),
+  }).eq('id', movieId);
+
+  await supabase.from('catalog_integrity_issues').upsert({
+    issue_key: `episode_identity_mismatch:${movieId}`,
+    issue_type: 'episode_identity_mismatch',
+    movie_id: movieId,
+    related_movie_id: relatedMovieIds.size === 1 ? [...relatedMovieIds][0] : null,
+    severity: 5,
+    confidence: 1,
+    status: 'resolved',
+    evidence: {
+      removed_episode_rows: foreignRows.length,
+      verified_source_slug: detail.movie.slug,
+      verified_source_year: detailYear,
+      related_movie_ids: [...relatedMovieIds],
+    },
+    last_detected_at: new Date().toISOString(),
+    resolved_at: new Date().toISOString(),
+    last_error: null,
+  }, { onConflict: 'issue_key' });
+
+  return foreignRows.length;
+}
+
 async function writeLog(supabase: SupabaseClient, stats: SyncStats, elapsedMs: number, metadata: Record<string, unknown>): Promise<void> {
   try {
     await supabase.from('sync_logs').insert({
@@ -1420,15 +1587,15 @@ serve(async (req) => {
     const targetSlug = String(url.searchParams.get('slug') || '').trim();
     const targetMovieId = String(url.searchParams.get('movie_id') || '').trim();
     let targetMovie: TargetMovieIdentity | null = null;
-    if (targetMovieId) {
+    if (targetMovieId || targetSlug) {
       const { data, error } = await supabase
         .from('movies')
-        .select('id,slug,name,origin_name,title_vi,title_en,title_original,year,tmdb_id,ophim_slug,source_site,source_name')
-        .eq('id', targetMovieId)
+        .select('id,slug,name,origin_name,title_vi,title_en,title_original,year,type,tmdb_id,ophim_slug,source_site,source_name')
+        .eq(targetMovieId ? 'id' : 'slug', targetMovieId || targetSlug)
         .maybeSingle();
-      if (error) throw new Error(`target movie lookup ${targetMovieId}: ${error.message}`);
+      if (error) throw new Error(`target movie lookup ${targetMovieId || targetSlug}: ${error.message}`);
       targetMovie = data as TargetMovieIdentity | null;
-      if (!targetMovie) throw new Error(`target movie ${targetMovieId} not found`);
+      if (targetMovieId && !targetMovie) throw new Error(`target movie ${targetMovieId} not found`);
     }
     const startPage = useCursor ? await readCursorPage(supabase, cursorKey, requestedStartPage) : requestedStartPage;
     const candidates = new Map<string, OPhimMovie>();
@@ -1456,12 +1623,20 @@ serve(async (req) => {
     for (const slug of slugs) {
       stats.scanned += 1;
       try {
-        const detail = targetMovie
+        const fetchedDetail = targetMovie
           ? await fetchDetailForTarget(provider, targetMovie)
           : await fetchDetail(provider, slug);
+        const expected = candidates.get(slug);
+        const detail = fetchedDetail && (!expected || detailMatchesExpected(expected, fetchedDetail))
+          ? fetchedDetail
+          : null;
         if (!detail) {
           stats.skipped += 1;
-          if ((targetSlug || targetMovie) && strictMissingDetail) stats.errors.push(`[${slug}] detail not found`);
+          if (fetchedDetail && expected) {
+            stats.errors.push(`[${slug}] provider list/detail identity mismatch`);
+          } else if ((targetSlug || targetMovie) && strictMissingDetail) {
+            stats.errors.push(`[${slug}] detail not found or identity mismatch`);
+          }
           continue;
         }
         if (dryRun) continue;
@@ -1472,6 +1647,10 @@ serve(async (req) => {
         }
         if (result.created) stats.created += 1;
         if (result.updated) stats.updated += 1;
+        if (targetMovie) {
+          const removedForeignEpisodes = await quarantineVerifiedForeignEpisodes(supabase, result.id, detail);
+          if (removedForeignEpisodes > 0) changedSlugs.push(String(detail.movie.slug || slug));
+        }
         const beforeEpisodesInserted = stats.episodesInserted;
         if (includeEpisodes) {
           const primarySource = String(targetMovie?.source_site || targetMovie?.source_name || '').toLowerCase();

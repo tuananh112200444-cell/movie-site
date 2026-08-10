@@ -32,6 +32,9 @@ interface OPhimResponse {
     slug?: string;
     episode_current?: string;
     episode_total?: string;
+    origin_name?: string;
+    year?: number;
+    type?: string;
   };
   data?: {
     item?: {
@@ -41,6 +44,8 @@ interface OPhimResponse {
       slug?: string;
       episode_current?: string;
       episode_total?: string;
+      year?: number;
+      type?: string;
       episodes?: OPhimServer[];
     };
     items?: Array<{
@@ -59,6 +64,8 @@ interface OPhimResponse {
     slug?: string;
     episode_current?: string;
     episode_total?: string;
+    year?: number;
+    type?: string;
     episodes?: OPhimServer[];
   };
   episodes?: OPhimServer[];
@@ -74,6 +81,7 @@ interface MovieRow {
   title_vi?: string | null;
   title_en?: string | null;
   year?: number | null;
+  type?: string | null;
   episode_current?: string | null;
   current_episode?: number | null;
   total_episodes?: number | null;
@@ -92,6 +100,8 @@ interface ParsedOPhimDetail {
   originName: string;
   episodeCurrent: string;
   episodeTotal: string;
+  year: number;
+  type: string;
   episodes: OPhimServer[];
 }
 
@@ -239,8 +249,28 @@ function shouldRoutineSyncMovie(movie: MovieRow, includeCompleted: boolean): boo
   return current > 0 && current < total;
 }
 
-function tokenCount(value = ''): number {
-  return normalizeText(value).split(/\s+/).filter(Boolean).length;
+function normalizedMovieType(value: unknown): 'single' | 'series' | '' {
+  const type = normalizeText(String(value || ''));
+  if (['single', 'movie', 'phim le', 'phim chieu rap'].includes(type)) return 'single';
+  if (['series', 'tv', 'phim bo', 'hoathinh'].includes(type)) return 'series';
+  return '';
+}
+
+function detailMatchesMovie(movie: MovieRow, detail: ParsedOPhimDetail): boolean {
+  const movieYear = Number(movie.year || 0);
+  if (!(movieYear > 0 && detail.year > 0 && movieYear === detail.year)) return false;
+
+  const movieTitles = [movie.name, movie.origin_name, movie.title_vi, movie.title_en]
+    .map((value) => normalizeText(String(value || '')))
+    .filter((value) => value.length >= 3);
+  const detailTitles = [detail.name, detail.originName]
+    .map((value) => normalizeText(String(value || '')))
+    .filter((value) => value.length >= 3);
+  if (!detailTitles.some((title) => movieTitles.includes(title))) return false;
+
+  const movieType = normalizedMovieType(movie.type);
+  const detailType = normalizedMovieType(detail.type);
+  return !(movieType && detailType && movieType !== detailType);
 }
 
 function getEpisodeNumber(ep: OPhimEpisode): number {
@@ -271,6 +301,8 @@ function parseOPhimDetail(data: OPhimResponse, fallbackSlug: string): ParsedOPhi
     originName: String('origin_name' in item ? item.origin_name || '' : ''),
     episodeCurrent: String(item.episode_current || ''),
     episodeTotal: String(item.episode_total || ''),
+    year: Number('year' in item ? item.year || 0 : 0),
+    type: String('type' in item ? item.type || '' : ''),
     episodes,
   };
 }
@@ -317,25 +349,11 @@ async function findOPhimSlug(movie: MovieRow): Promise<string> {
     .filter(Boolean);
 
   const exact = items.find((item) => {
-    if (movie.year && item.year && Math.abs(Number(item.year) - Number(movie.year)) > 1) return false;
+    if (!(movie.year && item.year && Number(item.year) === Number(movie.year))) return false;
     const itemKeys = [item.name, item.origin_name].map((value) => normalizeText(String(value || ''))).filter(Boolean);
     return itemKeys.some((itemKey) => movieKeys.includes(itemKey));
   });
-  if (exact) return String(exact.slug || '');
-
-  const reliableTitle = [movie.origin_name, movie.title_en, movie.name, movie.title_vi]
-    .map((value) => String(value || '').trim())
-    .find((value) => tokenCount(value) >= 3);
-  if (!reliableTitle) return '';
-
-  const reliableKey = normalizeText(reliableTitle);
-  const contains = items.find((item) => {
-    if (movie.year && item.year && Math.abs(Number(item.year) - Number(movie.year)) > 1) return false;
-    return [item.name, item.origin_name]
-      .map((value) => normalizeText(String(value || '')))
-      .some((itemKey) => itemKey.includes(reliableKey) || reliableKey.includes(itemKey));
-  });
-  return String(contains?.slug || '');
+  return String(exact?.slug || '');
 }
 
 function isLikelyOPhimMovie(movie: MovieRow): boolean {
@@ -351,13 +369,13 @@ async function resolveOPhimDetail(movie: MovieRow): Promise<ParsedOPhimDetail | 
   if (!isLikelyOPhimMovie(movie)) return null;
   const candidates = [
     String(movie.ophim_slug || '').trim(),
-    String(movie.ophim_id || '').trim(),
+    String(movie.slug || '').trim(),
     await findOPhimSlug(movie),
   ].filter(Boolean);
 
   for (const candidate of Array.from(new Set(candidates))) {
     const detail = await fetchOPhimDetail(candidate);
-    if (detail) return detail;
+    if (detail && detailMatchesMovie(movie, detail)) return detail;
   }
   return null;
 }
@@ -434,7 +452,7 @@ serve(async (req) => {
 
     let moviesQuery = supabase
       .from('movies')
-      .select('id, ophim_id, ophim_slug, slug, name, origin_name, title_vi, title_en, year, episode_current, current_episode, total_episodes, status, source_site, source_name, showtimes, updated_at, last_synced_at')
+      .select('id, ophim_id, ophim_slug, slug, name, origin_name, title_vi, title_en, year, type, episode_current, current_episode, total_episodes, status, source_site, source_name, showtimes, updated_at, last_synced_at')
       .eq('is_published', true)
       .order('last_synced_at', { ascending: true, nullsFirst: true })
       .limit(queryLimit);

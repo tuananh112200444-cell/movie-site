@@ -19,6 +19,11 @@ for (const file of connectorFiles) {
     && source.includes("filter((episode) => !episode.raw)")
     && source.includes(".eq('audio_type', 'raw')")
     && source.includes(".in('episode_number', translatedEpisodeNumbers)");
+  const verifiedForeignIdentityQuarantine =
+    source.includes('Verified foreign-identity quarantine contract')
+    && source.includes('quarantineVerifiedForeignEpisodes')
+    && source.includes('candidates.size === 0')
+    && source.includes("from('episodes').delete().in('id', idBatch)");
   const unpublishMovie =
     /from\(['"]movies['"]\)[\s\S]{0,240}(?:update|upsert)\(\{[\s\S]{0,160}is_published\s*:\s*false/s.test(source);
   const automaticStreamDeactivation =
@@ -26,7 +31,7 @@ for (const file of connectorFiles) {
   const destructiveDetailCacheDelete =
     /from\(['"]movie_api_cache['"]\)\s*\.delete\(\)/s.test(source);
 
-  if (destructiveEpisodeDelete && !verifiedLocalizedReplacement) failures.push(`${file}: source sync can delete last-known-good episodes`);
+  if (destructiveEpisodeDelete && !verifiedLocalizedReplacement && !verifiedForeignIdentityQuarantine) failures.push(`${file}: source sync can delete last-known-good episodes`);
   if (unpublishMovie) failures.push(`${file}: source sync can unpublish an existing movie`);
   if (automaticStreamDeactivation) failures.push(`${file}: source sync can deactivate streams from one incomplete feed response`);
   if (destructiveDetailCacheDelete) failures.push(`${file}: source sync deletes last-known-good movie detail cache`);
@@ -35,6 +40,7 @@ for (const file of connectorFiles) {
 const motchill = fs.readFileSync('supabase/functions/sync-motchill-feed/index.ts', 'utf8');
 const onlyflix = fs.readFileSync('supabase/functions/sync-onlyflix-feed/index.ts', 'utf8');
 const ophim = fs.readFileSync('supabase/functions/sync-ophim-movies/index.ts', 'utf8');
+const autoOphimEpisodes = fs.readFileSync('supabase/functions/auto-sync-ophim-episodes/index.ts', 'utf8');
 const providerBackups = fs.readFileSync('supabase/functions/sync-provider-backups/index.ts', 'utf8');
 const episodeRepairPriority = fs.readFileSync('supabase/migrations/20260805170000_prioritize_public_episode_repairs.sql', 'utf8');
 const unifiedPlaybackHealth = fs.readFileSync('supabase/migrations/20260805205000_unify_public_playback_health.sql', 'utf8');
@@ -99,6 +105,27 @@ if (
   || !ophim.includes('labelAsBackup')
 ) {
   failures.push('Cross-provider episode import must verify identity and keep its server rows separate from the primary source');
+}
+if (
+  !ophim.includes('detailMatchesExpected(expected, fetchedDetail)')
+  || !ophim.includes('provider list/detail identity mismatch')
+  || !ophim.includes('if (exactMatch && sameMovieByTitle(exactMatch, payload)) return exactMatch')
+  || !ophim.includes('quarantineVerifiedForeignEpisodes')
+) {
+  failures.push('OPhim/KKPhim list, detail, existing movie and persisted episodes must pass one strict identity gate');
+}
+if (
+  !autoOphimEpisodes.includes('detailMatchesMovie(movie, detail)')
+  || autoOphimEpisodes.includes("String(movie.ophim_id || '').trim(),")
+  || !autoOphimEpisodes.includes('Number(item.year) === Number(movie.year)')
+) {
+  failures.push('Automatic OPhim episode sync must reject ID-as-slug and require exact title/year identity');
+}
+if (
+  !ophim.includes('existingYear === incomingYear')
+  || /incomingTitle\.length\s*>=\s*10[\s\S]{0,120}includes\(incomingTitle\)/.test(ophim)
+) {
+  failures.push('Provider movie matching must require exact title and exact year, never a contains-title merge');
 }
 if (
   !providerBackups.includes("const limit = clamp(requestUrl.searchParams.get('limit'), 3, 1, 4)")
