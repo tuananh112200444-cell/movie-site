@@ -21,6 +21,7 @@ const staticUrls = [
   { path: '/the-loai/lich-su', lastmod: currentDate, changefreq: 'weekly', priority: '0.76' },
   { path: '/press/', lastmod: '2026-07-19', changefreq: 'monthly', priority: '0.60' },
   { path: '/sitemap', lastmod: currentDate, changefreq: 'weekly', priority: '0.60' },
+  { path: '/kho-phim', lastmod: currentDate, changefreq: 'daily', priority: '0.85' },
 ];
 
 const entries = staticUrls.map((item) => `  <url>
