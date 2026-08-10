@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type SyntheticEvent } from 'react';
 import { supabase } from '../../lib/supabase';
 
 interface BannerItem {
@@ -13,11 +13,23 @@ function optimizedBannerImage(image: string): string {
   const absolute = image.startsWith('/') ? `https://khophim.org${image}` : image;
   const pathname = absolute.split('?')[0].toLowerCase();
 
-  // Animated banners must keep their original GIF bytes. The image proxy is
-  // useful for static images but can turn an animated creative into one frame.
-  if (pathname.endsWith('.gif')) return absolute;
+  // Cloudflare keeps animation when anim=true and serves a much smaller
+  // animated WebP to supporting browsers. The original GIF remains fallback.
+  if (pathname.endsWith('.gif')) {
+    const source = image.startsWith('/') ? image : absolute;
+    return `https://khophim.org/cdn-cgi/image/width=728,quality=75,format=auto,anim=true${source.startsWith('/') ? '' : '/'}${source}`;
+  }
 
   return `https://wsrv.nl/?url=${encodeURIComponent(absolute)}&w=728&q=76&output=webp&we`;
+}
+
+function originalBannerImage(image: string): string {
+  return image.startsWith('/') ? `https://khophim.org${image}` : image;
+}
+
+function restoreOriginalBanner(event: SyntheticEvent<HTMLImageElement>, image: string) {
+  const fallback = originalBannerImage(image);
+  if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
 }
 
 const BANNERS: BannerItem[] = [
@@ -121,6 +133,7 @@ export default function NavBanner() {
           >
             <img
               src={optimizedBannerImage(activeBanner.image)}
+              onError={(event) => restoreOriginalBanner(event, activeBanner.image)}
               alt={activeBanner.alt}
               className="aspect-[728/90] h-auto w-full object-contain object-center lg:max-h-[62px]"
               loading="eager"
@@ -164,6 +177,7 @@ export default function NavBanner() {
             >
               <img
                 src={optimizedBannerImage(banner.image)}
+                onError={(event) => restoreOriginalBanner(event, banner.image)}
                 alt={banner.alt}
                 className="aspect-[728/90] h-auto w-full object-contain object-center lg:max-h-[62px]"
                 loading={banner.id === BANNERS[0]?.id ? 'eager' : 'lazy'}

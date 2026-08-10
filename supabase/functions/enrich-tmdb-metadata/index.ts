@@ -49,6 +49,37 @@ interface TmdbDetail {
   };
 }
 
+interface TmdbSearchResult {
+  id: number;
+  title?: string;
+  name?: string;
+  original_title?: string;
+  original_name?: string;
+  release_date?: string;
+  first_air_date?: string;
+}
+
+interface TmdbSeasonDetail {
+  season_number?: number;
+  name?: string;
+  overview?: string;
+  air_date?: string;
+  poster_path?: string | null;
+}
+
+interface SeasonIdentity {
+  number: number;
+  baseTitles: string[];
+}
+
+interface VerifiedDetail {
+  detail: TmdbDetail;
+  mediaType: MediaType;
+  tmdbId: number;
+  season: TmdbSeasonDetail | null;
+  resolvedMissingId: boolean;
+}
+
 function reply(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -66,8 +97,12 @@ function normalize(value: unknown): string {
     .trim();
 }
 
+function visibleText(value: unknown): string {
+  return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function textLength(value: unknown): number {
-  return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length;
+  return visibleText(value).length;
 }
 
 function stringList(value: unknown): string[] {
@@ -82,10 +117,34 @@ function taxonomyList(value: unknown): Array<{ id?: string; name: string; slug: 
     .filter((item) => item.name && item.slug);
 }
 
+function rawTitles(movie: MovieRow): string[] {
+  return [movie.origin_name, movie.title_original, movie.title_en, movie.name, movie.title_vi, movie.title_zh]
+    .map((value) => String(value || '').trim())
+    .filter((value, index, values) => value.length >= 3 && values.indexOf(value) === index);
+}
+
+const SEASON_SUFFIX = /(?:\s*[-–—:]?\s*)?(?:\(|\[)?(?:season|phần|mùa)\s*(\d{1,2})(?:\)|\])?\s*$/iu;
+
+function seasonIdentity(movie: MovieRow): SeasonIdentity | null {
+  const matches = rawTitles(movie)
+    .map((title) => ({ title, match: title.match(SEASON_SUFFIX) }))
+    .filter((item): item is { title: string; match: RegExpMatchArray } => Boolean(item.match));
+  const numbers = [...new Set(matches.map((item) => Number(item.match[1])).filter((value) => value > 0 && value <= 99))];
+  if (numbers.length !== 1) return null;
+  const baseTitles = rawTitles(movie)
+    .map((title) => title.replace(SEASON_SUFFIX, '').trim())
+    .filter((title, index, values) => title.length >= 3 && values.indexOf(title) === index);
+  return baseTitles.length ? { number: numbers[0], baseTitles } : null;
+}
+
 function titleKeys(movie: MovieRow): Set<string> {
   return new Set([
     movie.name, movie.origin_name, movie.title_vi, movie.title_en, movie.title_zh, movie.title_original,
   ].map(normalize).filter((value) => value.length >= 3));
+}
+
+function identityTitleKeys(movie: MovieRow, season: SeasonIdentity | null): Set<string> {
+  return new Set((season?.baseTitles || rawTitles(movie)).map(normalize).filter((value) => value.length >= 3));
 }
 
 function detailTitleKeys(detail: TmdbDetail): Set<string> {
@@ -110,17 +169,20 @@ function expectedType(movie: MovieRow): MediaType | null {
 function identityMatches(movie: MovieRow, detail: TmdbDetail, mediaType: MediaType): boolean {
   const movieType = expectedType(movie);
   if (movieType && movieType !== mediaType) return false;
-  const movieKeys = titleKeys(movie);
+  const season = seasonIdentity(movie);
+  const movieKeys = identityTitleKeys(movie, season);
   const detailKeys = detailTitleKeys(detail);
   const sameTitle = [...movieKeys].some((key) => detailKeys.has(key));
   if (!sameTitle) return false;
+  if (season) return mediaType === 'tv';
   const movieYear = Number(movie.year || 0);
   const tmdbYear = releaseYear(detail);
-  return !movieYear || !tmdbYear || Math.abs(movieYear - tmdbYear) <= 1;
+  return Boolean(movieYear && tmdbYear && movieYear === tmdbYear);
 }
 
 function hasMetadataGap(movie: MovieRow): boolean {
-  return textLength(movie.content) < 80
+  return !Number(movie.tmdb_id || 0)
+    || textLength(movie.content) < 80
     || stringList(movie.actor).length === 0
     || stringList(movie.director).length === 0
     || taxonomyList(movie.category).length === 0
@@ -145,11 +207,9 @@ function youtubeTrailer(detail: TmdbDetail): string {
   return trailer?.key ? `https://www.youtube.com/watch?v=${trailer.key}` : '';
 }
 
-async function fetchDetail(tmdbId: number, mediaType: MediaType): Promise<TmdbDetail | null> {
-  const url = new URL(`${TMDB_BASE}/${mediaType}/${tmdbId}`);
-  url.searchParams.set('language', 'vi-VN');
-  url.searchParams.set('include_video_language', 'vi,en,null');
-  url.searchParams.set('append_to_response', 'credits,videos');
+async function tmdbFetch<T>(path: string, params: Record<string, string> = {}): Promise<T | null> {
+  const url = new URL(`${TMDB_BASE}${path}`);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
   if (TMDB_API_KEY) url.searchParams.set('api_key', TMDB_API_KEY);
   const response = await fetch(url, {
     headers: TMDB_READ_ACCESS_TOKEN ? { Authorization: `Bearer ${TMDB_READ_ACCESS_TOKEN}` } : undefined,
@@ -157,12 +217,71 @@ async function fetchDetail(tmdbId: number, mediaType: MediaType): Promise<TmdbDe
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`TMDB ${response.status}`);
-  return await response.json() as TmdbDetail;
+  return await response.json() as T;
 }
 
-async function resolveVerifiedDetail(movie: MovieRow): Promise<{ detail: TmdbDetail; mediaType: MediaType } | null> {
+async function fetchDetail(tmdbId: number, mediaType: MediaType): Promise<TmdbDetail | null> {
+  return tmdbFetch<TmdbDetail>(`/${mediaType}/${tmdbId}`, {
+    language: 'vi-VN',
+    include_video_language: 'vi,en,null',
+    append_to_response: 'credits,videos',
+  });
+}
+
+async function fetchSeason(tmdbId: number, seasonNumber: number): Promise<TmdbSeasonDetail | null> {
+  const vi = await tmdbFetch<TmdbSeasonDetail>(`/tv/${tmdbId}/season/${seasonNumber}`, { language: 'vi-VN' });
+  if (!vi) return null;
+  if (textLength(vi.overview) >= 80) return vi;
+  const en = await tmdbFetch<TmdbSeasonDetail>(`/tv/${tmdbId}/season/${seasonNumber}`, { language: 'en-US' });
+  return en && textLength(en.overview) > textLength(vi.overview) ? { ...vi, overview: en.overview } : vi;
+}
+
+function searchResultTitleKeys(result: TmdbSearchResult): Set<string> {
+  return new Set([result.title, result.name, result.original_title, result.original_name]
+    .map(normalize).filter((value) => value.length >= 3));
+}
+
+async function searchExactIdentity(movie: MovieRow, mediaType: MediaType, season: SeasonIdentity | null): Promise<number | null> {
+  const queryTitles = (season?.baseTitles || rawTitles(movie)).slice(0, 3);
+  const responses = await Promise.all(queryTitles.map((query) => tmdbFetch<{ results?: TmdbSearchResult[] }>(`/search/${mediaType}`, {
+    query,
+    language: 'vi-VN',
+    include_adult: 'false',
+  })));
+  const resultsById = new Map<number, TmdbSearchResult>();
+  responses.forEach((response) => (response?.results || []).forEach((result) => resultsById.set(result.id, result)));
+  const expectedTitles = identityTitleKeys(movie, season);
+  const movieYear = Number(movie.year || 0);
+  const exact = [...resultsById.values()].filter((result) => {
+    if (![...searchResultTitleKeys(result)].some((key) => expectedTitles.has(key))) return false;
+    if (season) return mediaType === 'tv';
+    const resultYear = Number(String(result.release_date || result.first_air_date || '').slice(0, 4)) || 0;
+    return Boolean(movieYear && resultYear && movieYear === resultYear);
+  });
+  if (!season) return exact.length === 1 ? exact[0].id : null;
+
+  const seasonChecks = await Promise.all(exact.map(async (result) => ({
+    id: result.id,
+    season: await fetchSeason(result.id, season.number),
+  })));
+  const verified = seasonChecks.filter((item) => Number(String(item.season?.air_date || '').slice(0, 4)) === movieYear);
+  return verified.length === 1 ? verified[0].id : null;
+}
+
+async function resolveVerifiedDetail(movie: MovieRow): Promise<VerifiedDetail | null> {
+  const season = seasonIdentity(movie);
+  const expected = expectedType(movie);
   const tmdbId = Number(movie.tmdb_id || 0);
-  if (!tmdbId) return null;
+  if (!tmdbId) {
+    if (!expected) return null;
+    const resolvedId = await searchExactIdentity(movie, expected, season);
+    if (!resolvedId) return null;
+    const detail = await fetchDetail(resolvedId, expected);
+    if (!detail || !identityMatches(movie, detail, expected)) return null;
+    const seasonDetail = season ? await fetchSeason(resolvedId, season.number) : null;
+    if (season && Number(String(seasonDetail?.air_date || '').slice(0, 4)) !== Number(movie.year || 0)) return null;
+    return { detail, mediaType: expected, tmdbId: resolvedId, season: seasonDetail, resolvedMissingId: true };
+  }
   const explicit = String(movie.tmdb_media_type || '').toLowerCase();
   const candidates: MediaType[] = explicit === 'movie' || explicit === 'tv'
     ? [explicit]
@@ -172,22 +291,26 @@ async function resolveVerifiedDetail(movie: MovieRow): Promise<{ detail: TmdbDet
     detail: await fetchDetail(tmdbId, mediaType),
   })));
   const verified = attempts.filter((item) => item.detail && identityMatches(movie, item.detail, item.mediaType)) as Array<{ detail: TmdbDetail; mediaType: MediaType }>;
-  return verified.length === 1 ? verified[0] : null;
+  if (verified.length !== 1) return null;
+  const seasonDetail = season ? await fetchSeason(tmdbId, season.number) : null;
+  if (season && Number(String(seasonDetail?.air_date || '').slice(0, 4)) !== Number(movie.year || 0)) return null;
+  return { ...verified[0], tmdbId, season: seasonDetail, resolvedMissingId: false };
 }
 
-function metadataPatch(movie: MovieRow, detail: TmdbDetail, mediaType: MediaType): Record<string, unknown> {
+function metadataPatch(movie: MovieRow, resolved: VerifiedDetail, replaceDuplicateSeasonContent: boolean): Record<string, unknown> {
+  const { detail, mediaType, season } = resolved;
   const patch: Record<string, unknown> = {};
-  const overview = String(detail.overview || '').trim();
+  const overview = String((season && replaceDuplicateSeasonContent ? season.overview : '') || detail.overview || '').trim();
   const actors = (detail.credits?.cast || []).map((item) => String(item.name || '').trim()).filter(Boolean).slice(0, 16);
   const directors = (detail.credits?.crew || [])
     .filter((item) => item.job === 'Director' || (mediaType === 'tv' && item.job === 'Creator'))
     .map((item) => String(item.name || '').trim()).filter(Boolean).slice(0, 8);
   const genres = (detail.genres || []).map((item) => ({ id: String(item.id), name: item.name, slug: slugify(item.name) })).filter((item) => item.name && item.slug);
   const countries = (detail.production_countries || []).map((item) => ({ id: item.iso_3166_1 || slugify(item.name), name: item.name, slug: slugify(item.name) })).filter((item) => item.name && item.slug).slice(0, 4);
-  const poster = tmdbImage(detail.poster_path) || tmdbImage(detail.backdrop_path, 'w780');
+  const poster = tmdbImage(season?.poster_path) || tmdbImage(detail.poster_path) || tmdbImage(detail.backdrop_path, 'w780');
   const backdrop = tmdbImage(detail.backdrop_path, 'w780') || poster;
 
-  if (textLength(movie.content) < 80 && textLength(overview) >= 80) patch.content = overview;
+  if ((textLength(movie.content) < 80 || replaceDuplicateSeasonContent) && textLength(overview) >= 80 && visibleText(movie.content) !== visibleText(overview)) patch.content = overview;
   if (stringList(movie.actor).length === 0 && actors.length) patch.actor = actors;
   if (stringList(movie.director).length === 0 && directors.length) patch.director = directors;
   if (taxonomyList(movie.category).length === 0 && genres.length) patch.category = genres;
@@ -195,6 +318,7 @@ function metadataPatch(movie: MovieRow, detail: TmdbDetail, mediaType: MediaType
   if (!String(movie.poster_url || '').trim() && poster) patch.poster_url = poster;
   if (!String(movie.thumb_url || '').trim() && backdrop) patch.thumb_url = backdrop;
   if (!String(movie.trailer_url || '').trim() && youtubeTrailer(detail)) patch.trailer_url = youtubeTrailer(detail);
+  if (!Number(movie.tmdb_id || 0)) patch.tmdb_id = resolved.tmdbId;
   if (!String(movie.tmdb_media_type || '').trim()) patch.tmdb_media_type = mediaType;
   if (Number.isFinite(Number(detail.popularity))) patch.tmdb_popularity = Number(detail.popularity || 0);
   if (Number.isFinite(Number(detail.vote_count))) patch.tmdb_vote_count = Number(detail.vote_count || 0);
@@ -255,10 +379,16 @@ serve(async (req) => {
           await recordStatus(supabase, movieId, 'skipped_identity', { tmdb_id: movie.tmdb_id, reason: 'strict_identity_not_confirmed' });
           continue;
         }
-        const patch = metadataPatch(movie, resolved.detail, resolved.mediaType);
+        let replaceDuplicateSeasonContent = false;
+        if (resolved.season && textLength(resolved.season.overview) >= 80) {
+          const { data, error } = await supabase.rpc('is_duplicate_series_season_content', { p_movie_id: movieId });
+          if (error) throw new Error(error.message);
+          replaceDuplicateSeasonContent = Boolean(data);
+        }
+        const patch = metadataPatch(movie, resolved, replaceDuplicateSeasonContent);
         if (Object.keys(patch).length === 0) {
           verifiedNoChange++;
-          await recordStatus(supabase, movieId, 'verified_no_change', { tmdb_id: movie.tmdb_id, media_type: resolved.mediaType });
+          await recordStatus(supabase, movieId, 'verified_no_change', { tmdb_id: resolved.tmdbId, media_type: resolved.mediaType });
           continue;
         }
         patch.updated_at = new Date().toISOString();
@@ -266,7 +396,14 @@ serve(async (req) => {
         if (error) throw new Error(error.message);
         enriched++;
         changedSlugs.push(String(movie.slug));
-        await recordStatus(supabase, movieId, 'enriched', { tmdb_id: movie.tmdb_id, media_type: resolved.mediaType, fields: Object.keys(patch).filter((key) => key !== 'updated_at') });
+        await recordStatus(supabase, movieId, 'enriched', {
+          tmdb_id: resolved.tmdbId,
+          media_type: resolved.mediaType,
+          season_number: resolved.season?.season_number ?? null,
+          resolved_missing_id: resolved.resolvedMissingId,
+          replaced_duplicate_season_content: replaceDuplicateSeasonContent,
+          fields: Object.keys(patch).filter((key) => key !== 'updated_at'),
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         errors.push(`${movieId}:${message}`);

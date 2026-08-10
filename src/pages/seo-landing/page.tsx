@@ -553,28 +553,19 @@ interface SeoLandingPageProps {
   landingKey: string;
 }
 
+function isSearchEngineCopy(value: string): boolean {
+  return /(google|\bseo\b|canonical|landing|topical authority|từ khóa|truy vấn|ý định tìm kiếm|tín hiệu tìm kiếm|bắt trend|độ phủ)/iu.test(value);
+}
+
 export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
   const data = LANDINGS[landingKey] ?? LANDINGS['xem-phim-online'];
   const path = `/${landingKey}`;
   const canonical = `${SITE_URL}${path}`;
-  const keywordChips = Array.from(new Set(
-    data.keywords
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .concat([
-        'xem phim',
-        'xem phim online',
-        'xem phim Vietsub',
-        'xem phim HD',
-        'phim mới nhất',
-        'phim chiếu rạp',
-        'phim Việt Nam',
-        'phim Hàn Quốc',
-        'anime Vietsub',
-        'KhoPhim',
-      ]),
-  )).slice(0, 22);
+  const readerSections = data.sections.filter((section) => !isSearchEngineCopy(`${section.title} ${section.body}`));
+  const usefulSections = readerSections.length ? readerSections : [{
+    title: `Cách khám phá ${data.h1.toLocaleLowerCase('vi-VN')}`,
+    body: 'Dùng bộ lọc, tìm kiếm hoặc các danh mục liên quan để chọn đúng phim, quốc gia, thể loại và trạng thái cập nhật bạn muốn xem.',
+  }];
   const schema = [
     {
       '@context': 'https://schema.org',
@@ -598,7 +589,7 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
     {
       '@context': 'https://schema.org',
       '@type': 'FAQPage',
-      mainEntity: data.sections.map((section) => ({
+      mainEntity: usefulSections.map((section) => ({
         '@type': 'Question',
         name: section.title,
         acceptedAnswer: { '@type': 'Answer', text: section.body },
@@ -624,7 +615,7 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
         </nav>
 
         <section className="border-b border-white/[0.08] pb-8">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-red-400">KhoPhim SEO</p>
+          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-red-400">Gợi ý khám phá</p>
           <h1 className="max-w-4xl text-3xl font-bold leading-tight md:text-5xl">{data.h1}</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-white/65">{data.description}</p>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -644,7 +635,7 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
         </section>
 
         <section className="grid gap-4 py-8 md:grid-cols-3">
-          {data.sections.map((section) => (
+          {usefulSections.map((section) => (
             <article key={section.title} className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-5">
               <h2 className="mb-3 text-lg font-bold text-white">{section.title}</h2>
               <p className="text-sm leading-6 text-white/60">{section.body}</p>
@@ -667,22 +658,6 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
           </div>
         </section>
 
-        <section className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-5">
-          <h2 className="mb-3 text-lg font-bold">Từ khóa liên quan</h2>
-          <p className="mb-4 text-sm leading-6 text-white/55">
-            Các cụm tìm kiếm này giúp người xem đi đúng nhóm phim cần tìm và giúp Google hiểu chủ đề của trang rõ hơn.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {keywordChips.map((keyword) => (
-              <span
-                key={keyword}
-                className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-100/80"
-              >
-                {keyword}
-              </span>
-            ))}
-          </div>
-        </section>
       </main>
       <Footer />
     </div>

@@ -43,6 +43,7 @@ const aboutSchema = [
     areaServed: 'VN',
     knowsLanguage: 'vi',
     sameAs: ['https://www.tiktok.com/@khophim.org'],
+    publishingPrinciples: `${SITE_URL}/press/`,
     contactPoint: {
       '@type': 'ContactPoint',
       name: 'KhoPhim Customer Support',
@@ -54,39 +55,39 @@ const aboutSchema = [
 ];
 
 const STATS = [
-  { value: 'Mỗi ngày', label: 'Cập Nhật', icon: 'ri-film-line', desc: 'Metadata được làm mới' },
-  { value: 'HD/4K', label: 'Chất Lượng', icon: 'ri-hd-line', desc: 'Hình ảnh sắc nét' },
-  { value: '100%', label: 'Miễn Phí', icon: 'ri-gift-line', desc: 'Không mất phí' },
-  { value: '0', label: 'Quảng Cáo', icon: 'ri-shield-check-line', desc: 'Xem không bị gián đoạn' },
+  { value: 'Tự động', label: 'Cập Nhật', icon: 'ri-film-line', desc: 'Có kiểm tra chất lượng' },
+  { value: 'Nhiều', label: 'Nguồn Phát', icon: 'ri-hd-line', desc: 'Chuyển nguồn khi có sẵn' },
+  { value: '0đ', label: 'Phí Truy Cập', icon: 'ri-gift-line', desc: 'Không có gói trả phí' },
+  { value: 'Rõ ràng', label: 'Quảng Cáo', icon: 'ri-shield-check-line', desc: 'Liên kết được gắn nhãn Ad' },
   { value: '10+', label: 'Quốc Gia', icon: 'ri-global-line', desc: 'Phim đa quốc gia' },
-  { value: '24/7', label: 'Hoạt Động', icon: 'ri-time-line', desc: 'Luôn sẵn sàng' },
+  { value: 'Mọi lúc', label: 'Truy Cập', icon: 'ri-time-line', desc: 'Theo trạng thái hệ thống' },
 ];
 
 const FEATURES = [
   {
     icon: 'ri-play-circle-line',
     title: 'Truy cập trực tiếp trên trình duyệt',
-    desc: 'Trải nghiệm xem phim liền mạch, không bị gián đoạn bởi quảng cáo phiền nhiễu. KhoPhim cam kết mang lại trải nghiệm xem phim vietsub thuần túy nhất.',
+    desc: 'Mở trang phim trực tiếp trên trình duyệt. Quảng cáo của KhoPhim được gắn nhãn và nguồn phát bên thứ ba có thể có chính sách riêng.',
   },
   {
     icon: 'ri-hd-line',
-    title: 'Chất Lượng HD & Full HD',
-    desc: 'Toàn bộ phim trên KhoPhim đều được cung cấp ở chất lượng HD, Full HD và 4K. Hình ảnh sắc nét, âm thanh rõ ràng cho trải nghiệm điện ảnh tại nhà.',
+    title: 'Chất lượng theo nguồn phát',
+    desc: 'Trang hiển thị chất lượng và trạng thái tập theo dữ liệu đã nhận. Độ phân giải thực tế phụ thuộc vào nguồn phát đang khả dụng.',
   },
   {
     icon: 'ri-translate-2',
     title: 'Vietsub & Lồng Tiếng Việt',
-    desc: 'Phim nước ngoài đều có phụ đề tiếng Việt (vietsub) hoặc lồng tiếng Việt chất lượng cao. Dễ dàng theo dõi nội dung phim từ Hàn, Trung, Âu Mỹ, Nhật Bản.',
+    desc: 'Nhãn Vietsub, thuyết minh và lồng tiếng được hiển thị khi nguồn dữ liệu có cung cấp, giúp người xem chọn phiên bản phù hợp.',
   },
   {
     icon: 'ri-refresh-line',
     title: 'Cập Nhật Hàng Ngày',
-    desc: 'Phim mới được cập nhật liên tục mỗi ngày. Từ phim chiếu rạp mới nhất đến các bộ phim bộ đang hot, KhoPhim luôn có nội dung mới để bạn khám phá.',
+    desc: 'Dữ liệu mới được đồng bộ theo lô nhỏ, kiểm tra ảnh, metadata, tập phim và trạng thái trước khi đưa vào các khu vực khám phá.',
   },
   {
     icon: 'ri-smartphone-line',
     title: 'Xem Trên Mọi Thiết Bị',
-    desc: 'Tương thích hoàn toàn với điện thoại, máy tính bảng và máy tính. Không cần tải app, xem trực tiếp trên trình duyệt web tại khophim.org.',
+    desc: 'Giao diện được thiết kế cho điện thoại, máy tính bảng và máy tính; không bắt buộc cài ứng dụng.',
   },
   {
     icon: 'ri-user-line',
@@ -109,7 +110,7 @@ const CATEGORIES = [
 const FAQS = [
   {
     q: 'KhoPhim có hoàn toàn miễn phí không?',
-    a: 'Có, KhoPhim hoàn toàn miễn phí 100%. Bạn không cần trả bất kỳ khoản phí nào để xem phim trên KhoPhim. Chúng tôi không có gói premium hay tính năng trả phí.',
+    a: 'KhoPhim hiện không thu phí truy cập và không có gói premium. Các liên kết quảng cáo của KhoPhim được gắn nhãn rõ ràng.',
   },
   {
     q: 'Tôi có cần tạo tài khoản để xem phim không?',
@@ -117,7 +118,7 @@ const FAQS = [
   },
   {
     q: 'KhoPhim có phim vietsub không?',
-    a: 'Có, hầu hết phim nước ngoài trên KhoPhim đều có phụ đề tiếng Việt (vietsub) hoặc lồng tiếng Việt. Phim Hàn, Trung, Âu Mỹ, Nhật Bản đều có vietsub chất lượng cao.',
+    a: 'Nhiều phim có Vietsub, thuyết minh hoặc lồng tiếng. Phiên bản cụ thể được ghi trên trang phim và phụ thuộc vào nguồn đang khả dụng.',
   },
   {
     q: 'Tôi có thể xem phim trên điện thoại không?',
@@ -125,7 +126,7 @@ const FAQS = [
   },
   {
     q: 'KhoPhim cập nhật phim mới như thế nào?',
-    a: 'KhoPhim cập nhật phim mới hàng ngày, bao gồm phim chiếu rạp mới nhất, phim bộ đang chiếu và phim lẻ mới ra mắt. Bạn có thể xem phim mới nhất tại trang chủ.',
+    a: 'Hệ thống đồng bộ từ các nguồn đã cấu hình, đối chiếu metadata, kiểm tra chất lượng rồi cập nhật trang phim và sitemap theo trạng thái đủ điều kiện.',
   },
   {
     q: 'Nếu phim bị lỗi, tôi phải làm gì?',
@@ -226,10 +227,13 @@ export default function AboutPage() {
                 Thư viện gồm phim lẻ, phim bộ, phim chiếu rạp, hoạt hình và anime từ nhiều quốc gia. Quy mô dữ liệu thay đổi theo quá trình đồng bộ, kiểm tra chất lượng và hợp nhất bản trùng.
               </p>
               <p>
-                Điểm khác biệt của KhoPhim là <strong className="text-white/70">không có quảng cáo</strong>, không yêu cầu đăng ký tài khoản, và tương thích hoàn toàn với mọi thiết bị từ điện thoại đến máy tính. Người dùng có thể xem phim vietsub HD ngay lập tức mà không cần cài đặt bất kỳ phần mềm nào.
+                KhoPhim không yêu cầu tài khoản để khám phá và xem nội dung. Quảng cáo do KhoPhim đặt được gắn nhãn <strong className="text-white/70">Ad</strong>; trình phát từ bên thứ ba có thể áp dụng chính sách riêng.
               </p>
               <p>
-                KhoPhim sử dụng công nghệ streaming tiên tiến để đảm bảo phim phát mượt mà, ít giật lag, với nhiều nguồn phim dự phòng để người xem luôn có thể xem phim ngay cả khi một nguồn gặp sự cố.
+                Khi một tập có nhiều nguồn, người xem có thể đổi nguồn. Tính khả dụng và chất lượng phát thực tế phụ thuộc vào từng nhà cung cấp, vì vậy trang không tuyên bố mọi phim luôn phát được ở mọi thời điểm.
+              </p>
+              <p>
+                Metadata được tổng hợp từ các nguồn đã cấu hình như OPhim, KKPhim, BLVietsub, GLVietsub và TMDB. Hệ thống chỉ bổ sung trường còn thiếu khi đối sánh danh tính đủ chặt, đồng thời giữ nguyên tên chuẩn, tập phim và liên kết phát đang tốt.
               </p>
             </div>
           </div>
@@ -265,7 +269,7 @@ export default function AboutPage() {
             <span className="w-1 h-5 bg-red-500 rounded-full inline-block" />
             <h2 className="text-xl font-bold text-white">Tại Sao Chọn KhoPhim?</h2>
           </div>
-          <p className="text-white/40 text-sm max-w-xl mx-auto">Những lý do hàng triệu người Việt Nam chọn KhoPhim để xem phim online miễn phí mỗi ngày</p>
+          <p className="text-white/40 text-sm max-w-xl mx-auto">Các nguyên tắc sản phẩm và dữ liệu mà KhoPhim áp dụng cho trải nghiệm khám phá phim</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {FEATURES.map(({ icon, title, desc }) => (
