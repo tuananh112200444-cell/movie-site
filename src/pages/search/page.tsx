@@ -18,11 +18,13 @@ import {
 } from '@/utils/searchRanking';
 import { setSmartSessionCache } from '@/utils/smartCache';
 import { getAudioLanguageLabels } from '@/utils/audioLanguage';
+import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
+import AdsterraNativeBanner from '@/components/feature/AdsterraNativeBanner';
 
 type ViewMode = 'grid' | 'list';
 type SortMode = SearchSortMode;
 
-const FALLBACK_SUPABASE_URL = 'https://dzpddbthdeqbkrcjlzap.supabase.co';
+const FALLBACK_SUPABASE_URL = 'https://ceoxbhsdodllziyxmbqr.supabase.co';
 const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
 
 const HOT_SEARCHES = [
@@ -740,7 +742,7 @@ export default function SearchPage() {
   ];
 
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
       <SEO
         title={q ? `Tìm kiếm "${q}" – KhoPhim` : 'Tìm Kiếm Phim – KhoPhim'}
         description={
@@ -1024,6 +1026,8 @@ export default function SearchPage() {
 
       <main className="cinema-page-container">
 
+        <AdsterraResponsiveBanner />
+
         {/* ── Quick Categories (only when no query) ── */}
         {!q && (
           <div className="mb-10">
@@ -1281,6 +1285,8 @@ export default function SearchPage() {
             </div>
           </div>
         )}
+
+        {((q && filteredResults.length > 0) || (!q && trending.length > 0)) && <AdsterraNativeBanner />}
       </main>
       <Footer />
     </div>

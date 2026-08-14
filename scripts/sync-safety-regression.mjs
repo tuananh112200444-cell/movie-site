@@ -5,6 +5,7 @@ const connectorFiles = [
   'supabase/functions/sync-onlyflix-feed/index.ts',
   'supabase/functions/sync-motchill-feed/index.ts',
   'supabase/functions/sync-ophim-movies/index.ts',
+  'supabase/functions/sync-gap-playback-providers/index.ts',
 ];
 
 const failures = [];
@@ -42,6 +43,8 @@ const onlyflix = fs.readFileSync('supabase/functions/sync-onlyflix-feed/index.ts
 const ophim = fs.readFileSync('supabase/functions/sync-ophim-movies/index.ts', 'utf8');
 const autoOphimEpisodes = fs.readFileSync('supabase/functions/auto-sync-ophim-episodes/index.ts', 'utf8');
 const providerBackups = fs.readFileSync('supabase/functions/sync-provider-backups/index.ts', 'utf8');
+const gapPlaybackProviders = fs.readFileSync('supabase/functions/sync-gap-playback-providers/index.ts', 'utf8');
+const ophimPriorityRestore = fs.readFileSync('supabase/migrations/20260812140000_restore_ophim_priority_sync.sql', 'utf8');
 const episodeRepairPriority = fs.readFileSync('supabase/migrations/20260805170000_prioritize_public_episode_repairs.sql', 'utf8');
 const unifiedPlaybackHealth = fs.readFileSync('supabase/migrations/20260805205000_unify_public_playback_health.sql', 'utf8');
 if (!ophim.includes('isTrailerEpisode(episode)') || !ophim.includes('if (isTrailerEpisode(ep)) continue')) {
@@ -94,6 +97,19 @@ if (!ophim.includes('safeProviderImage') || !ophim.includes("posterUrl = safePro
   failures.push('OPhim sync must reject inline/unsafe poster payloads and fall back to the provider thumbnail');
 }
 if (
+  !ophim.includes("bases: ['https://ophim1.com']")
+  || /ophim\.tv|ophim9\.cc|ophim8\.cc/.test(ophim)
+) {
+  failures.push('OPhim sync must fail over to independent providers instead of waiting on retired OPhim mirrors');
+}
+if (
+  !ophimPriorityRestore.includes("jobname = 'sync-ophim-priority-every-15-minutes'")
+  || !ophimPriorityRestore.includes('active := true')
+  || !ophimPriorityRestore.includes('pages=1&limit=8&episodes=1')
+) {
+  failures.push('The bounded OPhim priority feed must be restored and explicitly active');
+}
+if (
   ophim.includes('Targeted provider identity refresh; independent probe pending')
   || /if \(targetMovie\)[\s\S]{0,700}health_status:\s*'unchecked'[\s\S]{0,250}failure_count:\s*0/.test(ophim)
 ) {
@@ -109,7 +125,7 @@ if (
 if (
   !ophim.includes('detailMatchesExpected(expected, fetchedDetail)')
   || !ophim.includes('provider list/detail identity mismatch')
-  || !ophim.includes('if (exactMatch && sameMovieByTitle(exactMatch, payload)) return exactMatch')
+  || !ophim.includes('sameMovieByTitle(exactMatch, payload) || sameMovieByStableProviderIdentity(exactMatch, payload)')
   || !ophim.includes('quarantineVerifiedForeignEpisodes')
 ) {
   failures.push('OPhim/KKPhim list, detail, existing movie and persisted episodes must pass one strict identity gate');
@@ -132,9 +148,21 @@ if (
   || !providerBackups.includes("strict_missing_detail: '1'")
   || !providerBackups.includes('needsPartnerCoverage')
   || !providerBackups.includes("const cursorKey = 'sync-provider-backups:published:v1'")
+  || !providerBackups.includes("outcome: result.matched ? (result.ok ? 'synced' : 'error') : 'verified_no_match'")
 ) {
   failures.push('Provider-backup sync must be bounded, identity-checked and resumable');
 }
+if (
+  !gapPlaybackProviders.includes("const DEFAULT_PROVIDERS: Provider[] = ['vsmov', 'nguonc']")
+  || !gapPlaybackProviders.includes('candidateYear !== expectedYear')
+  || !gapPlaybackProviders.includes('candidateType !== expectedType')
+  || !gapPlaybackProviders.includes('Provider verification pending:')
+  || !gapPlaybackProviders.includes("reason: capacity?.mode === 'protect' ? 'runtime_capacity_protect' : 'vietnam_viewing_peak'")
+  || !gapPlaybackProviders.includes('resolveVsmovHls')
+) {
+  failures.push('Gap-provider sync must cover VSMOV and NguonC by default, remain strict-identity, health-gated and capacity-aware');
+}
+
 if (
   !ophim.includes('if (existing.is_published === false) update.is_published = false')
   || !ophim.includes('detailHasPlayableEpisode(detail) && result.hasImage')

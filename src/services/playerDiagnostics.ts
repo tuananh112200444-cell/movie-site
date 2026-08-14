@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase';
 
 export type PlayerIssueEventType =
   | 'playback_started'
+  | 'playback_stable'
+  | 'playback_heartbeat'
   | 'hls_retry'
   | 'hls_fatal_retry'
   | 'hls_media_retry'
@@ -14,6 +16,8 @@ export type PlayerIssueEventType =
   | 'app_error'
   | 'chunk_load_error'
   | 'service_worker_removed'
+  | 'release_update_deferred'
+  | 'release_update_applied'
   | 'stale_tab_reload'
   | 'bfcache_restore_reload'
   | 'offline'
@@ -33,6 +37,10 @@ export interface PlayerIssuePayload {
   duration?: number;
   buffered_ahead?: number;
   error_message?: string;
+  startup_ms?: number;
+  watched_seconds?: number;
+  stall_count?: number;
+  stall_seconds?: number;
 }
 
 const recentReports = new Map<string, number>();
@@ -136,6 +144,10 @@ export function reportPlayerIssue(payload: PlayerIssuePayload): void {
     playback_time: finiteNumber(payload.playback_time),
     duration: finiteNumber(payload.duration),
     buffered_ahead: finiteNumber(payload.buffered_ahead),
+    startup_ms: finiteNumber(payload.startup_ms),
+    watched_seconds: finiteNumber(payload.watched_seconds),
+    stall_count: finiteNumber(payload.stall_count),
+    stall_seconds: finiteNumber(payload.stall_seconds),
     error_message: payload.error_message?.slice(0, 500) || null,
     playback_session_id: getPlaybackSessionId(),
     user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 500) : null,

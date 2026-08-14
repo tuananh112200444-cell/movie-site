@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
+import AdsterraNativeBanner from '@/components/feature/AdsterraNativeBanner';
+import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import FilterSidebar, { GENRES, COUNTRIES, TYPES, SORT_OPTIONS } from './components/FilterSidebar';
 import MovieListItem from './components/MovieListItem';
@@ -176,10 +178,10 @@ export default function FilterPage() {
   ];
 
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
       <SEO
         title={`${seoTitle} – Lọc Phim | KhoPhim`}
-        description={`Lọc phim online theo thể loại, quốc gia, năm sản xuất tại KhoPhim. ${seoTitle} – xem phim HD vietsub miễn phí, không quảng cáo, cập nhật hàng ngày.`}
+        description={`Lọc phim online theo thể loại, quốc gia, năm sản xuất tại KhoPhim. ${seoTitle} – xem phim HD vietsub miễn phí, cập nhật hàng ngày.`}
         keywords="lọc phim, tìm phim theo thể loại, phim theo quốc gia, xem phim online miễn phí, kho phim HD vietsub, phim mới nhất 2026"
         canonical={`${SITE_URL}/filter${searchParams.toString() ? `?${searchParams.toString()}` : ''}`}
         noIndex={movies.length === 0 && !loading}
@@ -238,6 +240,8 @@ export default function FilterPage() {
       </div>
 
       <main className="max-w-[1760px] mx-auto px-4 pb-16">
+        <AdsterraResponsiveBanner />
+
         <div className="flex gap-5 items-start">
           {/* Sidebar */}
           <FilterSidebar
@@ -377,6 +381,8 @@ export default function FilterPage() {
             )}
           </div>
         </div>
+
+        {!loading && movies.length > 0 && <AdsterraNativeBanner />}
       </main>
       <Footer />
     </div>

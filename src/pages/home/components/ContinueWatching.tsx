@@ -102,8 +102,8 @@ function HistoryCard({ entry, resume, onRemove }: HistoryCardProps) {
 
   return (
     <div className="group relative min-w-0">
-      <Link to={watchUrl} className="block cursor-pointer">
-        <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-[#1a1d27] shadow-[0_10px_24px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.05]">
+      <Link to={watchUrl} className="movie-card-contain block cursor-pointer">
+        <div className="movie-art-frame movie-art-frame--portrait relative aspect-[2/3] overflow-hidden rounded-lg bg-[#1a1d27] shadow-[0_10px_24px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.05]">
           {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton" />}
           {imgError && (
             <div className="absolute inset-0 z-[1] flex items-center justify-center bg-[#1a1d27]">

@@ -48,12 +48,12 @@ function GridItem({ movie, query }: { movie: MovieItem; query: string }) {
   return (
     <Link
       to={href}
-      className="group relative flex cursor-pointer flex-row gap-3 rounded-[1.15rem] border border-white/[0.07] bg-white/[0.025] p-2 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.035] sm:flex-col sm:gap-0 sm:border-0 sm:bg-transparent sm:p-1"
+      className="movie-card-contain group relative flex cursor-pointer flex-row gap-3 rounded-[1.15rem] border border-white/[0.07] bg-white/[0.025] p-2 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.035] sm:flex-col sm:gap-0 sm:border-0 sm:bg-transparent sm:p-1"
       onMouseEnter={() => prefetchMovieDetail(movie.slug)}
       onMouseLeave={() => cancelPrefetchMovieDetail(movie.slug)}
     >
       {/* Poster */}
-      <div className="relative aspect-[2/3] w-[108px] flex-shrink-0 rounded-[1rem] overflow-hidden bg-[#141823] ring-1 ring-white/[0.07] shadow-[0_14px_38px_rgba(0,0,0,0.24)] transition-all duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.34)] sm:w-auto">
+      <div className="movie-art-frame movie-art-frame--portrait relative aspect-[2/3] w-[108px] flex-shrink-0 rounded-[1rem] overflow-hidden bg-[#141823] ring-1 ring-white/[0.07] shadow-[0_14px_38px_rgba(0,0,0,0.24)] transition-all duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.34)] sm:w-auto">
         <img
           src={currentSrc}
           alt={movie.name}
@@ -159,12 +159,12 @@ function ListItem({ movie, query }: { movie: MovieItem; query: string }) {
   return (
     <Link
       to={href}
-      className="group flex gap-2.5 sm:gap-4 rounded-2xl border border-white/[0.075] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-2 shadow-[0_12px_36px_rgba(0,0,0,0.16)] transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-white/[0.045] sm:p-3"
+      className="movie-card-contain group flex gap-2.5 sm:gap-4 rounded-2xl border border-white/[0.075] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-2 shadow-[0_12px_36px_rgba(0,0,0,0.16)] transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-white/[0.045] sm:p-3"
       onMouseEnter={() => prefetchMovieDetail(movie.slug)}
       onMouseLeave={() => cancelPrefetchMovieDetail(movie.slug)}
     >
       {/* Thumbnail */}
-      <div className="relative w-[80px] sm:w-[100px] md:w-[120px] aspect-[2/3] rounded-xl overflow-hidden bg-[#141823] ring-1 ring-white/[0.07] flex-shrink-0">
+      <div className="movie-art-frame movie-art-frame--portrait relative w-[80px] sm:w-[100px] md:w-[120px] aspect-[2/3] rounded-xl overflow-hidden bg-[#141823] ring-1 ring-white/[0.07] flex-shrink-0">
         <img
           src={currentSrc}
           alt={movie.name}

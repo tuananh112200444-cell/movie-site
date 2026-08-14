@@ -307,7 +307,8 @@ function parseOPhimDetail(data: OPhimResponse, fallbackSlug: string): ParsedOPhi
   };
 }
 
-const OPHIM_MIRRORS = ['https://ophim1.com', 'https://ophim.tv', 'https://ophim9.cc', 'https://ophim8.cc'];
+// Retired mirrors no longer satisfy the OPhim JSON API contract.
+const OPHIM_MIRRORS = ['https://ophim1.com'];
 
 async function fetchOPhimDetail(slug: string): Promise<ParsedOPhimDetail | null> {
   if (!slug) return null;

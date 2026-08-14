@@ -1,0 +1,1986 @@
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { normalizeVerifiedSeasonNumbering } from '../_shared/episode-numbering.ts';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const MOVIE_DETAIL_PROXY_SECRET = Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') ?? '';
+const ENABLE_PUBLIC_LAZY_PERSIST = Deno.env.get('ENABLE_PUBLIC_LAZY_PERSIST') === 'true';
+const DETAIL_CACHE_TTL_MIN = 10;
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': 'https://khophim.org',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-khophim-proxy-secret',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Vary': 'Origin'
+};
+const MOVIE_DETAIL_SELECT = [
+  'id',
+  'slug',
+  'name',
+  'origin_name',
+  'title_vi',
+  'title_en',
+  'title_zh',
+  'title_original',
+  'content',
+  'type',
+  'status',
+  'thumb_url',
+  'poster_url',
+  'trailer_url',
+  'time',
+  'episode_current',
+  'episode_total',
+  'current_episode',
+  'total_episodes',
+  'schedule_type',
+  'release_time',
+  'release_day',
+  'schedule_timezone',
+  'release_at',
+  'next_episode_at',
+  'next_episode_name',
+  'schedule_note',
+  'quality',
+  'lang',
+  'year',
+  'actor',
+  'director',
+  'category',
+  'country',
+  'notify',
+  'showtimes',
+  'view',
+  'ophim_id',
+  'ophim_slug',
+  'tmdb_id',
+  'imdb_id',
+  'seo_catalog_status',
+  'catalog_source',
+  'tmdb_media_type',
+  'tmdb_popularity',
+  'tmdb_vote_count',
+  'tmdb_vote_average',
+  'catalog_synced_at',
+  'source_site',
+  'source_name',
+  'is_published',
+  'created_at',
+  'updated_at'
+].join(',');
+function isBlvietsubWatchPageUrl(url) {
+  const raw = String(url || '').replace(/&amp;/g, '&').trim();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw);
+    return /^(?:www\.)?blvietsub\.com$/i.test(parsed.hostname) && /\/+xem-phim\//i.test(parsed.pathname);
+  } catch  {
+    return /^(?:https?:\/\/)?(?:www\.)?blvietsub\.com\/+xem-phim\//i.test(raw);
+  }
+}
+function normalizeDailymotionUrl(url) {
+  if (isBlvietsubWatchPageUrl(url)) return '';
+  const dm = /^https?:\/\/(?:www\.)?dailymotion\.com\/(?:embed\/)?video\/([a-zA-Z0-9]+)/i.exec(url);
+  if (dm) return `https://geo.dailymotion.com/player.html?video=${dm[1]}`;
+  const short = /^https?:\/\/dai\.ly\/([a-zA-Z0-9]+)/i.exec(url);
+  if (short) return `https://geo.dailymotion.com/player.html?video=${short[1]}`;
+  return url;
+}
+function epSortKey(ep) {
+  const text = ep.slug || ep.name || '';
+  const number = extractEpNumber(text);
+  if (number) return number;
+  if (text.toLowerCase().includes('full')) return 0;
+  return Infinity;
+}
+function extractEpNumber(text) {
+  const normalized = String(text || '').toLowerCase();
+  if (normalized.includes('full')) return 0;
+  const slash = normalized.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
+  if (slash) return Number(slash[1] || 0) || 0;
+  const range = normalized.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
+  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
+  const matches = [
+    ...normalized.matchAll(/(\d{1,4})/g)
+  ].map((match)=>Number(match[1])).filter(Number.isFinite);
+  return matches.length ? Math.max(...matches) : 0;
+}
+function extractMaxEpNumber(text) {
+  const matches = String(text || '').match(/\d+/g);
+  if (!matches) return extractEpNumber(text);
+  return Math.max(...matches.map((value)=>Number(value || 0)).filter(Number.isFinite));
+}
+function getExpectedEpisodeNumber(movie) {
+  if (!movie) return 0;
+  return Math.max(Number(movie.current_episode || 0) || 0, extractEpNumber(String(movie.episode_current || movie.episodeCurrent || '')));
+}
+function getMaxEpisodeNumberFromServers(servers = []) {
+  return servers.reduce((max, server)=>{
+    const serverMax = (server.server_data ?? []).reduce((innerMax, raw)=>{
+      const ep = raw;
+      if (String(ep.audio_type || '').toLowerCase() === 'raw' || /\braw\b/i.test(String(ep.name || ''))) return innerMax;
+      return Math.max(innerMax, extractEpNumber(String(ep.slug || ep.name || '')));
+    }, 0);
+    return Math.max(max, serverMax);
+  }, 0);
+}
+function getMaxEpisodeNumberFromServerMap(serverMap) {
+  let max = 0;
+  for (const [, episodes] of serverMap){
+    for (const raw of episodes){
+      const ep = raw;
+      max = Math.max(max, extractEpNumber(String(ep.slug || ep.name || '')));
+    }
+  }
+  return max;
+}
+function isClearlyEpisodicMovie(movie) {
+  if (!movie) return false;
+  const kind = `${movie.type || ''} ${movie.tmdb_media_type || ''}`.toLowerCase();
+  const advertisedTotal = Math.max(Number(movie.total_episodes || 0) || 0, extractMaxEpNumber(String(movie.episode_total || '')));
+  return advertisedTotal > 1 && /phim-bo|series|tv/.test(kind);
+}
+function hasOnlyFullPlaceholderCoverage(movie, serverMap) {
+  if (!isClearlyEpisodicMovie(movie)) return false;
+  // Without a stable external identity, `Full` may be a legitimate manual
+  // compilation or special. Do not replace it from a title-only guess.
+  if (!String(movie?.tmdb_id || '').trim()) return false;
+  const playableLabels = [];
+  for (const rows of serverMap.values()){
+    for (const raw of rows){
+      const ep = raw;
+      if (!String(ep.link_m3u8 || '').trim() && !String(ep.link_embed || '').trim()) continue;
+      playableLabels.push(`${ep.slug || ''} ${ep.name || ''}`.trim().toLowerCase());
+    }
+  }
+  return playableLabels.length > 0 && playableLabels.every((label)=>/\bfull\b/.test(label));
+}
+function removeLegacyUncheckedFullPlaceholders(movie, serverMap) {
+  if (!isClearlyEpisodicMovie(movie)) return;
+  const numberedEpisodes = new Set();
+  for (const rows of serverMap.values()){
+    for (const raw of rows){
+      const ep = raw;
+      const number = extractEpNumber(String(ep.slug || ep.name || ''));
+      if (number > 0) numberedEpisodes.add(number);
+    }
+  }
+  if (numberedEpisodes.size < 2) return;
+  for (const [serverName, rows] of serverMap){
+    const filtered = rows.filter((raw)=>{
+      const ep = raw;
+      const label = `${ep.slug || ''} ${ep.name || ''}`.trim().toLowerCase();
+      const provider = String(ep.source_provider || '').trim().toLowerCase();
+      const health = String(ep.source_health_status || '').trim().toLowerCase();
+      // Keep manual/special Full editions. Only hide the old OPhim placeholder
+      // pattern that was never independently checked and conflicts with the
+      // verified numbered series catalogue.
+      return !(/\bfull\b/.test(label) && provider === 'ophim' && health === 'unchecked');
+    });
+    if (filtered.length > 0) serverMap.set(serverName, filtered);
+    else serverMap.delete(serverName);
+  }
+}
+function isPlaceholderSeriesDetail(payload) {
+  const movie = payload.movie;
+  if (!isClearlyEpisodicMovie(movie)) return false;
+  const episodes = Array.isArray(payload.episodes) ? payload.episodes : [];
+  const labels = episodes.flatMap((server)=>(server.server_data ?? []).map((raw)=>{
+      const ep = raw;
+      return `${ep.slug || ''} ${ep.name || ''}`.trim().toLowerCase();
+    }));
+  return labels.length > 0 && labels.every((label)=>/\bfull\b/.test(label));
+}
+function isDetailEpisodeIncomplete(payload) {
+  const movie = payload.movie;
+  const expected = getExpectedEpisodeNumber(movie);
+  if (expected <= 1) return false;
+  const episodes = Array.isArray(payload.episodes) ? payload.episodes : [];
+  const actual = getMaxEpisodeNumberFromServers(episodes);
+  return actual > 0 && actual < expected;
+}
+function normalizeEpisodeKeyPart(value) {
+  return value.trim().toLowerCase().normalize('NFC');
+}
+function buildEpisodeDedupKeys(serverName, slug, episodeNumber, name = '') {
+  const server = normalizeEpisodeKeyPart(serverName || 'Nguồn');
+  const keys = [];
+  const normalizedSlug = normalizeEpisodeKeyPart(slug || '');
+  const normalizedName = normalizeEpisodeKeyPart(name || '');
+  if (normalizedSlug) keys.push(`${server}|slug:${normalizedSlug}`);
+  if (normalizedName) keys.push(`${server}|name:${normalizedName}`);
+  if (Number.isFinite(episodeNumber)) keys.push(`${server}|num:${episodeNumber}`);
+  return keys;
+}
+function hasSeenEpisode(seen, serverName, slug, episodeNumber, name = '') {
+  return buildEpisodeDedupKeys(serverName, slug, episodeNumber, name).some((key)=>seen.has(key));
+}
+function markSeenEpisode(seen, serverName, slug, episodeNumber, name = '') {
+  for (const key of buildEpisodeDedupKeys(serverName, slug, episodeNumber, name)){
+    seen.add(key);
+  }
+}
+function isHiddenEpisodeSource(source) {
+  return String(source || '').trim().toLowerCase() === 'hidden';
+}
+function hasPlayableEpisodeLink(epData) {
+  return Boolean(String(epData.link_m3u8 || '').trim() || String(epData.link_embed || '').trim());
+}
+function hasPlayableFullMovie(servers = []) {
+  return servers.some((server)=>(server.server_data || []).some((raw)=>{
+      const episode = raw;
+      if (!hasPlayableEpisodeLink(episode) || !episodeHealthIsUsable(episode)) return false;
+      const label = `${String(episode.slug || '')} ${String(episode.name || '')}`.trim().toLowerCase();
+      return /\bfull\b/.test(label) && !label.includes('trailer');
+    }));
+}
+function pushEpisode(serverMap, serverName, epData) {
+  if (!hasPlayableEpisodeLink(epData)) return;
+  if (!serverMap.has(serverName)) serverMap.set(serverName, []);
+  serverMap.get(serverName).push(epData);
+}
+function normalizePlayableUrl(value = '') {
+  return String(value || '').trim().replace(/&amp;/g, '&').replace(/\/+$/, '');
+}
+function isDuplicateDbError(error) {
+  const text = String(error?.message || '').toLowerCase();
+  return error?.code === '23505' || text.includes('duplicate') || text.includes('unique constraint');
+}
+function streamRowUrl(row) {
+  return normalizePlayableUrl(String(row.stream_url || row.embed_url || ''));
+}
+function buildStreamHealthIndex(streams = []) {
+  const index = new Map();
+  for (const raw of streams){
+    const row = raw;
+    const url = streamRowUrl(row);
+    const serverName = String(row.server_name || 'Nguá»“n');
+    const episodeSlug = String(row.episode_slug || '');
+    if (url) index.set(`url:${url}`, row);
+    if (serverName && episodeSlug) {
+      index.set(`server:${normalizeEpisodeKeyPart(serverName)}|slug:${normalizeEpisodeKeyPart(episodeSlug)}`, row);
+      const episodeNumber = extractEpNumber(episodeSlug);
+      if (Number.isFinite(episodeNumber)) {
+        index.set(`server:${normalizeEpisodeKeyPart(serverName)}|num:${episodeNumber}`, row);
+      }
+    }
+  }
+  return index;
+}
+function getEpisodeHealthRow(healthIndex, serverName, slug, episodeNumber, epData) {
+  const url = normalizePlayableUrl(String(epData.link_m3u8 || epData.link_embed || ''));
+  if (url && healthIndex.has(`url:${url}`)) return healthIndex.get(`url:${url}`) || null;
+  const server = normalizeEpisodeKeyPart(serverName || 'Nguá»“n');
+  const normalizedSlug = normalizeEpisodeKeyPart(slug || '');
+  if (server && normalizedSlug && healthIndex.has(`server:${server}|slug:${normalizedSlug}`)) {
+    return healthIndex.get(`server:${server}|slug:${normalizedSlug}`) || null;
+  }
+  if (server && Number.isFinite(episodeNumber) && healthIndex.has(`server:${server}|num:${episodeNumber}`)) {
+    return healthIndex.get(`server:${server}|num:${episodeNumber}`) || null;
+  }
+  return null;
+}
+function shouldSuppressUnhealthyStream(row) {
+  if (!row) return false;
+  if (String(row.last_error || '').startsWith('Provider verification pending:')) return true;
+  const healthStatus = String(row.health_status || '').toLowerCase();
+  const failureCount = Number(row.failure_count || 0);
+  const embedUrl = String(row.embed_url || row.link_embed || '').trim();
+  const browserManagedProbeException = /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl) || /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl);
+  if (healthStatus === 'blocked' && !browserManagedProbeException) return true;
+  return healthStatus === 'dead' || healthStatus === 'failed' && failureCount >= 3;
+}
+function episodeHealthIsUsable(ep) {
+  if (String(ep.source_last_error || '').startsWith('Provider verification pending:')) return false;
+  const status = String(ep.source_health_status || '').trim().toLowerCase();
+  const failures = Number(ep.source_failure_count || 0);
+  if (status === 'dead') return false;
+  if (status === 'failed' && failures >= 2) return false;
+  if (status === 'blocked' && failures >= 2) return false;
+  return true;
+}
+function hasUnhealthyExpectedCoverage(serverMap, expectedEpisode) {
+  if (expectedEpisode <= 0 || expectedEpisode > 300) return false;
+  const usable = new Set();
+  const present = new Set();
+  for (const rows of serverMap.values()){
+    for (const raw of rows){
+      const ep = raw;
+      const number = extractEpNumber(String(ep.slug || ep.name || ''));
+      if (number <= 0 || number > expectedEpisode) continue;
+      present.add(number);
+      if (episodeHealthIsUsable(ep)) usable.add(number);
+    }
+  }
+  if (present.size === 0) return false;
+  for(let number = 1; number <= expectedEpisode; number += 1){
+    if (present.has(number) && !usable.has(number)) return true;
+  }
+  return false;
+}
+function episodeProviderKey(ep) {
+  const source = String(ep.source_provider || '').trim().toLowerCase();
+  if (/phimapi|kkphim/.test(source)) return 'phimapi';
+  if (/ophim/.test(source)) return 'ophim';
+  if (/motchill/.test(source)) return 'motchill';
+  if (source) return source;
+  try {
+    return new URL(String(ep.link_m3u8 || ep.link_embed || '')).hostname.toLowerCase();
+  } catch  {
+    return '';
+  }
+}
+// Old catalogues can look complete while every URL comes from one provider and
+// has never been checked. Request one independent provider before promising
+// playback; once either a healthy URL or a second provider exists, normal cache
+// behavior resumes and the external API is not called on every page view.
+function hasUnverifiedSingleProviderCoverage(serverMap, expectedEpisode) {
+  if (expectedEpisode <= 0 || expectedEpisode > 300) return false;
+  const episodes = new Map();
+  for (const rows of serverMap.values()){
+    for (const raw of rows){
+      const ep = raw;
+      const number = extractEpNumber(String(ep.slug || ep.name || ''));
+      if (number <= 0 || number > expectedEpisode) continue;
+      const bucket = episodes.get(number) || [];
+      bucket.push(ep);
+      episodes.set(number, bucket);
+    }
+  }
+  for (const candidates of episodes.values()){
+    if (candidates.some((ep)=>{
+      if (String(ep.source_health_status || '').toLowerCase() !== 'ok') return false;
+      const checkedAt = Date.parse(String(ep.source_last_checked_at || ''));
+      return Number.isFinite(checkedAt) && Date.now() - checkedAt <= 6 * 60 * 60 * 1000;
+    })) continue;
+    const providers = new Set(candidates.map(episodeProviderKey).filter(Boolean));
+    if (providers.size < 2) return true;
+  }
+  return false;
+}
+function attachStreamHealth(epData, row) {
+  if (!row) return epData;
+  const healthStatus = String(row.health_status || 'unchecked').toLowerCase();
+  const lastError = String(row.last_error || '');
+  const directStreamFailed = healthStatus === 'degraded' && lastError.startsWith('Direct stream failed:');
+  return {
+    ...epData,
+    ...directStreamFailed ? {
+      link_m3u8: ''
+    } : {},
+    source_health_status: healthStatus,
+    source_response_time_ms: Number(row.response_time_ms || 0) || undefined,
+    source_failure_count: Number(row.failure_count || 0) || undefined,
+    source_priority: Number(row.priority || 0) || undefined,
+    source_provider: String(row.source || epData.source_provider || '') || undefined,
+    source_last_checked_at: String(row.last_checked_at || '') || undefined,
+    source_last_error: lastError || undefined
+  };
+}
+function jsonResponse(body, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...CORS_HEADERS,
+      ...extraHeaders
+    }
+  });
+}
+function timeoutSignal(ms) {
+  const controller = new AbortController();
+  setTimeout(()=>controller.abort(), ms);
+  return controller.signal;
+}
+async function fetchTextWithTimeout(url, ms = 5000, init = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(()=>{
+    try {
+      controller.abort();
+    } catch  {}
+  }, ms);
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; KhoPhimBot/1.0)',
+        'Accept': init.body ? 'application/json,text/plain,*/*' : 'text/html,application/xhtml+xml',
+        ...init.headers || {}
+      }
+    });
+    if (!response.ok) return null;
+    return await response.text();
+  } catch  {
+    return null;
+  } finally{
+    clearTimeout(timer);
+  }
+}
+function decodeHtmlEntities(value) {
+  return value.replace(/&amp;/g, '&').replace(/&#038;/g, '&').replace(/&quot;/g, '"').replace(/&#8211;/g, '-').replace(/&#8217;/g, "'").replace(/&nbsp;/g, ' ').replace(/<[^>]+>/g, '').trim();
+}
+function getUrlHost(value = '') {
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, '');
+  } catch  {
+    return '';
+  }
+}
+function isKnownBlockedEmbedHost(value = '') {
+  const raw = String(value || '').toLowerCase();
+  const decoded = (()=>{
+    try {
+      return decodeURIComponent(raw);
+    } catch  {
+      return raw;
+    }
+  })();
+  if (raw.includes('versondd.top') || decoded.includes('versondd.top') || raw.includes('short.icu') || decoded.includes('short.icu')) return true;
+  const host = getUrlHost(value);
+  return host === 'versondd.top' || host.endsWith('.versondd.top') || host === 'short.icu' || host.endsWith('.short.icu');
+}
+async function readCachedDetail(supabase, slug, liveMovie) {
+  try {
+    const { data } = await supabase.from('movie_api_cache').select('detail_json, expires_at').eq('slug', slug).abortSignal(timeoutSignal(1500)).maybeSingle();
+    const row = data;
+    if (!row?.detail_json || !row.expires_at) return null;
+    if (liveMovie && liveMovie.is_published !== true) return null;
+    // An expired detail is still the last-known-good publication. Keep serving
+    // it during database/upstream incidents; a newer movies.current_episode
+    // below invalidates it as soon as verified episode coverage advances.
+    const staleAgeMs = Date.now() - Date.parse(row.expires_at);
+    if (Number.isFinite(staleAgeMs) && staleAgeMs > 7 * 24 * 60 * 60 * 1000) return null;
+    const cachedMovie = row.detail_json.movie;
+    if (getExpectedEpisodeNumber(liveMovie) > getExpectedEpisodeNumber(cachedMovie)) return null;
+    return row.detail_json;
+  } catch  {
+    return null;
+  }
+}
+async function writeCachedDetail(supabase, slug, payload) {
+  try {
+    await supabase.from('movie_api_cache').upsert({
+      slug,
+      detail_json: payload,
+      source: 'movie-detail-proxy',
+      cached_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + DETAIL_CACHE_TTL_MIN * 60 * 1000).toISOString()
+    }).abortSignal(timeoutSignal(3000));
+  } catch  {
+  /* cache write is best-effort */ }
+}
+/* ── Search OPhim for correct slug when detail 404 ── */ function getInternalSyncSecret() {
+  return Deno.env.get('CRON_SECRET') || Deno.env.get('BLVIETSUB_SYNC_SECRET') || Deno.env.get('PLAYER_REPAIR_SECRET') || '';
+}
+function edgeWaitUntil(promise) {
+  try {
+    const runtime = globalThis;
+    if (runtime.EdgeRuntime?.waitUntil) {
+      runtime.EdgeRuntime.waitUntil(promise);
+    } else {
+      void promise;
+    }
+  } catch  {
+    void promise;
+  }
+}
+function isBlvietsubMovieRecord(movie) {
+  const text = `${movie?.source_site || ''} ${movie?.source_name || ''} ${movie?.showtimes || ''} ${movie?.source_url || ''}`.toLowerCase();
+  return text.includes('blvietsub') || text.includes('glvietsub') || text.includes('admin-queer');
+}
+function getBlvietsubMovieUrl(movie) {
+  for (const value of [
+    movie?.source_url,
+    movie?.showtimes
+  ]){
+    const url = String(value || '').trim();
+    if (/^https?:\/\/blvietsub\.com\/phim\/[^/]+\/?$/i.test(url)) return url.replace(/\/+$/, '/');
+  }
+  return '';
+}
+function isOphimLikeMovieRecord(movie) {
+  const text = `${movie?.source_site || ''} ${movie?.source_name || ''}`.toLowerCase();
+  return text.includes('ophim') || text.includes('kkphim') || !!movie?.ophim_slug;
+}
+function isTrustedQueerEpisodeSource(source, serverName) {
+  const text = `${source || ''} ${serverName || ''}`.toLowerCase();
+  if (!text.trim()) return true;
+  const verifiedAuxiliary = text.includes('verified') && (text.includes('ophim') || text.includes('kkphim') || text.includes('phimapi'));
+  if (verifiedAuxiliary) return true;
+  if (text.includes('ophim') || text.includes('kkphim') || text.includes('phimapi') || text.includes('#hà nội') || text.includes('#ha noi') || text.includes('hà nội') || text.includes('ha noi')) {
+    return false;
+  }
+  return text.includes('blvietsub') || text.includes('glvietsub') || text.includes('admin-queer') || text.includes('verified') || text.includes('manual') || text.includes('stream') || text.includes('ss') || /\bsv\s*\d+\b/.test(text);
+}
+function hasUntrustedQueerEpisodeServer(payload) {
+  const movie = payload?.movie;
+  if (!isBlvietsubMovieRecord(movie)) return false;
+  const servers = Array.isArray(payload?.episodes) ? payload.episodes : [];
+  return servers.some((server)=>!isTrustedQueerEpisodeSource('', server.server_name));
+}
+function detailHasPlayableEpisodes(detail) {
+  return Boolean(detail?.episodes?.some((server)=>(server.server_data ?? []).some((raw)=>{
+      const ep = raw;
+      return Boolean(String(ep.link_m3u8 || '').trim() || String(ep.link_embed || '').trim());
+    })));
+}
+function getOphimProvider(movie) {
+  const text = `${movie?.source_site || ''} ${movie?.source_name || ''}`.toLowerCase();
+  return text.includes('kkphim') || text.includes('phimapi') ? 'kkphim' : 'ophim';
+}
+function getOphimRepairSlug(movie, fallbackSlug) {
+  return String(movie?.ophim_slug || movie?.slug || fallbackSlug).trim();
+}
+function parseMotchillEpisodeLinks(html, slug) {
+  const escapedSlug = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`href=['"]([^'"]*\\/tap-phim\\/${escapedSlug}-tap-(\\d+)[^'"]*)['"]`, 'gi');
+  const links = new Map();
+  let match;
+  while((match = pattern.exec(html)) !== null){
+    const episodeNumber = Number(match[2] || 0);
+    if (!episodeNumber) continue;
+    const rawUrl = match[1].replace(/&amp;/g, '&');
+    const url = rawUrl.startsWith('http') ? rawUrl : `https://www.motchillkz.org${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
+    links.set(episodeNumber, url);
+  }
+  return [
+    ...links.entries()
+  ].map(([episodeNumber, url])=>({
+      episodeNumber,
+      url
+    })).sort((a, b)=>a.episodeNumber - b.episodeNumber);
+}
+function parseMotchillPlayerOptions(html) {
+  const options = [];
+  const pattern = /<li[^>]*data-type=['"]([^'"]+)['"][^>]*data-post=['"]([^'"]+)['"][^>]*data-nume=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/li>/gi;
+  let match;
+  while((match = pattern.exec(html)) !== null){
+    const titleMatch = match[4].match(/<span[^>]*class=['"][^'"]*title[^'"]*['"][^>]*>([\s\S]*?)<\/span>/i);
+    const serverName = decodeHtmlEntities(titleMatch?.[1] || `Motchill #${match[3]}`);
+    if (/trailer/i.test(serverName)) continue;
+    options.push({
+      serverName: serverName || `Motchill #${match[3]}`,
+      type: match[1],
+      post: match[2],
+      nume: match[3]
+    });
+  }
+  return options;
+}
+async function fetchMotchillPlayer(option) {
+  const body = new URLSearchParams({
+    action: 'doo_player_ajax',
+    post: option.post,
+    nume: option.nume,
+    type: option.type
+  });
+  const text = await fetchTextWithTimeout('https://www.motchillkz.org/wp-admin/admin-ajax.php', 4500, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'Referer': 'https://www.motchillkz.org/',
+      'X-Requested-With': 'XMLHttpRequest'
+    },
+    body
+  });
+  if (!text) return '';
+  try {
+    const payload = JSON.parse(text);
+    const value = String(payload.embed_url || '').replace(/\\\//g, '/').trim();
+    if (/^https?:\/\//i.test(value)) return value;
+    return value.match(/<iframe[^>]+src=["'](https?:\/\/[^"']+)/i)?.[1] || '';
+  } catch  {
+    return '';
+  }
+}
+async function fetchMotchillMovieDetail(slug) {
+  const seriesUrl = `https://www.motchillkz.org/phim-bo/${encodeURIComponent(slug)}`;
+  const html = await fetchTextWithTimeout(seriesUrl, 5500);
+  if (!html || !html.includes('/tap-phim/')) return null;
+  const episodeLinks = parseMotchillEpisodeLinks(html, slug);
+  if (episodeLinks.length === 0) return null;
+  const maxListedEpisode = episodeLinks.reduce((max, episode)=>Math.max(max, episode.episodeNumber), 0);
+  const labelText = decodeHtmlEntities(html.match(/<span[^>]*class=['"][^'"]*item-label[^'"]*['"][^>]*>([\s\S]*?)<\/span>/i)?.[1] || '');
+  const currentFromLabel = extractMaxEpNumber(labelText) || Math.min(maxListedEpisode, 1);
+  const linksToFetch = episodeLinks.slice(0, 24);
+  const serverMap = new Map();
+  await Promise.all(linksToFetch.map(async ({ episodeNumber, url })=>{
+    const episodeHtml = await fetchTextWithTimeout(url, 5500, {
+      headers: {
+        Referer: seriesUrl
+      }
+    });
+    if (!episodeHtml) return;
+    const options = parseMotchillPlayerOptions(episodeHtml);
+    await Promise.all(options.slice(0, 4).map(async (option)=>{
+      const embed = await fetchMotchillPlayer(option);
+      if (!embed || /youtube\.com|youtu\.be/i.test(embed) || isKnownBlockedEmbedHost(embed)) return;
+      const serverName = option.serverName.toLowerCase().includes('motchill') ? option.serverName : `${option.serverName} Motchill`;
+      if (!serverMap.has(serverName)) serverMap.set(serverName, []);
+      serverMap.get(serverName).push({
+        name: `Tap ${episodeNumber}`,
+        slug: `tap-${episodeNumber}`,
+        filename: '',
+        link_embed: embed,
+        link_m3u8: '',
+        source: 'motchill'
+      });
+    }));
+  }));
+  const episodes = [
+    ...serverMap.entries()
+  ].map(([server_name, server_data])=>({
+      server_name,
+      server_data: server_data.sort((a, b)=>epSortKey(a) - epSortKey(b))
+    })).filter((server)=>server.server_data.length > 0);
+  if (episodes.length === 0) return null;
+  const title = decodeHtmlEntities(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || html.match(/<meta[^>]+property=['"]og:title['"][^>]+content=['"]([^'"]+)['"]/i)?.[1] || slug.replace(/-/g, ' '));
+  const originName = decodeHtmlEntities(html.match(/<h2[^>]*class=['"][^'"]*tieudephim[^'"]*['"][^>]*>([\s\S]*?)<\/h2>/i)?.[1] || '');
+  const poster = (html.match(/<meta[^>]+property=['"]og:image['"][^>]+content=['"]([^'"]+)['"]/i)?.[1] || '').replace(/&amp;/g, '&');
+  const year = Number(html.match(/<span[^>]*class=['"]year['"][^>]*>(\d{4})<\/span>/i)?.[1] || 0);
+  return {
+    movie: {
+      id: `motchill:${slug}`,
+      _id: `motchill:${slug}`,
+      slug,
+      name: title,
+      origin_name: originName,
+      type: 'series',
+      status: 'ongoing',
+      thumb_url: poster,
+      poster_url: poster,
+      episode_current: currentFromLabel > 0 ? `Tap ${currentFromLabel}` : '',
+      current_episode: currentFromLabel || undefined,
+      year: year || undefined,
+      source_site: 'motchill',
+      source_name: 'Motchill'
+    },
+    episodes
+  };
+}
+async function callInternalFunction(functionName, params) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return {
+    ok: false,
+    status: 0,
+    body: null
+  };
+  const secret = getInternalSyncSecret();
+  const endpoint = new URL(`${SUPABASE_URL}/functions/v1/${functionName}`);
+  for (const [key, value] of Object.entries(params))endpoint.searchParams.set(key, String(value));
+  if (secret) endpoint.searchParams.set('secret', secret);
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), 9000);
+  try {
+    const response = await fetch(endpoint.toString(), {
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+      },
+      signal: controller.signal
+    });
+    const body = await response.json().catch(()=>null);
+    return {
+      ok: response.ok && body?.success !== false,
+      status: response.status,
+      body
+    };
+  } catch (error) {
+    console.log(`[movie-detail-proxy] on-demand repair ${functionName} failed:`, error);
+    return {
+      ok: false,
+      status: 0,
+      body: null
+    };
+  } finally{
+    clearTimeout(timer);
+  }
+}
+async function clearDetailCaches(supabase, slugs) {
+  const cleanSlugs = Array.from(new Set(slugs.map((value)=>String(value || '').trim()).filter(Boolean)));
+  if (cleanSlugs.length === 0) return;
+  await Promise.allSettled(cleanSlugs.map((cacheSlug)=>supabase.from('movie_api_cache').delete().eq('slug', cacheSlug)));
+}
+function triggerOnDemandEpisodeRepair(supabase, movie, requestedSlug, reason) {
+  if (!movie) return false;
+  const movieSlug = String(movie.slug || requestedSlug).trim();
+  let repairPromise = null;
+  if (isBlvietsubMovieRecord(movie)) {
+    const movieUrl = getBlvietsubMovieUrl(movie);
+    if (movieUrl) {
+      repairPromise = callInternalFunction('sync-blvietsub-feed', {
+        movie_url: movieUrl,
+        refresh_search: '1',
+        reason
+      });
+    } else {
+      repairPromise = callInternalFunction('sync-blvietsub-feed', {
+        repair_existing: '1',
+        limit: 8,
+        refresh_search: '1',
+        reason
+      });
+    }
+  } else if (isOphimLikeMovieRecord(movie)) {
+    repairPromise = callInternalFunction('sync-ophim-movies', {
+      provider: getOphimProvider(movie),
+      slug: getOphimRepairSlug(movie, requestedSlug),
+      episodes: '1',
+      limit: 1,
+      reason
+    });
+  }
+  if (!repairPromise) return false;
+  edgeWaitUntil(repairPromise.then(()=>clearDetailCaches(supabase, [
+      requestedSlug,
+      movieSlug,
+      String(movie.ophim_slug || '')
+    ])).catch(()=>undefined));
+  return true;
+}
+async function searchOphimForSlug(keyword) {
+  const candidates = await searchOphimCandidateSlugs(keyword, 1);
+  return candidates[0] ?? null;
+}
+async function searchOphimCandidateSlugs(keyword, limit = 6, preferredYear = 0) {
+  const cleanKeyword = String(keyword || '').trim();
+  if (!cleanKeyword) return [];
+  const urls = [
+    `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
+    `https://phimapi.com/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
+    `https://ophim.tv/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`
+  ];
+  const providerResults = await Promise.all(urls.map(async (url)=>{
+    try {
+      const r = await fetch(url, {
+        signal: AbortSignal.timeout(4000)
+      });
+      if (!r.ok) return [];
+      const data = await r.json();
+      const d = data;
+      const items = d?.data?.items ?? d?.items ?? [];
+      if (!Array.isArray(items)) return [];
+      const rankedItems = [
+        ...items
+      ].sort((a, b)=>{
+        if (preferredYear <= 0) return 0;
+        const aYear = Number(a.year || 0) || 0;
+        const bYear = Number(b.year || 0) || 0;
+        return Number(bYear === preferredYear) - Number(aYear === preferredYear);
+      });
+      return rankedItems.map((item)=>String(item.slug || '').trim()).filter(Boolean).slice(0, limit);
+    } catch  {
+      return [];
+    }
+  }));
+  const slugs = [];
+  for (const providerSlugs of providerResults){
+    for (const slug of providerSlugs){
+      if (!slugs.includes(slug)) slugs.push(slug);
+      if (slugs.length >= limit) return slugs;
+    }
+  }
+  return slugs;
+}
+/* ── OPTIMIZED: Accept ANY 200 response from /phim/${slug} ── */ function verifiedAuxiliaryServerName(serverName, provider) {
+  const clean = String(serverName || 'Vietsub').trim();
+  const prefix = provider === 'kkphim' ? 'KKPhim' : provider === 'phimapi' ? 'PhimAPI' : 'OPhim';
+  return `${prefix} verified - ${clean}`;
+}
+function externalProviderFromMovie(movie) {
+  const text = `${movie?.source_site || ''} ${movie?.source_name || ''}`.toLowerCase();
+  if (text.includes('kkphim')) return 'kkphim';
+  if (text.includes('phimapi')) return 'phimapi';
+  return 'ophim';
+}
+function verifiedAuxiliarySourceFromServer(serverName) {
+  const text = String(serverName || '').toLowerCase();
+  if (text.includes('kkphim')) return 'verified-kkphim';
+  if (text.includes('phimapi')) return 'verified-phimapi';
+  return 'verified-ophim';
+}
+function isSafeAuxiliaryExternalMatch(primary, external) {
+  if (!primary || !external) return false;
+  const primaryTmdbObject = primary.tmdb && typeof primary.tmdb === 'object' ? primary.tmdb : null;
+  const externalTmdbObject = external.tmdb && typeof external.tmdb === 'object' ? external.tmdb : null;
+  const primaryTmdb = String(primary.tmdb_id || primaryTmdbObject?.id || '').trim();
+  const externalTmdb = String(external.tmdb_id || externalTmdbObject?.id || '').trim();
+  if (primaryTmdb && externalTmdb && primaryTmdb === externalTmdb) {
+    const mediaType = `${primary.tmdb_media_type || primaryTmdbObject?.type || ''} ${external.tmdb_media_type || externalTmdbObject?.type || ''} ${external.type || ''}`.toLowerCase();
+    const primaryYear = Number(primary.year || 0) || 0;
+    const externalYear = Number(external.year || 0) || 0;
+    // TMDB uses one series ID across all seasons. The release year prevents a
+    // season-1 catalogue shell from importing season 2/3 merely because the
+    // series-level TMDB ID is identical.
+    if (/tv|series/.test(mediaType) && primaryYear > 0 && externalYear > 0 && primaryYear !== externalYear) {
+      return false;
+    }
+    return true;
+  }
+  return sameMovieYearOrUnknown(primary, external) && hasSharedTitle(primary, external);
+}
+async function fetchVerifiedAuxiliaryExternalDetail(movie) {
+  if (!movie) return null;
+  const candidates = Array.from(new Set([
+    movie.ophim_slug,
+    movie.origin_name,
+    movie.title_en,
+    movie.title_original,
+    movie.name,
+    String(movie.slug || '').replace(/^blvietsub-\d+-/, '').replace(/-/g, ' ')
+  ].map((value)=>String(value || '').trim()).filter((value)=>value.length >= 3).slice(0, 5)));
+  for (const query of candidates){
+    const directSlugs = /^[a-z0-9-]+$/i.test(query) ? [
+      query
+    ] : [];
+    const preferredYear = Number(movie.year || 0) || 0;
+    const searchSlugs = await searchOphimCandidateSlugs(query, 5, preferredYear);
+    for (const candidateSlug of Array.from(new Set([
+      ...directSlugs,
+      ...searchSlugs
+    ]))){
+      const detail = await fetchExternalMovieDetail(candidateSlug);
+      if (!detail || !detailHasPlayableEpisodes(detail)) continue;
+      if (!isSafeAuxiliaryExternalMatch(movie, detail.movie)) continue;
+      const provider = externalProviderFromMovie(detail.movie);
+      return {
+        movie: detail.movie,
+        episodes: detail.episodes.map((server)=>({
+            server_name: verifiedAuxiliaryServerName(server.server_name, provider),
+            server_data: server.server_data
+          }))
+      };
+    }
+  }
+  return null;
+}
+async function persistVerifiedAuxiliaryEpisodes(supabase, movieId, detail) {
+  if (!movieId || !detail?.episodes?.length) return {
+    inserted: 0,
+    updated: 0,
+    skipped: 0
+  };
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+  for (const server of detail.episodes){
+    const serverName = String(server.server_name || '').trim();
+    if (!serverName || !isTrustedQueerEpisodeSource(verifiedAuxiliarySourceFromServer(serverName), serverName)) {
+      skipped += Array.isArray(server.server_data) ? server.server_data.length : 0;
+      continue;
+    }
+    for (const rawEpisode of server.server_data ?? []){
+      const epName = String(rawEpisode.name || '').trim();
+      const slugVal = String(rawEpisode.slug || epName || '').trim();
+      const epNum = extractEpNumber(slugVal || epName);
+      const linkEmbed = normalizeDailymotionUrl(String(rawEpisode.link_embed || '').trim());
+      const linkM3u8 = String(rawEpisode.link_m3u8 || '').trim();
+      if (epNum <= 0 || !linkEmbed && !linkM3u8) {
+        skipped += 1;
+        continue;
+      }
+      const payload = {
+        movie_id: movieId,
+        episode_number: epNum,
+        episode_name: epName || `Tập ${epNum}`,
+        slug: slugVal || `tap-${epNum}`,
+        server_name: serverName,
+        link_embed: linkEmbed,
+        link_m3u8: linkM3u8,
+        subtitle_url: String(rawEpisode.subtitle_url || rawEpisode.subtitle || '').trim(),
+        thumbnail_url: String(rawEpisode.thumb_url || rawEpisode.thumbnail_url || '').trim(),
+        duration: String(rawEpisode.time || rawEpisode.duration || '').trim(),
+        source: verifiedAuxiliarySourceFromServer(serverName),
+        is_backup: true
+      };
+      const { data: existing, error: existingError } = await supabase.from('movie_episodes').select('id,link_embed,link_m3u8,subtitle_url,slug,episode_name').eq('movie_id', movieId).eq('server_name', serverName).eq('episode_number', epNum).maybeSingle();
+      if (existingError) {
+        console.warn('verified_auxiliary_lookup_failed', {
+          movieId,
+          serverName,
+          epNum,
+          error: existingError.message
+        });
+        skipped += 1;
+        continue;
+      }
+      if (existing?.id) {
+        const current = existing;
+        const shouldUpdate = String(current.link_embed || '') !== payload.link_embed || String(current.link_m3u8 || '') !== payload.link_m3u8 || String(current.subtitle_url || '') !== payload.subtitle_url || String(current.slug || '') !== payload.slug || String(current.episode_name || '') !== payload.episode_name;
+        if (shouldUpdate) {
+          const { error: updateError } = await supabase.from('movie_episodes').update(payload).eq('id', String(current.id));
+          if (updateError) {
+            console.warn('verified_auxiliary_update_failed', {
+              movieId,
+              serverName,
+              epNum,
+              error: updateError.message
+            });
+            skipped += 1;
+          } else {
+            updated += 1;
+          }
+        }
+        continue;
+      }
+      const { error: insertError } = await supabase.from('movie_episodes').insert(payload);
+      if (insertError) {
+        if (/duplicate key value/i.test(insertError.message || '')) {
+          const { error: duplicateUpdateError } = await supabase.from('movie_episodes').update(payload).eq('movie_id', movieId).eq('server_name', serverName).eq('episode_number', epNum);
+          if (duplicateUpdateError) {
+            console.warn('verified_auxiliary_duplicate_update_failed', {
+              movieId,
+              serverName,
+              epNum,
+              error: duplicateUpdateError.message
+            });
+            skipped += 1;
+          } else {
+            updated += 1;
+          }
+          continue;
+        }
+        console.warn('verified_auxiliary_insert_failed', {
+          movieId,
+          serverName,
+          epNum,
+          error: insertError.message
+        });
+        skipped += 1;
+        continue;
+      }
+      inserted += 1;
+    }
+  }
+  return {
+    inserted,
+    updated,
+    skipped
+  };
+}
+async function fetchExternalMovieDetail(slug) {
+  const urls = [
+    {
+      url: `https://ophim1.com/v1/api/phim/${encodeURIComponent(slug)}`,
+      provider: 'ophim'
+    },
+    {
+      url: `https://phimapi.com/phim/${encodeURIComponent(slug)}`,
+      provider: 'phimapi'
+    },
+    {
+      url: `https://ophim.tv/v1/api/phim/${encodeURIComponent(slug)}`,
+      provider: 'ophim'
+    }
+  ];
+  const controllers = [];
+  const promises = urls.map(({ url, provider })=>{
+    const ctrl = new AbortController();
+    controllers.push(ctrl);
+    const t = setTimeout(()=>{
+      try {
+        ctrl.abort();
+      } catch  {}
+    }, 5000);
+    return fetch(url, {
+      signal: ctrl.signal
+    }).then(async (r)=>{
+      clearTimeout(t);
+      if (!r.ok) {
+        if (r.status === 404) throw new Error('HTTP 404');
+        throw new Error(`HTTP ${r.status}`);
+      }
+      const data = await r.json();
+      let movieData;
+      let episodesData;
+      if (data.movie && typeof data.movie === 'object') {
+        movieData = data.movie;
+        episodesData = data.episodes;
+      } else if (data.data && typeof data.data === 'object' && data.data.movie) {
+        movieData = data.data.movie;
+        episodesData = data.data.episodes;
+      } else if (data.data && typeof data.data === 'object' && data.data.item && typeof data.data.item === 'object') {
+        const item = data.data.item;
+        if (item.movie && typeof item.movie === 'object') {
+          movieData = item.movie;
+          episodesData = item.episodes;
+        } else if (item.slug || item.name || item._id || item.id) {
+          movieData = item;
+          episodesData = item.episodes;
+        }
+      }
+      if (!movieData || !movieData.name) throw new Error('No movie data');
+      return {
+        movie: {
+          ...movieData,
+          source_site: provider,
+          source_name: provider === 'phimapi' ? 'PhimAPI' : 'OPhim'
+        },
+        episodes: episodesData ?? []
+      };
+    }).catch((err)=>{
+      clearTimeout(t);
+      console.log(`[fetchExternalMovieDetail] ${url} failed: ${err.message}`);
+      return null;
+    });
+  });
+  promises.push(fetchMotchillMovieDetail(slug).catch((err)=>{
+    console.log(`[fetchExternalMovieDetail] motchill ${slug} failed: ${err.message}`);
+    return null;
+  }));
+  const results = await Promise.all(promises);
+  const validResults = results.filter((r)=>r !== null);
+  const normalizedResults = validResults.map((detail)=>{
+    const normalized = normalizeVerifiedSeasonNumbering(detail.movie, detail.episodes);
+    return {
+      movie: normalized.movie,
+      episodes: normalized.episodes
+    };
+  });
+  const winner = normalizedResults.sort((a, b)=>{
+    const aMax = getMaxEpisodeNumberFromServers(a.episodes);
+    const bMax = getMaxEpisodeNumberFromServers(b.episodes);
+    if (bMax !== aMax) return bMax - aMax;
+    const aExpected = getExpectedEpisodeNumber(a.movie);
+    const bExpected = getExpectedEpisodeNumber(b.movie);
+    if (bExpected !== aExpected) return bExpected - aExpected;
+    const serverCountDiff = (b.episodes?.length ?? 0) - (a.episodes?.length ?? 0);
+    if (serverCountDiff !== 0) return serverCountDiff;
+    const providerRank = (detail)=>{
+      const provider = externalProviderFromMovie(detail.movie);
+      return provider === 'phimapi' || provider === 'kkphim' ? 2 : provider === 'ophim' ? 1 : 0;
+    };
+    return providerRank(b) - providerRank(a);
+  })[0] ?? null;
+  if (winner) {
+    controllers.forEach((c)=>{
+      try {
+        c.abort();
+      } catch  {}
+    });
+  }
+  return winner ?? null;
+}
+function slugifyVietnamese(value) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+function normalizeTitle(value) {
+  return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u0111/g, 'd').replace(/\u0110/g, 'd').replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().replace(/\s+/g, ' ');
+}
+function titleCandidates(value) {
+  return Array.from(new Set([
+    value.name,
+    value.title_vi,
+    value.title_en,
+    value.title_zh,
+    value.title_original,
+    value.origin_name,
+    String(value.slug || '').replace(/-/g, ' '),
+    String(value.ophim_slug || '').replace(/-/g, ' '),
+    value.normalized_name
+  ].map(normalizeTitle).filter((title)=>title.length >= 3)));
+}
+function hasSharedTitle(a, b) {
+  const aTitles = titleCandidates(a);
+  const bTitles = titleCandidates(b);
+  if (aTitles.length === 0 || bTitles.length === 0) return false;
+  return aTitles.some((left)=>bTitles.some((right)=>left === right || left.length >= 8 && right.includes(left) || right.length >= 8 && left.includes(right)));
+}
+function sameMovieYearOrUnknown(a, b) {
+  const ay = Number(a.year || 0);
+  const by = Number(b.year || 0);
+  if (!Number.isFinite(ay) || !Number.isFinite(by)) return true;
+  return ay <= 0 || by <= 0 || ay === by;
+}
+function normalizedSlug(value) {
+  return String(value || '').trim().toLowerCase();
+}
+function isWeakCatalogTitle(movie, requestedSlug) {
+  const name = String(movie?.name || '').trim();
+  const origin = String(movie?.origin_name || movie?.title_en || '').trim();
+  if (!name) return true;
+  if (origin && normalizeTitle(name) === normalizeTitle(origin)) return true;
+  const requestedTitle = normalizeTitle(String(requestedSlug || '').replace(/-/g, ' '));
+  const nameTitle = normalizeTitle(name);
+  return requestedTitle.length >= 4 && !!nameTitle && !requestedTitle.includes(nameTitle) && !nameTitle.includes(requestedTitle);
+}
+function shouldPreferExternalMovieData(primary, external, requestedSlug) {
+  if (!primary || !external) return false;
+  const requested = normalizedSlug(requestedSlug);
+  const primarySlug = normalizedSlug(primary.slug);
+  const externalSlug = normalizedSlug(external.slug || external.ophim_slug);
+  if (externalSlug && requested && externalSlug !== requested) return false;
+  if (!sameMovieYearOrUnknown(primary, external) || !hasSharedTitle(primary, external)) return false;
+  return primarySlug !== requested || isWeakCatalogTitle(primary, requestedSlug);
+}
+function mergeMovieDataForRequestedSlug(primary, external, requestedSlug) {
+  const requested = String(requestedSlug || '').trim();
+  return {
+    ...primary,
+    name: external.name || primary.name,
+    title_vi: external.name || primary.title_vi || primary.name,
+    origin_name: external.origin_name || primary.origin_name,
+    title_en: primary.title_en || external.origin_name || primary.origin_name,
+    title_original: primary.title_original || external.origin_name || primary.origin_name || external.name,
+    slug: requested || external.slug || primary.slug,
+    ophim_slug: external.slug || primary.ophim_slug,
+    ophim_id: external._id || external.id || primary.ophim_id,
+    content: external.content || external.description || primary.content,
+    type: external.type || primary.type,
+    status: external.status || primary.status,
+    thumb_url: external.thumb_url || external.thumbUrl || external.thumb || primary.thumb_url,
+    poster_url: external.poster_url || external.posterUrl || external.poster || primary.poster_url,
+    trailer_url: external.trailer_url || external.trailerUrl || primary.trailer_url,
+    time: external.time || primary.time,
+    episode_current: external.episode_current || external.episodeCurrent || primary.episode_current,
+    episode_total: external.episode_total || external.episodeTotal || primary.episode_total,
+    current_episode: external.current_episode || primary.current_episode,
+    total_episodes: external.total_episodes || primary.total_episodes,
+    quality: external.quality || primary.quality,
+    lang: external.lang || external.language || primary.lang,
+    year: external.year || primary.year,
+    actor: Array.isArray(external.actor) && external.actor.length > 0 ? external.actor : primary.actor,
+    director: Array.isArray(external.director) && external.director.length > 0 ? external.director : primary.director,
+    category: Array.isArray(external.category) && external.category.length > 0 ? external.category : primary.category,
+    country: Array.isArray(external.country) && external.country.length > 0 ? external.country : primary.country
+  };
+}
+function escapePostgrestIlike(value) {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/[(),]/g, ' ');
+}
+function buildPersistMoviePayload(movie, requestedSlug, detailSlug) {
+  const name = String(movie.name || movie.title || requestedSlug);
+  const originName = String(movie.origin_name || movie.originName || movie.original_title || '');
+  const canonicalSlug = String(movie.slug || detailSlug || requestedSlug || slugifyVietnamese(name));
+  const now = new Date().toISOString();
+  const normalizedName = normalizeTitle(name);
+  return {
+    slug: canonicalSlug,
+    ophim_slug: detailSlug || canonicalSlug,
+    ophim_id: String(movie._id || movie.id || movie.ophim_id || ''),
+    name,
+    title_vi: name,
+    title_en: originName,
+    title_original: originName || name,
+    normalized_name: normalizedName,
+    origin_name: originName,
+    content: String(movie.content || movie.description || ''),
+    type: String(movie.type || 'phim-le'),
+    status: String(movie.status || 'completed'),
+    thumb_url: String(movie.thumb_url || movie.thumbUrl || movie.thumb || ''),
+    poster_url: String(movie.poster_url || movie.posterUrl || movie.poster || ''),
+    trailer_url: String(movie.trailer_url || movie.trailerUrl || ''),
+    time: String(movie.time || ''),
+    episode_current: String(movie.episode_current || movie.episodeCurrent || ''),
+    episode_total: String(movie.episode_total || movie.episodeTotal || ''),
+    quality: String(movie.quality || 'HD'),
+    lang: String(movie.lang || movie.language || 'Vietsub'),
+    year: Number(movie.year || 0),
+    actor: Array.isArray(movie.actor) ? movie.actor : [],
+    director: Array.isArray(movie.director) ? movie.director : [],
+    category: Array.isArray(movie.category) ? movie.category : [],
+    country: Array.isArray(movie.country) ? movie.country : [],
+    source_site: String(movie.source_site || 'ophim'),
+    source_name: String(movie.source_name || 'OPhim'),
+    // Lazy detail persistence is not proof that playback exists. Keep a new
+    // row private until persistExternalMovie verifies stored playable coverage.
+    is_published: false,
+    last_synced_at: now,
+    updated_at: now
+  };
+}
+async function findMovieIdForPersist(supabase, payload) {
+  const checks = [
+    {
+      column: 'slug',
+      value: String(payload.slug || '')
+    },
+    {
+      column: 'ophim_slug',
+      value: String(payload.ophim_slug || '')
+    },
+    {
+      column: 'ophim_id',
+      value: String(payload.ophim_id || '')
+    }
+  ].filter((item)=>item.value.trim());
+  for (const check of checks){
+    const { data } = await supabase.from('movies').select('id').eq(check.column, check.value).limit(1).maybeSingle();
+    if (data?.id) return String(data.id);
+  }
+  const terms = Array.from(new Set([
+    payload.name,
+    payload.title_vi,
+    payload.title_en,
+    payload.title_original,
+    payload.origin_name,
+    String(payload.slug || '').replace(/-/g, ' '),
+    String(payload.ophim_slug || '').replace(/-/g, ' ')
+  ].map((term)=>String(term || '').trim()).filter((term)=>term.length >= 3).slice(0, 6)));
+  const year = Number(payload.year || 0);
+  for (const term of terms){
+    const safeTerm = escapePostgrestIlike(term);
+    let query = supabase.from('movies').select('id,slug,name,title_vi,title_en,title_zh,title_original,origin_name,normalized_name,ophim_slug,year,type').or(`name.ilike.%${safeTerm}%,title_vi.ilike.%${safeTerm}%,title_en.ilike.%${safeTerm}%,title_zh.ilike.%${safeTerm}%,title_original.ilike.%${safeTerm}%,origin_name.ilike.%${safeTerm}%,slug.ilike.%${safeTerm}%,ophim_slug.ilike.%${safeTerm}%`).eq('is_published', true);
+    if (Number.isFinite(year) && year > 0) query = query.eq('year', year);
+    const { data } = await query.limit(10);
+    const match = (data ?? []).find((item)=>sameMovieYearOrUnknown(item, payload) && hasSharedTitle(item, payload));
+    if (match?.id) return String(match.id);
+  }
+  if (Number.isFinite(year) && year > 0 && titleCandidates(payload).length > 0) {
+    const { data } = await supabase.from('movies').select('id,slug,name,title_vi,title_en,title_zh,title_original,origin_name,normalized_name,ophim_slug,year,type').eq('year', year).eq('is_published', true).order('updated_at', {
+      ascending: false
+    }).limit(200);
+    const match = (data ?? []).find((item)=>sameMovieYearOrUnknown(item, payload) && hasSharedTitle(item, payload));
+    if (match?.id) return String(match.id);
+  }
+  return null;
+}
+async function removeConflictingMovieIdentityFields(supabase, movieId, update) {
+  const safeUpdate = {
+    ...update
+  };
+  const checks = [
+    [
+      'ophim_slug',
+      safeUpdate.ophim_slug
+    ],
+    [
+      'ophim_id',
+      safeUpdate.ophim_id
+    ]
+  ];
+  for (const [column, rawValue] of checks){
+    const value = String(rawValue || '').trim();
+    if (!value) continue;
+    const { data, error } = await supabase.from('movies').select('id').eq(column, value).neq('id', movieId).limit(1).maybeSingle();
+    if (!error && data?.id) delete safeUpdate[column];
+  }
+  return safeUpdate;
+}
+async function persistExternalMovie(supabase, external, requestedSlug, detailSlug, existingMovieId = '') {
+  try {
+    const payload = buildPersistMoviePayload(external.movie, requestedSlug, detailSlug);
+    let movieId = existingMovieId || await findMovieIdForPersist(supabase, payload);
+    const now = new Date().toISOString();
+    const externalSource = String(external.movie.source_site || 'ophim').trim().toLowerCase();
+    const isAuxiliarySource = externalSource && externalSource !== 'ophim' && externalSource !== 'kkphim' && externalSource !== 'phimapi';
+    const externalMaxEpisode = getMaxEpisodeNumberFromServers(external.episodes);
+    const hasExternalPlayable = external.episodes.some((server)=>(server.server_data || []).some((rawEpisode)=>{
+        const episode = rawEpisode;
+        return Boolean(String(episode.link_m3u8 || '').trim() || String(episode.link_embed || '').trim());
+      }));
+    const hasUsableImage = Boolean(String(payload.thumb_url || payload.poster_url || '').trim() && !/^(?:data:|javascript:|about:|null$|undefined$)/i.test(String(payload.thumb_url || payload.poster_url || '').trim()));
+    if (movieId) {
+      const movieUpdate = {
+        last_synced_at: now,
+        updated_at: now
+      };
+      if (externalMaxEpisode > 0) {
+        const { data: currentMovie } = await supabase.from('movies').select('current_episode,episode_current').eq('id', movieId).limit(1).maybeSingle();
+        const storedCurrent = Math.max(Number(currentMovie?.current_episode || 0) || 0, extractEpNumber(String(currentMovie?.episode_current || '')));
+        if (externalMaxEpisode > storedCurrent) {
+          movieUpdate.current_episode = externalMaxEpisode;
+          movieUpdate.episode_current = `Tập ${externalMaxEpisode}`;
+        }
+      }
+      if (!isAuxiliarySource) {
+        movieUpdate.ophim_id = payload.ophim_id;
+        movieUpdate.ophim_slug = payload.ophim_slug;
+      }
+      const safeMovieUpdate = await removeConflictingMovieIdentityFields(supabase, movieId, movieUpdate);
+      await supabase.from('movies').update(safeMovieUpdate).eq('id', movieId);
+    } else {
+      const conflictColumn = String(payload.ophim_slug || '').trim() ? 'ophim_slug' : 'slug';
+      const { data, error } = await supabase.from('movies').upsert(payload, {
+        onConflict: conflictColumn
+      }).select('id').single();
+      if (error) {
+        console.log('[movie-detail-proxy] lazy movie insert failed:', error.message);
+        return;
+      }
+      movieId = String(data.id);
+    }
+    const ophimId = String(payload.ophim_id || '');
+    for (const srv of external.episodes){
+      const serverName = String(srv.server_name || 'Nguồn');
+      const rows = srv.server_data || [];
+      for (const ep of rows){
+        const linkM3u8 = String(ep.link_m3u8 || '').trim();
+        const linkEmbed = String(ep.link_embed || '').trim();
+        if (!linkM3u8 && !linkEmbed) continue;
+        const epName = String(ep.name || '').trim();
+        const epSlug = String(ep.slug || slugifyVietnamese(epName) || 'full').trim();
+        const episodeNumber = extractEpNumber(epSlug || epName);
+        const subtitleUrl = String(ep.subtitle_url || ep.subtitle || '').trim();
+        const { data: existingEpisode } = await supabase.from('episodes').select('id').eq('movie_id', movieId).ilike('server_name', serverName).ilike('episode_slug', epSlug).limit(1).maybeSingle();
+        if (!existingEpisode) {
+          const { error: insertEpisodeError } = await supabase.from('episodes').insert({
+            movie_id: movieId,
+            ophim_id: ophimId,
+            server_name: serverName,
+            episode_number: episodeNumber,
+            episode_name: epName || (episodeNumber > 0 ? `Tập ${episodeNumber}` : 'Full'),
+            episode_slug: epSlug,
+            link_m3u8: linkM3u8,
+            link_embed: linkEmbed,
+            subtitle_url: subtitleUrl,
+            server_data: ep
+          });
+          if (isDuplicateDbError(insertEpisodeError)) {
+            const { data: duplicateEpisode } = await supabase.from('episodes').select('id').eq('movie_id', movieId).ilike('server_name', serverName).ilike('episode_slug', epSlug).limit(1).maybeSingle();
+            if (duplicateEpisode?.id) {
+              await supabase.from('episodes').update({
+                link_m3u8: linkM3u8,
+                link_embed: linkEmbed,
+                subtitle_url: subtitleUrl,
+                server_data: ep
+              }).eq('id', duplicateEpisode.id);
+            }
+          }
+        } else {
+          await supabase.from('episodes').update({
+            link_m3u8: linkM3u8,
+            link_embed: linkEmbed,
+            subtitle_url: subtitleUrl,
+            server_data: ep
+          }).eq('id', existingEpisode.id);
+        }
+        const { data: existingStream } = await supabase.from('streams').select('id').eq('movie_id', movieId).eq('source', externalSource || 'ophim').eq('is_active', true).ilike('server_name', serverName).ilike('episode_slug', epSlug).limit(1).maybeSingle();
+        if (!existingStream) {
+          const { error: insertStreamError } = await supabase.from('streams').insert({
+            movie_id: movieId,
+            ophim_id: ophimId,
+            server_name: serverName,
+            episode_slug: epSlug,
+            stream_url: linkM3u8,
+            embed_url: linkEmbed,
+            subtitle_url: subtitleUrl,
+            source: externalSource || 'ophim',
+            is_active: true
+          });
+          if (isDuplicateDbError(insertStreamError)) {
+            const { data: duplicateStream } = await supabase.from('streams').select('id').eq('movie_id', movieId).eq('source', externalSource || 'ophim').eq('is_active', true).ilike('server_name', serverName).ilike('episode_slug', epSlug).limit(1).maybeSingle();
+            if (duplicateStream?.id) {
+              await supabase.from('streams').update({
+                stream_url: linkM3u8,
+                embed_url: linkEmbed,
+                subtitle_url: subtitleUrl,
+                source: externalSource || 'ophim',
+                is_active: true
+              }).eq('id', duplicateStream.id);
+            }
+          }
+        } else {
+          await supabase.from('streams').update({
+            stream_url: linkM3u8,
+            embed_url: linkEmbed,
+            subtitle_url: subtitleUrl,
+            source: externalSource || 'ophim',
+            is_active: true
+          }).eq('id', existingStream.id);
+        }
+      }
+    }
+    if (hasExternalPlayable && hasUsableImage) {
+      const [{ data: storedEpisode }, { data: storedStream }] = await Promise.all([
+        supabase.from('episodes').select('id').eq('movie_id', movieId).or('link_m3u8.neq.,link_embed.neq.').limit(1).maybeSingle(),
+        supabase.from('streams').select('id').eq('movie_id', movieId).eq('is_active', true).or('stream_url.neq.,embed_url.neq.').limit(1).maybeSingle()
+      ]);
+      const persistedPlayableCoverage = Boolean(storedEpisode?.id || storedStream?.id);
+      if (persistedPlayableCoverage) {
+        await supabase.from('movies').update({
+          is_published: true
+        }).eq('id', movieId);
+      }
+    }
+  } catch (err) {
+    console.log('[movie-detail-proxy] lazy persist failed:', err);
+  }
+}
+serve(async (req)=>{
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: CORS_HEADERS
+    });
+  }
+  const suppliedProxySecret = req.headers.get('x-khophim-proxy-secret') ?? '';
+  if (!MOVIE_DETAIL_PROXY_SECRET || suppliedProxySecret !== MOVIE_DETAIL_PROXY_SECRET) {
+    return jsonResponse({
+      status: false,
+      message: 'Unauthorized'
+    }, 401, {
+      'Cache-Control': 'no-store'
+    });
+  }
+  const { searchParams } = new URL(req.url);
+  const slug = searchParams.get('slug');
+  const forceRefresh = searchParams.get('refresh') === '1';
+  if (!slug) {
+    return jsonResponse({
+      status: false,
+      message: 'Missing slug'
+    }, 400);
+  }
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+    // An exact private catalogue row is an authoritative quarantine/tombstone.
+    // Do this before either cache lookup or provider fallback so a dead upstream
+    // URL cannot make an intentionally unpublished movie playable again.
+    const { data: exactCatalogMovie, error: exactCatalogError } = await supabase.from('movies').select('id,is_published,current_episode,episode_current').eq('slug', slug).abortSignal(timeoutSignal(1500)).maybeSingle();
+    if (!exactCatalogError && exactCatalogMovie && exactCatalogMovie.is_published !== true) {
+      await supabase.from('movie_api_cache').delete().eq('slug', slug);
+      return jsonResponse({
+        status: false,
+        message: 'Movie is not currently available'
+      }, 404, {
+        'Cache-Control': 'no-store',
+        'X-Catalog-Quarantine': '1'
+      });
+    }
+    if (!forceRefresh) {
+      const cachedDetail = await readCachedDetail(supabase, slug, exactCatalogMovie);
+      if (cachedDetail?.status && !isDetailEpisodeIncomplete(cachedDetail) && !isPlaceholderSeriesDetail(cachedDetail) && !hasUntrustedQueerEpisodeServer(cachedDetail)) {
+        return jsonResponse(cachedDetail, 200, {
+          'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800, stale-if-error=86400',
+          'X-Cache': 'DB-HIT'
+        });
+      }
+    }
+    /* ── 1. Try Supabase DB first (multiple slug variants) ── */ let movie = null;
+    let movieId = '';
+    let movieData = null;
+    const slugVariants = Array.from(new Set([
+      slug,
+      slug.normalize('NFC'),
+      decodeURIComponent(slug)
+    ]));
+    for (const variant of slugVariants){
+      const { data, error } = await supabase.from('movies').select(MOVIE_DETAIL_SELECT).eq('slug', variant).eq('is_published', true).maybeSingle();
+      if (!error && data) {
+        movie = data;
+        movieId = movie.id;
+        movieData = movie;
+        break;
+      }
+    }
+    // Compatibility layer for slugs retired by a safe movie merge. Resolve only
+    // to an explicitly recorded canonical movie; never guess by title here.
+    if (!movie) {
+      for (const variant of slugVariants){
+        const { data: alias } = await supabase.from('movie_slug_aliases').select('movie_id,canonical_slug').eq('alias_slug', variant).maybeSingle();
+        if (!alias?.movie_id) continue;
+        const { data: canonical, error } = await supabase.from('movies').select(MOVIE_DETAIL_SELECT).eq('id', alias.movie_id).eq('is_published', true).maybeSingle();
+        if (!error && canonical) {
+          movie = canonical;
+          movieId = movie.id;
+          movieData = movie;
+          break;
+        }
+      }
+    }
+    // Fallback: ilike search
+    if (!movie) {
+      const safeSlug = slug.replace(/%/g, '\\%').replace(/_/g, '\\_');
+      for (const variant of slugVariants){
+        const { data, error } = await supabase.from('movies').select(MOVIE_DETAIL_SELECT).eq('ophim_slug', variant).eq('is_published', true).limit(1).maybeSingle();
+        if (!error && data) {
+          movie = data;
+          movieId = movie.id;
+          movieData = movie;
+          break;
+        }
+      }
+    }
+    const useSupabase = !!movieData;
+    const supabaseOphimId = movieData ? String(movieData.ophim_id || '').trim() : '';
+    const isQueerSourceMovie = isBlvietsubMovieRecord(movieData || movie);
+    /* ── 2. Load episodes from DB ── */ const serverMap = new Map();
+    const seen = new Set();
+    const knownUnhealthyUrls = new Set();
+    if (useSupabase && movieId) {
+      const [{ data: meRows, error: meErr }, { data: oldEps }, { data: streams }] = await Promise.all([
+        supabase.from('movie_episodes').select('server_name, source, episode_number, slug, episode_name, link_embed, link_m3u8, subtitle_url, audio_type').eq('movie_id', movieId).order('episode_number', {
+          ascending: true
+        }),
+        supabase.from('episodes').select('server_name, episode_number, episode_slug, episode_name, link_m3u8, link_embed, subtitle_url, server_data').eq('movie_id', movieId).order('episode_number', {
+          ascending: true
+        }),
+        supabase.from('streams').select('server_name, source, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count, last_checked_at, last_error, audio_type').eq('movie_id', movieId).order('priority', {
+          ascending: false
+        }).order('response_time_ms', {
+          ascending: true,
+          nullsFirst: false
+        })
+      ]);
+      if (meErr) {
+        console.log('[movie-detail-proxy] movie_episodes error:', meErr.message);
+      }
+      const allStreams = streams ?? [];
+      const activeStreams = allStreams.filter((row)=>Boolean(row.is_active));
+      const streamHealthIndex = buildStreamHealthIndex(allStreams);
+      for (const raw of allStreams){
+        const row = raw;
+        if (!shouldSuppressUnhealthyStream(row)) continue;
+        for (const value of [
+          row.stream_url,
+          row.embed_url
+        ]){
+          const normalized = normalizePlayableUrl(String(value || ''));
+          if (normalized) knownUnhealthyUrls.add(normalized);
+        }
+      }
+      const movieEpisodeRows = [
+        ...meRows ?? []
+      ].sort((a, b)=>{
+        const am = a;
+        const bm = b;
+        const aPreferredOnlyflix = /moviesapi/i.test(String(am.server_name || ''));
+        const bPreferredOnlyflix = /moviesapi/i.test(String(bm.server_name || ''));
+        if (aPreferredOnlyflix !== bPreferredOnlyflix) return aPreferredOnlyflix ? -1 : 1;
+        const aSecondaryOnlyflix = /vidfast\.(?:pro|vc)/i.test(String(am.server_name || ''));
+        const bSecondaryOnlyflix = /vidfast\.(?:pro|vc)/i.test(String(bm.server_name || ''));
+        if (aSecondaryOnlyflix !== bSecondaryOnlyflix) return aSecondaryOnlyflix ? -1 : 1;
+        const aHidden = isHiddenEpisodeSource(am.source);
+        const bHidden = isHiddenEpisodeSource(bm.source);
+        if (aHidden !== bHidden) return aHidden ? -1 : 1;
+        const aApi = String(am.source || '').trim().toLowerCase() === 'ophim';
+        const bApi = String(bm.source || '').trim().toLowerCase() === 'ophim';
+        if (aApi !== bApi) return aApi ? 1 : -1;
+        return Number(am.episode_number ?? 0) - Number(bm.episode_number ?? 0);
+      });
+      // 2a. movie_episodes overrides. Hidden rows block API rows without entering playback.
+      for (const ep of movieEpisodeRows){
+        const em = ep;
+        const num = Number(em.episode_number ?? 0);
+        const slugVal = String(em.slug || `tap-${num}`);
+        const serverName = String(em.server_name || 'Nguồn');
+        const source = String(em.source || 'manual');
+        if (isQueerSourceMovie && !isTrustedQueerEpisodeSource(source, serverName)) continue;
+        let epData = {
+          name: String(em.episode_name || `Tập ${num}`),
+          slug: slugVal,
+          filename: '',
+          link_embed: normalizeDailymotionUrl(String(em.link_embed || '')),
+          link_m3u8: String(em.link_m3u8 || ''),
+          subtitle_url: String(em.subtitle_url || ''),
+          audio_type: String(em.audio_type || '') || undefined,
+          source_provider: source
+        };
+        const healthRow = getEpisodeHealthRow(streamHealthIndex, serverName, slugVal, num, epData);
+        if (shouldSuppressUnhealthyStream(healthRow)) continue;
+        epData = attachStreamHealth(epData, healthRow);
+        if (isKnownBlockedEmbedHost(String(epData.link_embed || epData.link_m3u8 || ''))) continue;
+        const alreadySeen = hasSeenEpisode(seen, serverName, slugVal, num, String(epData.name));
+        markSeenEpisode(seen, serverName, slugVal, num, String(epData.name));
+        if (isHiddenEpisodeSource(source) || alreadySeen) continue;
+        pushEpisode(serverMap, serverName, epData);
+      }
+      // 2b. Episodes table
+      for (const row of oldEps ?? []){
+        const rm = row;
+        const serverName = String(rm.server_name || 'Nguồn');
+        if (isQueerSourceMovie) continue;
+        let epData;
+        const num = Number(rm.episode_number ?? 0);
+        const slugVal = String(rm.episode_slug || (num > 0 ? String(num) : 'full'));
+        if (rm.link_m3u8 || rm.link_embed || rm.episode_name || rm.episode_slug) {
+          epData = {
+            name: String(rm.episode_name || (num > 0 ? `Tập ${num}` : 'Full')),
+            slug: slugVal,
+            filename: '',
+            link_embed: normalizeDailymotionUrl(String(rm.link_embed || '')),
+            link_m3u8: String(rm.link_m3u8 || ''),
+            subtitle_url: String(rm.subtitle_url || '')
+          };
+        } else if (rm.server_data && typeof rm.server_data === 'object' && !Array.isArray(rm.server_data)) {
+          const sd = rm.server_data;
+          epData = {
+            name: String(sd.name || ''),
+            slug: String(sd.slug || ''),
+            filename: String(sd.filename || ''),
+            link_embed: normalizeDailymotionUrl(String(sd.link_embed || '')),
+            link_m3u8: String(sd.link_m3u8 || ''),
+            subtitle_url: String(sd.subtitle_url || sd.subtitle || '')
+          };
+        } else if (Array.isArray(rm.server_data)) {
+          const sds = rm.server_data;
+          for (const ep of sds){
+            const epSlug = String(ep.slug || ep.name || '');
+            const epName = String(ep.name || '');
+            const epNum = extractEpNumber(epSlug || epName);
+            if (hasSeenEpisode(seen, serverName, epSlug, epNum, epName)) continue;
+            markSeenEpisode(seen, serverName, epSlug, epNum, epName);
+            let nestedEpData = {
+              name: String(ep.name || ''),
+              slug: epSlug,
+              filename: String(ep.filename || ''),
+              link_embed: normalizeDailymotionUrl(String(ep.link_embed || '')),
+              link_m3u8: String(ep.link_m3u8 || ''),
+              subtitle_url: String(ep.subtitle_url || ep.subtitle || '')
+            };
+            const healthRow = getEpisodeHealthRow(streamHealthIndex, serverName, epSlug, epNum, nestedEpData);
+            if (shouldSuppressUnhealthyStream(healthRow)) continue;
+            nestedEpData = attachStreamHealth(nestedEpData, healthRow);
+            if (isKnownBlockedEmbedHost(String(nestedEpData.link_embed || nestedEpData.link_m3u8 || ''))) continue;
+            pushEpisode(serverMap, serverName, nestedEpData);
+          }
+          continue;
+        } else {
+          continue;
+        }
+        const healthRow = getEpisodeHealthRow(streamHealthIndex, serverName, slugVal, num, epData);
+        if (shouldSuppressUnhealthyStream(healthRow)) continue;
+        epData = attachStreamHealth(epData, healthRow);
+        if (isKnownBlockedEmbedHost(String(epData.link_embed || epData.link_m3u8 || ''))) continue;
+        if (hasSeenEpisode(seen, serverName, slugVal, num, String(epData.name || ''))) continue;
+        markSeenEpisode(seen, serverName, slugVal, num, String(epData.name || ''));
+        pushEpisode(serverMap, serverName, epData);
+      }
+      // 2c. Streams table — skip dead streams
+      for (const s of activeStreams){
+        const sm = s;
+        if (shouldSuppressUnhealthyStream(sm)) continue;
+        if (isQueerSourceMovie && !isTrustedQueerEpisodeSource(sm.source, sm.server_name)) continue;
+        const streamUrl = String(sm.stream_url || '').trim();
+        const embedUrl = String(sm.embed_url || '').trim();
+        if (!streamUrl && !embedUrl) continue;
+        if (isKnownBlockedEmbedHost(embedUrl || streamUrl)) continue;
+        const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
+        const failureCount = Number(sm.failure_count || 0);
+        const lastError = String(sm.last_error || '');
+        const directStreamFailed = healthStatus === 'degraded' && lastError.startsWith('Direct stream failed:');
+        // Keep the API contract aligned with the frontend. Viewer telemetry
+        // raises failure_count by three after repeated fatal playback reports;
+        // returning those rows until five failures made a known-bad source
+        // eligible for one more viewer session and left stale edge responses.
+        if (healthStatus === 'dead' || healthStatus === 'failed' && failureCount >= 3) continue;
+        const slugVal = String(sm.episode_slug || 'full');
+        const serverName = String(sm.server_name || 'Nguồn');
+        const num = extractEpNumber(slugVal);
+        const epName = slugVal === 'full' ? 'Full' : `Tập ${num || slugVal}`;
+        if (hasSeenEpisode(seen, serverName, slugVal, num, epName)) continue;
+        markSeenEpisode(seen, serverName, slugVal, num, epName);
+        const epData = {
+          name: epName,
+          slug: slugVal,
+          filename: '',
+          link_embed: normalizeDailymotionUrl(embedUrl),
+          link_m3u8: directStreamFailed ? '' : streamUrl,
+          subtitle_url: String(sm.subtitle_url || ''),
+          source_health_status: healthStatus || 'unchecked',
+          source_response_time_ms: Number(sm.response_time_ms || 0) || undefined,
+          source_failure_count: failureCount || undefined,
+          source_priority: Number(sm.priority || 0) || undefined,
+          source_provider: String(sm.source || '') || undefined,
+          source_last_checked_at: String(sm.last_checked_at || '') || undefined,
+          source_last_error: lastError || undefined
+        };
+        pushEpisode(serverMap, serverName, epData);
+      }
+    }
+    /* ── 3. Fetch external if no DB episodes or no DB movie ── */ let externalMovieData = null;
+    const dbMaxEpisode = getMaxEpisodeNumberFromServerMap(serverMap);
+    const expectedEpisode = Math.max(getExpectedEpisodeNumber(movieData), getExpectedEpisodeNumber(movie));
+    const advertisedTotalEpisode = Math.max(Number((movieData || movie)?.total_episodes || 0) || 0, extractEpNumber(String((movieData || movie)?.episode_total || '')));
+    const shouldCheckFreshOngoingExternal = isOphimLikeMovieRecord(movieData || movie) && expectedEpisode > 0 && advertisedTotalEpisode > expectedEpisode;
+    const shouldCheckRequestedSlugAlias = useSupabase && !!movieData && normalizedSlug(movieData.slug) !== normalizedSlug(slug) && isOphimLikeMovieRecord(movieData || movie);
+    const shouldRepairOnDemand = expectedEpisode > 1 && (dbMaxEpisode === 0 || dbMaxEpisode < expectedEpisode);
+    // Episode count alone is not playback readiness. If the database contains
+    // the advertised episode numbers but every candidate for one of those
+    // numbers is repeatedly blocked/failed, fetch an independent provider and
+    // persist it as a backup instead of returning a superficially complete set.
+    const shouldRepairUnhealthyCoverage = expectedEpisode > 0 && hasUnhealthyExpectedCoverage(serverMap, expectedEpisode);
+    const shouldRepairUnverifiedCoverage = expectedEpisode > 0 && hasUnverifiedSingleProviderCoverage(serverMap, expectedEpisode);
+    // A TV/series record advertised as multiple episodes must not be accepted
+    // as complete when its only playable row is a legacy `full` placeholder.
+    // Search by stable movie metadata (TMDB/title/year) and require the normal
+    // safe-match check before merging a numbered provider catalogue.
+    const shouldRepairPlaceholderSeries = hasOnlyFullPlaceholderCoverage(movieData || movie, serverMap);
+    // A manual refresh is an explicit request to re-check the known BLVietsub
+    // source. It lets a completed series catch its final episode even when
+    // its old database badge was internally consistent.
+    const shouldForceKnownBlvietsubSync = forceRefresh && isBlvietsubMovieRecord(movieData || movie) && Boolean(getBlvietsubMovieUrl(movieData || movie));
+    let repairTriggered = false;
+    const shouldRepairInBackground = shouldRepairOnDemand || shouldForceKnownBlvietsubSync || shouldRepairUnhealthyCoverage || shouldRepairUnverifiedCoverage || shouldRepairPlaceholderSeries || shouldCheckFreshOngoingExternal || shouldCheckRequestedSlugAlias;
+    if (shouldRepairInBackground) {
+      repairTriggered = triggerOnDemandEpisodeRepair(supabase, movieData || movie, slug, shouldForceKnownBlvietsubSync ? 'movie_detail_force_refresh' : shouldRepairUnhealthyCoverage ? 'movie_detail_unhealthy_playback' : shouldRepairUnverifiedCoverage ? 'movie_detail_unverified_playback' : 'movie_detail_episode_mismatch');
+    }
+    // A complete, playable BLVietsub record must stay on the fast database
+    // path. Searching OPhim/PhimAPI is network-bound and previously delayed
+    // every detail request by up to several upstream timeouts, even when no
+    // repair was needed. Only block for an auxiliary source when coverage is
+    // genuinely missing or all candidates for the advertised episode failed.
+    const shouldFetchQueerAuxiliary = isQueerSourceMovie && !!movieData && (serverMap.size === 0 || shouldRepairOnDemand);
+    if (shouldFetchQueerAuxiliary && movieData) {
+      const queerMovieData = movieData;
+      // Auxiliary discovery is a repair job, not a viewer request dependency.
+      // Persist a verified match for the next open without holding this
+      // response behind several third-party searches and detail fetches.
+      edgeWaitUntil(fetchVerifiedAuxiliaryExternalDetail(queerMovieData).then(async (verifiedAuxiliary)=>{
+        if (!verifiedAuxiliary) return;
+        const result = await persistVerifiedAuxiliaryEpisodes(supabase, String(movieId || ''), verifiedAuxiliary);
+        if (result.inserted || result.updated) {
+          await clearDetailCaches(supabase, [
+            slug,
+            String(queerMovieData.slug || ''),
+            String(queerMovieData.ophim_slug || '')
+          ]);
+        }
+      }).catch((error)=>{
+        console.warn('verified_auxiliary_persist_failed', {
+          slug,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }));
+    }
+    // Never make a usable database-backed player wait for third-party repair.
+    // Provider search can exceed the Cloudflare 4s gateway budget and used to
+    // trip the movie-detail circuit repeatedly for large catalogues. The
+    // repair request above runs in the background; synchronous external lookup
+    // is reserved for the true no-episode/no-database fallback.
+    const shouldFetchExternal = !isQueerSourceMovie && (serverMap.size === 0 || !useSupabase || shouldRepairPlaceholderSeries);
+    if (shouldFetchExternal) {
+      let detailSlug = slug;
+      // A `full` placeholder has already proven that the requested legacy slug
+      // is not a valid episodic catalogue. Skip that redundant upstream round
+      // trip and resolve a verified title/TMDB/year alias directly.
+      let external = shouldRepairPlaceholderSeries ? null : await fetchExternalMovieDetail(detailSlug);
+      const initialExternalMax = external ? getMaxEpisodeNumberFromServers(external.episodes) : 0;
+      if (movieData && (initialExternalMax < expectedEpisode || shouldRepairPlaceholderSeries)) {
+        const verifiedAlias = await fetchVerifiedAuxiliaryExternalDetail(movieData);
+        const verifiedMax = verifiedAlias ? getMaxEpisodeNumberFromServers(verifiedAlias.episodes) : 0;
+        if (verifiedAlias && verifiedMax > initialExternalMax) {
+          external = verifiedAlias;
+          detailSlug = String(verifiedAlias.movie.slug || detailSlug);
+        }
+      }
+      // If 404, search OPhim for correct slug
+      if (!external) {
+        const foundSlug = await searchOphimForSlug(slug);
+        if (foundSlug && foundSlug !== slug) {
+          console.log(`[movie-detail-proxy] Search found slug "${foundSlug}" for "${slug}" - retrying detail`);
+          external = await fetchExternalMovieDetail(foundSlug);
+          if (external) detailSlug = foundSlug;
+        }
+      }
+      if (external) {
+        externalMovieData = external.movie;
+        if (movieData && shouldPreferExternalMovieData(movieData, external.movie, slug)) {
+          movieData = mergeMovieDataForRequestedSlug(movieData, external.movie, slug);
+        }
+        if (!movieData) {
+          movieData = external.movie;
+        }
+        if (ENABLE_PUBLIC_LAZY_PERSIST || movieId) {
+          try {
+            const runtime = globalThis;
+            const persistPromise = persistExternalMovie(supabase, external, slug, detailSlug, movieId);
+            if (runtime.EdgeRuntime?.waitUntil) {
+              runtime.EdgeRuntime.waitUntil(persistPromise);
+            } else {
+              void persistPromise;
+            }
+          } catch  {
+          /* lazy persist is best-effort */ }
+        }
+        for (const srv of external.episodes){
+          const serverName = String(srv.server_name || 'Nguồn');
+          const sds = srv.server_data ?? [];
+          for (const ep of sds){
+            const slugVal = String(ep.slug || ep.name || '');
+            const epName = String(ep.name || '');
+            const epNum = extractEpNumber(slugVal || epName);
+            const externalStreamUrl = normalizePlayableUrl(String(ep.link_m3u8 || ''));
+            const externalEmbedUrl = normalizePlayableUrl(String(ep.link_embed || ''));
+            if (externalStreamUrl && knownUnhealthyUrls.has(externalStreamUrl) || externalEmbedUrl && knownUnhealthyUrls.has(externalEmbedUrl)) continue;
+            if (hasSeenEpisode(seen, serverName, slugVal, epNum, epName)) continue;
+            markSeenEpisode(seen, serverName, slugVal, epNum, epName);
+            pushEpisode(serverMap, serverName, {
+              name: String(ep.name || ''),
+              slug: slugVal,
+              filename: String(ep.filename || ''),
+              link_embed: normalizeDailymotionUrl(String(ep.link_embed || '')),
+              link_m3u8: String(ep.link_m3u8 || ''),
+              subtitle_url: String(ep.subtitle_url || ep.subtitle || '')
+            });
+          }
+        }
+      }
+    }
+    /* ── 4. Sort episodes ── */ removeLegacyUncheckedFullPlaceholders(movieData, serverMap);
+    for (const [, eps] of serverMap){
+      eps.sort((a, b)=>epSortKey(a) - epSortKey(b));
+    }
+    const episodeServers = [];
+    for (const [serverName, serverData] of serverMap){
+      const playable = serverData.filter((ep)=>!!(ep.link_m3u8?.trim() || ep.link_embed?.trim()));
+      if (playable.length > 0) {
+        episodeServers.push({
+          server_name: serverName,
+          server_data: playable
+        });
+      }
+    }
+    // Older BLVietsub sync runs numbered legacy buttons globally, turning two
+    // complete hosts into N singleton servers. Rebuild those rows by host.
+    if (isQueerSourceMovie && episodeServers.length > 4) {
+      const initialMaxCoverage = Math.max(...episodeServers.map((server)=>server.server_data.length));
+      if (initialMaxCoverage === 1) {
+        const byHost = new Map();
+        for (const server of episodeServers){
+          for (const rawEpisode of server.server_data){
+            const episode = rawEpisode;
+            const url = String(episode.link_m3u8 || episode.link_embed || '');
+            const host = getUrlHost(url) || String(server.server_name || 'unknown').toLowerCase();
+            if (!byHost.has(host)) {
+              const label = host.includes('abyssplayer') ? 'BLVietsub HX' : host.includes('ssplay') ? 'BLVietsub SS' : `BLVietsub ${byHost.size + 1}`;
+              byHost.set(host, {
+                server_name: label,
+                server_data: [],
+                seen: new Set()
+              });
+            }
+            const group = byHost.get(host);
+            const key = String(epSortKey(episode));
+            if (group.seen.has(key)) continue;
+            group.seen.add(key);
+            group.server_data.push(episode);
+          }
+        }
+        const regrouped = [
+          ...byHost.values()
+        ].filter((server)=>server.server_data.length > 1).map(({ server_name, server_data })=>({
+            server_name,
+            server_data: server_data.sort((a, b)=>epSortKey(a) - epSortKey(b))
+          }));
+        const recoveredRows = regrouped.reduce((sum, server)=>sum + server.server_data.length, 0);
+        if (regrouped.length > 0 && recoveredRows >= Math.ceil(episodeServers.length * 0.75)) {
+          episodeServers.splice(0, episodeServers.length, ...regrouped);
+        }
+      }
+    }
+    // Some legacy BLVietsub sync runs stored every episode/player button as a
+    // separate SV server. When complete servers exist, hide those singleton
+    // duplicates from playback instead of presenting dozens of fake choices.
+    if (isQueerSourceMovie && episodeServers.length > 3) {
+      const maxCoverage = Math.max(...episodeServers.map((server)=>server.server_data.length));
+      if (maxCoverage >= 4) {
+        const minimumUsefulCoverage = Math.max(2, Math.ceil(maxCoverage * 0.5));
+        const usefulServers = episodeServers.filter((server)=>server.server_data.length >= minimumUsefulCoverage);
+        if (usefulServers.length > 0) {
+          episodeServers.splice(0, episodeServers.length, ...usefulServers);
+        }
+      }
+    }
+    if (!movieData) {
+      return jsonResponse({
+        status: false,
+        message: 'Movie not found'
+      }, 404);
+    }
+    const hasEpisodes = episodeServers.length > 0;
+    const m = movieData;
+    const response = {
+      status: true,
+      movie: {
+        _id: String(m.id || m._id || externalMovieData?.id || externalMovieData?._id || ''),
+        name: String(m.name || externalMovieData?.name || ''),
+        slug: String(m.slug || externalMovieData?.slug || slug),
+        origin_name: String(m.origin_name || m.originName || externalMovieData?.origin_name || ''),
+        content: String(m.content || m.description || externalMovieData?.content || ''),
+        type: String(m.type || externalMovieData?.type || 'phim-le'),
+        status: String(m.status || externalMovieData?.status || 'completed'),
+        thumb_url: String(m.thumb_url || m.thumbUrl || m.thumb || externalMovieData?.thumb_url || ''),
+        poster_url: String(m.poster_url || m.posterUrl || m.poster || externalMovieData?.poster_url || ''),
+        trailer_url: String(m.trailer_url || m.trailerUrl || externalMovieData?.trailer_url || ''),
+        time: String(m.time || externalMovieData?.time || ''),
+        episode_current: String(m.episode_current || m.episodeCurrent || externalMovieData?.episode_current || ''),
+        episode_total: String(m.episode_total || m.episodeTotal || externalMovieData?.episode_total || ''),
+        current_episode: Number(m.current_episode || externalMovieData?.current_episode || 0) || undefined,
+        total_episodes: Number(m.total_episodes || externalMovieData?.total_episodes || 0) || undefined,
+        schedule_type: String(m.schedule_type || externalMovieData?.schedule_type || ''),
+        release_time: String(m.release_time || externalMovieData?.release_time || ''),
+        release_day: m.release_day ?? externalMovieData?.release_day,
+        schedule_timezone: String(m.schedule_timezone || externalMovieData?.schedule_timezone || ''),
+        release_at: String(m.release_at || externalMovieData?.release_at || ''),
+        next_episode_at: String(m.next_episode_at || externalMovieData?.next_episode_at || ''),
+        next_episode_name: String(m.next_episode_name || externalMovieData?.next_episode_name || ''),
+        schedule_note: String(m.schedule_note || externalMovieData?.schedule_note || ''),
+        quality: String(m.quality || externalMovieData?.quality || 'HD'),
+        lang: String(m.lang || m.language || externalMovieData?.lang || 'Vietsub'),
+        year: Number(m.year || externalMovieData?.year || 0),
+        actor: Array.isArray(m.actor) ? m.actor : Array.isArray(externalMovieData?.actor) ? externalMovieData?.actor : [],
+        director: Array.isArray(m.director) ? m.director : Array.isArray(externalMovieData?.director) ? externalMovieData?.director : [],
+        category: Array.isArray(m.category) ? m.category : Array.isArray(externalMovieData?.category) ? externalMovieData?.category : [],
+        country: Array.isArray(m.country) ? m.country : Array.isArray(externalMovieData?.country) ? externalMovieData?.country : [],
+        notify: String(m.notify || ''),
+        showtimes: String(m.showtimes || ''),
+        is_copyright: false,
+        sub_docquyen: false,
+        chieurap: false,
+        view: Number(m.view || 0),
+        ophim_id: String(m.ophim_id || m.ophimId || externalMovieData?.ophim_id || externalMovieData?._id || ''),
+        tmdb_id: m.tmdb_id ? Number(m.tmdb_id) : undefined,
+        imdb_id: String(m.imdb_id || ''),
+        seo_catalog_status: String(m.seo_catalog_status || ''),
+        catalog_source: String(m.catalog_source || ''),
+        tmdb_media_type: String(m.tmdb_media_type || ''),
+        tmdb_popularity: Number(m.tmdb_popularity || 0),
+        tmdb_vote_count: Number(m.tmdb_vote_count || 0),
+        tmdb_vote_average: Number(m.tmdb_vote_average || 0),
+        seo_has_playable_episode: hasEpisodes,
+        modified: {
+          time: String(m.updated_at || m.created_at || new Date().toISOString())
+        }
+      },
+      episodes: episodeServers
+    };
+    const liveMaxEpisode = getMaxEpisodeNumberFromServers(episodeServers);
+    const labelAdvertisedEpisode = extractEpNumber(String(response.movie.episode_current || ''));
+    const currentAdvertisedEpisode = Math.max(Number(response.movie.current_episode || 0) || 0, labelAdvertisedEpisode);
+    if (liveMaxEpisode > 0 && (liveMaxEpisode !== currentAdvertisedEpisode || labelAdvertisedEpisode !== liveMaxEpisode)) {
+      response.movie.episode_current = `Tập ${liveMaxEpisode}`;
+      response.movie.current_episode = liveMaxEpisode;
+      if (!response.movie.total_episodes || Number(response.movie.total_episodes) < liveMaxEpisode) {
+        response.movie.total_episodes = undefined;
+        response.movie.episode_total = '';
+      }
+    }
+    if (liveMaxEpisode === 0 && hasPlayableFullMovie(episodeServers)) {
+      response.movie.episode_current = 'Full';
+      response.movie.episode_total = '1';
+      response.movie.current_episode = 1;
+      response.movie.total_episodes = Math.max(Number(response.movie.total_episodes || 0), 1);
+    }
+    // Cache successful responses for repeat opens; episode metadata rarely changes minute by minute.
+    const responseMaxEpisode = getMaxEpisodeNumberFromServers(episodeServers);
+    const responseExpectedEpisode = getExpectedEpisodeNumber(response.movie);
+    const isIncomplete = responseExpectedEpisode > 1 && responseMaxEpisode > 0 && responseMaxEpisode < responseExpectedEpisode;
+    const cacheControl = hasEpisodes ? isIncomplete ? 'no-store' : 'public, max-age=300, stale-while-revalidate=1800, stale-if-error=86400' : 'no-store';
+    if (hasEpisodes && !isIncomplete) {
+      const responseSlug = String(response.movie.slug || '');
+      const cacheWrites = [
+        writeCachedDetail(supabase, slug, response)
+      ];
+      if (responseSlug && responseSlug !== slug) cacheWrites.push(writeCachedDetail(supabase, responseSlug, response));
+      // Cache persistence is best-effort and must never consume the viewer's
+      // four-second Cloudflare gateway budget after the response is ready.
+      edgeWaitUntil(Promise.allSettled(cacheWrites));
+    }
+    return jsonResponse(response, 200, {
+      'Cache-Control': cacheControl,
+      'X-Cache': forceRefresh ? 'REFRESH' : 'MISS',
+      'X-Repair-Triggered': repairTriggered || isIncomplete ? '1' : '0'
+    });
+  } catch (err) {
+    console.error('[movie-detail-proxy] Fatal Error:', err);
+    return jsonResponse({
+      status: false,
+      message: 'Server error'
+    }, 500);
+  }
+});

@@ -104,7 +104,7 @@ function FeaturedMainCard({ movie, palette }: { movie: Movie; palette: typeof PA
   return (
     <Link
       to={movieDetailUrl(movie.slug)}
-      className={`group relative block rounded-2xl overflow-hidden bg-[#13151f] cursor-pointer ring-1 ring-white/5 ${palette.ringHover} transition-all`}
+      className={`movie-card-contain movie-art-frame movie-art-frame--wide group relative block rounded-2xl overflow-hidden bg-[#13151f] cursor-pointer ring-1 ring-white/5 ${palette.ringHover} transition-all`}
     >
       <div className="relative" style={{ aspectRatio: '16/9' }}>
         {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton z-[1]" />}
@@ -204,9 +204,9 @@ function FeaturedSideCard({ movie, palette }: { movie: Movie; palette: typeof PA
   return (
     <Link
       to={movieDetailUrl(movie.slug)}
-      className="group flex gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05] hover:border-white/10 transition-all cursor-pointer"
+      className="movie-card-contain group flex gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05] hover:border-white/10 transition-all cursor-pointer"
     >
-      <div className="relative w-20 sm:w-28 md:w-32 flex-shrink-0 aspect-[16/10] rounded-lg overflow-hidden bg-[#13151f]">
+      <div className="movie-art-frame movie-art-frame--wide relative w-20 sm:w-28 md:w-32 flex-shrink-0 aspect-[16/10] rounded-lg overflow-hidden bg-[#13151f]">
         {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton z-[1]" />}
         {imgError && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">

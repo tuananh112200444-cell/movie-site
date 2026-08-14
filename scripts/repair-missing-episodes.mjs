@@ -195,7 +195,7 @@ function getEpisodeNumber(ep) {
 }
 
 async function fetchOphimDetail(slug) {
-  const bases = ['https://ophim1.com', 'https://ophim.tv', 'https://ophim9.cc', 'https://ophim8.cc'];
+  const bases = ['https://ophim1.com'];
   for (const base of bases) {
     try {
       const response = await fetch(`${base}/v1/api/phim/${encodeURIComponent(slug)}`, {
@@ -223,7 +223,7 @@ async function fetchOphimDetail(slug) {
 async function searchOphimSlug(target) {
   const keyword = [target.origin_name, target.name].map((value) => String(value || '').trim()).find(Boolean);
   if (!keyword) return '';
-  const bases = ['https://ophim1.com', 'https://ophim.tv', 'https://ophim9.cc', 'https://ophim8.cc'];
+  const bases = ['https://ophim1.com'];
   const wanted = new Set([target.name, target.origin_name].map(normalizeTitle).filter(Boolean));
   for (const base of bases) {
     try {

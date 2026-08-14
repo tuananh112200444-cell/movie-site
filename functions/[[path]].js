@@ -5,6 +5,9 @@ const SUPABASE_FUNCTION_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functio
 const SUPABASE_REST_BASE = 'https://dzpddbthdeqbkrcjlzap.supabase.co/rest/v1';
 // This is Supabase's public browser key (RLS still applies), not a service key.
 const SUPABASE_PUBLIC_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
+// Single production kill switch. Keep APIs/internal provider bridges online so
+// the overnight source rebuild can continue while public pages return 503.
+const MAINTENANCE_MODE = false;
 const SEO_PRERENDER_VERSION = '20260810-internal-discovery-v17';
 const CONSOLIDATED_SEO_PATHS = new Map([
   ['/xem-phim', '/xem-phim-online'],
@@ -27,12 +30,76 @@ const CONSOLIDATED_SEO_PATHS = new Map([
 const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
   'Content-Security-Policy':
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://kit.fontawesome.com https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests; worker-src 'self' blob:; manifest-src 'self'",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://kit.fontawesome.com https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com https://pl30842366.effectivecpmnetwork.com https://pl30842367.effectivecpmnetwork.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests; worker-src 'self' blob:; manifest-src 'self'",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'SAMEORIGIN',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), autoplay=(), payment=(), usb=()',
 };
+
+function shouldShowMaintenance(request, pathname) {
+  if (!MAINTENANCE_MODE || (request.method !== 'GET' && request.method !== 'HEAD')) return false;
+  if (
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/internal/') ||
+    pathname.startsWith('/assets/') ||
+    pathname.startsWith('/images/') ||
+    pathname === '/robots.txt' ||
+    pathname === '/release.json' ||
+    pathname === '/service-worker.js' ||
+    pathname === '/home-fallback.json' ||
+    pathname === '/queer-fallback.json' ||
+    pathname === '/feed.xml' ||
+    pathname.startsWith('/sitemap')
+  ) return false;
+
+  const destination = String(request.headers.get('sec-fetch-dest') || '').toLowerCase();
+  const accept = String(request.headers.get('accept') || '').toLowerCase();
+  return destination === 'document' || accept.includes('text/html');
+}
+
+function maintenanceResponse(request) {
+  const html = `<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta http-equiv="refresh" content="300">
+  <title>KhoPhim đang bảo trì</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 20%,#182640 0,#090d16 44%,#05070c 100%);color:#f8fafc}
+    main{width:min(620px,100%);padding:44px 28px;text-align:center;border:1px solid rgba(255,255,255,.1);border-radius:28px;background:rgba(11,16,27,.82);box-shadow:0 32px 90px rgba(0,0,0,.45);backdrop-filter:blur(18px)}
+    .mark{width:76px;height:76px;margin:0 auto 24px;display:grid;place-items:center;border-radius:22px;background:linear-gradient(145deg,#ff6b35,#e2314b);box-shadow:0 16px 44px rgba(226,49,75,.28)}
+    svg{width:40px;height:40px}h1{margin:0;font-size:clamp(28px,6vw,44px);line-height:1.12;letter-spacing:-.03em}p{margin:18px auto 0;max-width:510px;color:#bac4d5;font-size:clamp(16px,3vw,19px);line-height:1.65}
+    .status{display:inline-flex;align-items:center;gap:9px;margin-top:28px;padding:10px 16px;border:1px solid rgba(255,255,255,.1);border-radius:999px;background:rgba(255,255,255,.05);color:#e4e9f2;font-size:14px}
+    .dot{width:8px;height:8px;border-radius:50%;background:#ffb547;box-shadow:0 0 0 6px rgba(255,181,71,.12);animation:pulse 1.8s ease-in-out infinite}@keyframes pulse{50%{opacity:.45;transform:scale(.8)}}
+    small{display:block;margin-top:22px;color:#778398;font-size:13px}
+  </style>
+</head>
+<body>
+  <main role="main" aria-labelledby="maintenance-title">
+    <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a4 4 0 0 0-5-5L12 3.6 9.6 6 7.3 3.7a4 4 0 0 0 5 5L19 15.4a2.1 2.1 0 1 1-3 3L9.4 11.7a4 4 0 0 0-5 5L6.7 14 9 16.4l-2.3 2.3a4 4 0 0 0 5-5"/></svg></div>
+    <h1 id="maintenance-title">Hệ thống đang bảo trì</h1>
+    <p>KhoPhim đang nâng cấp hệ thống nguồn phát để mang lại trải nghiệm xem phim nhanh và ổn định hơn. Vui lòng quay lại sau.</p>
+    <div class="status"><span class="dot"></span><span>Đang nâng cấp trong đêm nay</span></div>
+    <small>Trang sẽ tự động kiểm tra lại sau mỗi 5 phút.</small>
+  </main>
+</body>
+</html>`;
+
+  return new Response(request.method === 'HEAD' ? null : html, {
+    status: 503,
+    statusText: 'Service Unavailable',
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Retry-After': '1800',
+      'X-KhoPhim-Maintenance': 'active',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
 
 function canonicalRedirect(url, pathname) {
   return new Response(null, {
@@ -1512,7 +1579,6 @@ async function renderStaticPrerender(pathname, context) {
 async function fetchOphimMovie(slug) {
   const urls = [
     `https://ophim1.com/phim/${encodeURIComponent(slug)}`,
-    `https://ophim.tv/phim/${encodeURIComponent(slug)}`,
   ];
   const results = await Promise.allSettled(urls.map(async (url) => {
     try {
@@ -2556,6 +2622,149 @@ async function proxyMovieDetail(request, context) {
   }
 }
 
+async function secretsMatch(provided, expected) {
+  if (!provided || !expected) return false;
+  const encoder = new TextEncoder();
+  const [providedHash, expectedHash] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(provided)),
+    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
+  ]);
+  return crypto.subtle.timingSafeEqual(providedHash, expectedHash);
+}
+
+async function proxyNguoncDetail(request, context) {
+  if (request.method !== 'GET') {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: { Allow: 'GET', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+  const expectedSecret = String(context?.env?.MOVIE_DETAIL_PROXY_SECRET || '');
+  const providedSecret = String(request.headers.get('x-khophim-proxy-secret') || '');
+  if (!await secretsMatch(providedSecret, expectedSecret)) {
+    return new Response(JSON.stringify({ status: false, message: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+
+  const url = new URL(request.url);
+  const slug = String(url.searchParams.get('slug') || '').trim().toLowerCase();
+  if (!slug || slug.length > 180 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    return new Response(JSON.stringify({ status: false, message: 'Invalid slug' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+
+  try {
+    const upstream = await fetch(`https://phim.nguonc.com/api/film/${encodeURIComponent(slug)}`, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36 KhoPhim-ProviderBridge/1.0',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(7000),
+    });
+    const contentType = upstream.headers.get('content-type') || '';
+    const contentLength = Number(upstream.headers.get('content-length') || 0);
+    if (!upstream.ok || !/json/i.test(contentType) || contentLength > 2_000_000) {
+      await upstream.body?.cancel().catch(() => undefined);
+      return new Response(JSON.stringify({ status: false, message: 'Provider detail unavailable' }), {
+        status: upstream.ok ? 502 : upstream.status,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+      });
+    }
+    return new Response(upstream.body, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'private, no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
+        ...SECURITY_HEADERS,
+      },
+    });
+  } catch {
+    return new Response(JSON.stringify({ status: false, message: 'Provider bridge unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+}
+
+async function proxyNguoncCollection(request, context, kind) {
+  if (request.method !== 'GET') {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: { Allow: 'GET', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+  const expectedSecret = String(context?.env?.MOVIE_DETAIL_PROXY_SECRET || '');
+  const providedSecret = String(request.headers.get('x-khophim-proxy-secret') || '');
+  if (!await secretsMatch(providedSecret, expectedSecret)) {
+    return new Response(JSON.stringify({ status: false, message: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+
+  const url = new URL(request.url);
+  let upstreamUrl = '';
+  if (kind === 'catalog') {
+    const page = Number(url.searchParams.get('page') || 0);
+    if (!Number.isInteger(page) || page < 1 || page > 10000) {
+      return new Response(JSON.stringify({ status: false, message: 'Invalid page' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+      });
+    }
+    upstreamUrl = `https://phim.nguonc.com/api/films/phim-moi-cap-nhat?page=${page}`;
+  } else {
+    const keyword = String(url.searchParams.get('keyword') || '').trim();
+    if (!keyword || keyword.length > 160) {
+      return new Response(JSON.stringify({ status: false, message: 'Invalid keyword' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+      });
+    }
+    upstreamUrl = `https://phim.nguonc.com/api/films/search?keyword=${encodeURIComponent(keyword)}`;
+  }
+
+  try {
+    const upstream = await fetch(upstreamUrl, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36 KhoPhim-ProviderBridge/1.0',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(7000),
+    });
+    const contentType = upstream.headers.get('content-type') || '';
+    const contentLength = Number(upstream.headers.get('content-length') || 0);
+    if (!upstream.ok || !/json/i.test(contentType) || contentLength > 2_000_000) {
+      await upstream.body?.cancel().catch(() => undefined);
+      return new Response(JSON.stringify({ status: false, message: 'Provider collection unavailable' }), {
+        status: upstream.ok ? 502 : upstream.status,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+      });
+    }
+    return new Response(upstream.body, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'private, no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
+        ...SECURITY_HEADERS,
+      },
+    });
+  } catch {
+    return new Response(JSON.stringify({ status: false, message: 'Provider bridge unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+}
+
 async function proxySearch(request, context) {
   const url = new URL(request.url);
   const query = String(url.searchParams.get('q') || '').trim().slice(0, 120);
@@ -2782,10 +2991,48 @@ function isDmcaRemovedPath(pathname) {
   return Boolean(movieMatch && DMCA_REMOVED_MOVIE_SLUGS.has(decodeURIComponent(movieMatch[1]).toLowerCase()));
 }
 
+const ADSTERRA_BANNER_FRAMES = new Map([
+  ['/_ads/banner-728x90.html', { key: 'bdb00121f91598ecc645ad05155f9af9', width: 728, height: 90 }],
+  ['/_ads/banner-320x50.html', { key: 'b4a6445f28b35fc2a47190d98ebe6af6', width: 320, height: 50 }],
+  ['/_ads/banner-300x250.html', { key: 'b9e4fcb9b31cf4b3ba07f94fd96f3290', width: 300, height: 250 }],
+]);
+
+function adsterraBannerFrameResponse(request, pathname) {
+  const ad = ADSTERRA_BANNER_FRAMES.get(pathname);
+  if (!ad) return null;
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+  }
+
+  const options = JSON.stringify({
+    key: ad.key,
+    format: 'iframe',
+    height: ad.height,
+    width: ad.width,
+    params: {},
+  });
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><style>html,body{width:${ad.width}px;height:${ad.height}px;margin:0;overflow:hidden;background:transparent}</style></head><body><script>window.atOptions=${options};</script><script src="https://www.highperformanceformat.com/${ad.key}/invoke.js"></script></body></html>`;
+
+  return new Response(request.method === 'HEAD' ? null : html, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+      'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://www.highperformanceformat.com; style-src 'unsafe-inline'; img-src data: https:; connect-src https:; frame-src about: https:; base-uri 'none'; form-action 'none'; frame-ancestors https://khophim.org https://www.khophim.org https://mhophim.com https://www.mhophim.com https://movie-site-eds.pages.dev https://*.movie-site-eds.pages.dev",
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
+  });
+}
+
 export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
   const pathname = url.pathname;
+
+  const adFrameResponse = adsterraBannerFrameResponse(request, pathname);
+  if (adFrameResponse) return adFrameResponse;
 
   if (url.hostname === 'mhophim.com' || url.hostname === 'www.mhophim.com') {
     return handleMhophimRequest(context, url, pathname);
@@ -2797,6 +3044,10 @@ export async function onRequest(context) {
 
   if (url.hostname === 'www.khophim.org' || url.protocol === 'http:') {
     return canonicalRedirect(url, pathname);
+  }
+
+  if (shouldShowMaintenance(request, pathname)) {
+    return maintenanceResponse(request);
   }
 
   // Historical cards emitted ?source=ophim even though the canonical detail
@@ -2866,6 +3117,18 @@ export async function onRequest(context) {
 
   if (pathname === '/api/movie-detail') {
     return proxyMovieDetail(request, context);
+  }
+
+  if (pathname === '/internal/nguonc-detail') {
+    return proxyNguoncDetail(request, context);
+  }
+
+  if (pathname === '/internal/nguonc-catalog') {
+    return proxyNguoncCollection(request, context, 'catalog');
+  }
+
+  if (pathname === '/internal/nguonc-search') {
+    return proxyNguoncCollection(request, context, 'search');
   }
 
   if (pathname === '/api/search') {

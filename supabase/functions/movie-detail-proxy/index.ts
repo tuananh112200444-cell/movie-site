@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { normalizeVerifiedSeasonNumbering } from '../_shared/episode-numbering.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -342,7 +343,7 @@ function shouldSuppressUnhealthyStream(row: Record<string, unknown> | null): boo
     /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl) ||
     /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl);
   if (healthStatus === 'blocked' && !browserManagedProbeException) return true;
-  return (healthStatus === 'dead' && failureCount >= 2) || (healthStatus === 'failed' && failureCount >= 3);
+  return healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 3);
 }
 
 function episodeHealthIsUsable(ep: Record<string, unknown>): boolean {
@@ -435,7 +436,8 @@ function attachStreamHealth(epData: Record<string, unknown>, row: Record<string,
     source_response_time_ms: Number(row.response_time_ms || 0) || undefined,
     source_failure_count: Number(row.failure_count || 0) || undefined,
     source_priority: Number(row.priority || 0) || undefined,
-    source_provider: String(row.source || epData.source_provider || '') || undefined,
+    source_playback_score: Number(row.playback_score ?? -1) >= 0 ? Number(row.playback_score) : undefined,
+    source_provider: String(row.provider_key || row.source || epData.source_provider || '') || undefined,
     source_last_checked_at: String(row.last_checked_at || '') || undefined,
     source_last_error: lastError || undefined,
   };
@@ -893,6 +895,36 @@ function triggerOnDemandEpisodeRepair(
   return true;
 }
 
+function triggerOnDemandStreamRecovery(
+  supabase: ReturnType<typeof createClient>,
+  movie: Record<string, unknown> | null | undefined,
+  requestedSlug: string,
+): boolean {
+  if (!movie) return false;
+  const movieSlug = String(movie.slug || requestedSlug).trim();
+  if (!movieSlug) return false;
+
+  // Do not put provider probing on the viewer response path. The targeted
+  // health route includes inactive rows, validates HLS down to a media
+  // segment, and reactivates the stream only after fresh playback proof.
+  edgeWaitUntil(
+    callInternalFunction('stream-health-check', {
+      slug: movieSlug,
+      limit: 12,
+      concurrency: 3,
+      deactivate_after: 3,
+      queue: 'recovery',
+    })
+      .then(() => clearDetailCaches(supabase, [
+        requestedSlug,
+        movieSlug,
+        String(movie.ophim_slug || ''),
+      ]))
+      .catch(() => undefined),
+  );
+  return true;
+}
+
 async function searchOphimForSlug(keyword: string): Promise<string | null> {
   const candidates = await searchOphimCandidateSlugs(keyword, 1);
   return candidates[0] ?? null;
@@ -904,7 +936,6 @@ async function searchOphimCandidateSlugs(keyword: string, limit = 6, preferredYe
   const urls = [
     `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
     `https://phimapi.com/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
-    `https://ophim.tv/v1/api/tim-kiem?keyword=${encodeURIComponent(cleanKeyword)}&limit=${limit}`,
   ];
   const providerResults = await Promise.all(urls.map(async (url) => {
     try {
@@ -1149,7 +1180,6 @@ async function fetchExternalMovieDetail(
   const urls = [
     { url: `https://ophim1.com/v1/api/phim/${encodeURIComponent(slug)}`, provider: 'ophim' },
     { url: `https://phimapi.com/phim/${encodeURIComponent(slug)}`, provider: 'phimapi' },
-    { url: `https://ophim.tv/v1/api/phim/${encodeURIComponent(slug)}`, provider: 'ophim' },
   ];
 
   const controllers: AbortController[] = [];
@@ -1227,7 +1257,17 @@ async function fetchExternalMovieDetail(
     movie: Record<string, unknown>;
     episodes: Array<{ server_name: string; server_data: unknown[] }>;
   } => r !== null);
-  const winner = validResults.sort((a, b) => {
+  const normalizedResults = validResults.map((detail) => {
+    const normalized = normalizeVerifiedSeasonNumbering(
+      detail.movie,
+      detail.episodes as Array<{ server_name?: string; server_data?: Array<Record<string, unknown>> }>,
+    );
+    return {
+      movie: normalized.movie,
+      episodes: normalized.episodes as Array<{ server_name: string; server_data: unknown[] }>,
+    };
+  });
+  const winner = normalizedResults.sort((a, b) => {
     const aMax = getMaxEpisodeNumberFromServers(a.episodes);
     const bMax = getMaxEpisodeNumberFromServers(b.episodes);
     if (bMax !== aMax) return bMax - aMax;
@@ -1878,6 +1918,8 @@ serve(async (req) => {
     const serverMap = new Map<string, unknown[]>();
     const seen = new Set<string>();
     const knownUnhealthyUrls = new Set<string>();
+    let recoverableProblemStreamCount = 0;
+    let newestProblemStreamCheckAt = 0;
 
     if (useSupabase && movieId) {
       const [
@@ -1897,8 +1939,9 @@ serve(async (req) => {
           .order('episode_number', { ascending: true }),
         supabase
           .from('streams')
-          .select('server_name, source, episode_slug, stream_url, embed_url, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count, last_checked_at, last_error, audio_type')
+          .select('server_name, source, provider_key, episode_slug, stream_url, embed_url, subtitle_url, priority, playback_score, is_active, health_status, response_time_ms, failure_count, last_checked_at, last_error, audio_type')
           .eq('movie_id', movieId)
+          .order('playback_score', { ascending: false, nullsFirst: false })
           .order('priority', { ascending: false })
           .order('response_time_ms', { ascending: true, nullsFirst: false }),
       ]);
@@ -1913,6 +1956,11 @@ serve(async (req) => {
       for (const raw of allStreams) {
         const row = raw as Record<string, unknown>;
         if (!shouldSuppressUnhealthyStream(row)) continue;
+        recoverableProblemStreamCount += 1;
+        const checkedAt = Date.parse(String(row.last_checked_at || ''));
+        if (Number.isFinite(checkedAt)) {
+          newestProblemStreamCheckAt = Math.max(newestProblemStreamCheckAt, checkedAt);
+        }
         for (const value of [row.stream_url, row.embed_url]) {
           const normalized = normalizePlayableUrl(String(value || ''));
           if (normalized) knownUnhealthyUrls.add(normalized);
@@ -2045,7 +2093,7 @@ serve(async (req) => {
         // raises failure_count by three after repeated fatal playback reports;
         // returning those rows until five failures made a known-bad source
         // eligible for one more viewer session and left stale edge responses.
-        if ((healthStatus === 'dead' && failureCount >= 2) || (healthStatus === 'failed' && failureCount >= 3)) continue;
+        if (healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 3)) continue;
 
         const slugVal = String(sm.episode_slug || 'full');
         const serverName = String(sm.server_name || 'Nguồn');
@@ -2064,7 +2112,8 @@ serve(async (req) => {
           source_response_time_ms: Number(sm.response_time_ms || 0) || undefined,
           source_failure_count: failureCount || undefined,
           source_priority: Number(sm.priority || 0) || undefined,
-          source_provider: String(sm.source || '') || undefined,
+          source_playback_score: Number(sm.playback_score ?? -1) >= 0 ? Number(sm.playback_score) : undefined,
+          source_provider: String(sm.provider_key || sm.source || '') || undefined,
           source_last_checked_at: String(sm.last_checked_at || '') || undefined,
           source_last_error: lastError || undefined,
         };
@@ -2094,7 +2143,7 @@ serve(async (req) => {
       !!movieData &&
       normalizedSlug((movieData as Record<string, unknown>).slug) !== normalizedSlug(slug) &&
       isOphimLikeMovieRecord((movieData || movie) as Record<string, unknown>);
-    const shouldRepairOnDemand = expectedEpisode > 1 && (dbMaxEpisode === 0 || dbMaxEpisode < expectedEpisode);
+    const shouldRepairOnDemand = expectedEpisode > 0 && dbMaxEpisode < expectedEpisode;
     // Episode count alone is not playback readiness. If the database contains
     // the advertised episode numbers but every candidate for one of those
     // numbers is repeatedly blocked/failed, fetch an independent provider and
@@ -2118,6 +2167,13 @@ serve(async (req) => {
       forceRefresh && isBlvietsubMovieRecord((movieData || movie) as Record<string, unknown>) &&
       Boolean(getBlvietsubMovieUrl((movieData || movie) as Record<string, unknown>));
     let repairTriggered = false;
+    const shouldRecheckQuarantinedPlayback =
+      serverMap.size === 0 &&
+      recoverableProblemStreamCount > 0 &&
+      (
+        newestProblemStreamCheckAt <= 0 ||
+        Date.now() - newestProblemStreamCheckAt >= 5 * 60 * 1000
+      );
     const shouldRepairInBackground =
       shouldRepairOnDemand ||
       shouldForceKnownBlvietsubSync ||
@@ -2139,6 +2195,13 @@ serve(async (req) => {
               ? 'movie_detail_unverified_playback'
               : 'movie_detail_episode_mismatch',
       );
+    }
+    if (shouldRecheckQuarantinedPlayback) {
+      repairTriggered = triggerOnDemandStreamRecovery(
+        supabase,
+        (movieData || movie) as Record<string, unknown>,
+        slug,
+      ) || repairTriggered;
     }
 
     // A complete, playable BLVietsub record must stay on the fast database

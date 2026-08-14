@@ -598,7 +598,7 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
   ];
 
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
       <SEO
         title={data.title}
         description={data.description}

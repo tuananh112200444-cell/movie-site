@@ -8,7 +8,10 @@ function getOrientationApi(): LockableOrientation | undefined {
 }
 
 export function isPortraitPhoneViewport(): boolean {
-  return window.innerHeight > window.innerWidth && window.innerWidth <= 900;
+  // Do not force-rotate tablets. iPad portrait widths commonly start around
+  // 744 CSS px; treating them as phones rotates the whole cross-origin player
+  // and can leave the provider's centre control looking like a broken square.
+  return window.innerHeight > window.innerWidth && window.innerWidth <= 600;
 }
 
 export async function tryLockPlayerLandscape(): Promise<boolean> {

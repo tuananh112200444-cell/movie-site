@@ -28,6 +28,24 @@ function isValidMovie(item) {
   );
 }
 
+function repairUtf8Mojibake(value) {
+  const text = String(value || '');
+  if (!/(?:Ã|Ä|áº|á»)/.test(text)) return text;
+  const decoded = Buffer.from(text, 'latin1').toString('utf8');
+  if (decoded.includes('\uFFFD')) return text;
+  return /(?:Ã|Ä|áº|á»)/.test(decoded) ? text : decoded;
+}
+
+function sanitizeMovie(item) {
+  if (!isValidMovie(item)) return item;
+  return {
+    ...item,
+    name: repairUtf8Mojibake(item.name),
+    origin_name: repairUtf8Mojibake(item.origin_name),
+    episode_current: repairUtf8Mojibake(item.episode_current),
+  };
+}
+
 function validateSections(sections) {
   if (!sections || typeof sections !== 'object') return false;
   return REQUIRED_SECTIONS.every((key) => (
@@ -70,10 +88,13 @@ try {
     sections: Object.fromEntries(
       REQUIRED_SECTIONS.map((key) => [
         key,
-        payload.sections[key].filter(isValidMovie),
+        payload.sections[key].filter(isValidMovie).map(sanitizeMovie),
       ]),
     ),
   };
+  if (/(?:Ã|Ä|áº|á»)/.test(JSON.stringify(snapshot))) {
+    throw new Error('response still contains mojibake after sanitization');
+  }
   await writeFile(OUTPUT_URL, `${JSON.stringify(snapshot)}\n`, 'utf8');
   console.log(
     `Refreshed public/home-fallback.json (${REQUIRED_SECTIONS.length} sections, `

@@ -6,6 +6,8 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import Pagination from '@/components/base/Pagination';
+import AdsterraNativeBanner from '@/components/feature/AdsterraNativeBanner';
+import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchLatestReleaseMovies, fetchMoviesByType, getFeaturedUrl, getSmallThumbUrl } from '@/services/movieApi';
 import { useLazySection } from '@/hooks/useLazySection';
@@ -335,7 +337,7 @@ export default function NewMoviesPage() {
   const activeFilter = FILTERS.find((f) => f.key === filterType) ?? FILTERS[0];
 
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
       <SEO
         title={`${pageLabel} 2026 – Vietsub HD Miễn Phí | KhoPhim`}
         description={`${pageDescription} trên KhoPhim.`}
@@ -416,6 +418,7 @@ export default function NewMoviesPage() {
       </div>
 
       <main className="cinema-page-container">
+        <AdsterraResponsiveBanner />
 
         {/* ── Filter Tabs ── */}
         <div className="mb-6 -mt-1">
@@ -540,6 +543,8 @@ export default function NewMoviesPage() {
           <Pagination currentPage={page} totalPages={totalPages} basePath={basePath} hasNext={hasNext} />
         )}
 
+        {!showLoading && pageMovies.length > 0 && <AdsterraNativeBanner />}
+
         {/* SEO content block */}
         <div ref={seoRef}>
           {seoVisible && (
@@ -657,7 +662,7 @@ function FeaturedCard({ movie }: { movie: Movie }) {
   const isTrailer = ep === 'trailer';
 
   return (
-    <Link to={movieDetailUrl(movie.slug)} className="group relative block rounded-2xl overflow-hidden bg-[#16192a] cursor-pointer">
+    <Link to={movieDetailUrl(movie.slug)} className="movie-card-contain movie-art-frame movie-art-frame--wide group relative block rounded-2xl overflow-hidden bg-[#16192a] cursor-pointer">
       <div className="relative" style={{ aspectRatio: '16/9' }}>
         {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton z-[1]" />}
         {imgError && (
@@ -743,7 +748,7 @@ function SideFeaturedCard({ movie }: { movie: Movie }) {
   return (
     <Link
       to={movieDetailUrl(movie.slug)}
-      className="group relative block overflow-hidden rounded-lg bg-[#16192a] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d14]"
+      className="movie-card-contain movie-art-frame movie-art-frame--wide group relative block overflow-hidden rounded-lg bg-[#16192a] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d14]"
       aria-label={`Xem phim ${movie.name}`}
     >
       <div className="relative aspect-[16/11] sm:aspect-[16/10]">

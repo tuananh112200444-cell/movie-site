@@ -244,8 +244,8 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
     posterPath,
     posterFallback,
     isImagePreloaded(getPosterUrl(posterPath || '')),
-    240,
-    78,
+    320,
+    84,
     { preferredAspect: 'portrait' },
   );
   const ep = getEpInfo(movie.episode_current);
@@ -290,7 +290,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
         {/* Poster frame â€” all hover via CSS group-hover, zero JS re-renders */}
         <div
           className={`
-            relative rounded-xl overflow-hidden
+            movie-card-contain relative rounded-xl overflow-hidden
             bg-[#16192a] border contain-paint
             transition-[transform,box-shadow,border-color] duration-300 ease-out
             ${isTop3
@@ -300,7 +300,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
             md:hover:-translate-y-1 md:hover:scale-[1.01]
           `}
         >
-          <div className="aspect-[2/3] relative overflow-hidden">
+          <div className="movie-art-frame movie-art-frame--portrait aspect-[2/3] relative overflow-hidden">
             {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton z-[1]" />}
             {imgError && (
               <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">

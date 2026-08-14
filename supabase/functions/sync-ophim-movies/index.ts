@@ -1,5 +1,9 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  normalizeVerifiedSeasonNumbering,
+  type SeasonNumberingNormalization,
+} from '../_shared/episode-numbering.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -11,11 +15,14 @@ const PROVIDERS = {
   ophim: {
     sourceSite: 'ophim',
     sourceName: 'OPhim',
-    bases: ['https://ophim1.com', 'https://ophim.tv', 'https://ophim9.cc', 'https://ophim8.cc'],
+    // The retired .tv/.cc mirrors refuse connections or redirect to a dead
+    // host. Failing fast lets the independent-provider repair path take over.
+    bases: ['https://ophim1.com'],
     listPath: (page: number) => `/v1/api/danh-sach/phim-moi-cap-nhat?page=${page}&sort_field=modified.time&sort_type=desc`,
     searchPath: (query: string) => `/v1/api/tim-kiem?keyword=${encodeURIComponent(query)}&limit=10`,
     detailPath: (slug: string) => `/v1/api/phim/${encodeURIComponent(slug)}`,
     trackOphimIdentity: true,
+    adapter: 'ophim',
   },
   kkphim: {
     sourceSite: 'phimapi',
@@ -25,6 +32,27 @@ const PROVIDERS = {
     searchPath: (query: string) => `/v1/api/tim-kiem?keyword=${encodeURIComponent(query)}&limit=10`,
     detailPath: (slug: string) => `/phim/${encodeURIComponent(slug)}`,
     trackOphimIdentity: false,
+    adapter: 'ophim',
+  },
+  vsmov: {
+    sourceSite: 'vsmov',
+    sourceName: 'VSMOV',
+    bases: ['https://vsmov.com'],
+    listPath: (page: number) => `/api/danh-sach/phim-moi-cap-nhat?page=${page}`,
+    searchPath: (query: string) => `/api/tim-kiem?keyword=${encodeURIComponent(query)}&limit=10`,
+    detailPath: (slug: string) => `/api/phim/${encodeURIComponent(slug)}`,
+    trackOphimIdentity: false,
+    adapter: 'ophim',
+  },
+  nguonc: {
+    sourceSite: 'nguonc',
+    sourceName: 'Nguồn C',
+    bases: ['https://phim.nguonc.com'],
+    listPath: (page: number) => `/api/films/phim-moi-cap-nhat?page=${page}`,
+    searchPath: (query: string) => `/api/films/search?keyword=${encodeURIComponent(query)}`,
+    detailPath: (slug: string) => `/api/film/${encodeURIComponent(slug)}`,
+    trackOphimIdentity: false,
+    adapter: 'nguonc',
   },
 } as const;
 
@@ -32,7 +60,10 @@ type ProviderKey = keyof typeof PROVIDERS;
 type ProviderConfig = (typeof PROVIDERS)[ProviderKey];
 
 function providerFromParam(value: string | null): ProviderConfig {
-  return value === 'kkphim' ? PROVIDERS.kkphim : PROVIDERS.ophim;
+  if (value === 'kkphim') return PROVIDERS.kkphim;
+  if (value === 'vsmov') return PROVIDERS.vsmov;
+  if (value === 'nguonc') return PROVIDERS.nguonc;
+  return PROVIDERS.ophim;
 }
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -55,6 +86,7 @@ interface OPhimMovie {
   id?: string;
   name?: string;
   origin_name?: string;
+  original_name?: string;
   alternative_names?: string[];
   slug?: string;
   content?: string;
@@ -93,6 +125,7 @@ interface DetailPayload {
 interface ParsedDetail {
   movie: OPhimMovie;
   episodes: OPhimServer[];
+  numberingNormalization?: SeasonNumberingNormalization | null;
 }
 
 interface SyncStats {
@@ -184,6 +217,9 @@ function sameMovieByTitle(existing: Record<string, unknown>, incoming: Record<st
   const existingYear = Number(existing.year || 0);
   const incomingYear = Number(incoming.year || 0);
   if (!(existingYear > 0 && incomingYear > 0 && existingYear === incomingYear)) return false;
+  const existingType = normalizedMovieType(existing.type);
+  const incomingType = normalizedMovieType(incoming.type);
+  if (existingType && incomingType && existingType !== incomingType) return false;
 
   const strictTitles = (record: Record<string, unknown>) => Array.from(new Set([
     record.name,
@@ -196,6 +232,27 @@ function sameMovieByTitle(existing: Record<string, unknown>, incoming: Record<st
   const existingTitles = strictTitles(existing);
   const incomingTitles = strictTitles(incoming);
   return incomingTitles.some((incomingTitle) => existingTitles.includes(incomingTitle));
+}
+
+function sameMovieByStableProviderIdentity(existing: Record<string, unknown>, incoming: Record<string, unknown>): boolean {
+  const incomingSource = String(incoming.source_site || '').toLowerCase();
+  if (incomingSource !== 'ophim') return false;
+  const sameId = String(existing.ophim_id || '') && String(existing.ophim_id) === String(incoming.ophim_id || '');
+  const sameSlug = String(existing.ophim_slug || '') && String(existing.ophim_slug) === String(incoming.ophim_slug || '');
+  if (!sameId && !sameSlug) return false;
+  const existingType = normalizedMovieType(existing.type);
+  const incomingType = normalizedMovieType(incoming.type);
+  if (existingType && incomingType && existingType !== incomingType) return false;
+  // OPhim occasionally renames a title while retaining both its immutable
+  // provider id and slug. That exact pair identifies a metadata rename, not a
+  // second movie; retaining the existing canonical row also avoids a unique
+  // ophim_slug collision.
+  if (sameId && sameSlug) return true;
+  const titles = (record: Record<string, unknown>) => [
+    record.name, record.origin_name, record.title_vi, record.title_en, record.title_original,
+  ].map((value) => normalizeText(String(value || ''))).filter((value) => value.length >= 3);
+  const existingTitles = titles(existing);
+  return titles(incoming).some((title) => existingTitles.includes(title));
 }
 
 function normalizedMovieType(value: unknown): 'single' | 'series' | '' {
@@ -378,6 +435,28 @@ function detailHasPlayableEpisode(detail: ParsedDetail): boolean {
   )));
 }
 
+function safeProviderEpisodeUrl(provider: ProviderConfig, value: unknown, kind: 'stream' | 'embed'): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return '';
+    if (provider.sourceSite === 'vsmov' && kind === 'embed') {
+      return /(^|\.)streamvsmov\.com$/i.test(url.hostname) && /^\/video\/[a-z0-9-]+\/?$/i.test(url.pathname)
+        ? url.toString()
+        : '';
+    }
+    if (provider.sourceSite === 'nguonc' && kind === 'embed') {
+      return /^embed\d+\.streamc\.xyz$/i.test(url.hostname) && url.pathname === '/embed.php'
+        ? url.toString()
+        : '';
+    }
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
 async function hasPersistedPlayableCoverage(supabase: SupabaseClient, movieId: string): Promise<boolean> {
   const [{ data: movieEpisodes }, { data: episodes }, { data: streams }] = await Promise.all([
     supabase.from('movie_episodes').select('source,server_name,slug,episode_number,link_m3u8,link_embed').eq('movie_id', movieId).limit(1000),
@@ -524,6 +603,31 @@ async function fetchJsonFromMirrors(provider: ProviderConfig, path: string, time
       clearTimeout(timer);
     }
   }
+  if (provider.sourceSite === 'nguonc') {
+    const proxySecret = Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') || '';
+    if (!proxySecret) return null;
+    let bridgeUrl = '';
+    const detail = path.match(/^\/api\/film\/([a-z0-9-]+)$/i);
+    const page = path.match(/^\/api\/films\/phim-moi-cap-nhat\?page=(\d+)$/i);
+    const search = path.match(/^\/api\/films\/search\?keyword=(.+)$/i);
+    if (detail) bridgeUrl = `https://movie-site-eds.pages.dev/internal/nguonc-detail?slug=${encodeURIComponent(detail[1])}`;
+    if (page) bridgeUrl = `https://movie-site-eds.pages.dev/internal/nguonc-catalog?page=${encodeURIComponent(page[1])}`;
+    if (search) bridgeUrl = `https://movie-site-eds.pages.dev/internal/nguonc-search?keyword=${search[1]}`;
+    if (!bridgeUrl) return null;
+    try {
+      const response = await fetch(bridgeUrl, {
+        headers: {
+          Accept: 'application/json',
+          'x-khophim-proxy-secret': proxySecret,
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok || !/json/i.test(response.headers.get('content-type') || '')) return null;
+      return await response.json() as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
   return null;
 }
 
@@ -537,6 +641,88 @@ function providerListPaths(provider: ProviderConfig, page: number): string[] {
     `/danh-sach/phim-moi-cap-nhat-v3?page=${page}`,
     `/v1/api/danh-sach/phim-moi-cap-nhat-v3?page=${page}`,
   ]));
+}
+
+function nguoncCategoryValues(movie: Record<string, unknown>, groupName: string): Array<Record<string, unknown>> {
+  const groups = movie.category && typeof movie.category === 'object'
+    ? Object.values(movie.category as Record<string, unknown>)
+    : [];
+  const wanted = normalizeText(groupName);
+  for (const entry of groups) {
+    const row = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+    const group = row.group && typeof row.group === 'object' ? row.group as Record<string, unknown> : {};
+    if (normalizeText(String(group.name || '')) !== wanted) continue;
+    return (Array.isArray(row.list) ? row.list : [])
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'));
+  }
+  return [];
+}
+
+function adaptNguoncDetail(payload: DetailPayload, fallbackSlug: string): DetailPayload {
+  const rawMovie = payload.movie && typeof payload.movie === 'object'
+    ? payload.movie as unknown as Record<string, unknown>
+    : {};
+  const format = nguoncCategoryValues(rawMovie, 'Định dạng')
+    .map((item) => normalizeText(String(item.name || '')));
+  const type = format.some((name) => name.includes('phim bo')) ? 'series' : 'single';
+  const year = Number(rawMovie.year || nguoncCategoryValues(rawMovie, 'Năm')[0]?.name || 0) || 0;
+  const categories = nguoncCategoryValues(rawMovie, 'Thể loại');
+  const countries = nguoncCategoryValues(rawMovie, 'Quốc gia');
+  const rawEpisodes = Array.isArray(rawMovie.episodes) ? rawMovie.episodes : [];
+  const episodes: OPhimServer[] = rawEpisodes.map((server) => {
+    const row = server && typeof server === 'object' ? server as Record<string, unknown> : {};
+    return {
+      server_name: String(row.server_name || 'Vietsub'),
+      server_data: (Array.isArray(row.items) ? row.items : []).map((item) => {
+        const episode = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+        const rawEmbed = String(episode.embed || '');
+        let linkEmbed = '';
+        try {
+          const parsed = new URL(rawEmbed);
+          if (
+            parsed.protocol === 'https:' &&
+            /^embed\d+\.streamc\.xyz$/i.test(parsed.hostname) &&
+            parsed.pathname === '/embed.php'
+          ) linkEmbed = parsed.toString();
+        } catch {
+          linkEmbed = '';
+        }
+        return {
+          name: String(episode.name || ''),
+          slug: String(episode.slug || ''),
+          filename: String(episode.name || ''),
+          link_embed: linkEmbed,
+          link_m3u8: '',
+        };
+      }),
+    };
+  });
+  const current = String(rawMovie.current_episode || '');
+  const total = String(rawMovie.total_episodes || '');
+  const movie: OPhimMovie = {
+    _id: String(rawMovie.id || ''),
+    id: String(rawMovie.id || ''),
+    name: String(rawMovie.name || fallbackSlug),
+    origin_name: String(rawMovie.original_name || ''),
+    slug: String(rawMovie.slug || fallbackSlug),
+    content: String(rawMovie.description || ''),
+    type,
+    status: format.some((name) => name.includes('hoan tat')) ? 'completed' : 'ongoing',
+    thumb_url: String(rawMovie.thumb_url || ''),
+    poster_url: String(rawMovie.poster_url || ''),
+    time: String(rawMovie.time || ''),
+    episode_current: current,
+    episode_total: total,
+    quality: String(rawMovie.quality || 'HD'),
+    lang: String(rawMovie.language || 'Vietsub'),
+    year,
+    actor: String(rawMovie.casts || '').split(',').map((value) => value.trim()).filter(Boolean),
+    director: String(rawMovie.director || '').split(',').map((value) => value.trim()).filter(Boolean),
+    category: categories.map((item) => ({ id: String(item.id || ''), name: String(item.name || ''), slug: slugify(String(item.name || '')) })),
+    country: countries.map((item) => ({ id: String(item.id || ''), name: String(item.name || ''), slug: slugify(String(item.name || '')) })),
+    modified: { time: String(rawMovie.modified || new Date().toISOString()) },
+  };
+  return { status: payload.status, movie, episodes };
 }
 
 async function fetchListPage(provider: ProviderConfig, page: number): Promise<Record<string, unknown> | null> {
@@ -569,19 +755,28 @@ function isProviderErrorPayload(payload: Record<string, unknown> | null): boolea
   );
 }
 
-function parseDetail(payload: DetailPayload | null, fallbackSlug: string): ParsedDetail | null {
+function parseDetail(provider: ProviderConfig, payload: DetailPayload | null, fallbackSlug: string): ParsedDetail | null {
   if (!payload) return null;
   if (isProviderErrorPayload(payload as Record<string, unknown>)) return null;
-  const item = payload.data?.item || payload.item || payload.movie || null;
+  const adapted = provider.adapter === 'nguonc' ? adaptNguoncDetail(payload, fallbackSlug) : payload;
+  const item = adapted.data?.item || adapted.item || adapted.movie || null;
   if (!item) return null;
-  const episodes = payload.data?.item?.episodes || payload.item?.episodes || payload.episodes || [];
+  const episodes = adapted.data?.item?.episodes || adapted.item?.episodes || adapted.episodes || [];
   const movie = { ...item, slug: item.slug || fallbackSlug };
-  return { movie, episodes: Array.isArray(episodes) ? episodes : [] };
+  const normalized = normalizeVerifiedSeasonNumbering(
+    movie as Record<string, unknown>,
+    (Array.isArray(episodes) ? episodes : []) as OPhimServer[],
+  );
+  return {
+    movie: normalized.movie as OPhimMovie,
+    episodes: normalized.episodes as OPhimServer[],
+    numberingNormalization: normalized.normalization,
+  };
 }
 
 async function fetchDetail(provider: ProviderConfig, slug: string): Promise<ParsedDetail | null> {
   const payload = await fetchJsonFromMirrors(provider, provider.detailPath(slug));
-  return parseDetail(payload as DetailPayload | null, slug);
+  return parseDetail(provider, payload as DetailPayload | null, slug);
 }
 
 interface TargetMovieIdentity {
@@ -753,6 +948,11 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
   };
 }
 
+function providerSlugPrefix(sourceSite: unknown): string {
+  const normalized = String(sourceSite || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return normalized || 'provider';
+}
+
 async function findExistingMovie(supabase: SupabaseClient, payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
   const checks = [
     ['slug', payload.slug],
@@ -774,13 +974,56 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
     }
   }
   if (isCuratedCatalogMovie(exactMatch)) {
-    const providerPrefix = String(payload.source_site || '').toLowerCase() === 'phimapi' ? 'phimapi' : 'ophim';
-    payload.slug = `${providerPrefix}-${String(payload.slug || 'movie')}`;
-    exactMatch = null;
+    const providerIdentity = String(payload.ophim_slug || '').trim();
+    if (providerIdentity) {
+      const { data: identityMatch } = await supabase
+        .from('movies')
+        .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+        .eq('ophim_slug', providerIdentity)
+        .limit(1)
+        .maybeSingle();
+      exactMatch = identityMatch && !isCuratedCatalogMovie(identityMatch as Record<string, unknown>)
+        ? identityMatch as Record<string, unknown>
+        : null;
+    } else {
+      exactMatch = null;
+    }
+    if (!exactMatch) {
+      const providerPrefix = providerSlugPrefix(payload.source_site);
+      payload.slug = `${providerPrefix}-${String(payload.slug || 'movie')}`;
+    }
+  }
+
+  if (exactMatch) {
+    const sameProviderSlug =
+      String(exactMatch.source_site || '').toLowerCase() === String(payload.source_site || '').toLowerCase()
+      && String(exactMatch.slug || '') === String(payload.slug || '');
+    // Exact provider identity is authoritative. Returning here avoids two
+    // broad title scans for virtually every repeat/backfill update.
+    if (
+      sameMovieByStableProviderIdentity(exactMatch, payload)
+      || sameProviderSlug
+      || sameMovieByTitle(exactMatch, payload)
+    ) return exactMatch;
+  }
+
+  const normalized = String(payload.normalized_name || '').trim();
+  const year = Number(payload.year || 0);
+  if (normalized.length >= 6 && year > 0) {
+    const { data } = await supabase
+      .from('movies')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .eq('year', year)
+      .eq('normalized_name', normalized)
+      .limit(10);
+    const match = ((data || []) as Record<string, unknown>[])
+      .filter((row) => !isCuratedCatalogMovie(row))
+      .filter((row) => sameMovieByTitle(row, payload))
+      .sort((a, b) => canonicalCandidateScore(b) - canonicalCandidateScore(a))[0];
+    if (match?.id) return match;
   }
 
   const title = String(payload.origin_name || payload.name || '').trim();
-  const year = Number(payload.year || 0);
   if (title.length >= 3 && year > 0) {
     const safe = escapePostgrestIlike(title);
     const { data } = await supabase
@@ -801,7 +1044,6 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
     ) return match;
   }
 
-  const normalized = String(payload.normalized_name || '').trim();
   if (normalized.length >= 6 && year > 0) {
     const { data } = await supabase
       .from('movies')
@@ -819,10 +1061,34 @@ async function findExistingMovie(supabase: SupabaseClient, payload: Record<strin
         canonicalCandidateScore(match) >= canonicalCandidateScore(exactMatch) + 40)
     ) return match;
   }
-  if (exactMatch && sameMovieByTitle(exactMatch, payload)) return exactMatch;
+  if (exactMatch && (sameMovieByTitle(exactMatch, payload) || sameMovieByStableProviderIdentity(exactMatch, payload))) return exactMatch;
   if (exactMatch) {
-    const providerPrefix = String(payload.source_site || '').toLowerCase() === 'phimapi' ? 'phimapi' : 'ophim';
+    const providerPrefix = providerSlugPrefix(payload.source_site);
     payload.slug = `${providerPrefix}-${String(payload.slug || 'movie')}`;
+  }
+  return null;
+}
+
+async function findMovieByProviderUniqueIdentity(
+  supabase: SupabaseClient,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  // Under connection pressure an earlier best-effort identity lookup can be
+  // canceled. If the insert then reports a unique conflict, resolve the exact
+  // provider identity directly instead of retrying the same broad title scan.
+  const checks = [
+    ['ophim_slug', payload.ophim_slug],
+    ['ophim_id', payload.ophim_id],
+  ].filter(([, value]) => String(value || '').trim());
+
+  for (const [column, value] of checks) {
+    const result = await runDatabaseMutationWithRetry(() => supabase
+      .from('movies')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .eq(column as string, value as string)
+      .limit(1)
+      .maybeSingle());
+    if (result.data?.id) return result.data as Record<string, unknown>;
   }
   return null;
 }
@@ -936,6 +1202,12 @@ async function upsertMovie(
     if (existing.is_published === false && existingSource.includes('merged')) {
       return { id: String(existing.id), created: false, updated: false, hasImage: hasUsableMovieImage(existing, payload), retired: true };
     }
+    if (
+      provider.trackOphimIdentity &&
+      sameMovieByStableProviderIdentity(existing, payload) &&
+      Number(existing.year || 0) > 0 &&
+      Number(existing.year) !== Number(payload.year || 0)
+    ) payload.year = existing.year;
     let update = protectExistingSlug(existing, updatePayloadForExisting(existing, payload));
     if (!provider.trackOphimIdentity) {
       if (existing.ophim_id) delete update.ophim_id;
@@ -975,7 +1247,8 @@ async function upsertMovie(
     .single();
   if (error) {
     if (isDuplicateError(error)) {
-      const duplicate = await findExistingMovie(supabase, payload);
+      const duplicate = await findMovieByProviderUniqueIdentity(supabase, payload)
+        || await findExistingMovie(supabase, payload);
       if (duplicate?.id) {
         const update = protectExistingSlug(duplicate, updatePayloadForExisting(duplicate, payload));
         const { error: updateError } = await runDatabaseMutationWithRetry(
@@ -1153,6 +1426,44 @@ async function upsertEpisodeRowsSafely(
   }
 }
 
+function bulkProviderCatalogItem(provider: ProviderConfig, detail: ParsedDetail): Record<string, unknown> {
+  const rawSourceId = String(detail.movie._id || detail.movie.id || detail.movie.slug || '');
+  const providerId = `${provider.sourceSite}:${rawSourceId}`.slice(0, 240);
+  const episodes: Record<string, unknown>[] = [];
+
+  for (const server of detail.episodes) {
+    const sourceServerName = String(server.server_name || provider.sourceName).trim() || provider.sourceName;
+    // Independent provider labels are stable across canonical movie merges and
+    // can never overwrite another provider's same-named server.
+    const serverName = `${provider.sourceName} - ${sourceServerName}`;
+    for (const episode of server.server_data || []) {
+      if (isTrailerEpisode(episode)) continue;
+      const number = episodeNumber(episode);
+      const name = String(episode.name || (number === 1 ? 'Full' : `Tap ${number}`));
+      const slug = String(episode.slug || slugify(name)).trim() || slugify(name);
+      const linkM3u8 = safeProviderEpisodeUrl(provider, episode.link_m3u8, 'stream');
+      const linkEmbed = safeProviderEpisodeUrl(provider, episode.link_embed, 'embed');
+      if (!linkM3u8 && !linkEmbed) continue;
+      episodes.push({
+        number,
+        name,
+        slug,
+        server_name: serverName,
+        link_m3u8: linkM3u8,
+        link_embed: linkEmbed,
+        raw: episode,
+      });
+    }
+  }
+
+  return {
+    provider_slug: String(detail.movie.slug || ''),
+    provider_id: providerId,
+    movie: moviePayload(provider, detail),
+    episodes,
+  };
+}
+
 async function insertEpisodes(
   supabase: SupabaseClient,
   provider: ProviderConfig,
@@ -1160,7 +1471,8 @@ async function insertEpisodes(
   detail: ParsedDetail,
   labelAsBackup = false,
 ): Promise<number> {
-  const sourceId = provider.trackOphimIdentity ? String(detail.movie._id || detail.movie.id || '') : '';
+  const rawSourceId = String(detail.movie._id || detail.movie.id || detail.movie.slug || '');
+  const sourceId = provider.trackOphimIdentity ? rawSourceId : `${provider.sourceSite}:${rawSourceId}`.slice(0, 240);
   const parsedEpisodes: Array<{
     number: number;
     epName: string;
@@ -1182,8 +1494,8 @@ async function insertEpisodes(
       const number = episodeNumber(ep);
       const epName = String(ep.name || (number === 1 ? 'Full' : `Tap ${number}`));
       const epSlug = String(ep.slug || slugify(epName)).trim() || slugify(epName);
-      const linkM3u8 = String(ep.link_m3u8 || '');
-      const linkEmbed = String(ep.link_embed || '');
+      const linkM3u8 = safeProviderEpisodeUrl(provider, ep.link_m3u8, 'stream');
+      const linkEmbed = safeProviderEpisodeUrl(provider, ep.link_embed, 'embed');
       if (!linkM3u8 && !linkEmbed) continue;
       // Unnumbered provider rows are legitimate specials/OVAs. Store them in
       // the slug-keyed tables with episode_number=0; movie_episodes remains
@@ -1193,6 +1505,51 @@ async function insertEpisodes(
   }
 
   if (parsedEpisodes.length === 0) return 0;
+
+  if (detail.numberingNormalization) {
+    const normalization = detail.numberingNormalization;
+    const { data: normalized, error: normalizeError } = await supabase.rpc(
+      'normalize_verified_cumulative_season_numbering',
+      {
+        p_movie_id: movieId,
+        p_source: provider.sourceSite,
+        p_raw_start: normalization.rawStart,
+        p_raw_end: normalization.rawEnd,
+        p_season: normalization.season,
+      },
+    );
+    if (normalizeError) {
+      throw new Error(`season numbering normalize ${detail.movie.slug}: ${normalizeError.message}`);
+    }
+    if (normalized === false) {
+      // The RPC intentionally refuses to transform a second time. A repeated
+      // sync is still safe when this provider's persisted rows already form
+      // the exact canonical 1..N range and contain no cumulative numbers.
+      const canonicalTotal = normalization.canonicalTotal;
+      const { data: storedRows, error: storedRowsError } = await supabase
+        .from('movie_episodes')
+        .select('episode_number')
+        .eq('movie_id', movieId)
+        .eq('source', provider.sourceSite)
+        .limit(2000);
+      if (storedRowsError) {
+        throw new Error(`season numbering verify ${detail.movie.slug}: ${storedRowsError.message}`);
+      }
+      const storedNumbers = (storedRows || [])
+        .map((row) => Number(row.episode_number || 0))
+        .filter((number) => Number.isInteger(number) && number > 0);
+      const canonicalNumbers = new Set(storedNumbers);
+      const alreadyNormalized =
+        storedNumbers.length > 0 &&
+        storedNumbers.every((number) => number <= canonicalTotal) &&
+        canonicalNumbers.size === canonicalTotal &&
+        Array.from({ length: canonicalTotal }, (_, index) => index + 1)
+          .every((number) => canonicalNumbers.has(number));
+      if (!alreadyNormalized) {
+        throw new Error(`season numbering normalize ${detail.movie.slug}: persisted rows failed the verified no-collision contract`);
+      }
+    }
+  }
 
   const [{ data: existingAdminRows, error: adminSelectError }, { data: existingEpisodeRows, error: episodeSelectError }, { data: existingStreamRows, error: streamSelectError }] = await Promise.all([
     supabase
@@ -1205,7 +1562,7 @@ async function insertEpisodes(
       .eq('movie_id', movieId),
     supabase
       .from('streams')
-      .select('server_name, episode_slug, source, stream_url, embed_url')
+      .select('server_name, episode_slug, source, stream_url, embed_url, is_active, health_status, failure_count, last_error, last_checked_at')
       .eq('movie_id', movieId)
       .eq('source', provider.sourceSite),
   ]);
@@ -1288,7 +1645,12 @@ async function insertEpisodes(
       String(existingStreamRow.stream_url || '') !== ep.linkM3u8 ||
       String(existingStreamRow.embed_url || '') !== ep.linkEmbed
     );
-    if ((!existingStreamRow || streamUrlChanged) && !plannedStreams.has(streamKey)) {
+    const streamNeedsVerification = Boolean(existingStreamRow) && (
+      existingStreamRow.is_active === false ||
+      ['failed', 'dead', 'blocked'].includes(String(existingStreamRow.health_status || '').toLowerCase()) ||
+      String(existingStreamRow.last_error || '').startsWith('Viewer telemetry:')
+    );
+    if ((!existingStreamRow || streamUrlChanged || streamNeedsVerification) && !plannedStreams.has(streamKey)) {
       plannedStreams.add(streamKey);
       streamRows.push({
         movie_id: movieId,
@@ -1301,10 +1663,10 @@ async function insertEpisodes(
         is_active: true,
         health_status: 'unchecked',
         failure_count: 0,
-        // A provider response is not proof that its media URL plays. Keep a
-        // newly introduced URL out of public playback until stream-health-check
-        // validates its playlist/embed independently. Unchanged rows never
-        // reach this branch, so prior success/failure evidence is preserved.
+        // A provider response is not proof that its media URL plays. New,
+        // changed, and previously failed rows return to a bounded verification
+        // queue. Healthy unchanged rows never reach this branch, preserving
+        // their evidence while allowing a recovered CDN URL to escape `dead`.
         last_error: `Provider verification pending: ${provider.sourceSite}`,
         last_checked_at: null,
         priority: 1,
@@ -1496,6 +1858,30 @@ async function clearCaches(supabase: SupabaseClient, slugs: string[]): Promise<v
   ]);
 }
 
+async function verifyTargetStreamsNow(
+  supabaseUrl: string,
+  serviceKey: string,
+  cronSecret: string,
+  slug: string,
+): Promise<void> {
+  const endpoint = new URL(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/stream-health-check`);
+  endpoint.searchParams.set('slug', slug);
+  endpoint.searchParams.set('queue', 'recovery');
+  endpoint.searchParams.set('limit', '16');
+  endpoint.searchParams.set('concurrency', '3');
+  endpoint.searchParams.set('deactivate_after', '3');
+  const response = await fetch(endpoint.toString(), {
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      'x-cron-secret': cronSecret,
+    },
+    signal: AbortSignal.timeout(65_000),
+  });
+  if (!response.ok) throw new Error(`target stream verification HTTP ${response.status}`);
+  await response.body?.cancel().catch(() => undefined);
+}
+
 function uniqueSlugs(slugs: string[]): string[] {
   return Array.from(new Set(slugs.map((slug) => String(slug || '').trim()).filter(Boolean))).slice(0, 100);
 }
@@ -1573,15 +1959,77 @@ serve(async (req) => {
   const includeEpisodes =
     url.searchParams.get('episodes') === '1' ||
     url.searchParams.get('include_episodes') === '1';
+  const setBasedBulk = url.searchParams.get('set_based_bulk') === '1';
+  const requestedBulkFastPath = url.searchParams.get('bulk_fast_path') === '1';
   const strictMissingDetail = url.searchParams.get('strict_missing_detail') === '1';
   const provider = providerFromParam(url.searchParams.get('provider'));
+  let submittedDetails = new Map<string, ParsedDetail>();
+  let submittedPage = 0;
+  if (req.method === 'POST') {
+    try {
+      const body = await req.json() as Record<string, unknown>;
+      submittedPage = Math.max(1, Number(body.page || 1) || 1);
+      const details = Array.isArray(body.details) ? body.details.slice(0, 20) : [];
+      for (const raw of details) {
+        if (!raw || typeof raw !== 'object') continue;
+        const parsed = parseDetail(provider, raw as DetailPayload, '');
+        const slug = String(parsed?.movie.slug || '').trim();
+        const validSlug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
+        // NguonC catalogue pages can legitimately contain announced titles
+        // before a playable episode exists. Persist their metadata privately;
+        // the publication gate below still requires a playable source.
+        if (parsed && validSlug) submittedDetails.set(slug, parsed);
+      }
+      if (!submittedDetails.size) {
+        return json({ success: false, error: `No valid ${provider.sourceSite} details submitted` }, 400);
+      }
+    } catch {
+      return json({ success: false, error: 'Invalid submitted provider payload' }, 400);
+    }
+  }
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  if (url.searchParams.get('status') === '1') {
+    const [{ data: progress, error: progressError }, { data: storageRows, error: storageError }] = await Promise.all([
+      supabase.from('provider_catalog_backfill_state').select('*').eq('provider', provider.sourceSite).maybeSingle(),
+      supabase.rpc('provider_catalog_storage_status'),
+    ]);
+    if (progressError || storageError) {
+      return json({ success: false, error: progressError?.message || storageError?.message || 'Status unavailable' }, 500);
+    }
+    return json({
+      success: true,
+      provider: provider.sourceSite,
+      progress: progress || null,
+      storage: Array.isArray(storageRows) ? storageRows[0] : storageRows,
+    });
+  }
   const stats: SyncStats = { scanned: 0, created: 0, updated: 0, episodesInserted: 0, skipped: 0, errors: [], transientErrors: [] };
   const changedSlugs: string[] = [];
+  const bulkFastPath = requestedBulkFastPath && setBasedBulk && submittedDetails.size > 0 &&
+    ['phimapi', 'nguonc'].includes(provider.sourceSite);
+
+  // The durable runner checks storage once when a provider session starts.
+  // Repeating this RPC for every submitted chunk overloaded PostgREST's schema
+  // cache and turned the guard itself into the catalogue bottleneck.
+  if (!dryRun && !bulkFastPath) {
+    const { data: storageRows, error: storageError } = await supabase.rpc('provider_catalog_storage_status');
+    const storage = Array.isArray(storageRows) ? storageRows[0] : storageRows;
+    if (storageError) return json({ success: false, error: `Storage guard unavailable: ${storageError.message}` }, 503);
+    if (storage && storage.can_continue === false) {
+      await supabase.from('provider_catalog_backfill_state').upsert({
+        provider: provider.sourceSite,
+        status: 'paused',
+        last_error: `Storage soft limit reached at ${storage.database_bytes} bytes`,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'provider' });
+      return json({ success: false, paused: true, reason: 'storage_soft_limit', storage }, 507);
+    }
+  }
 
   try {
     const requestedStartPage = Math.max(1, Number(url.searchParams.get('start_page') || url.searchParams.get('page') || 1) || 1);
     const maxPage = Math.max(1, Number(url.searchParams.get('max_page') || 5000) || 5000);
+    const totalPages = Math.max(0, Math.min(10_000, Number(url.searchParams.get('total_pages') || 0) || 0));
     const useCursor = url.searchParams.get('cursor') === '1' || url.searchParams.get('backfill') === '1';
     const cursorKey = String(url.searchParams.get('cursor_key') || `sync-ophim-movies:${provider.sourceSite}:backfill`);
     const targetSlug = String(url.searchParams.get('slug') || '').trim();
@@ -1602,7 +2050,11 @@ serve(async (req) => {
     let pagesWithItems = 0;
     let slugs: string[] = [];
 
-    if (targetSlug || targetMovie) {
+    if (submittedDetails.size) {
+      for (const [slug, detail] of submittedDetails) candidates.set(slug, detail.movie);
+      slugs = [...submittedDetails.keys()].slice(0, limit);
+      pagesWithItems = 1;
+    } else if (targetSlug || targetMovie) {
       slugs = [targetSlug || String(targetMovie?.slug || '')].filter(Boolean);
       pagesWithItems = 1;
     } else {
@@ -1620,12 +2072,40 @@ serve(async (req) => {
       }
     }
 
-    for (const slug of slugs) {
+    const canUseSetBasedBulk =
+      setBasedBulk &&
+      submittedDetails.size > 0 &&
+      includeEpisodes &&
+      !dryRun &&
+      !targetMovie &&
+      !targetSlug &&
+      ['phimapi', 'nguonc'].includes(provider.sourceSite);
+
+    if (canUseSetBasedBulk) {
+      const bulkItems = slugs
+        .map((slug) => submittedDetails.get(slug))
+        .filter((detail): detail is ParsedDetail => Boolean(detail))
+        .map((detail) => bulkProviderCatalogItem(provider, detail));
+      const { data: bulkResult, error: bulkError } = await supabase.rpc('bulk_ingest_provider_catalog', {
+        p_provider: provider.sourceSite,
+        p_items: bulkItems,
+      });
+      if (bulkError) throw new Error(`set-based bulk ingest: ${bulkError.message}`);
+      const result = (bulkResult || {}) as Record<string, unknown>;
+      stats.scanned += Number(result.scanned || 0);
+      stats.created += Number(result.created || 0);
+      stats.updated += Number(result.updated || 0);
+      stats.episodesInserted += Number(result.episodes_inserted || 0);
+      for (const message of (Array.isArray(result.errors) ? result.errors : [])) {
+        recordSyncError(stats, String(message || ''));
+      }
+      for (const slug of slugs) changedSlugs.push(slug);
+    } else for (const slug of slugs) {
       stats.scanned += 1;
       try {
-        const fetchedDetail = targetMovie
+        const fetchedDetail = submittedDetails.get(slug) || (targetMovie
           ? await fetchDetailForTarget(provider, targetMovie)
-          : await fetchDetail(provider, slug);
+          : await fetchDetail(provider, slug));
         const expected = candidates.get(slug);
         const detail = fetchedDetail && (!expected || detailMatchesExpected(expected, fetchedDetail))
           ? fetchedDetail
@@ -1647,41 +2127,70 @@ serve(async (req) => {
         }
         if (result.created) stats.created += 1;
         if (result.updated) stats.updated += 1;
-        if (targetMovie) {
-          const removedForeignEpisodes = await quarantineVerifiedForeignEpisodes(supabase, result.id, detail);
-          if (removedForeignEpisodes > 0) changedSlugs.push(String(detail.movie.slug || slug));
-        }
         const beforeEpisodesInserted = stats.episodesInserted;
-        if (includeEpisodes) {
-          const primarySource = String(targetMovie?.source_site || targetMovie?.source_name || '').toLowerCase();
-          const isIndependentProvider = provider.sourceSite === 'phimapi'
-            ? !/(kkphim|phimapi)/.test(primarySource)
-            : !/ophim/.test(primarySource);
-          stats.episodesInserted += await insertEpisodes(
-            supabase,
-            provider,
-            result.id,
-            detail,
-            Boolean(targetMovie && isIndependentProvider),
-          );
-          // Publication is a strict two-part gate: the provider detail must
-          // contain a real playable URL and the movie must have usable artwork.
-          // This also safely releases a private row left by an interrupted run,
-          // even when its episode rows were already written on that prior run.
-          // A targeted repair must also re-evaluate a previously public row.
-          // Provider metadata can move from upcoming/trailer to ongoing while
-          // still exposing no episode; preserving the old public flag would
-          // leak an unwatchable movie back into listings.
-          if (targetMovie || (detailHasPlayableEpisode(detail) && result.hasImage)) {
-            const persistedPlayableCoverage = await hasPersistedPlayableCoverage(supabase, result.id);
-            await supabase
-              .from('movies')
-              .update({ is_published: persistedPlayableCoverage && result.hasImage })
-              .eq('id', result.id);
+        try {
+          if (targetMovie) {
+            const removedForeignEpisodes = await quarantineVerifiedForeignEpisodes(supabase, result.id, detail);
+            if (removedForeignEpisodes > 0) changedSlugs.push(String(detail.movie.slug || slug));
+          }
+          if (includeEpisodes) {
+            const primarySource = String(targetMovie?.source_site || targetMovie?.source_name || '').toLowerCase();
+            const isIndependentProvider = provider.sourceSite === 'phimapi'
+              ? !/(kkphim|phimapi)/.test(primarySource)
+              : !/ophim/.test(primarySource);
+            stats.episodesInserted += await insertEpisodes(
+              supabase,
+              provider,
+              result.id,
+              detail,
+              Boolean(
+                provider.sourceSite === 'vsmov' ||
+                provider.sourceSite === 'nguonc' ||
+                (targetMovie && isIndependentProvider)
+              ),
+            );
+            // Publication is a strict two-part gate: the provider detail must
+            // contain a real playable URL and the movie must have usable artwork.
+            // This also safely releases a private row left by an interrupted run,
+            // even when its episode rows were already written on that prior run.
+            // A targeted repair must also re-evaluate a previously public row.
+            // Provider metadata can move from upcoming/trailer to ongoing while
+            // still exposing no episode; preserving the old public flag would
+            // leak an unwatchable movie back into listings.
+            if (targetMovie || (detailHasPlayableEpisode(detail) && result.hasImage)) {
+              const persistedPlayableCoverage = await hasPersistedPlayableCoverage(supabase, result.id);
+              await supabase
+                .from('movies')
+                .update({ is_published: persistedPlayableCoverage && result.hasImage })
+                .eq('id', result.id);
+            }
+          }
+        } finally {
+          // Provider metadata can advertise more episodes than the sources
+          // that are currently usable. This must run even when an episode
+          // write fails, because the movie metadata was already updated.
+          const { error: reconcileError } = await supabase.rpc('reconcile_movie_release_state', {
+            p_movie_id: result.id,
+          });
+          if (reconcileError) {
+            throw new Error(`movie release reconcile ${detail.movie.slug}: ${reconcileError.message}`);
           }
         }
+
         if (result.created || result.updated || stats.episodesInserted > beforeEpisodesInserted) {
           changedSlugs.push(String(detail.movie.slug || slug));
+        }
+        if (targetMovie && includeEpisodes) {
+          // A targeted catalogue repair is incomplete until the refreshed
+          // rows pass the same health/browser-managed policy used by the API.
+          // This also restores metadata immediately when a CDN URL recovers
+          // without changing its string value.
+          await verifyTargetStreamsNow(
+            supabaseUrl,
+            serviceKey,
+            cronSecret,
+            String(targetMovie.slug || detail.movie.slug || slug),
+          );
         }
       } catch (error) {
         recordSyncError(stats, `[${slug}] ${error instanceof Error ? error.message : String(error)}`);
@@ -1689,17 +2198,23 @@ serve(async (req) => {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
-    const seoAutomation = !dryRun
+    const seoAutomation = !dryRun && !bulkFastPath
       ? await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret, changedSlugs)
       : {
           changed_urls: 0,
           caches_cleared: false,
           search_index_refreshed: false,
-          google_ping: { attempted: false, ok: true, status: 0, urls: 0, message: 'dry run' },
+          google_ping: { attempted: false, ok: true, status: 0, urls: 0, message: bulkFastPath ? 'deferred during exact bulk backfill' : 'dry run' },
         };
 
-    const nextPage = targetSlug || targetMovie || pagesWithItems === 0 || startPage + pages > maxPage ? 1 : startPage + pages;
-    if (useCursor && !dryRun && !targetSlug && !targetMovie) await writeCursorPage(supabase, cursorKey, nextPage);
+    const computedNextPage = submittedDetails.size
+      ? submittedPage + 1
+      : (targetSlug || targetMovie || pagesWithItems === 0 || startPage + pages > maxPage ? 1 : startPage + pages);
+    const finiteBackfillComplete = totalPages > 0 && (
+      submittedDetails.size ? submittedPage >= totalPages : startPage + pages - 1 >= totalPages
+    );
+    const nextPage = finiteBackfillComplete ? totalPages + 1 : computedNextPage;
+    if (useCursor && !dryRun && !bulkFastPath && !targetSlug && !targetMovie) await writeCursorPage(supabase, cursorKey, nextPage);
 
     const elapsedMs = Date.now() - started;
     const metadata = {
@@ -1713,15 +2228,33 @@ serve(async (req) => {
       pages_with_items: pagesWithItems,
       dry_run: dryRun,
       include_episodes: includeEpisodes,
+      total_pages: totalPages || null,
       cursor: useCursor ? cursorKey : null,
       seo_automation: seoAutomation,
     };
-    await writeLog(supabase, stats, elapsedMs, metadata);
+    if (!dryRun && !bulkFastPath && !targetSlug && !targetMovie) {
+      const lastError = [...stats.errors, ...stats.transientErrors].slice(0, 3).join('; ');
+      const { error: progressError } = await supabase.rpc('record_provider_catalog_backfill_batch', {
+        p_provider: provider.sourceSite,
+        p_next_page: nextPage,
+        p_total_pages: totalPages,
+        p_scanned: stats.scanned,
+        p_created: stats.created,
+        p_updated: stats.updated,
+        p_episodes: stats.episodesInserted,
+        p_errors: stats.errors.length + stats.transientErrors.length,
+        p_last_error: lastError,
+        p_batch: metadata,
+      });
+      if (progressError) recordSyncError(stats, `progress checkpoint: ${progressError.message}`);
+    }
+    if (!bulkFastPath) await writeLog(supabase, stats, elapsedMs, metadata);
     return json({
       success: stats.errors.length === 0,
       provider: provider.sourceSite,
       start_page: startPage,
       next_page: nextPage,
+      total_pages: totalPages || null,
       target_slug: targetSlug || null,
       target_movie_id: targetMovieId || null,
       scanned: stats.scanned,
@@ -1739,7 +2272,7 @@ serve(async (req) => {
   } catch (error) {
     const elapsedMs = Date.now() - started;
     recordSyncError(stats, error instanceof Error ? error.message : String(error));
-    await writeLog(supabase, stats, elapsedMs, { provider: provider.sourceSite, pages, limit, dry_run: dryRun, include_episodes: includeEpisodes });
+    if (!bulkFastPath) await writeLog(supabase, stats, elapsedMs, { provider: provider.sourceSite, pages, limit, dry_run: dryRun, include_episodes: includeEpisodes });
     return json({
       success: stats.errors.length === 0,
       error: stats.errors[0] || null,

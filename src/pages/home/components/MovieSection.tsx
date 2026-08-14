@@ -300,7 +300,7 @@ export default function MovieSection({
           <div className="h-8 w-20 skeleton rounded-md flex-shrink-0" />
         </div>
         {!isDesktop ? (
-          <div className="grid grid-cols-3 gap-x-2.5 gap-y-4 pb-2 md:hidden">
+          <div className="movie-section-mobile-grid grid grid-cols-2 gap-x-2.5 gap-y-4 pb-2 sm:grid-cols-3 md:hidden">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i}>
                 <div className="aspect-[2/3] skeleton rounded-lg" />
@@ -362,9 +362,9 @@ export default function MovieSection({
   return (
     <section ref={sectionRef} className="home-section-surface group/section mb-6 md:mb-10">
       {/* Header */}
-      <div className="reveal mb-3.5 flex items-center gap-2.5 px-0.5 md:mb-5 md:px-1">
+      <div className="movie-section-header reveal mb-3.5 flex items-center gap-2.5 px-0.5 md:mb-5 md:px-1">
         {/* Icon box â€” shape varies by theme */}
-        <div className={`relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder} shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_14px_32px_-22px_rgba(255,255,255,0.75)] md:h-9 md:w-9 md:rounded-xl`}>
+        <div className={`movie-section-icon relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br ${t.iconBgFrom} ${t.iconBgTo} ${t.iconBorder} shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_14px_32px_-22px_rgba(255,255,255,0.75)] md:h-9 md:w-9 md:rounded-xl`}>
           <ThemeIcon size={16} strokeWidth={2.25} className={t.iconText} aria-hidden="true" />
           {/* Subtle pulse dot for trending */}
           {theme === 'trending' && (
@@ -374,10 +374,10 @@ export default function MovieSection({
 
         <div className="flex-1 min-w-0">
           <div className="flex min-w-0 items-center gap-2">
-            <h3 className={`truncate text-[1.08rem] font-black tracking-tight text-white md:text-2xl lg:text-[1.68rem] ${t.titleGradient}`}>
+            <h3 className={`movie-section-title truncate text-[1.08rem] font-black tracking-tight text-white md:text-2xl lg:text-[1.68rem] ${t.titleGradient}`}>
               {title}
             </h3>
-            <span className="hidden shrink-0 rounded-full border border-white/[0.08] bg-white/[0.045] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white/40 lg:inline-flex">
+            <span className="movie-section-badge hidden shrink-0 rounded-full border border-white/[0.08] bg-white/[0.045] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white/40 lg:inline-flex">
               Mới cập nhật
             </span>
           </div>
@@ -387,7 +387,7 @@ export default function MovieSection({
         {/* View All â€” ghost pill with theme hover */}
         <Link
           to={viewAllLink}
-          className={`group/btn flex min-h-11 flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.10] bg-white/[0.045] px-3.5 py-2 text-xs font-bold text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 hover:bg-white/[0.09] hover:shadow-[0_12px_30px_-22px_rgba(255,255,255,0.8)] active:scale-95 active:text-white touch-manipulation ${t.btnHoverText}`}
+          className={`movie-section-viewall group/btn flex min-h-11 flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.10] bg-white/[0.045] px-3.5 py-2 text-xs font-bold text-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 hover:bg-white/[0.09] hover:shadow-[0_12px_30px_-22px_rgba(255,255,255,0.8)] active:scale-95 active:text-white touch-manipulation ${t.btnHoverText}`}
         >
           Xem tất cả
           <i className="ri-arrow-right-line text-xs transition-transform duration-300 group-hover/btn:translate-x-1" />
@@ -396,7 +396,7 @@ export default function MovieSection({
 
       {/* Anime gets an editorial mosaic instead of another identical poster shelf. */}
       {theme === 'anime' ? (
-        <div className="relative overflow-hidden rounded-2xl border border-sky-400/15 bg-[radial-gradient(circle_at_10%_0%,rgba(56,189,248,0.13),transparent_34%),linear-gradient(135deg,rgba(14,24,43,0.96),rgba(8,10,16,0.96))] p-2.5 shadow-[0_28px_80px_-60px_rgba(56,189,248,0.9)] md:p-4">
+        <div className="anime-editorial-mosaic relative overflow-hidden rounded-2xl border border-sky-400/15 bg-[radial-gradient(circle_at_10%_0%,rgba(56,189,248,0.13),transparent_34%),linear-gradient(135deg,rgba(14,24,43,0.96),rgba(8,10,16,0.96))] p-2.5 shadow-[0_28px_80px_-60px_rgba(56,189,248,0.9)] md:p-4">
           <div className="pointer-events-none absolute right-3 top-1 text-[44px] font-black tracking-[-0.08em] text-white/[0.025] md:text-[84px]">
             ANIME
           </div>
@@ -421,7 +421,7 @@ export default function MovieSection({
           )}
         </div>
       ) : !isDesktop ? (
-        <div className="grid grid-cols-3 gap-x-2.5 gap-y-[1.125rem] pb-2 md:hidden">
+        <div className="movie-section-mobile-grid grid grid-cols-2 gap-x-2.5 gap-y-[1.125rem] pb-2 sm:grid-cols-3 md:hidden">
           {displayMovies.slice(0, 6).map((movie, index) => (
             <div
               key={`${movie._id}-mobile-${index}`}
@@ -430,7 +430,7 @@ export default function MovieSection({
               <MovieCard
                 movie={movie}
                 rank={variant === 'rank' ? index + 1 : undefined}
-                priority={prioritizeFirstRow && index < 3}
+                priority={prioritizeFirstRow && index < 2}
               />
             </div>
           ))}

@@ -10,6 +10,8 @@ const playerSection = fs.readFileSync('src/pages/movie-detail/components/MovieDe
 const moviePage = fs.readFileSync('src/pages/movie-detail/page.tsx', 'utf8');
 const router = fs.readFileSync('src/router/config.tsx', 'utf8');
 const continueWatching = fs.readFileSync('src/pages/home/components/ContinueWatching.tsx', 'utf8');
+const updateCoordinator = fs.readFileSync('src/components/base/UpdateCoordinator.tsx', 'utf8');
+const serviceWorker = fs.readFileSync('public/service-worker.js', 'utf8');
 
 const checks = [
   [hls.includes('document.fullscreenEnabled === true && el.requestFullscreen'), 'HLS player must only use a confirmed native fullscreen API'],
@@ -26,6 +28,7 @@ const checks = [
   [box.includes('h-12 w-12'), 'Embed fullscreen control must keep a 48px touch target'],
   [box.includes('data-kp-fullscreen="true"'), 'KhoPhim fullscreen control needs a stable selector above source-player controls'],
   [box.includes('!preferProviderNativeFullscreen') && box.includes('data-kp-source-fullscreen-proxy="true"'), 'The source fullscreen proxy must not cover the native player control on Apple mobile devices'],
+  [box.includes('Always expose a first-party fullscreen action') && box.includes('Do not rely on') && box.includes('data-kp-fullscreen="true"'), 'Apple iframe playback must keep a visible KhoPhim fullscreen fallback'],
   [box.includes('shouldUseProviderNativeFullscreenOnApple') && box.includes('navigator.maxTouchPoints > 1'), 'Fullscreen routing must recognize iPhone, iPad and touch-mode iPadOS'],
   [box.includes('appleVideo.webkitEnterFullscreen();') && box.includes("video.addEventListener('webkitendfullscreen'"), 'Direct video must use and track native iPhone fullscreen'],
   [box.includes("'top-3 right-3 h-12 w-12'"), 'KhoPhim fullscreen control must stay in the expected top-right corner'],
@@ -33,6 +36,8 @@ const checks = [
   [box.includes("transform: 'translate(-50%, -50%) rotate(90deg)'") && box.includes("width: '100dvh'") && box.includes("height: '100dvw'"), 'Embed fullscreen must provide a forced landscape fallback on portrait phones'],
   [globalCss.includes('.kp-landscape-fullscreen') && globalCss.includes('rotate(90deg) !important'), 'Landscape fallback must not be overridden by animation or reduced-motion CSS'],
   [hls.includes("rotate(90deg)"), 'HLS fullscreen must provide a landscape fallback on portrait phones'],
+  [fullscreenUtils.includes('window.innerWidth <= 600') && !fullscreenUtils.includes('window.innerWidth <= 900'), 'iPad/tablet fullscreen must not be force-rotated as a phone viewport'],
+  [box.includes("classList.add('kp-player-pseudo-fullscreen')") && hls.includes("classList.add('kp-player-pseudo-fullscreen')") && globalCss.includes('html.kp-player-pseudo-fullscreen .kp-main-header') && globalCss.includes('html.kp-player-pseudo-fullscreen .angular-detail-page') && globalCss.includes('html.kp-player-pseudo-fullscreen .movie-player-frame') && globalCss.includes('html.kp-player-pseudo-fullscreen .movie-player-box'), 'Pseudo-fullscreen must prevent angular page chrome and clipping from covering the exit control'],
   [fullscreenUtils.includes("orientation.lock('landscape')"), 'Player fullscreen must request native landscape orientation when supported'],
   [fullscreenUtils.includes('getOrientationApi()?.unlock?.()'), 'Player fullscreen must restore orientation on exit'],
   [movieApi.includes("host.includes('short.icu')) return 'known_bad'"), 'Client source scoring must reject the dead short.icu host'],
@@ -51,6 +56,9 @@ const checks = [
   [continueWatching.includes('`/xem-phim/${encodeURIComponent(movieSlug)}'), 'Continue-watching links must open the dedicated player with a validated slug'],
   [moviePage.includes('requestedEpisodeNumber') && moviePage.includes('epSortKey(episode) === requestedEpisodeNumber'), 'Episode URLs must match equivalent slugs such as 3 and tap-03 across sources'],
   [moviePage.includes('pickBestEpisodeByPriority(filteredEpisodes, requestedEpisode)'), 'Direct episode URLs must score every matching provider instead of selecting the first stored URL'],
+  [updateCoordinator.includes("if (/^\\/xem-phim(?:\\/|$)/.test(pathname)) return true;"), 'Release coordinator can still auto-reload a paused or buffering watch route'],
+  [updateCoordinator.includes("'release_update_deferred'"), 'Deferred watch-route updates are not observable in diagnostics'],
+  [!serviceWorker.includes('self.skipWaiting()') && !serviceWorker.includes('self.clients.claim()'), 'Legacy service-worker cleanup can still force a controller change during playback'],
 ];
 
 const failures = checks.filter(([ok]) => !ok).map(([, message]) => message);

@@ -1,5 +1,5 @@
-const BAD_SOURCE_HOSTS_KEY = 'khophim.bad-source-hosts.v1';
-const SOURCE_HEALTH_LAST_FETCH_KEY = 'khophim.source-health.last-fetch.v1';
+const BAD_SOURCE_HOSTS_KEY = 'khophim.bad-source-hosts.v2';
+const SOURCE_HEALTH_LAST_FETCH_KEY = 'khophim.source-health.last-fetch.v2';
 const SOURCE_HEALTH_FETCH_TTL_MS = 5 * 60 * 1000;
 const SOURCE_HEALTH_TIMEOUT_MS = 3500;
 const SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000;
@@ -96,10 +96,10 @@ async function fetchPlayerSourceHealth(): Promise<void> {
     if (!payload.ok || !Array.isArray(payload.bad_hosts)) return;
 
     const now = Date.now();
-    const map = readJsonMap(BAD_SOURCE_HOSTS_KEY);
-    for (const [host, timestamp] of Object.entries(map)) {
-      if (!Number.isFinite(timestamp) || now - timestamp >= SOURCE_HEALTH_PENALTY_TTL_MS) delete map[host];
-    }
+    // The response is the complete current outage snapshot. Rebuild rather
+    // than extend the old map, otherwise a recovered host stays blocked for
+    // 30 minutes even after fresh success evidence removed it from bad_hosts.
+    const map: Record<string, number> = {};
     for (const item of payload.bad_hosts) {
       const host = normalizeHost(item.host);
       if (!host || Number(item.critical || 0) < 2 || Number(item.score || 0) < 5) continue;
@@ -149,6 +149,54 @@ export function isRecentlyBadSourceHost(urlOrHost?: string): boolean {
   // could otherwise start on another known-bad OPhim/KKPhim shard.
   const cluster = getSourceCluster(host);
   return Boolean(cluster) && isFreshPenalty(Number(map[`cluster:${cluster}`] || 0));
+}
+
+/**
+ * Exact-host outage evidence is strong enough to stop a new playback attempt.
+ * Keep this separate from provider-cluster hints: a cluster warning may still
+ * have healthy shards, while an exact hostname has independent viewer errors.
+ */
+export function isRecentlyBadExactSourceHost(urlOrHost?: string): boolean {
+  if (!canUseBrowserStorage() || !urlOrHost) return false;
+  let host = normalizeHost(urlOrHost);
+  try {
+    host = normalizeHost(new URL(urlOrHost).hostname);
+  } catch {
+    // The caller may already provide a hostname.
+  }
+  const map = readJsonMap(BAD_SOURCE_HOSTS_KEY);
+  const markedAt = Number(map[host] || 0);
+  return markedAt > 0 && Date.now() - markedAt < SOURCE_HEALTH_PENALTY_TTL_MS;
+}
+
+export function isRecentlyBadSourceCluster(urlOrHost?: string): boolean {
+  if (!canUseBrowserStorage() || !urlOrHost) return false;
+  let host = normalizeHost(urlOrHost);
+  try {
+    host = normalizeHost(new URL(urlOrHost).hostname);
+  } catch {
+    // The caller may already provide a hostname.
+  }
+  const cluster = getSourceCluster(host);
+  if (!cluster) return false;
+  const map = readJsonMap(BAD_SOURCE_HOSTS_KEY);
+  const markedAt = Number(map[`cluster:${cluster}`] || 0);
+  return markedAt > 0 && Date.now() - markedAt < SOURCE_HEALTH_PENALTY_TTL_MS;
+}
+
+export function markSourcePlaybackFailed(urlOrHost?: string): void {
+  if (!canUseBrowserStorage() || !urlOrHost) return;
+  let host = normalizeHost(urlOrHost);
+  try {
+    host = normalizeHost(new URL(urlOrHost).hostname);
+  } catch {
+    // The caller may already provide a hostname.
+  }
+  if (!host) return;
+  const map = readJsonMap(BAD_SOURCE_HOSTS_KEY);
+  map[host] = Date.now();
+  writeJsonMap(BAD_SOURCE_HOSTS_KEY, map);
+  window.dispatchEvent(new CustomEvent(SOURCE_HEALTH_UPDATED_EVENT));
 }
 
 export function markSourcePlaybackHealthy(urlOrHost?: string): void {

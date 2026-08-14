@@ -14,6 +14,16 @@ interface Props {
   onVideoEnded?: () => void;
   onFatalError?: () => void;
   onPlaybackStarted?: () => void;
+  onPlaybackQuality?: (quality: {
+    event_type: 'playback_stable' | 'playback_heartbeat';
+    playback_time: number;
+    duration: number;
+    buffered_ahead: number;
+    startup_ms: number;
+    watched_seconds: number;
+    stall_count: number;
+    stall_seconds: number;
+  }) => void;
   onPlayerIssue?: (issue: {
     event_type: 'hls_retry' | 'hls_fatal_retry' | 'hls_media_retry' | 'hls_fatal' | 'stall_recovery' | 'stall_fatal' | 'native_hls_error';
     playback_time?: number;
@@ -42,6 +52,8 @@ const STALL_MIN_PROGRESS_SECONDS = 0.05;
 const REPEATED_STALL_WINDOW_MS = 25_000;
 const MAX_REPEATED_SHORT_STALLS = 3;
 const PLAYER_LOGO_URL = '/brand/khophim-favicon-v2-96.png';
+const STABLE_PLAYBACK_SECONDS = 15;
+const PLAYBACK_HEARTBEAT_SECONDS = 60;
 
 function getPlaybackProfile() {
   if (typeof window === 'undefined') {
@@ -117,23 +129,26 @@ function getBufferedAhead(video: HTMLVideoElement): number {
 function pickStableStartLevel(levels: Hls['levels']): number {
   if (!levels.length) return -1;
   const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 768;
-  const maxHeight = isSmallScreen ? 720 : 1080;
-  const maxBitrate = isSmallScreen ? 2_800_000 : 5_500_000;
-  let bestIndex = 0;
-  let bestScore = 0;
+  // Start conservatively so a weak third-party CDN can deliver the first
+  // fragment quickly. ABR remains enabled (selectedLevel = -1) and raises the
+  // quality after measuring the viewer's real connection and source speed.
+  const targetHeight = isSmallScreen ? 360 : 480;
+  const targetBitrate = isSmallScreen ? 1_000_000 : 1_600_000;
+  const indexed = levels.map((level, index) => ({
+    index,
+    height: level.height || 0,
+    bitrate: level.bitrate || 0,
+  }));
+  const safeCandidates = indexed
+    .filter((level) => (!level.height || level.height <= targetHeight)
+      && (!level.bitrate || level.bitrate <= targetBitrate))
+    .sort((a, b) => b.height - a.height || b.bitrate - a.bitrate);
+  if (safeCandidates.length > 0) return safeCandidates[0].index;
 
-  levels.forEach((level, index) => {
-    const height = level.height || 0;
-    const bitrate = level.bitrate || 0;
-    if ((height && height > maxHeight) || (bitrate && bitrate > maxBitrate)) return;
-    const score = height * 10_000 + bitrate;
-    if (score > bestScore) {
-      bestScore = score;
-      bestIndex = index;
-    }
-  });
-
-  return bestIndex;
+  return indexed
+    .slice()
+    .sort((a, b) => (a.bitrate || Number.MAX_SAFE_INTEGER) - (b.bitrate || Number.MAX_SAFE_INTEGER)
+      || a.height - b.height)[0].index;
 }
 
 function capToLowerAutoLevel(hls: Hls): boolean {
@@ -166,6 +181,7 @@ export default function LightweightHlsPlayer({
   onVideoEnded,
   onFatalError,
   onPlaybackStarted,
+  onPlaybackQuality,
   onPlayerIssue,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -190,6 +206,15 @@ export default function LightweightHlsPlayer({
   const wasPlayingBeforeOfflineRef = useRef(false);
   const pseudoFsRef = useRef(false);
   const scrollPositionRef = useRef(0);
+  const sourceOpenedAtRef = useRef(Date.now());
+  const firstPlayingAtRef = useRef(0);
+  const watchedSecondsRef = useRef(0);
+  const lastMetricPlaybackTimeRef = useRef(Math.max(0, initialTime));
+  const stallCountRef = useRef(0);
+  const stallSecondsRef = useRef(0);
+  const stallStartedAtRef = useRef(0);
+  const stableReportedRef = useRef(false);
+  const heartbeatBucketRef = useRef(0);
 
   const [loaded, setLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -210,6 +235,18 @@ export default function LightweightHlsPlayer({
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [pipActive, setPipActive] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
+
+  useEffect(() => {
+    sourceOpenedAtRef.current = Date.now();
+    firstPlayingAtRef.current = 0;
+    watchedSecondsRef.current = 0;
+    lastMetricPlaybackTimeRef.current = Math.max(0, initialTime);
+    stallCountRef.current = 0;
+    stallSecondsRef.current = 0;
+    stallStartedAtRef.current = 0;
+    stableReportedRef.current = false;
+    heartbeatBucketRef.current = 0;
+  }, [src, initialTime]);
 
   /* Keep the media element and HLS instance alive across ordinary tab changes.
      Rebuilding here resets playback to the stale initialTime (often zero). */
@@ -730,6 +767,10 @@ export default function LightweightHlsPlayer({
       clearStallTimer();
       if (!video.paused && !video.ended && !document.hidden && navigator.onLine !== false) {
         const now = Date.now();
+        if (!stallStartedAtRef.current) {
+          stallStartedAtRef.current = now;
+          stallCountRef.current += 1;
+        }
         repeatedStallTimesRef.current = repeatedStallTimesRef.current
           .filter((time) => now - time <= REPEATED_STALL_WINDOW_MS);
         if (getBufferedAhead(video) < 0.75) repeatedStallTimesRef.current.push(now);
@@ -755,6 +796,12 @@ export default function LightweightHlsPlayer({
       stallTimerRef.current = setTimeout(recoverStalledStream, STALL_RECOVERY_DELAY_MS);
     };
     const onPlaying = () => {
+      const now = Date.now();
+      if (!firstPlayingAtRef.current) firstPlayingAtRef.current = now;
+      if (stallStartedAtRef.current) {
+        stallSecondsRef.current += Math.max(0, (now - stallStartedAtRef.current) / 1000);
+        stallStartedAtRef.current = 0;
+      }
       setIsBuffering(false);
       setErrorMsg('');
       streamRecoveryRef.current = 0;
@@ -775,6 +822,31 @@ export default function LightweightHlsPlayer({
       setCurrentTime(video.currentTime);
       setDuration(video.duration || 0);
       onTimeUpdate?.(video.currentTime, video.duration || 0);
+      const metricDelta = video.currentTime - lastMetricPlaybackTimeRef.current;
+      if (metricDelta > 0 && metricDelta <= 3) watchedSecondsRef.current += metricDelta;
+      lastMetricPlaybackTimeRef.current = video.currentTime;
+      const emitPlaybackQuality = (eventType: 'playback_stable' | 'playback_heartbeat') => {
+        if (!onPlaybackQuality || !firstPlayingAtRef.current) return;
+        onPlaybackQuality({
+          event_type: eventType,
+          playback_time: video.currentTime,
+          duration: video.duration || 0,
+          buffered_ahead: getBufferedAhead(video),
+          startup_ms: Math.max(0, firstPlayingAtRef.current - sourceOpenedAtRef.current),
+          watched_seconds: watchedSecondsRef.current,
+          stall_count: stallCountRef.current,
+          stall_seconds: stallSecondsRef.current + (stallStartedAtRef.current ? Math.max(0, (now - stallStartedAtRef.current) / 1000) : 0),
+        });
+      };
+      if (!stableReportedRef.current && watchedSecondsRef.current >= STABLE_PLAYBACK_SECONDS) {
+        stableReportedRef.current = true;
+        emitPlaybackQuality('playback_stable');
+      }
+      const heartbeatBucket = Math.floor(watchedSecondsRef.current / PLAYBACK_HEARTBEAT_SECONDS);
+      if (heartbeatBucket > heartbeatBucketRef.current) {
+        heartbeatBucketRef.current = heartbeatBucket;
+        emitPlaybackQuality('playback_heartbeat');
+      }
       if (getBufferedAhead(video) > 2) {
         setErrorMsg('');
         streamRecoveryRef.current = 0;
@@ -841,7 +913,7 @@ export default function LightweightHlsPlayer({
       stopStallMonitor();
       clearStallTimer();
     };
-  }, [onTimeUpdate, onEnded, onVideoEnded, onFatalError, onPlaybackStarted, onPlayerIssue]);
+  }, [onTimeUpdate, onEnded, onVideoEnded, onFatalError, onPlaybackStarted, onPlaybackQuality, onPlayerIssue]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -966,6 +1038,7 @@ export default function LightweightHlsPlayer({
     el.style.borderRadius = '0';
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
+    document.documentElement.classList.add('kp-player-pseudo-fullscreen');
     // A transformed ancestor establishes a fixed-position containing block.
     // Compensate its offset so the player aligns with the real viewport.
     if (!rotateToLandscape) {
@@ -999,6 +1072,7 @@ export default function LightweightHlsPlayer({
     el.style.borderRadius = '';
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
+    document.documentElement.classList.remove('kp-player-pseudo-fullscreen');
     unlockPlayerOrientation();
     window.scrollTo({ top: scrollPositionRef.current, behavior: 'auto' });
   }, []);
@@ -1061,6 +1135,7 @@ export default function LightweightHlsPlayer({
   useEffect(() => () => {
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
+    document.documentElement.classList.remove('kp-player-pseudo-fullscreen');
     unlockPlayerOrientation();
   }, []);
 

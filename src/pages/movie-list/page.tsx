@@ -9,6 +9,8 @@ import CategorySEOContent from './components/CategorySEOContent';
 import { useLazySection } from '@/hooks/useLazySection';
 import { useMoviesByType } from '@/hooks/useMovies';
 import Pagination from '@/components/base/Pagination';
+import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
+import AdsterraNativeBanner from '@/components/feature/AdsterraNativeBanner';
 import type { Movie } from '../../types/movie';
 import { getImageUrl } from '../../services/movieApi';
 
@@ -255,7 +257,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
   const gridMovies = showFeatured ? movies.slice(5) : movies;
 
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
       <SEO
         title={seoTitle}
         description={seoDesc}
@@ -298,6 +300,8 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
           </div>
         </div>
         </section>
+
+        <AdsterraResponsiveBanner />
 
         {/* ── Filter & Sort Bar ── */}
         <div className="cinema-toolbar-panel mb-7 flex flex-col items-stretch justify-between gap-3 px-3 py-3 sm:flex-row sm:items-center sm:px-4">
@@ -392,6 +396,8 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
         {!loading && (movies.length > 0 || page > 1) && (
           <Pagination currentPage={page} totalPages={totalPages} basePath={basePath} hasNext={hasNextPage} />
         )}
+
+        {!loading && movies.length > 0 && <AdsterraNativeBanner />}
 
         <div className="mt-10 sm:mt-16 pt-8 sm:pt-12 pb-4" ref={seoRef}>
           {seoVisible && <CategorySEOContent categoryKey={seoKey} />}

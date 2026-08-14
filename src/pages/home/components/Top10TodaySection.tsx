@@ -314,12 +314,16 @@ interface Top10TodaySectionProps {
   initialMovies?: MovieItem[];
   loading?: boolean;
   variant?: 'single' | 'series';
+  title?: string;
+  subtitle?: string;
 }
 
 export default function Top10TodaySection({
   initialMovies = [],
   loading: parentLoading = false,
   variant = 'single',
+  title,
+  subtitle,
 }: Top10TodaySectionProps) {
   const [movies, setMovies] = useState<MovieItem[]>(initialMovies.slice(0, 10));
   const [loading, setLoading] = useState(parentLoading && initialMovies.length === 0);
@@ -372,10 +376,10 @@ export default function Top10TodaySection({
 
         <div className="flex flex-col">
           <h3 className="text-lg md:text-2xl lg:text-[1.55rem] font-black text-white leading-tight">
-            {isSeries ? 'Top 10 Phim Bộ Hôm Nay' : 'Top 10 Phim Lẻ Hay Nhức Nách'}
+            {title ?? (isSeries ? 'Top 10 Phim Bộ Hôm Nay' : 'Top 10 Phim Lẻ Hay Nhức Nách')}
           </h3>
           <span className="text-[10px] text-white/30">
-            {isSeries ? 'Những bộ phim đang cuốn người xem quay lại mỗi ngày' : 'Phim xem được, nổi bật và đáng dành thời gian'}
+            {subtitle ?? (isSeries ? 'Những bộ phim đang cuốn người xem quay lại mỗi ngày' : 'Phim xem được, nổi bật và đáng dành thời gian')}
           </span>
         </div>
 

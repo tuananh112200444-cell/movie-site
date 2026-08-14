@@ -512,6 +512,17 @@ serve(async (req) => {
       candidate.episodes,
     );
 
+    // Close the repair loop in the same bounded operation. Provider sync can
+    // refresh a row while keeping the same URL; without a targeted probe that
+    // row used to remain dead until a later global queue happened to reach it.
+    calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'stream-health-check', {
+      slug: movie.slug,
+      queue: 'recovery',
+      limit: 16,
+      concurrency: 3,
+      deactivate_after: 3,
+    }));
+
     await deleteMovieCaches(supabase, [
       movie.slug,
       `detail:${movie.slug}`,

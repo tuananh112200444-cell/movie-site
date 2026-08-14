@@ -22,8 +22,9 @@ const SUPABASE_ANON_KEY = env.VITE_PUBLIC_SUPABASE_ANON_KEY;
 const FULL_AUDIT = process.argv.includes('--full');
 // Keep the deploy gate bounded and deterministic. Full catalog analysis remains
 // available for scheduled operations without making every deployment time out.
-const LIMIT = Math.max(1, Math.min(Number(process.env.SOURCE_BRAIN_LIMIT || (FULL_AUDIT ? 20_000 : 500)), 20_000));
+const LIMIT = Math.max(1, Math.min(Number(process.env.SOURCE_BRAIN_LIMIT || (FULL_AUDIT ? 50_000 : 500)), 50_000));
 const QUERY_CONCURRENCY = Math.max(1, Math.min(Number(process.env.SOURCE_BRAIN_CONCURRENCY || (FULL_AUDIT ? 4 : 2)), 8));
+const QUERY_CHUNK_SIZE = Math.max(5, Math.min(Number(process.env.SOURCE_BRAIN_QUERY_CHUNK || (FULL_AUDIT ? 10 : 100)), 100));
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error('Missing VITE_PUBLIC_SUPABASE_URL or VITE_PUBLIC_SUPABASE_ANON_KEY in .env');
@@ -101,6 +102,92 @@ function sourceKind(row) {
   return 'other';
 }
 
+function normalizeEpisodeKey(row, nested = null) {
+  const candidate = nested || row;
+  const number = Math.max(
+    Number(candidate?.episode_number || 0) || 0,
+    episodeNumberFromText(candidate?.slug),
+    episodeNumberFromText(candidate?.episode_slug),
+    episodeNumberFromText(candidate?.episode_name),
+    episodeNumberFromText(candidate?.name),
+  );
+  if (number > 0) return String(number);
+  return String(
+    candidate?.slug || candidate?.episode_slug || candidate?.episode_name || candidate?.name || 'full',
+  ).trim().toLowerCase().replace(/^tap[-_ ]*0*/i, '') || 'full';
+}
+
+function getUrlHost(url) {
+  try {
+    return new URL(String(url || '')).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function extractSourceEntries(row) {
+  const output = [];
+  const add = (candidate, parent = row) => {
+    const m3u8 = String(candidate?.link_m3u8 || candidate?.stream_url || '').trim();
+    const embed = String(candidate?.link_embed || candidate?.embed_url || '').trim();
+    const url = m3u8 || embed;
+    const host = getUrlHost(url);
+    if (!host) return;
+    output.push({
+      episodeKey: normalizeEpisodeKey(parent, candidate),
+      url,
+      host,
+      hasDirectHls: /\.m3u8(?:[?#].*)?$/i.test(m3u8),
+      streamcIframeOnly: !m3u8 && /(^|\.)streamc\.xyz$/i.test(host),
+      playbackScore: Number(candidate?.playback_score ?? parent?.playback_score ?? -1),
+    });
+  };
+
+  add(row);
+  const nestedRows = Array.isArray(row.server_data)
+    ? row.server_data
+    : row.server_data && typeof row.server_data === 'object'
+      ? [row.server_data]
+      : [];
+  for (const nested of nestedRows) add(nested, row);
+  return output;
+}
+
+function isRuntimeUsableRow(row) {
+  if (row.source_table !== 'streams') return true;
+  const health = String(row.health_status || 'unchecked').toLowerCase();
+  const failures = Number(row.failure_count || 0);
+  const embed = String(row.embed_url || '');
+  const browserManagedException = /player\.phimapi\.com\/player|streamc\.xyz\//i.test(embed);
+  if (health === 'dead' || (health === 'failed' && failures >= 3)) return false;
+  if (health === 'blocked' && !browserManagedException) return false;
+  return true;
+}
+
+async function fetchRecentBadHosts() {
+  const endpoint = new URL(`${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/player-source-health`);
+  endpoint.searchParams.set('hours', '1');
+  endpoint.searchParams.set('limit', '5000');
+  const response = await fetch(endpoint, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      origin: 'https://khophim.org',
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(`player-source-health: HTTP ${response.status}`);
+  const payload = await response.json();
+  if (!payload?.ok || !Array.isArray(payload.bad_hosts)) {
+    throw new Error('player-source-health returned an invalid snapshot');
+  }
+  return {
+    hosts: new Set(payload.bad_hosts.map((item) => getUrlHost(`https://${item.host}`)).filter(Boolean)),
+    scannedEvents: Number(payload.scanned_events || 0),
+    clusterOutages: Array.isArray(payload.cluster_outages) ? payload.cluster_outages : [],
+  };
+}
+
 async function fetchPublishedMovies() {
   const rows = [];
   for (let from = 0; rows.length < LIMIT; from += 1000) {
@@ -119,15 +206,12 @@ async function fetchPublishedMovies() {
 }
 
 async function queryRows(table, select, movieIds, { activeOnly = false } = {}) {
-  const idChunks = chunk(movieIds, 100);
+  const idChunks = chunk(movieIds, QUERY_CHUNK_SIZE);
   const chunkResults = new Array(idChunks.length);
   let cursor = 0;
 
-  async function worker() {
-    while (cursor < idChunks.length) {
-      const index = cursor++;
-      const ids = idChunks[index];
-      const rows = [];
+  async function fetchChunk(ids) {
+    const rows = [];
     for (let from = 0; ; from += 1000) {
       let data;
       let error;
@@ -147,11 +231,26 @@ async function queryRows(table, select, movieIds, { activeOnly = false } = {}) {
         if (!error || !/timeout|canceling statement/i.test(String(error.message || ''))) break;
         if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 350));
       }
-      if (error) throw new Error(`${table}: ${error.message}`);
+      if (error) {
+        if (/timeout|canceling statement/i.test(String(error.message || '')) && ids.length > 1) {
+          const midpoint = Math.ceil(ids.length / 2);
+          const left = await fetchChunk(ids.slice(0, midpoint));
+          const right = await fetchChunk(ids.slice(midpoint));
+          return [...left, ...right];
+        }
+        throw new Error(`${table}: ${error.message}`);
+      }
       rows.push(...(data || []));
       if (!data || data.length < 1000) break;
     }
-      chunkResults[index] = rows;
+    return rows;
+  }
+
+  async function worker() {
+    while (cursor < idChunks.length) {
+      const index = cursor++;
+      const ids = idChunks[index];
+      chunkResults[index] = await fetchChunk(ids);
     }
   }
 
@@ -159,14 +258,17 @@ async function queryRows(table, select, movieIds, { activeOnly = false } = {}) {
   return chunkResults.flat();
 }
 
-const movies = await fetchPublishedMovies();
+const [movies, sourceHealthSnapshot] = await Promise.all([
+  fetchPublishedMovies(),
+  fetchRecentBadHosts(),
+]);
 const movieIds = movies.map((movie) => movie.id).filter(Boolean);
 const [movieEpisodes, episodes, streams] = await Promise.all([
   queryRows('movie_episodes', 'id,movie_id,episode_number,slug,episode_name,server_name,source,link_embed,link_m3u8', movieIds),
   queryRows('episodes', 'id,movie_id,episode_number,episode_slug,episode_name,server_name,link_embed,link_m3u8,server_data', movieIds),
   queryRows(
     'streams',
-    'id,movie_id,episode_slug,server_name,source,stream_url,embed_url,is_active,health_status,failure_count,response_time_ms',
+    'id,movie_id,episode_slug,server_name,source,provider_key,stream_url,embed_url,is_active,health_status,failure_count,response_time_ms,playback_score',
     movieIds,
     { activeOnly: true },
   ),
@@ -174,9 +276,9 @@ const [movieEpisodes, episodes, streams] = await Promise.all([
 
 const rowsByMovie = new Map();
 for (const row of [
-  ...movieEpisodes,
-  ...episodes.map((row) => ({ ...row, source: 'legacy' })),
-  ...streams.filter((row) => row.is_active !== false),
+  ...movieEpisodes.map((row) => ({ ...row, source_table: 'movie_episodes' })),
+  ...episodes.map((row) => ({ ...row, source: 'legacy', source_table: 'episodes' })),
+  ...streams.filter((row) => row.is_active !== false).map((row) => ({ ...row, source_table: 'streams' })),
 ]) {
   if (!row.movie_id) continue;
   const rows = rowsByMovie.get(row.movie_id) || [];
@@ -188,6 +290,10 @@ const needsRepair = [];
 const noBackup = [];
 const unhealthyOnly = [];
 const legacySingleEpisodeRechecks = [];
+const oldVisibilityRisks = [];
+const streamcRankingRisks = [];
+let oldVisibilityHiddenEpisodes = 0;
+let streamcRankingRiskEpisodes = 0;
 const backupCoverage = {
   totalPlayable: 0,
   withVerifiedBackup: 0,
@@ -199,6 +305,44 @@ for (const movie of movies) {
   const advertised = advertisedEpisode(movie);
   const rows = rowsByMovie.get(movie.id) || [];
   const playableRows = rows.filter((row) => playableNumber(row) > 0);
+  const runtimeEntries = rows
+    .filter(isRuntimeUsableRow)
+    .flatMap(extractSourceEntries);
+  const entriesByEpisode = new Map();
+  for (const entry of runtimeEntries) {
+    const list = entriesByEpisode.get(entry.episodeKey) || [];
+    list.push(entry);
+    entriesByEpisode.set(entry.episodeKey, list);
+  }
+  const hasAnyOldFilterSurvivor = runtimeEntries.some((entry) => !sourceHealthSnapshot.hosts.has(entry.host));
+  const hiddenEpisodeKeys = hasAnyOldFilterSurvivor
+    ? [...entriesByEpisode.entries()]
+      .filter(([, entries]) => entries.length > 0 && entries.every((entry) => sourceHealthSnapshot.hosts.has(entry.host)))
+      .map(([episodeKey]) => episodeKey)
+    : [];
+  if (hiddenEpisodeKeys.length > 0) {
+    oldVisibilityHiddenEpisodes += hiddenEpisodeKeys.length;
+    oldVisibilityRisks.push({
+      slug: movie.slug,
+      name: movie.name,
+      hiddenEpisodes: hiddenEpisodeKeys.length,
+      samples: hiddenEpisodeKeys.slice(0, 8),
+    });
+  }
+  const streamcRiskKeys = [...entriesByEpisode.entries()]
+    .filter(([, entries]) =>
+      entries.some((entry) => entry.streamcIframeOnly && entry.playbackScore > 0)
+      && entries.some((entry) => entry.hasDirectHls && !entry.streamcIframeOnly))
+    .map(([episodeKey]) => episodeKey);
+  if (streamcRiskKeys.length > 0) {
+    streamcRankingRiskEpisodes += streamcRiskKeys.length;
+    streamcRankingRisks.push({
+      slug: movie.slug,
+      name: movie.name,
+      riskyEpisodes: streamcRiskKeys.length,
+      samples: streamcRiskKeys.slice(0, 8),
+    });
+  }
   const playableMax = playableRows.reduce((max, row) => Math.max(max, playableNumber(row)), 0);
   const kinds = new Set(playableRows.map(sourceKind));
   const sourceText = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
@@ -255,8 +399,24 @@ if (unhealthyOnly.length > 0) failures.push(`Found ${unhealthyOnly.length} movie
 
 console.log(JSON.stringify({
   auditMode: FULL_AUDIT ? 'full' : 'deploy-gate',
+  catalogComplete: movies.length < LIMIT,
   checkedMovies: movies.length,
   checkedRows: movieEpisodes.length + episodes.length + streams.length,
+  sourceHealthSnapshot: {
+    scannedEvents: sourceHealthSnapshot.scannedEvents,
+    badHosts: [...sourceHealthSnapshot.hosts],
+    clusterOutages: sourceHealthSnapshot.clusterOutages,
+  },
+  oldVisibilityRisk: {
+    affectedMoviesBeforeGlobalFix: oldVisibilityRisks.length,
+    affectedEpisodesBeforeGlobalFix: oldVisibilityHiddenEpisodes,
+    samples: oldVisibilityRisks.slice(0, 20),
+  },
+  streamcProbeScoreRisk: {
+    affectedMoviesBeforeGlobalFix: streamcRankingRisks.length,
+    affectedEpisodesBeforeGlobalFix: streamcRankingRiskEpisodes,
+    samples: streamcRankingRisks.slice(0, 20),
+  },
   backupCoverage,
   needsRepairCount: needsRepair.length,
   noBackupBlvietsubCount: noBackup.length,
