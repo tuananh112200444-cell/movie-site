@@ -8,6 +8,8 @@ import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByCategory, searchMovies } from '@/services/movieApi';
 import type { MovieItem } from '@/types/movie';
 import Pagination from '@/components/base/Pagination';
+import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
+import AdsterraNativeBanner from '@/components/feature/AdsterraNativeBanner';
 
 /* ─── Genre config: màu, icon, hình nền riêng từng thể loại ─── */
 const GENRE_META: Record<string, {
@@ -508,7 +510,7 @@ export default function GenrePage() {
 
   if (!meta) {
     return (
-      <div className="min-h-screen kp-cinema-page text-white">
+      <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
         <SEO title="Thể Loại Không Tồn Tại – KhoPhim" description="Thể loại phim không tồn tại." noIndex />
         <Navbar />
         <div className="flex flex-col items-center justify-center h-screen gap-4">
@@ -593,7 +595,7 @@ export default function GenrePage() {
   const otherGenres = Object.entries(GENRE_META).filter(([s]) => s !== slug);
 
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
       <SEO
         title={seoTitle}
         description={verifiedDescription}
@@ -605,7 +607,7 @@ export default function GenrePage() {
       <Navbar />
 
       {/* ─── Hero Banner ─── */}
-      <div ref={heroRef} className="relative w-full h-[220px] sm:h-[340px] md:h-[420px] overflow-hidden">
+      <div ref={heroRef} className="catalog-visual-hero relative w-full h-[220px] sm:h-[340px] md:h-[420px] overflow-hidden">
         {/* Background image — lazy loaded via IntersectionObserver */}
         <div className="absolute inset-0">
           {showHeroBg ? (
@@ -680,8 +682,10 @@ export default function GenrePage() {
       </div>
 
       <main className="max-w-[1760px] mx-auto px-4 pb-16">
+        <AdsterraResponsiveBanner />
+
         {/* ─── Sort & Filter Bar ─── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 py-4 sm:py-5 border-b border-white/5">
+        <div className="catalog-toolbar flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 py-4 px-3 sm:py-5 border-b border-white/5">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 -mx-1 px-1">
             <span className="text-xs text-white/30 mr-1 flex-shrink-0">Sắp xếp:</span>
             {SORT_OPTIONS.map((opt) => (
@@ -739,6 +743,8 @@ export default function GenrePage() {
             </>
           )}
         </div>
+
+        {!loading && movies.length > 0 && <AdsterraNativeBanner />}
 
         {/* ─── FAQ Section ─── */}
         <div className="mt-10 sm:mt-16 pt-6 sm:pt-10 border-t border-white/5">

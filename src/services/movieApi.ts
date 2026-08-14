@@ -4,6 +4,8 @@ import { mergeMoviesUnique, sortMoviesForSearch } from '../utils/searchRanking';
 import { normalizeSearchText } from '../utils/searchHelper';
 import { setSmartSessionCache } from '../utils/smartCache';
 import { supabase } from '@/lib/supabase';
+import { isRecentlyBadExactSourceHost, isRecentlyBadSourceCluster } from '@/services/playerSourceHealth';
+import { normalizeVerifiedSeasonNumbering } from '../../supabase/functions/_shared/episode-numbering';
 
 declare const __IS_PREVIEW__: boolean;
 
@@ -165,7 +167,7 @@ function validateOphimExactMatch(
    OPTIMIZED: chỉ gọi 2 nguồn nhanh nhất (OPhim + KKPhim)
    ════════════════════════════════════════════ */
 const LIST_SOURCES = [
-  { base: 'https://ophim1.com',  name: 'OPhim',   site: 'ophim', timeout: 5000, listEndpoint: '/v1/api/danh-sach/', newMoviesEndpoint: '/v1/api/danh-sach/phim-moi-cap-nhat', mirror: 'https://ophim.tv' },
+  { base: 'https://ophim1.com',  name: 'OPhim',   site: 'ophim', timeout: 5000, listEndpoint: '/v1/api/danh-sach/', newMoviesEndpoint: '/v1/api/danh-sach/phim-moi-cap-nhat', mirror: null },
   // KKPhim exposes the latest-feed route without the /v1/api prefix. Its
   // category routes still use /v1/api, which are built separately below.
   { base: 'https://phimapi.com', name: 'KKPhim',  site: 'phimapi', timeout: 5000, listEndpoint: '/v1/api/danh-sach/', newMoviesEndpoint: '/danh-sach/phim-moi-cap-nhat', mirror: 'https://phimapi.net' },
@@ -255,7 +257,7 @@ export async function fetchNewMoviesMultiSource(page = 1): Promise<MovieListResp
    OPTIMIZED: chỉ 2 nguồn nhanh nhất để giảm latency
    ════════════════════════════════════════════ */
 const SEARCH_SOURCES = [
-  { base: 'https://ophim1.com',  name: 'OPhim',  site: 'ophim', timeout: 1400, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://ophim.tv' },
+  { base: 'https://ophim1.com',  name: 'OPhim',  site: 'ophim', timeout: 1400, searchEndpoint: '/v1/api/tim-kiem', mirror: null },
   { base: 'https://phimapi.com', name: 'KKPhim', site: 'phimapi', timeout: 1400, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://phimapi.net' },
 ] as const;
 
@@ -1133,7 +1135,6 @@ export async function fetchMoviesByType(
   // OPTIMIZED: chỉ gọi 2 nguồn chính + 1 mirror
   const urls = [
     `https://ophim1.com/v1/api/danh-sach/${type}?${q}`,
-    `https://ophim.tv/v1/api/danh-sach/${type}?${q}`,
     `https://phimapi.com/v1/api/danh-sach/${type}?${q}`,
   ];
 
@@ -1197,7 +1198,6 @@ export async function fetchMoviesByCategory(params: {
   // OPTIMIZED: chỉ 3 nguồn chính
   const urls = [
     `https://ophim1.com/v1/api/danh-sach/${type}?${q}`,
-    `https://ophim.tv/v1/api/danh-sach/${type}?${q}`,
     `https://phimapi.com/v1/api/danh-sach/${type}?${q}`,
   ];
 
@@ -1305,7 +1305,7 @@ function promiseAllSettledWithTimeout<T>(promises: Promise<T>[], timeoutMs: numb
 /* ════════════════════════════════════════════
    MOVIE DETAIL — EDGE FUNCTION PROXY (production CORS bypass)
    ════════════════════════════════════════════ */
-const FALLBACK_SUPABASE_URL = 'https://dzpddbthdeqbkrcjlzap.supabase.co';
+const FALLBACK_SUPABASE_URL = 'https://ceoxbhsdodllziyxmbqr.supabase.co';
 const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
 const SUPABASE_URL = typeof import.meta.env !== 'undefined'
   ? ((import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined) ||
@@ -1417,6 +1417,17 @@ function parseMovieDetailPayload(payload: Record<string, unknown>, fallbackSlug?
     }
   }
 
+  const normalizedProviderDetail = normalizeVerifiedSeasonNumbering(
+    movieRaw,
+    episodesArray as Array<{ server_name?: string; server_data?: Array<Record<string, unknown>> }>,
+  );
+  movieRaw = normalizedProviderDetail.movie;
+  episodesArray.splice(
+    0,
+    episodesArray.length,
+    ...(normalizedProviderDetail.episodes as Record<string, unknown>[]),
+  );
+
   const movie: MovieDetail = {
     _id: String(movieRaw._id ?? movieRaw.id ?? ''),
     name: String(movieRaw.name ?? ''),
@@ -1479,7 +1490,6 @@ function parseMovieDetailPayload(payload: Record<string, unknown>, fallbackSlug?
 async function fetchMovieDetailFromOPhim(slug: string, allowSearchFallback = true): Promise<MovieDetailResponse | null> {
   const urls = [
     `https://ophim1.com/v1/api/phim/${encodeURIComponent(slug)}`,
-    `https://ophim.tv/v1/api/phim/${encodeURIComponent(slug)}`,
   ];
 
   // ── Fetch ALL mirrors IN PARALLEL — winner is first valid response ──
@@ -1547,7 +1557,6 @@ async function fetchMovieDetailFromOPhim(slug: string, allowSearchFallback = tru
 async function searchOphimForSlug(keyword: string): Promise<string | null> {
   const urls = [
     `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=1`,
-    `https://ophim.tv/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=1`,
   ];
   const promises = urls.map(async (url) => {
     try {
@@ -1567,7 +1576,6 @@ async function searchOphimForSlug(keyword: string): Promise<string | null> {
 async function searchOphimCandidates(keyword: string, limit = 8): Promise<Record<string, unknown>[]> {
   const urls = [
     `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=${limit}`,
-    `https://ophim.tv/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=${limit}`,
   ];
   const promises = urls.map(async (url) => {
     try {
@@ -3922,11 +3930,14 @@ interface ServerQualityInfo {
   hasM3u8: boolean;
   hasEmbed: boolean;
 }
-export const STREAM_SERVER_PRIORITY = ['OPHIM', 'KKPHIM', 'KHOPHIM', 'DM', 'SUPABASE', 'SS', 'OK', 'ABYSS', 'VK'] as const;
+export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'SUPABASE', 'OPHIM', 'KKPHIM', 'VSMOV', 'NGUONC', 'DM', 'SS', 'OK', 'ABYSS', 'VK'] as const;
 const SERVER_RECENT_BAD_HOST_PENALTY = 1800;
 const SERVER_RECENT_BAD_HOST_TTL_MS = 30 * 60 * 1000;
+const OPHIM_ACTIVE_OUTAGE_MULTIPLIER = 2.4;
+const KKPHIM_ACTIVE_OUTAGE_MULTIPLIER = 1.35;
 const OPHIM_PREFERRED_SOURCE_BONUS = 380;
 const OPSTREAM_IFRAME_BLOCK_PENALTY = 1050;
+const STREAMC_IFRAME_ONLY_PENALTY = 1800;
 const KKPHIM_PREFERRED_SOURCE_BONUS = 360;
 const RESILIENT_DIRECT_SOURCE_BONUS = 620;
 const TRUSTED_PLATFORM_SOURCE_BONUS = 460;
@@ -3960,6 +3971,7 @@ function normalizeServerPriorityText(value: string): string {
 function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): number {
   const text = normalizeServerPriorityText([
     server.server_name,
+    episode?.source_provider,
     episode?.link_embed,
     episode?.link_m3u8,
   ].filter(Boolean).join(' '));
@@ -3990,6 +4002,8 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('DAILYLY') ||
     tokens.has('DL') ||
     /(^|[./])dai\.ly/i.test(String(episode?.link_embed || ''));
+  const hasVsmovSource = compact.includes('VSMOV') || joinedUrls.includes('streamvsmov');
+  const hasNguoncSource = compact.includes('NGUONC') || joinedUrls.includes('streamc.xyz');
   const isOwnHlsSource = Boolean(episode?.link_m3u8) && (
     compact.includes('KHOPHIM') ||
     compact.includes('VIDEOKHOPHIMORG') ||
@@ -4000,6 +4014,12 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
   }
   if (hasKkPhimSource) {
     return STREAM_SERVER_PRIORITY.indexOf('KKPHIM');
+  }
+  if (hasVsmovSource) {
+    return STREAM_SERVER_PRIORITY.indexOf('VSMOV');
+  }
+  if (hasNguoncSource) {
+    return STREAM_SERVER_PRIORITY.indexOf('NGUONC');
   }
   if (
     tokens.has('KHOPHIM') ||
@@ -4235,8 +4255,6 @@ function getSourceResilienceScore(ep: EpisodeData): number {
 function getRecentBadHostPenalty(ep: EpisodeData): number {
   if (typeof window === 'undefined') return 0;
   try {
-    const raw = window.localStorage.getItem('khophim.bad-source-hosts.v1');
-    const map = raw ? JSON.parse(raw) as Record<string, number> : {};
     // A transient mobile/background failure must only affect the exact host.
     // Penalising an entire provider cluster can make every movie look broken
     // after the browser suspends one stream while the user leaves the page.
@@ -4244,24 +4262,31 @@ function getRecentBadHostPenalty(ep: EpisodeData): number {
       .map((url) => getUrlHost(String(url || '')))
       .filter(Boolean)));
     if (!hosts.length) return 0;
-    const cluster = getEpisodeFailureCluster(ep);
-    const clusterBadAt = Number(map[`cluster:${cluster}`] || 0);
-    if (clusterBadAt > 0 && Date.now() - clusterBadAt < SERVER_RECENT_BAD_HOST_TTL_MS) {
+    if (hosts.some((host) => isRecentlyBadSourceCluster(host))) {
       const sourceKind = getEpisodeSourceKind(ep);
-      const multiplier = sourceKind === 'ophim' || sourceKind === 'kkphim' ? 1.35 : 1;
+      // OPhim remains available as a last resort, but an independently
+      // confirmed multi-shard outage must outweigh its normal primary-source
+      // bonus. KKPhim keeps a smaller outage penalty because current browser
+      // telemetry still shows materially more successful sessions there.
+      const multiplier = sourceKind === 'ophim'
+        ? OPHIM_ACTIVE_OUTAGE_MULTIPLIER
+        : sourceKind === 'kkphim'
+          ? KKPHIM_ACTIVE_OUTAGE_MULTIPLIER
+          : 1;
       return Math.round(SERVER_RECENT_BAD_HOST_PENALTY * multiplier);
     }
-    const badPaths = hosts.filter((host) => {
-      const lastBadAt = Number(map[host] || 0);
-      return lastBadAt > 0 && Date.now() - lastBadAt < SERVER_RECENT_BAD_HOST_TTL_MS;
-    });
+    const badPaths = hosts.filter((host) => isRecentlyBadExactSourceHost(host));
     if (!badPaths.length) return 0;
     // An episode can expose both a provider iframe and direct media. One bad
     // path is a small startup cost; only penalize the entire episode heavily
     // after every available playback path has recent viewer failures.
     if (badPaths.length < hosts.length) return 220;
     const sourceKind = getEpisodeSourceKind(ep);
-    const multiplier = sourceKind === 'ophim' || sourceKind === 'kkphim' ? 1.35 : 1;
+    const multiplier = sourceKind === 'ophim'
+      ? OPHIM_ACTIVE_OUTAGE_MULTIPLIER
+      : sourceKind === 'kkphim'
+        ? KKPHIM_ACTIVE_OUTAGE_MULTIPLIER
+        : 1;
     return Math.round(SERVER_RECENT_BAD_HOST_PENALTY * multiplier);
   } catch {
     return 0;
@@ -4269,6 +4294,10 @@ function getRecentBadHostPenalty(ep: EpisodeData): number {
 }
 
 function getPriorityRankScore(rank: number): number {
+  const code = STREAM_SERVER_PRIORITY[rank];
+  if (code === 'OPHIM' || code === 'KKPHIM' || code === 'VSMOV' || code === 'NGUONC') {
+    return 4 * 95;
+  }
   return rank < STREAM_SERVER_PRIORITY.length
     ? (STREAM_SERVER_PRIORITY.length - rank) * 95
     : 0;
@@ -4291,9 +4320,25 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   const host = getUrlHost(url);
   const lower = url.toLowerCase();
   let score = 0;
+  const hasBrowserManagedStreamcEmbed = /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
 
   if (!url) return -10000;
   if (!m3u8 && embed && isBlvietsubWatchPageUrl(embed)) return -10000;
+  const storedPlaybackScore = Number(ep.source_playback_score);
+  if (Number.isFinite(storedPlaybackScore) && storedPlaybackScore >= 0) {
+    // Supabase already measured this URL. Make that provider-neutral score the
+    // primary ranking signal; live cross-viewer outage evidence remains a
+    // final override so a newly failing cluster can be bypassed immediately.
+    const transportBonus = m3u8 ? 40 : isDirectFileUrl(embed) ? 30 : 10;
+    // A server-side probe can score a StreamC HTML response as fast/healthy
+    // even when its X-Frame-Options blocks playback on khophim.org. Keep the
+    // source selectable as a last resort, but never let that probe-only score
+    // outrank an actual direct HLS path.
+    const browserEmbedPenalty = !m3u8 && hasBrowserManagedStreamcEmbed
+      ? STREAMC_IFRAME_ONLY_PENALTY
+      : 0;
+    return storedPlaybackScore * 3 + transportBonus - browserEmbedPenalty - getRecentBadHostPenalty(ep);
+  }
   score += getSourceResilienceScore(ep);
   const healthStatus = String(ep.source_health_status || '').trim().toLowerCase();
   const failureCount = Number(ep.source_failure_count || 0);
@@ -4304,8 +4349,6 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
     && checkedAt <= Date.now()
     && Date.now() - checkedAt <= FRESH_STREAM_HEALTH_TTL_MS;
   const hasBrowserManagedPhimApiEmbed = /https?:\/\/player\.phimapi\.com\/player\//i.test(embed);
-  const hasBrowserManagedStreamcEmbed = /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
-
   if (healthStatus === 'ok' && healthIsFresh) score += 120;
   else if (healthStatus === 'ok') score -= 120;
   else if (healthStatus === 'unchecked') score += 8;
@@ -4503,7 +4546,13 @@ export function pickBestEpisodeAcrossServers(
 ): { serverIndex: number; episode: EpisodeData } | null {
   if (!episodes.length) return null;
 
-  const allOptions: { serverIndex: number; episode: EpisodeData; score: number; priorityRank: number }[] = [];
+  const allOptions: {
+    serverIndex: number;
+    episode: EpisodeData;
+    score: number;
+    reliabilityScore: number;
+    priorityRank: number;
+  }[] = [];
 
   for (let si = 0; si < episodes.length; si++) {
     const srv = episodes[si];
@@ -4515,13 +4564,14 @@ export function pickBestEpisodeAcrossServers(
       // BỎ QUA episode không có URL phát được
       if (!hasPlayableUrl(ep)) continue;
 
+      const reliabilityScore = getEpisodeReliabilityScore(ep);
       let epScore = srvScore;
       epScore += getEpisodeQualityScore(ep);
-      epScore += getEpisodeReliabilityScore(ep);
+      epScore += reliabilityScore;
       const priorityRank = getServerPriorityRank(srv, ep);
       epScore += getPriorityRankScore(priorityRank);
 
-      allOptions.push({ serverIndex: si, episode: ep, score: epScore, priorityRank });
+      allOptions.push({ serverIndex: si, episode: ep, score: epScore, reliabilityScore, priorityRank });
     }
   }
 
@@ -4529,6 +4579,10 @@ export function pickBestEpisodeAcrossServers(
 
   // Sort by score descending, pick best
   allOptions.sort((a, b) => {
+    // The clicked episode's measured source must win before unrelated
+    // server-wide quality. Live circuit-breaker penalties are already folded
+    // into reliabilityScore, so a newly failing source is still bypassed.
+    if (b.reliabilityScore !== a.reliabilityScore) return b.reliabilityScore - a.reliabilityScore;
     if (b.score !== a.score) return b.score - a.score;
     return a.priorityRank - b.priorityRank;
   });
@@ -4543,6 +4597,7 @@ export function pickBestEpisodeByPriority(
     serverIndex: number;
     episode: EpisodeData;
     priorityRank: number;
+    reliabilityScore: number;
     qualityScore: number;
     sourceKind: EpisodeSourceKind;
     failureCluster: string;
@@ -4561,15 +4616,17 @@ export function pickBestEpisodeByPriority(
         if (!matchesTarget) continue;
       }
       if (!hasPlayableUrl(episode)) continue;
+      const reliabilityScore = getEpisodeReliabilityScore(episode);
       candidates.push({
         serverIndex,
         episode,
         priorityRank: getServerPriorityRank(server, episode),
         sourceKind: getEpisodeSourceKind(episode),
         failureCluster: getEpisodeFailureCluster(episode),
+        reliabilityScore,
         qualityScore:
           getServerQualityScore(server) +
-          getEpisodeReliabilityScore(episode) +
+          reliabilityScore +
           getEpisodeQualityScore(episode),
       });
     }
@@ -4594,6 +4651,7 @@ export function pickBestEpisodeByPriority(
     const aSsplayOnly = hasIndependentSource && a.failureCluster === 'ssplay_abyss';
     const bSsplayOnly = hasIndependentSource && b.failureCluster === 'ssplay_abyss';
     if (aSsplayOnly !== bSsplayOnly) return aSsplayOnly ? 1 : -1;
+    if (b.reliabilityScore !== a.reliabilityScore) return b.reliabilityScore - a.reliabilityScore;
     if (b.qualityScore !== a.qualityScore) return b.qualityScore - a.qualityScore;
     if (Boolean(aDirect) !== Boolean(bDirect)) return bDirect ? 1 : -1;
     return a.priorityRank - b.priorityRank;
@@ -4900,6 +4958,8 @@ function attachStoredStreamHealth(episode: EpisodeData, row: Record<string, unkn
     source_response_time_ms: Number(row.response_time_ms || 0) || undefined,
     source_failure_count: Number(row.failure_count || 0) || undefined,
     source_priority: Number(row.priority || 0) || undefined,
+    source_playback_score: Number(row.playback_score ?? -1) >= 0 ? Number(row.playback_score) : undefined,
+    source_provider: String(row.provider_key || row.source || '') || undefined,
     source_last_checked_at: String(row.last_checked_at || '') || undefined,
     source_last_error: lastError || undefined,
   };
@@ -4948,8 +5008,9 @@ export async function getMergedEpisodes(
       .abortSignal(querySignal),
     supabase
       .from('streams')
-      .select('stream_url, embed_url, episode_slug, server_name, subtitle_url, priority, is_active, health_status, response_time_ms, failure_count, last_checked_at, last_error, audio_type')
+      .select('stream_url, embed_url, episode_slug, server_name, source, provider_key, subtitle_url, priority, playback_score, is_active, health_status, response_time_ms, failure_count, last_checked_at, last_error, audio_type')
       .eq('movie_id', movieId)
+      .order('playback_score', { ascending: false, nullsFirst: false })
       .order('priority', { ascending: false })
       .order('response_time_ms', { ascending: true, nullsFirst: false })
       .abortSignal(querySignal),
@@ -5179,6 +5240,8 @@ export async function getMergedEpisodes(
       source_response_time_ms: Number(sm.response_time_ms || 0) || undefined,
       source_failure_count: failureCount || undefined,
       source_priority: Number(sm.priority || 0) || undefined,
+      source_playback_score: Number(sm.playback_score ?? -1) >= 0 ? Number(sm.playback_score) : undefined,
+      source_provider: String(sm.provider_key || sm.source || '') || undefined,
       source_last_checked_at: String(sm.last_checked_at || '') || undefined,
       source_last_error: lastError || undefined,
       audio_type: (['vietsub', 'thuyetminh', 'longtieng', 'raw'].includes(String(sm.audio_type || ''))

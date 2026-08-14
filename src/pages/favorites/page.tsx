@@ -45,7 +45,7 @@ function ContinueCard({
       {/* Thumbnail + Progress */}
       <Link
         to={`/xem-phim/${encodeURIComponent(entry.slug)}${progressInfo && progressInfo.epSlug !== 'full' ? `/${encodeURIComponent(progressInfo.epSlug)}` : ''}`}
-        className="relative flex-shrink-0 w-[120px] sm:w-[180px] md:w-[220px] aspect-[16/9] rounded-lg overflow-hidden bg-[#1a1d27] block"
+        className="movie-card-contain movie-art-frame movie-art-frame--wide relative flex-shrink-0 w-[120px] sm:w-[180px] md:w-[220px] aspect-[16/9] rounded-lg overflow-hidden bg-[#1a1d27] block"
       >
         <img
           src={getPosterUrl(entry.thumb_url)}
@@ -203,7 +203,7 @@ function FavoriteCard({
     <div className="group relative flex items-center gap-2 sm:gap-4 p-2 sm:p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.05] transition-all duration-200">
       <Link
         to={`/phim/${encodeURIComponent(movie.slug)}`}
-        className="relative flex-shrink-0 w-[80px] sm:w-[120px] aspect-[2/3] rounded-lg overflow-hidden bg-[#1a1d27] block"
+        className="movie-card-contain movie-art-frame movie-art-frame--portrait relative flex-shrink-0 w-[80px] sm:w-[120px] aspect-[2/3] rounded-lg overflow-hidden bg-[#1a1d27] block"
       >
         <img
           src={getPosterUrl(movie.thumb_url)}

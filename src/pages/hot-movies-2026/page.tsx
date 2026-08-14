@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import Navbar from '../../components/feature/Navbar';
 import Footer from '../../components/feature/Footer';
 import SEO from '../../components/base/SEO';
+import AdsterraNativeBanner from '../../components/feature/AdsterraNativeBanner';
+import AdsterraResponsiveBanner from '../../components/feature/AdsterraResponsiveBanner';
 import TrendingSection from '../home/components/TrendingSection';
 import { fetchTrendingMovies } from '../../services/movieApi';
 import { movieDetailUrl } from '../../utils/slugEncoder';
@@ -62,7 +64,7 @@ export default function HotMovies2026Page() {
   ]), [movies]);
 
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
       <SEO
         title="Phim Thịnh Hành 2026, Mới Cập Nhật | KhoPhim"
         description="Khám phá phim thịnh hành 2026 trên KhoPhim. Danh sách tự động cập nhật theo độ phổ biến, thời điểm cập nhật và trạng thái tập mới."
@@ -93,7 +95,11 @@ export default function HotMovies2026Page() {
           </p>
         </header>
 
+        <AdsterraResponsiveBanner />
+
         <TrendingSection movies={movies} loading={loading} />
+
+        {!loading && movies.length > 0 && <AdsterraNativeBanner />}
 
         {!loading && movies.length === 0 && (
           <section className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 text-center">

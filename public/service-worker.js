@@ -18,7 +18,9 @@ async function clearKhophimCaches() {
 }
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  // Do not skipWaiting: activating over an open legacy tab fires that tab's
+  // old controllerchange handler, which reloads a movie mid-playback. The
+  // cleanup worker activates only after the visitor naturally closes/reloads.
   event.waitUntil(clearKhophimCaches());
 });
 
@@ -26,8 +28,6 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       await clearKhophimCaches();
-      await self.clients.claim();
-
       const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       await self.registration.unregister();
 

@@ -12,13 +12,13 @@
     "/logo.svg",
     "/logo.png",
     "/brand/*",
-    "/press/*",
     "/site.webmanifest",
     "/robots.txt",
     "/llms.txt",
     "/home-fallback.json",
     "/release.json",
     "/queer-fallback.json",
-    "/service-worker.js"
+    "/service-worker.js",
+    "/press/*"
   ]
 }

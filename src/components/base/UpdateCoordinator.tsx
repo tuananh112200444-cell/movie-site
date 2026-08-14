@@ -46,21 +46,25 @@ function isEditableElement(element: Element | null): boolean {
 }
 
 function isUpdateUnsafe(pathname: string): boolean {
+  // A watch route is a protected session, even while the media element is
+  // paused, buffering, waiting for autoplay permission or being replaced by
+  // a fallback source. Those short states used to look "safe" and allowed a
+  // release check to reload the document in the middle of a movie.
+  if (/^\/xem-phim(?:\/|$)/.test(pathname)) return true;
+
   const safariDocument = document as SafariDocument;
   if (document.hidden) return true;
   if (document.fullscreenElement || safariDocument.webkitFullscreenElement) return true;
   if (isEditableElement(document.activeElement)) return true;
   if (document.querySelector('[aria-label="Thoát chế độ Cinema"][aria-pressed="true"]')) return true;
 
-  if (/^\/xem-phim\//.test(pathname)) {
-    const videos = Array.from(document.querySelectorAll('video'));
-    if (videos.some((video) => !video.paused && !video.ended)) return true;
-    // Playback state inside third-party embeds is intentionally inaccessible.
-    // Never reload an iframe player without an explicit user action.
-    if (document.querySelector('iframe')) return true;
-  }
-
   return false;
+}
+
+function reportReleaseEvent(eventType: 'release_update_deferred' | 'release_update_applied', message: string): void {
+  void import('@/services/playerDiagnostics')
+    .then(({ reportClientIssue }) => reportClientIssue(eventType, message))
+    .catch(() => {});
 }
 
 function releaseManifestUrl(): string {
@@ -76,6 +80,7 @@ export default function UpdateCoordinator() {
   const checkingRef = useRef(false);
   const lastCheckedAtRef = useRef(0);
   const reloadTimerRef = useRef<number | null>(null);
+  const reportedDeferredReleaseRef = useRef('');
 
   const cancelScheduledReload = useCallback(() => {
     if (reloadTimerRef.current === null) return;
@@ -87,6 +92,10 @@ export default function UpdateCoordinator() {
     if (!releaseId || safeSessionGet(RELOAD_GUARD_KEY) === releaseId) return;
     cancelScheduledReload();
     safeSessionSet(RELOAD_GUARD_KEY, releaseId);
+    reportReleaseEvent(
+      'release_update_applied',
+      `Release update explicitly applied: ${__KP_RELEASE_ID__} -> ${releaseId}; path=${window.location.pathname}`,
+    );
     window.dispatchEvent(new CustomEvent('kp:before-release-reload', {
       detail: { currentRelease: __KP_RELEASE_ID__, targetRelease: releaseId },
     }));
@@ -139,6 +148,14 @@ export default function UpdateCoordinator() {
       setTargetRelease(remoteRelease);
       const unsafe = isUpdateUnsafe(window.location.pathname);
       setBlocked(unsafe);
+      if (unsafe && /^\/xem-phim(?:\/|$)/.test(window.location.pathname)
+        && reportedDeferredReleaseRef.current !== remoteRelease) {
+        reportedDeferredReleaseRef.current = remoteRelease;
+        reportReleaseEvent(
+          'release_update_deferred',
+          `Release update deferred for protected watch session: ${__KP_RELEASE_ID__} -> ${remoteRelease}`,
+        );
+      }
       if (!unsafe && safeSessionGet(RELOAD_GUARD_KEY) !== remoteRelease) {
         scheduleSafeUpdate(remoteRelease);
       }
@@ -204,7 +221,10 @@ export default function UpdateCoordinator() {
     };
   }, [dismissed, scheduleSafeUpdate, targetRelease]);
 
-  if (!targetRelease || dismissed) return null;
+  // The local Vite preview deliberately has a different release id from the
+  // generated manifest. Showing an update prompt there obscures the demo and
+  // can trigger a pointless reload loop, while production behavior is kept.
+  if (import.meta.env.DEV || !targetRelease || dismissed) return null;
 
   return (
     <section
@@ -218,7 +238,7 @@ export default function UpdateCoordinator() {
           <p className="text-sm font-black">KhoPhim có phiên bản mới</p>
           <p className="mt-1 text-xs leading-relaxed text-white/65">
             {blocked
-              ? 'Bạn đang xem phim. Tiến độ sẽ được lưu trước khi cập nhật.'
+              ? 'Phiên bản mới chỉ cập nhật khi bạn rời trang xem hoặc chủ động bấm Cập nhật.'
               : 'Đang chuẩn bị cập nhật giao diện ở thời điểm an toàn.'}
           </p>
         </div>

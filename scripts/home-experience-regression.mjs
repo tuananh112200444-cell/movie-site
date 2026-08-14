@@ -12,6 +12,7 @@ const app = await readFile('src/App.tsx', 'utf8');
 const main = await readFile('src/main.tsx', 'utf8');
 const smartCache = await readFile('src/utils/smartCache.ts', 'utf8');
 const discovery = await readFile('src/pages/home/components/HomeDiscoverySection.tsx', 'utf8');
+const catalogStats = await readFile('src/pages/home/components/CatalogStatsSection.tsx', 'utf8');
 const portalGateway = await readFile('src/pages/home/components/PortalGateway.tsx', 'utf8');
 const movieSection = await readFile('src/pages/home/components/MovieSection.tsx', 'utf8');
 const top10 = await readFile('src/pages/home/components/Top10TodaySection.tsx', 'utf8');
@@ -24,6 +25,20 @@ const navBanner = await readFile('src/components/feature/NavBanner.tsx', 'utf8')
 const headers = await readFile('public/_headers', 'utf8');
 const pagesWorker = await readFile('functions/[[path]].js', 'utf8');
 const failures = [];
+for (const snippet of [
+  '41.950',
+  '38.431',
+  '37.821',
+  'Số liệu hệ thống đã xác minh',
+  'Snapshot ngày {VERIFIED_AT}',
+]) {
+  if (!catalogStats.includes(snippet)) {
+    failures.push(`Homepage catalogue statistics are missing their verified contract: ${snippet}`);
+  }
+}
+if (!home.includes('<CatalogStatsSection />') || home.indexOf('<CatalogStatsSection />') > home.indexOf('fetchKey="onlyflix-moi"')) {
+  failures.push('The verified catalogue statistics must appear before the first movie shelf.');
+}
 if (
   stickyBanner.includes('sessionStorage') ||
   stickyBanner.includes('kp_sticky_banner_dismissed') ||

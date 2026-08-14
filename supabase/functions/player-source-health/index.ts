@@ -134,7 +134,20 @@ function addUnique(list: string[], value: string | null | undefined, limit = 4):
 }
 
 function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
-  const map = new Map<string, HostHealth>();
+  type SessionHealth = {
+    critical: boolean;
+    recovery: boolean;
+    success: boolean;
+    criticalScore: number;
+  };
+  type HostSessions = {
+    host: string;
+    cluster: string;
+    sessions: Map<string, SessionHealth>;
+    server_names: string[];
+    player_modes: string[];
+  };
+  const map = new Map<string, HostSessions>();
 
   for (const event of events) {
     const host = normalizeHost(event.source_host);
@@ -144,28 +157,27 @@ function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
     const current = map.get(host) ?? {
       host,
       cluster,
-      score: 0,
-      critical: 0,
-      recovery: 0,
-      success: 0,
-      failure_rate: 0,
-      total: 0,
+      sessions: new Map<string, SessionHealth>(),
       server_names: [],
       player_modes: [],
     };
-
-    current.total += 1;
+    const minuteBucket = Math.floor(Date.parse(event.created_at) / (5 * 60 * 1000));
+    const playbackIdentity = String(event.playback_session_id || '').trim()
+      || `${event.movie_slug || ''}:${event.episode_slug || ''}:${minuteBucket}`;
+    const session = current.sessions.get(playbackIdentity) ?? {
+      critical: false,
+      recovery: false,
+      success: false,
+      criticalScore: 0,
+    };
     if (SOURCE_CRITICAL_EVENTS.has(eventType)) {
-      current.critical += 1;
-      current.score += eventType === 'stall_fatal' ? 5 : 4;
+      session.critical = true;
+      session.criticalScore = Math.max(session.criticalScore, eventType === 'stall_fatal' ? 5 : 4);
     } else if (SOURCE_RECOVERY_EVENTS.has(eventType)) {
-      current.recovery += 1;
-      // A retry/recovery event is evidence that the player recovered, but it
-      // does not undo a fatal failure emitted by another viewer. Previously a
-      // busy, unstable host could accumulate enough retries to cancel every
-      // critical event and incorrectly look healthy.
-    } else if (SOURCE_SUCCESS_EVENTS.has(eventType)) current.success += 1;
+      session.recovery = true;
+    } else if (SOURCE_SUCCESS_EVENTS.has(eventType)) session.success = true;
 
+    current.sessions.set(playbackIdentity, session);
     addUnique(current.server_names, event.server_name);
     addUnique(current.player_modes, event.player_mode);
     map.set(host, current);
@@ -173,12 +185,34 @@ function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
 
   return [...map.values()]
     .map((item) => {
-      // Bayesian smoothing avoids condemning a busy host for a handful of
-      // failures while still reacting quickly when no successful starts exist.
-      const failureRate = (item.critical + 2) / (item.critical + item.success + 10);
-      return { ...item, failure_rate: Number(failureRate.toFixed(4)) };
+      const sessions = [...item.sessions.values()];
+      const critical = sessions.filter((session) => session.critical).length;
+      // A source that starts and then fatally stalls is a failed session, not
+      // one success plus one failure. Only sessions without a fatal event are
+      // allowed to contribute successful evidence.
+      const success = sessions.filter((session) => session.success && !session.critical).length;
+      const recovery = sessions.filter((session) => session.recovery).length;
+      const score = sessions.reduce((total, session) => total + session.criticalScore, 0);
+      const failureRate = (critical + 2) / (critical + success + 4);
+      return {
+        host: item.host,
+        cluster: item.cluster,
+        score,
+        critical,
+        recovery,
+        success,
+        failure_rate: Number(failureRate.toFixed(4)),
+        total: sessions.length,
+        server_names: item.server_names,
+        player_modes: item.player_modes,
+      };
     })
-    .filter((item) => item.critical >= 3 && item.score >= 9 && item.failure_rate >= 0.18)
+    // bad_hosts is a hard circuit breaker, not a generic degradation list.
+    // Require independent failed sessions and a sustained failure ratio so a
+    // short transient does not remove a working source for every viewer.
+    .filter((item) => item.critical >= 3
+      && item.score >= 12
+      && item.failure_rate >= 0.40)
     .sort((a, b) => b.score - a.score || b.critical - a.critical || a.host.localeCompare(b.host))
     .slice(0, 20);
 }

@@ -2,20 +2,22 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../../components/feature/Navbar';
 import Footer from '../../components/feature/Footer';
-import HeroBanner from './components/HeroBanner';
 import LazyMovieSection from './components/LazyMovieSection';
 import ContinueWatching from './components/ContinueWatching';
+import CatalogStatsSection from './components/CatalogStatsSection';
+import StickyBanner from '../../components/feature/StickyBanner';
+import AdsterraNativeBanner from '../../components/feature/AdsterraNativeBanner';
+import AdsterraResponsiveBanner from '../../components/feature/AdsterraResponsiveBanner';
+import EditorialHero from './components/EditorialHero';
+import EditorialSpotlight from './components/EditorialSpotlight';
+import EditorialMoodGrid from './components/EditorialMoodGrid';
 import TrendingSection from './components/TrendingSection';
-import Year2026Banner from './components/Year2026Banner';
-import HomeDiscoverySection from './components/HomeDiscoverySection';
 import SEO, { SITE_URL } from '../../components/base/SEO';
-import { fetchHomePageData, getOptimizedImageUrl, getPortraitImagePaths } from '../../services/movieApi';
+import { fetchHomePageData, getOptimizedImageUrl } from '../../services/movieApi';
 import { prefetchCriticalRoutes } from '../../utils/prefetchRoute';
 import { injectPreloadLink, preloadBatch } from '../../utils/imagePreloader';
-import { movieDetailUrl } from '../../utils/slugEncoder';
 import { removeSmartSessionCache, setSmartSessionCache } from '../../utils/smartCache';
 import type { MovieItem } from '../../types/movie';
-import { useImageFallback } from '../../hooks/useImageFallback';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 // Lazy load bottom sections
@@ -23,11 +25,11 @@ const FAQSection       = lazy(() => import('./components/FAQSection'));
 const AboutSection     = lazy(() => import('./components/AboutSection'));
 const SiteGuideSection = lazy(() => import('./components/SiteGuideSection'));
 const GenreSEOSection  = lazy(() => import('./components/GenreSEOSection'));
+const QueerUniverseHome = lazy(() => import('./components/QueerUniverseHome'));
 const TopCinemaMoviesSection = lazy(() => import('./components/TopCinemaMoviesSection'));
 const Top10TodaySection = lazy(() => import('./components/Top10TodaySection'));
 const TopRatedSection = lazy(() => import('./components/TopRatedSection'));
 const TrailerMoviesSection = lazy(() => import('./components/TrailerMoviesSection'));
-const QueerUniverseHome = lazy(() => import('./components/QueerUniverseHome'));
 
 function VietnamPoetryBanner() {
   return (
@@ -280,118 +282,30 @@ const MOBILE_CATEGORY_LINKS = [
   { label: 'Âu Mỹ', href: '/phim-au-my', icon: 'ri-global-line' },
 ];
 
-function MobileQuickCategories() {
+function HomeAngularIndex() {
   return (
-    <nav className="-mx-3 mb-3 flex gap-2 overflow-x-auto px-3 pb-1.5 scrollbar-hide sm:hidden" aria-label="Lối tắt thể loại">
-      {MOBILE_CATEGORY_LINKS.map((item) => (
-        <Link
-          key={item.href}
-          to={item.href}
-          className="flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.05] px-3.5 text-xs font-bold text-white/82 active:scale-95 touch-manipulation"
-        >
-          <i className={`${item.icon} text-red-400`} />
-          {item.label}
-        </Link>
-      ))}
+    <nav className="home-angular-index" aria-label="Khám phá nhanh theo nhóm phim">
+      <div className="home-angular-index__label" aria-hidden="true">
+        <span>Khám phá nhanh</span>
+        <strong>CHOOSE YOUR FRAME</strong>
+      </div>
+      <div className="home-angular-index__rail scrollbar-hide">
+        {MOBILE_CATEGORY_LINKS.map((item, index) => (
+          <Link key={item.href} to={item.href} className="home-angular-index__link touch-manipulation">
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            <i className={item.icon} aria-hidden="true" />
+            <strong>{item.label}</strong>
+            <i className="ri-arrow-right-up-line" aria-hidden="true" />
+          </Link>
+        ))}
+      </div>
     </nav>
-  );
-}
-
-function MobileQuickMovies({ movies, loading }: { movies: MovieItem[]; loading: boolean }) {
-  if (loading && movies.length === 0) {
-    return (
-      <section className="mb-5 sm:hidden">
-        <div className="mb-3 flex items-center justify-between px-0.5">
-          <div className="h-5 w-32 rounded skeleton" />
-          <div className="h-4 w-16 rounded skeleton" />
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index}>
-              <div className="aspect-[2/3] rounded-lg skeleton" />
-              <div className="mt-1.5 h-3 w-full rounded skeleton" />
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  }
-
-  if (movies.length === 0) return null;
-
-  return (
-    <section className="mb-5 rounded-[1.15rem] border border-white/[0.08] bg-[radial-gradient(circle_at_0%_0%,rgba(248,113,113,0.10),transparent_15rem),linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.055),0_16px_48px_-38px_rgba(0,0,0,0.9)] sm:hidden" aria-label="Phim đề xuất nhanh">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/15 text-red-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
-            <i className="ri-flashlight-line text-sm" />
-          </span>
-          <h2 className="truncate text-base font-black tracking-tight text-white">Xem ngay hôm nay</h2>
-        </div>
-        <Link to="/search" className="flex min-h-11 shrink-0 items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-3 text-xs font-bold text-white/52 active:text-white touch-manipulation">
-          Tìm thêm
-        </Link>
-      </div>
-      <div className="grid grid-cols-3 gap-x-2.5 gap-y-3">
-        {movies.slice(0, 6).map((movie, index) => {
-          return (
-            <MobileQuickMovieCard key={`${movie.slug || movie._id}-${index}`} movie={movie} index={index} />
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function MobileQuickMovieCard({ movie, index }: { movie: MovieItem; index: number }) {
-  const { primary: posterPath, fallback: posterFallback } = getPortraitImagePaths(movie);
-  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
-    posterPath,
-    posterFallback,
-    false,
-    260,
-    82,
-    { preferredAspect: 'portrait' },
-  );
-
-  return (
-    <Link to={movieDetailUrl(movie.slug)} className="group block min-w-0 active:scale-[0.97]">
-      <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-[#16192a] ring-1 ring-white/[0.07]">
-        {!loaded && !hasError && <div className="absolute inset-0 animate-pulse bg-white/[0.06]" />}
-        {hasError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27]">
-            <i className="ri-image-line text-2xl text-white/20" />
-          </div>
-        )}
-        {!hasError && (
-          <img
-            src={currentSrc}
-            alt={movie.name}
-            loading={index < 3 ? 'eager' : 'lazy'}
-            fetchPriority={index < 3 ? 'high' : 'low'}
-            decoding="async"
-            className={`h-full w-full object-cover object-center transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-            onLoad={onLoad}
-            onError={onError}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-transparent to-black/8" />
-        {movie.episode_current && (
-          <span className="absolute bottom-1.5 left-1.5 max-w-[calc(100%-12px)] truncate rounded bg-red-500/95 px-1.5 py-0.5 text-[9px] font-bold text-white">
-            {movie.episode_current}
-          </span>
-        )}
-      </div>
-      <h3 className="mt-1.5 line-clamp-2 min-h-[32px] text-[11px] font-bold leading-4 text-white/92">
-        {movie.name}
-      </h3>
-    </Link>
   );
 }
 
 const ALL_SECTIONS = ['trending', 'top10-series', 'top10-single', 'onlyflix-moi', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
 const DESKTOP_HOME_SECTIONS = ALL_SECTIONS;
-const MOBILE_HOME_SECTIONS = ['trending', 'top10-series', 'top10-single', 'onlyflix-moi', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh'];
+const MOBILE_HOME_SECTIONS = ALL_SECTIONS;
 const HOME_CACHE_KEY = 'kp_home_proxy_v6_short';
 const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
@@ -399,10 +313,34 @@ const HOME_FALLBACK_URL = '/home-fallback.json';
 const HOME_CACHE_TTL = 15 * 60 * 1000;
 const HOME_REFRESH_ON_RETURN_MS = 60 * 1000;
 const MAX_STATIC_HOME_FALLBACK_AGE_MS = 6 * 60 * 60 * 1000;
-const EMPTY_MOVIES: MovieItem[] = [];
 
 function normalizeHomeSections(sections?: Record<string, MovieItem[]>): Record<string, MovieItem[]> {
   return sections ? { ...sections } : {};
+}
+
+type EditorialSectionTone = 'cinema' | 'hot' | 'premiere' | 'ranking' | 'rated' | 'trailer' | 'anime' | 'series' | 'single' | 'western' | 'china' | 'korea' | 'thai' | 'mood';
+
+function EditorialSectionFrame({
+  number,
+  code,
+  tone,
+  children,
+}: {
+  number: string;
+  code: string;
+  tone: EditorialSectionTone;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`editorial-section-frame tone-${tone}`} data-editorial-section={number}>
+      <div className="editorial-section-chrome" aria-hidden="true">
+        <strong>{number}</strong>
+        <span>{code}</span>
+        <i />
+      </div>
+      <div className="editorial-section-content">{children}</div>
+    </div>
+  );
 }
 
 function mergeHomeSections(
@@ -616,8 +554,9 @@ export default function Home() {
     if (priorityMovies.length === 0) return;
 
     const isMobileHero = window.innerWidth < 640;
-    const heroWidth = isMobileHero ? 420 : window.innerWidth < 1280 ? 1080 : 1360;
-    const heroQuality = isMobileHero ? 78 : 82;
+    const isTabletHero = window.innerWidth < 1024;
+    const heroWidth = isMobileHero ? 560 : isTabletHero ? 960 : 1280;
+    const heroQuality = isMobileHero ? 78 : isTabletHero ? 80 : 82;
     const heroUrls = priorityMovies
       .slice(0, 1)
       .map((movie) => getOptimizedImageUrl(movie.poster_url || movie.thumb_url, heroWidth, heroQuality))
@@ -632,6 +571,21 @@ export default function Home() {
     });
   }, [activePortal, homeData.trending]);
   const trendingMovies = homeData.trending ?? [];
+  const top10TodayMovies = useMemo(() => {
+    const seen = new Set<string>();
+    return [
+      ...(homeData['top10-single'] ?? []),
+      ...(homeData['top10-series'] ?? []),
+      ...trendingMovies,
+    ]
+      .filter((movie) => {
+        const key = movie.slug || movie._id || movie.name;
+        if (!key || seen.has(key) || (movie.episode_current ?? '').toLowerCase().trim() === 'trailer') return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 10);
+  }, [homeData, trendingMovies]);
   const topRatedMovies = useMemo(() => {
     const seen = new Set<string>();
     return [
@@ -642,36 +596,14 @@ export default function Home() {
       ...(homeData['au-my'] ?? []),
     ]
       .filter((movie) => {
-        const slug = movie.slug || movie._id || movie.name;
-        if (!slug || seen.has(slug)) return false;
-        seen.add(slug);
-        return (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer';
+        const key = movie.slug || movie._id || movie.name;
+        if (!key || seen.has(key) || (movie.episode_current ?? '').toLowerCase().trim() === 'trailer') return false;
+        seen.add(key);
+        return true;
       })
-      .sort((a, b) => {
-        const yearDiff = Number(b.year || 0) - Number(a.year || 0);
-        if (yearDiff !== 0) return yearDiff;
-        return String(a.name || '').localeCompare(String(b.name || ''));
-      })
+      .sort((a, b) => Number(b.year || 0) - Number(a.year || 0))
       .slice(0, 10);
   }, [homeData]);
-  const mobileQuickMovies = useMemo(() => {
-    const seen = new Set<string>();
-    return [
-      ...trendingMovies,
-      ...(homeData['phim-chieu-rap'] ?? []),
-      ...topRatedMovies,
-      ...(homeData['phim-bo'] ?? []),
-      ...(homeData['phim-le'] ?? []),
-    ]
-      .filter((movie) => {
-        const key = movie.slug || movie._id || movie.name;
-        const episode = (movie.episode_current ?? '').toLowerCase().trim();
-        if (!key || seen.has(key) || episode === 'trailer') return false;
-        seen.add(key);
-        return Boolean(movie.poster_url || movie.thumb_url);
-      })
-      .slice(0, 8);
-  }, [homeData, topRatedMovies, trendingMovies]);
   const bannerLoading = homeLoading && heroMovies.length === 0;
   if (activePortal === 'queer') {
     return (
@@ -693,7 +625,7 @@ export default function Home() {
     );
   }
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="home-editorial-v4 min-h-screen kp-cinema-page text-white">
       <h1 className="sr-only">KhoPhim – Tìm phim theo tên, thể loại và quốc gia</h1>
       <SEO
         title="KhoPhim – Tìm phim theo tên, thể loại và quốc gia"
@@ -703,121 +635,158 @@ export default function Home() {
         schema={homeSchema}
       />
       <Navbar />
-      
-      <div className="relative z-0">
-        <HeroBanner movies={heroMovies} loading={bannerLoading} />
+
+      <div className="home-top-banner" aria-label="Banner trên đầu trang">
+        <StickyBanner />
       </div>
 
-      <main className="home-desktop-shell pt-2 md:pt-7">
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-400/10 bg-emerald-400/[0.035] px-3 py-2 text-[11px] text-white/55 sm:mb-4 sm:px-4 sm:text-xs">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-            </span>
-            <span className="truncate">Kho phim được đồng bộ và kiểm tra nguồn phát tự động</span>
-          </span>
-          <Link to="/phim-moi-nhat" className="shrink-0 font-bold text-emerald-300 transition-colors hover:text-emerald-200">
-            Phim mới <i className="ri-arrow-right-line" aria-hidden="true" />
-          </Link>
-        </div>
-        <LazyMovieSection
-          fetchType="type" fetchKey="onlyflix-moi" limit={compactMobile ? 9 : 18}
-          title="Phim Đang Chiếu Rạp" viewAllLink="/phim-chieu-rap"
-          cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
-          movies={homeData['onlyflix-moi'] ?? []}
-          loading={homeLoading}
-        />
-        <HomeDiscoverySection onSelect={setActivePortal} />
-        <MobileQuickCategories />
-        <VietnamPoetryBanner />
-        <MobileQuickMovies movies={mobileQuickMovies} loading={homeLoading} />
-        <ContinueWatching />
-        <TrendingSection movies={trendingMovies} loading={bannerLoading} />
-        <LazyMovieSection
-          fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 18}
-          title="Phim Điện Ảnh Mới Coóng" viewAllLink="/phim-le"
-          cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
-          movies={homeData['phim-le'] ?? []}
-          loading={homeLoading}
-        />
-        <DeferredHomeSection minHeight={compactMobile ? 210 : 240}>
-          <Suspense fallback={<div className="h-[210px] sm:h-[240px] skeleton" />}>
-            <Top10TodaySection
-              variant="series"
-              initialMovies={homeData['top10-series']?.length ? homeData['top10-series'] : (homeData['phim-bo'] ?? EMPTY_MOVIES)}
-              loading={homeLoading}
-            />
-          </Suspense>
-        </DeferredHomeSection>
-        <DeferredHomeSection minHeight={compactMobile ? 210 : 260}>
-          <Suspense fallback={<div className="h-[210px] sm:h-[260px] skeleton" />}>
-            <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? EMPTY_MOVIES} loading={homeLoading} />
-          </Suspense>
-        </DeferredHomeSection>
-        <DeferredHomeSection minHeight={compactMobile ? 210 : 240}>
-          <Suspense fallback={<div className="h-[210px] sm:h-[240px] skeleton" />}>
-            <Top10TodaySection
-              initialMovies={homeData['top10-single']?.length ? homeData['top10-single'] : trendingMovies}
-              loading={homeLoading}
-            />
-          </Suspense>
-        </DeferredHomeSection>
-        <DeferredHomeSection minHeight={compactMobile ? 210 : 220}>
-          <Suspense fallback={<div className="h-[210px] sm:h-[220px] skeleton" />}>
-            <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} />
-          </Suspense>
-        </DeferredHomeSection>
-        <Year2026Banner />
-        <DeferredHomeSection minHeight={180}>
-          <Suspense fallback={<div className="h-[180px] skeleton" />}>
-            <TrailerMoviesSection />
-          </Suspense>
-        </DeferredHomeSection>
+      <div className="editorial-hero-shell">
+        <EditorialHero movies={heroMovies} loading={bannerLoading} />
+      </div>
 
-        {/* Category shelves sit below the discovery/ranking sections for a cleaner viewing flow. */}
-        <LazyMovieSection
-          fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 18}
-          title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
-          cols={6} rootMargin="120px" sectionIndex={1} theme="trending"
-          movies={homeData['phim-bo'] ?? []}
-          loading={homeLoading}
-        />
-        <LazyMovieSection
-          fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 9 : 18}
-          title="Kho Tàng Anime Mới Nhất" viewAllLink="/hoat-hinh"
-          cols={6} rootMargin="120px" sectionIndex={2} theme="anime"
-          movies={homeData['hoat-hinh'] ?? []}
-          loading={homeLoading}
-        />
-        <LazyMovieSection
-          fetchType="country" fetchKey="han-quoc" limit={compactMobile ? 9 : 18}
-          title="Phim Hàn Quốc" viewAllLink="/phim-han-quoc"
-          cols={6} rootMargin="120px" sectionIndex={3} theme="kdrama"
-          movies={homeData['han-quoc'] ?? []}
-          loading={homeLoading}
-        />
-        <LazyMovieSection
-          fetchType="country" fetchKey="au-my" limit={compactMobile ? 9 : 18}
-          title="Phim Âu Mỹ" viewAllLink="/phim-au-my"
-          cols={6} rootMargin="120px" sectionIndex={4} theme="hollywood"
-          movies={homeData['au-my'] ?? []}
-          loading={homeLoading}
-        />
-        <LazyMovieSection
-          fetchType="country" fetchKey="trung-quoc" limit={compactMobile ? 9 : 18}
-          title="Phim Trung Quốc" viewAllLink="/phim-trung-quoc"
-          cols={6} rootMargin="120px" sectionIndex={5} theme="oriental"
-          movies={homeData['trung-quoc'] ?? []}
-          loading={homeLoading}
-        />
-        <LazyMovieSection
-          fetchType="country" fetchKey="thai-lan" limit={compactMobile ? 9 : 18}
-          title="Phim Thái Lan" viewAllLink="/phim-thai-lan"
-          cols={6} rootMargin="120px" sectionIndex={6} theme="tropical"
-          movies={homeData['thai-lan'] ?? []}
-          loading={homeLoading}
-        />
+      <main className="editorial-home-shell">
+        <HomeAngularIndex />
+        <ContinueWatching />
+        <AdsterraNativeBanner />
+
+        <EditorialSectionFrame number="01" code="NOW SCREENING" tone="cinema">
+          <LazyMovieSection
+            fetchType="type" fetchKey="phim-chieu-rap" limit={compactMobile ? 9 : 18}
+            title="Phim Đang Chiếu Rạp" viewAllLink="/phim-chieu-rap"
+            cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
+            movies={homeData['phim-chieu-rap'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="02" code="LIVE PULSE" tone="hot">
+          <TrendingSection movies={trendingMovies} loading={bannerLoading} />
+        </EditorialSectionFrame>
+
+        <AdsterraResponsiveBanner />
+
+        <EditorialSectionFrame number="03" code="NEW PREMIERE" tone="premiere">
+          <EditorialSpotlight
+            movies={homeData['onlyflix-moi'] ?? []}
+            loading={homeLoading}
+            title="Phim Điện Ảnh Mới Coóng"
+            eyebrow="Vừa lên kệ tại KhoPhim"
+            description="Những bộ phim mới đáng để bạn dành trọn một buổi tối."
+            viewAllLink="/phim-le"
+          />
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="04" code="DAILY CHART" tone="ranking">
+          <DeferredHomeSection minHeight={compactMobile ? 220 : 300}>
+            <Suspense fallback={<div className="h-[220px] sm:h-[300px] skeleton" />}>
+              <Top10TodaySection
+                initialMovies={top10TodayMovies}
+                loading={homeLoading}
+                title="Top 10 Phim Hôm Nay"
+                subtitle="Những bộ phim được quan tâm nhiều nhất trong ngày"
+              />
+            </Suspense>
+          </DeferredHomeSection>
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="05" code="BIG SCREEN" tone="cinema">
+          <DeferredHomeSection minHeight={compactMobile ? 230 : 310}>
+            <Suspense fallback={<div className="h-[230px] sm:h-[310px] skeleton" />}>
+              <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? []} loading={homeLoading} />
+            </Suspense>
+          </DeferredHomeSection>
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="06" code="CRITICS' CHOICE" tone="rated">
+          <DeferredHomeSection minHeight={compactMobile ? 220 : 300}>
+            <Suspense fallback={<div className="h-[220px] sm:h-[300px] skeleton" />}>
+              <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} />
+            </Suspense>
+          </DeferredHomeSection>
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="07" code="COMING SOON" tone="trailer">
+          <DeferredHomeSection minHeight={190}>
+            <Suspense fallback={<div className="h-[190px] skeleton" />}>
+              <TrailerMoviesSection />
+            </Suspense>
+          </DeferredHomeSection>
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="08" code="ANIME ARCHIVE" tone="anime">
+          <LazyMovieSection
+            fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 9 : 18}
+            title="Kho Tàng Anime Mới Nhất" viewAllLink="/hoat-hinh"
+            cols={6} rootMargin="160px" sectionIndex={7} theme="anime"
+            movies={homeData['hoat-hinh'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="09" code="SERIES INDEX" tone="series">
+          <LazyMovieSection
+            fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 15}
+            title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
+            cols={5} rootMargin="160px" sectionIndex={8} theme="trending"
+            movies={homeData['phim-bo'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+        <EditorialSectionFrame number="10" code="FEATURE FILMS" tone="single">
+          <LazyMovieSection
+            fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 15}
+            title="Phim Lẻ Đang Hot" viewAllLink="/phim-le"
+            cols={5} rootMargin="160px" sectionIndex={9} theme="cinematic"
+            movies={homeData['phim-le'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="11" code="WESTERN FRAME" tone="western">
+          <LazyMovieSection
+            fetchType="country" fetchKey="au-my" limit={compactMobile ? 9 : 18}
+            title="Phim Âu Mỹ" viewAllLink="/phim-au-my"
+            cols={6} rootMargin="160px" sectionIndex={10} theme="hollywood"
+            movies={homeData['au-my'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+        <EditorialSectionFrame number="12" code="ORIENTAL FRAME" tone="china">
+          <LazyMovieSection
+            fetchType="country" fetchKey="trung-quoc" limit={compactMobile ? 9 : 18}
+            title="Phim Trung Quốc" viewAllLink="/phim-trung-quoc"
+            cols={6} rootMargin="160px" sectionIndex={11} theme="oriental"
+            movies={homeData['trung-quoc'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+        <EditorialSectionFrame number="13" code="K-DRAMA FRAME" tone="korea">
+          <LazyMovieSection
+            fetchType="country" fetchKey="han-quoc" limit={compactMobile ? 9 : 18}
+            title="Phim Hàn Quốc" viewAllLink="/phim-han-quoc"
+            cols={6} rootMargin="160px" sectionIndex={12} theme="kdrama"
+            movies={homeData['han-quoc'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+        <EditorialSectionFrame number="14" code="THAI FRAME" tone="thai">
+          <LazyMovieSection
+            fetchType="country" fetchKey="thai-lan" limit={compactMobile ? 9 : 18}
+            title="Phim Thái Lan" viewAllLink="/phim-thai-lan"
+            cols={6} rootMargin="160px" sectionIndex={13} theme="tropical"
+            movies={homeData['thai-lan'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="15" code="MOOD INDEX" tone="mood">
+          <EditorialMoodGrid onOpenQueer={() => setActivePortal('queer')} />
+        </EditorialSectionFrame>
+
+        <div className="cinematic-bottom-info">
+          <VietnamPoetryBanner />
+          <CatalogStatsSection />
+        </div>
 
         {/* Bottom sections — lazy render khi gần cuối trang */}
         <div ref={bottomRef}>

@@ -34,6 +34,17 @@ for (const path of walk(migrationRoot)) {
   if (/secret=YOUR_CRON_SECRET/.test(source)) findings.push(`${path}: cron secret placeholder in URL`);
 }
 
+const playbackCloseout = readFileSync(
+  join(migrationRoot, '20260810132000_close_publication_playback_and_security_gaps.sql'),
+  'utf8',
+);
+if (
+  !playbackCloseout.includes('revoke all on function public.pick_unchecked_stream_health_candidates(uuid[], integer)')
+  || !playbackCloseout.includes('to service_role;')
+) {
+  findings.push('raw stream health RPC remains executable outside service_role');
+}
+
 if (findings.length) {
   console.error(`Supabase security audit failed (${findings.length}):\n- ${findings.join('\n- ')}`);
   process.exit(1);

@@ -182,6 +182,32 @@ test('release coordinator never interrupts an iframe player automatically', asyn
   await expect(page).toHaveURL(/\/xem-phim\/e2e-player\/tap-1/);
 });
 
+test('release coordinator never interrupts a paused or buffering direct player', async ({ page }) => {
+  let documentLoads = 0;
+  page.on('request', request => {
+    if (request.resourceType() === 'document') documentLoads += 1;
+  });
+  await page.route('**/release.json*', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ release_id: 'e2e-direct-player-release', generated_at: new Date().toISOString() }),
+  }));
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'Direct', server_data: [{ name: 'Tap 1', slug: 'tap-1', link_embed: 'https://media.example.test/buffering.mp4' }] },
+  ]));
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+  await expect.poll(async () => page.locator('video').count(), { timeout: 20_000 }).toBeGreaterThan(0);
+  const loadsBeforeUpdateCheck = documentLoads;
+
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('kp:page-resumed')));
+  await expect(page.getByTestId('release-update-notice')).toBeVisible();
+  await page.waitForTimeout(2200);
+
+  expect(documentLoads).toBe(loadsBeforeUpdateCheck);
+  expect(await page.evaluate(() => sessionStorage.getItem('kp_release_reload_target_v1'))).toBeNull();
+  await expect(page).toHaveURL(/\/xem-phim\/e2e-player\/tap-1/);
+});
+
 test('player: nguồn trang bị chặn tự chuyển sang nguồn phát được', async ({ page }) => {
   await mockMovieDetail(page, e2eMovie([
     { server_name: 'BLVietsub lỗi', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://blvietsub.com/xem-phim/e2e/tap-1' }] },

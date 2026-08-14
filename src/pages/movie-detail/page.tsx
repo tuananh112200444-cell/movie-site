@@ -8,6 +8,8 @@ import { persistWatchHistoryProgress, useWatchHistory } from '@/hooks/useWatchHi
 import { useResumeWatch } from '@/hooks/useResumeWatch';
 import { useFavorites } from '@/hooks/useFavorites';
 import MovieDetailHero from './components/MovieDetailHero';
+import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
+import AdsterraRectangleBanner from '@/components/feature/AdsterraRectangleBanner';
 import SEO from '@/components/base/SEO';
 import type { MovieDetailResponse, EpisodeData, EpisodeServer, MovieItem } from '@/types/movie';
 import {
@@ -112,6 +114,28 @@ function getHighestEpisodeFromServers(episodes: EpisodeServer[]): number {
     }, 0);
     return Math.max(highest, serverHighest);
   }, 0);
+}
+
+function isPreviewOnlyDetail(detail: MovieDetailResponse): boolean {
+  const movie = detail.movie as MovieDetailResponse['movie'] & {
+    status?: string;
+    seo_catalog_status?: string;
+    current_episode?: number | string;
+    trailer_url?: string;
+  };
+  const status = String(movie.status || '').trim().toLowerCase();
+  const seoStatus = String(movie.seo_catalog_status || '').trim().toLowerCase();
+  const episodeCurrent = String(movie.episode_current || '').trim().toLowerCase();
+  if (
+    ['upcoming', 'trailer'].includes(status) ||
+    ['upcoming', 'trailer'].includes(seoStatus) ||
+    /(trailer|sắp chiếu|sap chieu)/i.test(episodeCurrent)
+  ) return true;
+
+  return Boolean(String(movie.trailer_url || '').trim()) &&
+    Number(movie.current_episode || 0) <= 0 &&
+    !/\d/.test(episodeCurrent) &&
+    !['completed', 'ongoing', 'released'].includes(status);
 }
 
 function getAdvertisedCurrentEpisode(detail: MovieDetailResponse): number {
@@ -304,6 +328,8 @@ export default function MovieDetailPage() {
     const isFresh = searchParams.has('fresh');
     const source = searchParams.get('source') || undefined;
     let cancelled = false;
+    let autoRecoverySucceeded = false;
+    const recoveryTimers: number[] = [];
     if (isFresh) {
       setSearchParams({}, { replace: true });
     }
@@ -342,6 +368,37 @@ export default function MovieDetailPage() {
           setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
         } else {
           setActiveServer(-1);
+
+          // Opening a released title with zero sources starts a bounded repair
+          // in the detail proxy. Give that background health/provider repair
+          // two chances to finish, then update the player without requiring
+          // the viewer to reload. Preview-only pages never enter this loop.
+          if (!isPreviewOnlyDetail(data)) {
+            for (const delay of [4000, 12000]) {
+              recoveryTimers.push(window.setTimeout(() => {
+                if (
+                  cancelled ||
+                  autoRecoverySucceeded ||
+                  navigator.onLine === false ||
+                  document.visibilityState !== 'visible'
+                ) return;
+                void fetchMovieDetail(slug, true, source)
+                  .then((recovered) => {
+                    if (cancelled || autoRecoverySucceeded || !recovered) return;
+                    const recoveredServers = deduplicateAndLimitServers(recovered.episodes ?? []);
+                    if (recoveredServers.length === 0) return;
+                    autoRecoverySucceeded = true;
+                    setDetail(recovered);
+                    const bestIdx = pickBestServerIndex(recoveredServers);
+                    const originalIdx = (recovered.episodes ?? []).findIndex(
+                      (server) => server === recoveredServers[bestIdx],
+                    );
+                    setActiveServer(originalIdx >= 0 ? originalIdx : bestIdx);
+                  })
+                  .catch(() => {});
+              }, delay));
+            }
+          }
         }
 
         if (!isFresh && shouldRefreshEpisodeDetail(data)) {
@@ -375,6 +432,7 @@ export default function MovieDetailPage() {
 
     return () => {
       cancelled = true;
+      recoveryTimers.forEach((timer) => window.clearTimeout(timer));
     };
   }, [slug]);
 
@@ -409,10 +467,13 @@ export default function MovieDetailPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [cinemaMode]);
 
-  const filteredEpisodes = useMemo(
-    () => deduplicateAndLimitServers(detail?.episodes ?? []),
-    [detail?.episodes, sourceHealthVersion]
-  );
+  const filteredEpisodes = useMemo(() => {
+    // Keep the complete playable catalogue visible. Cross-viewer health is a
+    // ranking/failover signal, not permission to erase a requested episode.
+    // Otherwise a few bad hosts from one provider can leave a series showing
+    // only unrelated episode numbers from another provider.
+    return deduplicateAndLimitServers(detail?.episodes ?? []);
+  }, [detail?.episodes]);
 
   const displayMovie = useMemo(() => {
     if (!detail?.movie) return null;
@@ -818,7 +879,7 @@ export default function MovieDetailPage() {
 
   /* ── Loading ── */
   if (loading) return (
-    <div className="min-h-screen kp-cinema-page text-white" data-player-fix="blvietsub-embed-autoplay-20260704">
+    <div className="angular-detail-page min-h-screen kp-cinema-page text-white" data-player-fix="blvietsub-embed-autoplay-20260704">
       <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
       <Navbar />
       <main className="max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">
@@ -842,7 +903,7 @@ export default function MovieDetailPage() {
   );
 
   if (error || !detail || !displayMovie) return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="angular-detail-page min-h-screen kp-cinema-page text-white">
       <SEO title="Không tìm thấy phim – KhoPhim" description="Phim không tồn tại hoặc đã bị xóa." noIndex={true} />
       <Navbar />
       <main className="flex flex-col items-center justify-center min-h-[70vh] gap-4 px-4">
@@ -867,7 +928,7 @@ export default function MovieDetailPage() {
   const favored = isFav(movie._id);
 
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className={`angular-detail-page ${isWatchPage ? 'is-watch-mode' : 'is-info-mode'} min-h-screen kp-cinema-page text-white`}>
       <Navbar />
 
       <main id="main-content">
@@ -886,25 +947,30 @@ export default function MovieDetailPage() {
 
       {/* Hero section */}
       {!isWatchPage && (
-        <MovieDetailHero
-          movie={movie}
-          slug={slug ?? ''}
-          favored={favored}
-          isTrailerOnly={isTrailerOnly}
-          hasEpisodes={hasEpisodes}
-          onFavToggle={handleFavToggle}
-          onWatchNow={() => {
-            if (!hasEpisodes && !isTrailerOnly) {
-              showToast('Phim đang cập nhật, chưa có tập phim', 'info');
-              return;
-            }
-            const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
-            const best = pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
-            const selected = best?.episode;
-            const episodePath = selected ? `/${encodeURIComponent(selected.slug || selected.name || 'tap-1')}` : '';
-            navigate(`/xem-phim/${slug ?? ''}${episodePath}`);
-          }}
-        />
+        <>
+          <MovieDetailHero
+            movie={movie}
+            slug={slug ?? ''}
+            favored={favored}
+            isTrailerOnly={isTrailerOnly}
+            hasEpisodes={hasEpisodes}
+            onFavToggle={handleFavToggle}
+            onWatchNow={() => {
+              if (!hasEpisodes && !isTrailerOnly) {
+                showToast('Phim đang cập nhật, chưa có tập phim', 'info');
+                return;
+              }
+              const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
+              const best = pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
+              const selected = best?.episode;
+              const episodePath = selected ? `/${encodeURIComponent(selected.slug || selected.name || 'tap-1')}` : '';
+              navigate(`/xem-phim/${slug ?? ''}${episodePath}`);
+            }}
+          />
+          <div className="cinema-page-container">
+            <AdsterraResponsiveBanner />
+          </div>
+        </>
       )}
 
       {!isWatchPage && detailEpisodeLinks.length > 0 && (
@@ -981,6 +1047,12 @@ export default function MovieDetailPage() {
         setCinemaMode={setCinemaMode}
       /></Suspense>}
 
+      {isWatchPage && (
+        <div className="cinema-page-container">
+          <AdsterraResponsiveBanner deferMs={8_000} />
+        </div>
+      )}
+
       {/* Bottom sections — deferred + lazy loaded */}
       {!isWatchPage && <div className="max-w-[1760px] mx-auto px-3 sm:px-4 pb-12">
         {showBottom ? (
@@ -1001,6 +1073,8 @@ export default function MovieDetailPage() {
                 </div>
               </div>
             )}
+
+            <AdsterraRectangleBanner />
 
             <Suspense fallback={<div className="h-40 skeleton rounded-xl" />}>
               <UserComments slug={slug ?? ''} movieName={movie.name} />

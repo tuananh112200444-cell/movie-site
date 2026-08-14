@@ -24,7 +24,23 @@ interface StreamRow {
   last_checked_at: string | null;
   last_error: string | null;
   response_time_ms: number | null;
-  movies?: { slug?: string } | Array<{ slug?: string }> | null;
+  movies?: {
+    slug?: string;
+    is_published?: boolean;
+    status?: string | null;
+    seo_catalog_status?: string | null;
+    episode_current?: string | null;
+    current_episode?: number | null;
+    trailer_url?: string | null;
+  } | Array<{
+    slug?: string;
+    is_published?: boolean;
+    status?: string | null;
+    seo_catalog_status?: string | null;
+    episode_current?: string | null;
+    current_episode?: number | null;
+    trailer_url?: string | null;
+  }> | null;
 }
 
 interface ProbeResult {
@@ -76,6 +92,38 @@ function spreadAcrossMovies(rows: unknown[], limit: number): unknown[] {
   return [...onePerMovie, ...overflow].slice(0, limit);
 }
 
+function joinedMovie(row: unknown): Record<string, unknown> | null {
+  const movie = (row as StreamRow)?.movies;
+  if (Array.isArray(movie)) return (movie[0] as Record<string, unknown> | undefined) || null;
+  return movie && typeof movie === 'object' ? movie as Record<string, unknown> : null;
+}
+
+function isPreviewOnlyMovie(row: unknown): boolean {
+  const movie = joinedMovie(row);
+  if (!movie) return false;
+  const status = String(movie.status || '').trim().toLowerCase();
+  const seoStatus = String(movie.seo_catalog_status || '').trim().toLowerCase();
+  const episodeCurrent = String(movie.episode_current || '').trim().toLowerCase();
+  const explicitPreview =
+    ['upcoming', 'trailer'].includes(status) ||
+    ['upcoming', 'trailer'].includes(seoStatus) ||
+    /(trailer|sắp chiếu|sap chieu)/i.test(episodeCurrent);
+  if (explicitPreview) return true;
+
+  // A trailer URL is often only promotional metadata on an already released
+  // movie. It is a preview-only signal only while there is no advertised
+  // episode and the release state does not say completed/ongoing.
+  return Boolean(String(movie.trailer_url || '').trim()) &&
+    Number(movie.current_episode || 0) <= 0 &&
+    !/\d/.test(episodeCurrent) &&
+    !['completed', 'ongoing', 'released'].includes(status);
+}
+
+function uniqueRowsById(rows: unknown[]): unknown[] {
+  return [...new Map(rows.map((row) => [String((row as StreamRow).id || ''), row])).values()]
+    .filter((row) => Boolean(String((row as StreamRow).id || '')));
+}
+
 function isHls(url: string) {
   return /\.m3u8($|[?#])/i.test(url);
 }
@@ -92,7 +140,7 @@ function isBrowserManagedPhimApiProbeBlocked(row: StreamRow, result: ProbeResult
   const directUrl = String(row.stream_url || '').trim();
   const embedUrl = String(row.embed_url || '').trim();
   return Boolean(
-    /https?:\/\/[^/]*phim1280\.tv\//i.test(directUrl)
+    /https?:\/\/[^/]*(?:phim1280\.tv|kkphimplayer\d+\.com)\//i.test(directUrl)
     && /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl)
     && (result.status === 401 || result.status === 403 || result.status === 404),
   );
@@ -336,17 +384,19 @@ async function updateStream(
     ) || isBrowserManagedPhimApiProbeBlocked(row, result);
   if (browserManagedProbeBlocked) {
     const viewerReportedFailure = String(row.last_error || '').startsWith('Viewer telemetry:');
-    const providerVerificationPending = String(row.last_error || '').startsWith('Provider verification pending:');
     await supabase.from('streams').update({
       last_checked_at: now,
       response_time_ms: result.responseMs,
       updated_at: now,
       ...(!viewerReportedFailure ? {
+        // KKPhim's CDN currently returns false 404s to Supabase Edge while
+        // the same master, media playlist and segment work for Viet Nam
+        // viewers. Keep it eligible for browser validation; only independent
+        // viewer failures may quarantine this source.
+        is_active: true,
         health_status: 'unchecked',
         failure_count: 0,
-        last_error: providerVerificationPending
-          ? row.last_error
-          : 'Server probe blocked; browser validation required',
+        last_error: 'Server probe inconclusive; browser validation required',
       } : {}),
     }).eq('id', row.id);
     return;
@@ -425,7 +475,7 @@ serve(async (req) => {
   const dryRun = url.searchParams.get('dry_run') === '1';
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-  const streamSelect = 'id,movie_id,episode_slug,source,server_name,stream_url,embed_url,quality,priority,health_status,failure_count,last_checked_at,last_error,response_time_ms,movies!inner(slug)';
+  const streamSelect = 'id,movie_id,episode_slug,source,server_name,stream_url,embed_url,quality,priority,health_status,failure_count,last_checked_at,last_error,response_time_ms,movies!inner(slug,is_published,status,seo_catalog_status,episode_current,current_episode,trailer_url)';
   let query = supabase
     .from('streams')
     .select(streamSelect)
@@ -437,9 +487,9 @@ serve(async (req) => {
   let preselectedRows: unknown[] | null = null;
 
   if (slug) {
-    // Resolve the indexed movie identity first. Filtering streams through the
-    // embedded movies join timed out on the production stream table even for
-    // a single requested episode.
+    // A targeted recheck is also the recovery path for a movie whose sources
+    // were deactivated. Rebuild the query without the default is_active=true
+    // filter; otherwise an operator can never revive a recovered source.
     const { data: targetMovie, error: targetMovieError } = await supabase
       .from('movies')
       .select('id')
@@ -447,8 +497,34 @@ serve(async (req) => {
       .maybeSingle();
     if (targetMovieError) return json({ success: false, error: targetMovieError.message }, 500);
     if (!targetMovie?.id) return json({ success: true, checked: 0, results: [], message: 'Movie not found' });
-    query = query.eq('movie_id', targetMovie.id);
+    query = supabase
+      .from('streams')
+      .select(streamSelect)
+      .eq('movie_id', targetMovie.id)
+      .or('stream_url.neq.,embed_url.neq.')
+      .order('last_checked_at', { ascending: true, nullsFirst: true })
+      .order('priority', { ascending: false })
+      .limit(limit);
     if (episodeSlug) query = query.eq('episode_slug', episodeSlug);
+  }
+  else if (queue === 'newest') {
+    const { data: claimedRows, error: claimError } = await supabase.rpc(
+      'claim_newest_playback_audit_batch',
+      { p_movie_limit: movieLimit, p_stream_limit: limit },
+    );
+    if (claimError) return json({ success: false, error: claimError.message }, 500);
+    const claimed = (claimedRows || []) as unknown as StreamRow[];
+    if (claimed.length > 0) {
+      const movieIds = unique(claimed.map((row) => row.movie_id).filter(Boolean));
+      const { data: movieRows } = await supabase.from('movies').select('id,slug').in('id', movieIds);
+      const slugByMovieId = new Map((movieRows || []).map((movie) => [String(movie.id), String(movie.slug || '')]));
+      preselectedRows = claimed.map((row) => ({
+        ...row,
+        movies: { slug: slugByMovieId.get(row.movie_id) || '' },
+      }));
+    } else {
+      preselectedRows = [];
+    }
   }
   else if (queue === 'unchecked') {
     // Split one bounded run between new imports and the historical backlog.
@@ -484,11 +560,86 @@ serve(async (req) => {
         .map((row) => [String((row as StreamRow).id), row]),
     ).values()];
     preselectedRows = spreadAcrossMovies(distinctRows, limit);
+  } else if (queue === 'recovery') {
+    // Hidden movies cannot generate new viewer telemetry. A second failure
+    // mode used to strand released movies that had a promotional trailer:
+    // they remained public with zero playable sources, so the hidden-only
+    // recovery queue never saw them. Split this bounded queue between both
+    // populations and between recently affected and long-waiting titles.
+    const recentMovieLimit = Math.ceil(movieLimit / 2);
+    const backlogMovieLimit = Math.max(0, movieLimit - recentMovieLimit);
+    const hiddenMovieQuery = () => supabase
+      .from('movies')
+      .select('id,slug')
+      .eq('is_published', false)
+      .eq('seo_catalog_status', 'awaiting_playback');
+    const [recentMoviesResult, backlogMoviesResult] = await Promise.all([
+      hiddenMovieQuery()
+        .order('updated_at', { ascending: false })
+        .limit(recentMovieLimit),
+      backlogMovieLimit > 0
+        ? hiddenMovieQuery()
+          .order('updated_at', { ascending: true })
+          .limit(backlogMovieLimit)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    const hiddenMovieError = recentMoviesResult.error || backlogMoviesResult.error;
+    if (hiddenMovieError) return json({ success: false, error: hiddenMovieError.message }, 500);
+    const hiddenMovies = [...new Map(
+      [...(recentMoviesResult.data || []), ...(backlogMoviesResult.data || [])]
+        .map((movie) => [String(movie.id), movie]),
+    ).values()];
+    const hiddenMovieIds = hiddenMovies.map((movie) => String(movie.id)).filter(Boolean);
+    let hiddenRecoveryRows: unknown[] = [];
+    if (hiddenMovieIds.length > 0) {
+      const { data: recoveryRows, error: recoveryError } = await supabase
+        .from('streams')
+        .select(streamSelect)
+        .in('movie_id', hiddenMovieIds)
+        .in('health_status', ['failed', 'dead', 'blocked'])
+        .or('stream_url.neq.,embed_url.neq.')
+        .order('last_checked_at', { ascending: true, nullsFirst: true })
+        .order('priority', { ascending: false })
+        .limit(Math.min(limit * 6, 600));
+      if (recoveryError) return json({ success: false, error: recoveryError.message }, 500);
+      hiddenRecoveryRows = recoveryRows || [];
+    }
+
+    const publicRecoveryQuery = () => supabase
+      .from('streams')
+      .select(streamSelect)
+      .eq('movies.is_published', true)
+      .in('health_status', ['failed', 'dead', 'blocked'])
+      .or('stream_url.neq.,embed_url.neq.');
+    const [recentPublicResult, backlogPublicResult] = await Promise.all([
+      publicRecoveryQuery()
+        .order('updated_at', { ascending: false })
+        .limit(Math.min(limit * 4, 300)),
+      publicRecoveryQuery()
+        .order('last_checked_at', { ascending: true, nullsFirst: true })
+        .limit(Math.min(limit * 4, 300)),
+    ]);
+    const publicRecoveryError = recentPublicResult.error || backlogPublicResult.error;
+    if (publicRecoveryError) return json({ success: false, error: publicRecoveryError.message }, 500);
+    const publicRecoveryRows = uniqueRowsById([
+      ...(recentPublicResult.data || []),
+      ...(backlogPublicResult.data || []),
+    ]).filter((row) => !isPreviewOnlyMovie(row));
+
+    const hiddenQuota = Math.ceil(limit / 2);
+    const publicQuota = Math.max(0, limit - hiddenQuota);
+    const hiddenSelected = spreadAcrossMovies(hiddenRecoveryRows, hiddenQuota);
+    const publicSelected = spreadAcrossMovies(publicRecoveryRows, publicQuota);
+    preselectedRows = spreadAcrossMovies(uniqueRowsById([
+      ...hiddenSelected,
+      ...publicSelected,
+      ...publicRecoveryRows,
+      ...hiddenRecoveryRows,
+    ]), limit);
   } else if (queue === 'problem') {
     const { data: problemRows, error: problemError } = await supabase
       .from('streams')
       .select(streamSelect)
-      .eq('is_active', true)
       .in('health_status', ['failed', 'dead', 'blocked'])
       .or('stream_url.neq.,embed_url.neq.')
       .order('last_checked_at', { ascending: true, nullsFirst: true })
@@ -514,7 +665,6 @@ serve(async (req) => {
     const hotCandidateQuery = (pattern: string) => supabase
       .from('streams')
       .select(streamSelect)
-      .eq('is_active', true)
       .like('last_error', pattern)
       .or(`last_checked_at.is.null,last_checked_at.lt.${hotRetryBefore}`)
       .or('stream_url.neq.,embed_url.neq.')
@@ -614,6 +764,14 @@ serve(async (req) => {
         .from('movie_api_cache')
         .delete()
         .in('slug', staleDetailSlugs.slice(index, index + 100));
+    }
+    if (queue === 'newest') {
+      const okIds = results.filter((item) => item.ok).map((item) => item.stream_id);
+      const failedIds = results.filter((item) => !item.ok).map((item) => item.stream_id);
+      await supabase.rpc('record_newest_playback_audit_batch', {
+        p_ok_ids: okIds,
+        p_failed_ids: failedIds,
+      });
     }
   }
 

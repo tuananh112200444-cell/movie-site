@@ -9,6 +9,7 @@ import AnalyticsProvider from "./components/feature/AnalyticsProvider";
 import { ThemeProvider } from "./context/ThemeContext";
 import AppErrorBoundary from "./components/base/AppErrorBoundary";
 import UpdateCoordinator from "./components/base/UpdateCoordinator";
+import AdsterraSocialBar from "./components/feature/AdsterraSocialBar";
 import { warmPlayerSourceHealth } from "./services/playerSourceHealth";
 
 const BackToTop = lazy(() => import("./components/base/BackToTop"));
@@ -219,6 +220,7 @@ function App() {
               <AnalyticsProvider>
                 <OfflineIndicator />
                 <UpdateCoordinator />
+                <AdsterraSocialBar />
                 <ScrollProgressBar />
                 <AnimatedContent />
                 <NonCriticalEnhancements />

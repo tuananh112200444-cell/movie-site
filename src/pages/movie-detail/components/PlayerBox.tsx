@@ -6,7 +6,13 @@ import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
 import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
 import { isPortraitPhoneViewport, tryLockPlayerLandscape, unlockPlayerOrientation } from '@/utils/playerFullscreen';
-import { isRecentlyBadSourceHost, markSourcePlaybackHealthy, SOURCE_HEALTH_UPDATED_EVENT } from '@/services/playerSourceHealth';
+import {
+  isRecentlyBadExactSourceHost,
+  isRecentlyBadSourceHost,
+  markSourcePlaybackFailed,
+  markSourcePlaybackHealthy,
+  SOURCE_HEALTH_UPDATED_EVENT,
+} from '@/services/playerSourceHealth';
 /* ─── URL helpers ─── */
 const SSPLAY_VARIANTS = ['SU', 'SG', 'SD', 'HY'] as const;
 type SsplayVariant = typeof SSPLAY_VARIANTS[number];
@@ -74,6 +80,7 @@ function isIframeSource(url: string): boolean {
   if (isBlvietsubWatchPageUrl(u)) return false;
   return (
     u.includes('streamvsmov.com/video/') ||
+    u.includes('streamc.xyz/embed.php') ||
     u.includes('player.phimapi.com/player') ||
     (u.includes('opstream') && u.includes('/share/')) ||
     u.includes('youtube.com/embed') ||
@@ -96,6 +103,15 @@ function isIframeSource(url: string): boolean {
     u.includes('voe.sx') ||
     u.includes('uqload')
   );
+}
+
+function isStreamcEmbedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return /(^|\.)streamc\.xyz$/i.test(parsed.hostname) && parsed.pathname === '/embed.php';
+  } catch {
+    return /(^|\/\/|[./])streamc\.xyz\/embed\.php/i.test(String(url || ''));
+  }
 }
 
 function isStreamVsmovEmbedUrl(url: string): boolean {
@@ -313,7 +329,6 @@ interface PlayerBoxProps {
 }
 
 const DIRECT_VIDEO_SPEEDS = [1, 1.25, 1.5, 2];
-const BAD_SOURCE_HOSTS_KEY = 'khophim.bad-source-hosts.v1';
 const EMBED_FALLBACK_TIMEOUT_MS = 3800;
 const EMBED_LAST_SOURCE_TIMEOUT_MS = 8000;
 const DIRECT_VIDEO_STALL_TIMEOUT_MS = 7000;
@@ -322,19 +337,6 @@ const DIRECT_VIDEO_MIN_PROGRESS_SECONDS = 0.25;
 const DIRECT_VIDEO_MAX_RECOVERY_ATTEMPTS = 1;
 const PLAYER_LOGO_URL = '/brand/khophim-favicon-v2-96.png';
 const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
-
-function rememberBadSourceHost(host: string): void {
-  if (!host || typeof window === 'undefined') return;
-  try {
-    const raw = window.localStorage.getItem(BAD_SOURCE_HOSTS_KEY);
-    const map = raw ? JSON.parse(raw) as Record<string, number> : {};
-    const now = Date.now();
-    map[host] = now;
-    window.localStorage.setItem(BAD_SOURCE_HOSTS_KEY, JSON.stringify(map));
-  } catch {
-    // Best-effort hint only; playback fallback must still work if storage is blocked.
-  }
-}
 
 function getUrlOrigin(url: string): string | null {
   if (!url) return null;
@@ -354,6 +356,40 @@ function addTemporaryPreconnect(origin: string): () => void {
   link.crossOrigin = 'anonymous';
   document.head.appendChild(link);
   return () => link.remove();
+}
+
+function addTemporaryPrefetch(href: string, as: 'document' | 'script'): () => void {
+  const selector = `link[rel="prefetch"][href="${href}"]`;
+  const existing = document.querySelector<HTMLLinkElement>(selector);
+  if (existing) return () => {};
+  const link = document.createElement('link');
+  link.rel = 'prefetch';
+  link.href = href;
+  link.as = as;
+  document.head.appendChild(link);
+  return () => link.remove();
+}
+
+function shouldWarmProviderFallback(): boolean {
+  const nav = navigator as Navigator & {
+    connection?: { saveData?: boolean; effectiveType?: string };
+  };
+  if (nav.connection?.saveData) return false;
+  return !/(^|-)2g$/.test(nav.connection?.effectiveType ?? '');
+}
+
+function isSameLogicalEpisode(candidate: EpisodeData, active: EpisodeData | null): boolean {
+  if (!active) return false;
+  const episodeNumber = (value: EpisodeData) => Number(
+    value.episode_number
+    ?? String(value.slug || value.name || '').match(/\d+/)?.[0]
+    ?? 0,
+  );
+  const candidateNumber = episodeNumber(candidate);
+  const activeNumber = episodeNumber(active);
+  if (candidateNumber > 0 && activeNumber > 0) return candidateNumber === activeNumber;
+  const normalize = (value: EpisodeData) => String(value.slug || value.name || '').trim().toLowerCase();
+  return Boolean(normalize(candidate)) && normalize(candidate) === normalize(active);
 }
 
 function getVideoBufferedAhead(video: HTMLVideoElement | null): number {
@@ -531,6 +567,7 @@ export default function PlayerBox({
     }
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
+    document.documentElement.classList.remove('kp-player-pseudo-fullscreen');
     unlockPlayerOrientation();
     window.scrollTo({ top: embedScrollPositionRef.current, behavior: 'auto' });
   }, []);
@@ -545,6 +582,7 @@ export default function PlayerBox({
     setIsEmbedFullscreen(true);
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
+    document.documentElement.classList.add('kp-player-pseudo-fullscreen');
     requestAnimationFrame(() => {
       const el = embedContainerRef.current;
       if (!el) return;
@@ -645,12 +683,24 @@ export default function PlayerBox({
   useEffect(() => () => {
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
+    document.documentElement.classList.remove('kp-player-pseudo-fullscreen');
     unlockPlayerOrientation();
   }, []);
 
   const embedIsSourcePage = useMemo(() => isBlvietsubWatchPageUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
   const embedIsSsplay = useMemo(() => isSsplayEmbedUrl(episode?.link_embed ?? ''), [episode?.link_embed]);
   const embedSrc = useMemo(() => getSafeEmbedUrl(episode?.link_embed ?? '', ssplayVariant), [episode?.link_embed, ssplayVariant]);
+  const streamcFallbackUrl = useMemo(() => {
+    for (const server of allServers) {
+      for (const candidate of server.server_data ?? []) {
+        if (!isSameLogicalEpisode(candidate, episode)) continue;
+        const candidateUrl = String(candidate.link_embed || '').trim();
+        if (!candidateUrl || candidateUrl === episode?.link_embed || !isStreamcEmbedUrl(candidateUrl)) continue;
+        return candidateUrl;
+      }
+    }
+    return '';
+  }, [allServers, episode]);
   const embedNeedsLooseSandbox = useMemo(
     () => requiresUnsandboxedEmbed(embedSrc) || isOnlyflixEmbed(embedSrc),
     [embedSrc],
@@ -693,9 +743,7 @@ export default function PlayerBox({
   const activeSourceHost = useMemo(() => {
     const activeUrl = effectivePlayerMode === 'embed'
       ? embedSrc
-      : effectivePlayerMode === 'video'
-      ? directVideoSrc
-      : hlsSrc;
+      : episode?.link_m3u8 || directVideoSrc || hlsSrc;
     return getSourceHost(activeUrl || episode?.link_m3u8 || episode?.link_embed || '');
   }, [directVideoSrc, effectivePlayerMode, embedSrc, episode?.link_embed, episode?.link_m3u8, hlsSrc]);
   useEffect(() => {
@@ -707,7 +755,28 @@ export default function PlayerBox({
     const cleanups = origins.map(addTemporaryPreconnect);
     return () => cleanups.forEach((cleanup) => cleanup());
   }, [directVideoSrc, embedSrc, hlsSrc]);
-  const reportIssue = useCallback((issue: Pick<PlayerIssuePayload, 'event_type' | 'playback_time' | 'duration' | 'buffered_ahead' | 'error_message'>) => {
+  useEffect(() => {
+    if (!streamcFallbackUrl || !shouldWarmProviderFallback()) return;
+    const streamcOrigin = getUrlOrigin(streamcFallbackUrl);
+    if (!streamcOrigin) return;
+
+    const cleanups = [
+      addTemporaryPreconnect(streamcOrigin),
+      addTemporaryPreconnect('https://ssl.p.jwpcdn.com'),
+    ];
+    const timer = window.setTimeout(() => {
+      // Prefetching warms the exact iframe document and its largest provider
+      // script without executing an invisible autoplaying player.
+      cleanups.push(addTemporaryPrefetch(streamcFallbackUrl, 'document'));
+      cleanups.push(addTemporaryPrefetch(`${streamcOrigin}/player.js?ver=1.9`, 'script'));
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timer);
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, [streamcFallbackUrl]);
+  const reportIssue = useCallback((issue: Pick<PlayerIssuePayload, 'event_type' | 'playback_time' | 'duration' | 'buffered_ahead' | 'error_message' | 'startup_ms' | 'watched_seconds' | 'stall_count' | 'stall_seconds'>) => {
     reportPlayerIssue({
       movie_slug: movieSlug,
       movie_title: movieTitle,
@@ -856,10 +925,14 @@ export default function PlayerBox({
     setAutoNextActive(false);
   }, []);
 
-  const switchToFallbackServer = useCallback(() => {
-    rememberBadSourceHost(activeSourceHost);
+  const rememberActiveSourceFailure = useCallback(() => {
+    markSourcePlaybackFailed(activeSourceHost);
     const activeSourceKey = activeSourceHost || String(episode?.link_m3u8 || episode?.link_embed || '').trim();
     if (activeSourceKey) failedSourceKeysRef.current.add(activeSourceKey);
+  }, [activeSourceHost, episode?.link_embed, episode?.link_m3u8]);
+
+  const switchToFallbackServer = useCallback(() => {
+    rememberActiveSourceFailure();
 
     const { indices: candidateIndices, servers: candidateServers } = buildFallbackServersAvoidingHost(
       allServers,
@@ -894,7 +967,7 @@ export default function PlayerBox({
       return true;
     }
     return false;
-  }, [activeServer, activeSourceHost, allServers, episode, onSelectEp, onSwitchServer]);
+  }, [activeServer, activeSourceHost, allServers, episode, onSelectEp, onSwitchServer, rememberActiveSourceFailure]);
 
   useEffect(() => {
     if (!embedIsSourcePage || effectivePlayerMode !== 'embed') return;
@@ -926,6 +999,7 @@ export default function PlayerBox({
       event_type: 'hls_fatal',
       error_message: 'HLS fatal callback reached PlayerBox',
     });
+    rememberActiveSourceFailure();
     const embedUrl = episode?.link_embed;
     const hlsCluster = getSourceFailureClusterFromUrl(episode?.link_m3u8 || '');
     const embedCluster = getSourceFailureClusterFromUrl(embedUrl || '');
@@ -951,7 +1025,7 @@ export default function PlayerBox({
     // fire iframe onLoad, so the parent cannot treat that as playback proof.
     // LightweightHlsPlayer now keeps its terminal error + retry UI when no
     // genuinely independent path exists.
-  }, [effectivePlayerMode, episode?.link_embed, reportIssue, switchToFallbackServer]);
+  }, [effectivePlayerMode, episode?.link_embed, rememberActiveSourceFailure, reportIssue, switchToFallbackServer]);
 
   const handleDirectVideoError = useCallback(() => {
     if (navigator.onLine === false) return;
@@ -962,6 +1036,7 @@ export default function PlayerBox({
       duration: video?.duration ?? 0,
       error_message: 'direct video element error',
     });
+    rememberActiveSourceFailure();
     const embedUrl = episode?.link_embed ?? '';
     const directCluster = getSourceFailureClusterFromUrl(episode?.link_m3u8 || '');
     const embedCluster = getSourceFailureClusterFromUrl(embedUrl);
@@ -976,7 +1051,7 @@ export default function PlayerBox({
       return;
     }
     switchToFallbackServer();
-  }, [effectivePlayerMode, episode?.link_embed, reportIssue, switchToFallbackServer]);
+  }, [effectivePlayerMode, episode?.link_embed, rememberActiveSourceFailure, reportIssue, switchToFallbackServer]);
 
   const handleDirectVideoStallFatal = useCallback((reason: string) => {
     if (navigator.onLine === false) return;
@@ -995,6 +1070,16 @@ export default function PlayerBox({
     if (effectivePlayerMode !== 'video' || !directVideoSrc) return;
     const video = directVideoRef.current;
     if (!video) return;
+
+    const sourceOpenedAt = Date.now();
+    let firstPlayingAt = 0;
+    let watchedSeconds = 0;
+    let lastMetricTime = Math.max(0, video.currentTime);
+    let stallCount = 0;
+    let stallSeconds = 0;
+    let stallStartedAt = 0;
+    let stableReported = false;
+    let heartbeatBucket = 0;
 
     const clearStallTimer = () => {
       if (directVideoStallTimerRef.current) {
@@ -1060,16 +1145,52 @@ export default function PlayerBox({
       }, DIRECT_VIDEO_STALL_CHECK_MS);
     };
     const onWaiting = () => {
+      if (!stallStartedAt) {
+        stallStartedAt = Date.now();
+        stallCount += 1;
+      }
       clearStallTimer();
       directVideoStallTimerRef.current = setTimeout(() => {
         recoverOrFallback('direct video waiting timeout');
       }, DIRECT_VIDEO_STALL_TIMEOUT_MS);
     };
     const onPlaying = () => {
+      const now = Date.now();
+      if (!firstPlayingAt) firstPlayingAt = now;
+      if (stallStartedAt) {
+        stallSeconds += Math.max(0, (now - stallStartedAt) / 1000);
+        stallStartedAt = 0;
+      }
       clearStallTimer();
       directVideoRecoveryAttemptsRef.current = 0;
       startMonitor();
       if (!video.paused && !video.ended) reportPlaybackStarted();
+    };
+    const onTimeUpdate = () => {
+      const now = Date.now();
+      const delta = video.currentTime - lastMetricTime;
+      if (delta > 0 && delta <= 3) watchedSeconds += delta;
+      lastMetricTime = video.currentTime;
+      if (!firstPlayingAt) return;
+      const emitQuality = (event_type: 'playback_stable' | 'playback_heartbeat') => reportIssue({
+        event_type,
+        playback_time: video.currentTime,
+        duration: video.duration || 0,
+        buffered_ahead: getVideoBufferedAhead(video),
+        startup_ms: Math.max(0, firstPlayingAt - sourceOpenedAt),
+        watched_seconds: watchedSeconds,
+        stall_count: stallCount,
+        stall_seconds: stallSeconds + (stallStartedAt ? Math.max(0, (now - stallStartedAt) / 1000) : 0),
+      });
+      if (!stableReported && watchedSeconds >= 15) {
+        stableReported = true;
+        emitQuality('playback_stable');
+      }
+      const nextHeartbeatBucket = Math.floor(watchedSeconds / 60);
+      if (nextHeartbeatBucket > heartbeatBucket) {
+        heartbeatBucket = nextHeartbeatBucket;
+        emitQuality('playback_heartbeat');
+      }
     };
     const onPause = () => {
       clearStallTimer();
@@ -1090,6 +1211,7 @@ export default function PlayerBox({
     video.addEventListener('stalled', onWaiting);
     video.addEventListener('playing', onPlaying);
     video.addEventListener('canplay', onPlaying);
+    video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('pause', onPause);
     video.addEventListener('ended', onEnded);
     window.addEventListener('online', onOnline);
@@ -1101,6 +1223,7 @@ export default function PlayerBox({
       video.removeEventListener('stalled', onWaiting);
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('canplay', onPlaying);
+      video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('ended', onEnded);
       window.removeEventListener('online', onOnline);
@@ -1124,16 +1247,17 @@ export default function PlayerBox({
       event_type: 'iframe_blocked',
       error_message: 'embed iframe load timed out or failed',
     });
+    rememberActiveSourceFailure();
     // The provider iframe and its direct media URL are separate playback
     // paths. If the iframe is blocked by CSP/cookies, try the direct stream of
     // the same episode before abandoning it for another server.
-    if (episode?.link_m3u8) {
+    if (episode?.link_m3u8 && !isRecentlyBadExactSourceHost(episode.link_m3u8)) {
       setIframeBlocked(false);
       setPlayerMode(isHlsUrl(episode.link_m3u8) ? 'hls' : 'video');
       return;
     }
     switchToFallbackServer();
-  }, [effectivePlayerMode, episode?.link_m3u8, iframeBlocked, reportIssue, switchToFallbackServer]);
+  }, [effectivePlayerMode, episode?.link_m3u8, iframeBlocked, rememberActiveSourceFailure, reportIssue, switchToFallbackServer]);
 
   return (
     <div className="movie-player-box mb-2 relative">
@@ -1229,9 +1353,10 @@ export default function PlayerBox({
                 ))}
               </div>
             )}
-            {/* Apple mobile must receive the provider's real video control:
-                an overlay here would replace native fullscreen with a CSS-only
-                viewport fallback that cannot hide Safari chrome. */}
+            {/* Keep the provider's bottom-right native control unobstructed on
+                Apple mobile. The visible KhoPhim control stays available in
+                the top-right because cross-origin iframe fullscreen is often
+                denied there and must fall back to viewport fullscreen. */}
             {!preferProviderNativeFullscreen && (
               <button
                 type="button"
@@ -1242,19 +1367,18 @@ export default function PlayerBox({
                 className="absolute bottom-0 right-0 z-30 h-16 w-16 cursor-pointer border-0 bg-transparent p-0 opacity-0 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-white"
               />
             )}
-            {/* Overlay fullscreen button on embed video */}
-            {!preferProviderNativeFullscreen && (
-              <button
-                type="button"
-                aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-                onClick={() => void toggleEmbedFullscreen()}
-                title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-                data-kp-fullscreen="true"
-                className={`absolute z-40 flex items-center justify-center rounded-xl bg-black/20 text-white border border-white/35 shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[2px] transition-all hover:bg-black/55 hover:border-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100 ${isEmbedFullscreen ? 'top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] h-14 w-14' : 'top-3 right-3 h-12 w-12'}`}
-              >
-                <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl drop-shadow-[0_1px_3px_rgba(0,0,0,1)]`} />
-              </button>
-            )}
+            {/* Always expose a first-party fullscreen action. Do not rely on
+                a third-party iframe control that iOS may block. */}
+            <button
+              type="button"
+              aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+              onClick={() => void toggleEmbedFullscreen()}
+              title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+              data-kp-fullscreen="true"
+              className={`absolute z-40 flex items-center justify-center rounded-xl bg-black/20 text-white border border-white/35 shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[2px] transition-all hover:bg-black/55 hover:border-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100 ${isEmbedFullscreen ? 'top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] h-14 w-14' : 'top-3 right-3 h-12 w-12'}`}
+            >
+              <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl drop-shadow-[0_1px_3px_rgba(0,0,0,1)]`} />
+            </button>
           </div>
         )}
 
@@ -1329,6 +1453,7 @@ export default function PlayerBox({
               onVideoEnded={onVideoEnded}
               onFatalError={handleHlsFatal}
               onPlaybackStarted={reportPlaybackStarted}
+              onPlaybackQuality={reportIssue}
               onPlayerIssue={reportIssue}
               subtitleUrl={episode?.subtitle_url || ''}
             />

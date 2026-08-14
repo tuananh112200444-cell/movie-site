@@ -244,7 +244,7 @@ export default function Navbar() {
 
       <header
         ref={headerRef}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+        className={`kp-main-header ${pathname === '/' ? 'is-editorial-home' : ''} ${scrolled ? 'is-scrolled' : ''} fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
           scrolled
             ? 'bg-[#07080d]/95 border-b border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl'
             : 'bg-gradient-to-b from-black/80 via-black/45 to-transparent'
@@ -254,10 +254,10 @@ export default function Navbar() {
           <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
         )}
 
-        <div className="mx-auto flex h-14 max-w-[1760px] items-center justify-between gap-3 px-4 lg:h-16 lg:px-8 2xl:px-10">
+        <div className="navbar-inner mx-auto flex h-14 max-w-[1760px] items-center justify-between gap-3 px-4 lg:h-16 lg:px-8 2xl:px-10">
 
           {/* ── Logo ── */}
-          <Link to="/" className="flex min-h-11 items-center gap-3 flex-shrink-0 group touch-manipulation">
+          <Link to="/" className="navbar-brand flex min-h-11 items-center gap-3 flex-shrink-0 group touch-manipulation">
             <div className="relative w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center flex-shrink-0">
               {/* Glow halo */}
               <div className="absolute inset-0 bg-red-500/40 rounded-xl blur-md group-hover:bg-red-500/60 transition-all duration-300 scale-110" />
@@ -279,7 +279,7 @@ export default function Navbar() {
           </Link>
 
           {/* ── Desktop Nav ── */}
-          <nav className="hidden lg:flex items-center gap-1 rounded-2xl border border-white/[0.07] bg-black/25 px-1.5 py-1 backdrop-blur-md">
+          <nav className="desktop-main-nav hidden lg:flex items-center gap-1 rounded-2xl border border-white/[0.07] bg-black/25 px-1.5 py-1 backdrop-blur-md">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.to}
@@ -391,9 +391,9 @@ export default function Navbar() {
           </nav>
 
           {/* ── Right Actions ── */}
-          <div className="flex items-center gap-1">
+          <div className="navbar-actions flex items-center gap-1">
             {/* Social links */}
-            <div className="hidden lg:flex items-center gap-0.5 mr-1">
+            <div className="hidden 2xl:flex items-center gap-0.5 mr-1">
               {SOCIAL_LINKS.map(({ href, icon, desktopColor, title }) => (
                 <a key={href} href={href} target="_blank" rel="noopener noreferrer nofollow" title={title} aria-label={title}
                   className={`w-8 h-8 flex items-center justify-center border ${desktopColor} transition-all duration-200 cursor-pointer rounded-lg hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}>
@@ -516,7 +516,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        <StickyBanner />
+        {pathname !== '/' && <StickyBanner />}
         
         {/* Mobile Search Overlay */}
         {searchOpen && (

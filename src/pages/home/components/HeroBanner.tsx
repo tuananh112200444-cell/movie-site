@@ -118,9 +118,14 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
   const displayTime = getDisplayTime(active.time);
   const activeDetailHref = getMovieDetailHref(active);
   const favored = isFav(active._id);
+  const synopsis = String(active.content || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|&amp;|&quot;|&#39;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   return (
-    <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/6.35', minHeight: 'clamp(218px, 52vw, 560px)' }}>
+    <div className="cinematic-home-hero relative w-full overflow-hidden">
 
       {/* Only render active + next slides to reduce initial DOM & image count */}
       <MemoSlideBackground
@@ -161,7 +166,7 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
       <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#080a10] to-transparent pointer-events-none" />
 
       {/* Content */}
-      <div className="absolute inset-0 flex items-center px-3 pt-7 pb-7 sm:px-8 sm:pt-20 sm:pb-6 md:px-12 md:pt-24 md:pb-4 lg:px-10 xl:px-12">
+      <div className="absolute inset-0 flex items-center px-4 pb-12 pt-16 sm:px-8 sm:pb-10 sm:pt-24 md:px-12 lg:px-10 xl:px-12">
         <div key={contentKey} className="hero-content-enter mx-auto flex w-full max-w-[1880px] items-center justify-between gap-3 md:gap-8 2xl:px-2">
 
           {/* Left: Text info */}
@@ -174,14 +179,9 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
                 </Link>
               ))}
               {active.year && <span className="text-[9px] md:text-xs text-white/40 font-medium">{active.year}</span>}
-              {active.quality && (
-                <span className="flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold text-amber-300 md:text-xs">
-                  {active.quality}
-                </span>
-              )}
             </div>
 
-            <h2 className="hero-title-enter mb-1 text-[1.35rem] font-black leading-tight tracking-tight text-white line-clamp-2 sm:mb-1.5 sm:text-2xl sm:leading-tight md:text-4xl lg:text-5xl 2xl:text-[3.6rem]">
+            <h2 className="hero-title-enter mb-1 text-[1.8rem] font-black leading-[1.04] tracking-[-0.04em] text-white line-clamp-2 sm:mb-1.5 sm:text-3xl md:text-5xl lg:text-6xl 2xl:text-[4.5rem]">
               {active.name}
             </h2>
 
@@ -191,16 +191,21 @@ function HeroBanner({ movies, loading }: HeroBannerProps) {
               </p>
             )}
 
-            <div className="hero-badges-enter hidden items-center gap-1.5 md:mb-3 md:flex md:gap-2">
+            {synopsis && (
+              <p className="hero-sub-enter mb-4 hidden max-w-2xl text-sm leading-6 text-white/62 line-clamp-2 md:block lg:text-[15px]">
+                {synopsis}
+              </p>
+            )}
+
+            <div className="hero-badges-enter hidden items-center gap-2 md:mb-4 md:flex">
               {displayTime && (
-                <span className="flex items-center gap-1 text-[9px] md:text-xs text-white/50">
-                  <span className="text-white/20">·</span>
-                  <i className="ri-time-line text-white/30 text-[10px]" />{displayTime}
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-white/60">
+                  <i className="ri-time-line text-white/35" />{displayTime}
                 </span>
               )}
               {active.episode_current && active.episode_current.toLowerCase() !== 'trailer' && (
-                <span className="flex items-center gap-1 text-[9px] md:text-xs text-white/50">
-                  <span className="text-white/20">·</span>{active.episode_current}
+                <span className="flex items-center gap-1 text-xs font-semibold text-white/60">
+                  <span className="text-white/20">•</span>{active.episode_current}
                 </span>
               )}
             </div>

@@ -196,7 +196,12 @@ if (
 if (!viewerSourceRecovery.includes('stream-health-problem-every-15-minutes') || !viewerSourceRecovery.includes('auto-repair-player-issues-every-10-minutes')) {
   failures.push('viewer-facing health and telemetry recovery are not prioritized by cron');
 }
-if (!detailProxy.includes("healthStatus === 'dead' && failureCount >= 2") || !detailProxy.includes('getExpectedEpisodeNumber(liveMovie')) {
+if (
+  !detailProxy.includes("healthStatus === 'dead'") ||
+  !streamHealth.includes("return failureCount >= 2 ? 'dead' : 'failed'") ||
+  !streamHealth.includes('isBrowserManagedPhimApiProbeBlocked') ||
+  !detailProxy.includes('getExpectedEpisodeNumber(liveMovie')
+) {
   failures.push('detail cache or source filtering can hide new episodes after one transient probe failure');
 }
 if (!detailProxy.includes('phimapi.com/v1/api/tim-kiem') || !detailProxy.includes('initialExternalMax < expectedEpisode')) {
@@ -205,7 +210,13 @@ if (!detailProxy.includes('phimapi.com/v1/api/tim-kiem') || !detailProxy.include
 if (!movieApi.includes('source_health_status') || !movieApi.includes('source_failure_count')) {
   failures.push('frontend source selection does not consume the backend health contract');
 }
-if (!autoRepair.includes('penalizeTelemetryFailedStreams') || !autoRepair.includes('independent probe required') || autoRepair.includes("last_error: 'Viewer telemetry: repeated fatal playback failure'")) {
+if (
+  !autoRepair.includes('penalizeTelemetryFailedStreams')
+  || !autoRepair.includes('independent probe required')
+  || !autoRepair.includes("'stream-health-check'")
+  || !autoRepair.includes("queue: 'recovery'")
+  || autoRepair.includes("last_error: 'Viewer telemetry: repeated fatal playback failure'")
+) {
   failures.push('viewer telemetry can disable a stream without an independent probe');
 }
 if (!ophimSync.includes('canonicalCandidateScore') || !ophimSync.includes('canonicalCandidateScore(match) >= canonicalCandidateScore(exactMatch) + 40')) {

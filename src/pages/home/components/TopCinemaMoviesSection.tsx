@@ -213,8 +213,8 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
     movie.poster_url || movie.thumb_url,
     movie.thumb_url || movie.poster_url,
     isImagePreloaded(getImageUrl(movie.poster_url || movie.thumb_url)),
-    280,
-    80,
+    320,
+    84,
     { preferredAspect: 'portrait' },
   );
   const ep = getEpInfo(movie.episode_current);
@@ -259,7 +259,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
         {/* Poster frame */}
         <div
           className={`
-            relative rounded-xl overflow-hidden
+            movie-card-contain relative rounded-xl overflow-hidden
             bg-[#16192a] border contain-paint
             transition-[transform,box-shadow,border-color] duration-300 ease-out
             ${isTop3
@@ -269,7 +269,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
             md:hover:-translate-y-1 md:hover:scale-[1.01]
           `}
         >
-          <div className="aspect-[2/3] relative overflow-hidden">
+          <div className="movie-art-frame movie-art-frame--portrait aspect-[2/3] relative overflow-hidden">
             {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton z-[1]" />}
             {imgError && (
               <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">

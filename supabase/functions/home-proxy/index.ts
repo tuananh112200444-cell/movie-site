@@ -9,9 +9,6 @@ const TMDB_BASE = 'https://api.themoviedb.org/3';
 
 const OPHIM_BASES = [
   'https://ophim1.com',
-  'https://ophim.tv',
-  'https://ophim9.cc',
-  'https://ophim8.cc',
 ];
 
 const EXTERNAL_BASES = [

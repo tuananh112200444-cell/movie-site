@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMoviesByType } from '../../../hooks/useMovies';
-import { getImageUrl } from '../../../services/movieApi';
+import { getOptimizedImageUrl } from '../../../services/movieApi';
 import type { Movie } from '../../../types/movie';
 
 export default function HotCinemaRankedSection() {
@@ -142,7 +142,7 @@ function RankedCard({ movie, rank, priority = false }: RankedCardProps) {
     crown: false,
   };
 
-  const posterUrl = getImageUrl(movie.poster_url || movie.thumb_url);
+  const posterUrl = getOptimizedImageUrl(movie.poster_url || movie.thumb_url, 320, 84);
   const rating = (9.8 - (rank - 1) * 0.15 + Math.random() * 0.05).toFixed(1);
   const viewK = [12.5, 9.8, 8.2, 6.5, 5.1, 4.3, 3.6, 2.9, 2.3, 1.8, 1.4, 1.0][rank - 1] ?? 0.8;
   const eps = movie.episode_current || 'Full';
@@ -151,7 +151,7 @@ function RankedCard({ movie, rank, priority = false }: RankedCardProps) {
     <div>
       <Link
         to={`/phim/${encodeURIComponent(movie.slug)}`}
-        className="block cursor-pointer group"
+        className="movie-card-contain block cursor-pointer group"
       >
         <div
           className={`
@@ -166,7 +166,7 @@ function RankedCard({ movie, rank, priority = false }: RankedCardProps) {
           `}
         >
           {/* Poster area */}
-          <div className="relative aspect-[2/3] overflow-hidden">
+          <div className="movie-art-frame movie-art-frame--portrait relative aspect-[2/3] overflow-hidden">
             {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton z-[1]" />}
             {imgError && (
               <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">

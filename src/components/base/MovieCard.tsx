@@ -84,8 +84,8 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
     posterPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
-    280,
-    82,
+    320,
+    84,
     { preferredAspect: 'portrait' },
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -129,7 +129,7 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
       <div className="relative flex h-full flex-col rounded-xl p-0.5 transition-[transform,box-shadow,background-color,border-color] duration-300 ease-out md:hover:z-30 md:hover:-translate-y-1 md:hover:bg-white/[0.045] md:hover:shadow-[0_18px_46px_-24px_rgba(0,0,0,0.92)]">
         {/* Poster */}
         <div
-          className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg bg-[#151824] ring-1 ring-white/[0.055] transition-[ring-color,box-shadow] duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_16px_38px_-30px_rgba(255,255,255,0.75)]"
+          className="movie-art-frame movie-art-frame--portrait relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg bg-[#151824] ring-1 ring-white/[0.055] transition-[ring-color,box-shadow] duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_16px_38px_-30px_rgba(255,255,255,0.75)]"
         >
           <div className={`absolute inset-0 blur-placeholder z-[1] transition-opacity duration-500 ${imgLoaded ? 'opacity-0' : 'opacity-100'}`} />
           {imgError && (
@@ -250,8 +250,8 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
     posterPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
-    240,
-    78,
+    320,
+    84,
     { preferredAspect: 'portrait' },
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -288,12 +288,12 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
   return (
     <Link
       to={detailUrl}
-      className="group flex h-full cursor-pointer flex-col rounded-xl active:scale-[0.985] transition-transform duration-150"
+      className="movie-card-contain group flex h-full cursor-pointer flex-col rounded-xl active:scale-[0.985] transition-transform duration-150"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       <div className="relative flex h-full flex-col rounded-lg p-0.5 transition-[transform,box-shadow,background-color] duration-300 ease-out md:hover:z-30 md:hover:-translate-y-1 md:hover:bg-white/[0.035] md:hover:shadow-[0_18px_44px_-28px_rgba(0,0,0,0.88)]">
-        <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg bg-[#151824] ring-1 ring-white/[0.06] transition-[ring-color,box-shadow] duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_16px_36px_-30px_rgba(255,255,255,0.62)]">
+        <div className="movie-art-frame movie-art-frame--portrait relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg bg-[#151824] ring-1 ring-white/[0.06] transition-[ring-color,box-shadow] duration-300 group-hover:ring-white/[0.16] group-hover:shadow-[0_16px_36px_-30px_rgba(255,255,255,0.62)]">
           <div className={`absolute inset-0 z-[1] blur-placeholder transition-opacity duration-500 ${imgLoaded ? 'opacity-0' : 'opacity-100'}`} />
           {imgError && (
             <div className="absolute inset-0 z-[1] flex items-center justify-center bg-[#1a1d27]">
@@ -305,7 +305,7 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
             alt={altText}
             width={320}
             height={480}
-            sizes="(min-width: 1800px) 220px, (min-width: 1536px) 210px, (min-width: 1280px) 190px, (min-width: 1024px) 17vw, (min-width: 768px) 22vw, (min-width: 640px) 24vw, 31vw"
+            sizes="(min-width: 1800px) 280px, (min-width: 1536px) 250px, (min-width: 1280px) 240px, (min-width: 1024px) 23vw, (min-width: 768px) 23vw, (min-width: 640px) 31vw, 46vw"
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'low'}
             decoding="async"
@@ -384,18 +384,18 @@ function RankCard({ movie, rank, priority }: MovieCardProps) {
     posterPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(posterPath)),
-    280,
-    82,
+    320,
+    84,
     { preferredAspect: 'portrait' },
   );
   const altText = buildAlt(movie);
 
   return (
-    <Link to={movieDetailUrl(movie.slug)} className="group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
+    <Link to={movieDetailUrl(movie.slug)} className="movie-card-contain group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
       <div>
         {/* Poster */}
         <div
-          className="relative overflow-hidden rounded-xl bg-[#16192a]"
+          className="movie-art-frame movie-art-frame--portrait relative overflow-hidden rounded-xl bg-[#16192a]"
           style={{ aspectRatio: '2/3' }}
         >
           <div className={`absolute inset-0 blur-placeholder z-[1] transition-opacity duration-500 ${imgLoaded ? 'opacity-0' : 'opacity-100'}`} />
@@ -468,18 +468,18 @@ function WideCard({ movie, priority }: MovieCardProps) {
     thumbPath,
     fallbackPath,
     isImagePreloaded(getImageUrl(thumbPath)),
-    520,
+    640,
     84,
     { preferredAspect: 'landscape' },
   );
   const altText = buildAlt(movie);
 
   return (
-    <Link to={movieDetailUrl(movie.slug)} className="group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
+    <Link to={movieDetailUrl(movie.slug)} className="movie-card-contain group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
       <div className="relative">
         {/* Poster */}
         <div
-          className="relative overflow-hidden rounded-xl bg-[#16192a]"
+          className="movie-art-frame movie-art-frame--wide relative overflow-hidden rounded-xl bg-[#16192a]"
           style={{ aspectRatio: '16/9' }}
         >
           <div className={`absolute inset-0 blur-placeholder z-[1] transition-opacity duration-500 ${imgLoaded ? 'opacity-0' : 'opacity-100'}`} />

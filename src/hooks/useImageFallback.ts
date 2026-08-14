@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, type SyntheticEvent } from 'react';
+import { useState, useCallback, useLayoutEffect, useMemo, type SyntheticEvent } from 'react';
 import { getOptimizedImageFallbacks } from '../services/movieApi';
 
 interface UseImageFallbackResult {
@@ -40,7 +40,11 @@ export function useImageFallback(
   const currentSrc = fallbackUrls[Math.min(index, fallbackUrls.length - 1)];
   const hasError = exhausted;
 
-  useEffect(() => {
+  // Reset before the browser can dispatch a memory-cache `load` event. A
+  // passive effect could run after that event and overwrite loaded=true,
+  // leaving a successfully decoded image permanently hidden at opacity: 0
+  // after an SPA route round-trip.
+  useLayoutEffect(() => {
     setIndex(0);
     setLoaded(preloaded);
     setExhausted(false);

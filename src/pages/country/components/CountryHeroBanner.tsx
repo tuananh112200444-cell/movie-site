@@ -38,7 +38,7 @@ export default function CountryHeroBanner({ config, page }: Props) {
   const others = OTHER_COUNTRIES.filter((c) => c.slug !== config.slug);
 
   return (
-    <div ref={heroRef} className="relative pt-16 overflow-hidden">
+    <div ref={heroRef} className="catalog-visual-hero relative pt-16 overflow-hidden">
       {/* Background image — lazy loaded via IntersectionObserver */}
       <div
         className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700 ${heroImgLoaded ? 'opacity-100' : 'opacity-0'}`}

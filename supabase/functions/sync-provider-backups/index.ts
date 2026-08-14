@@ -21,6 +21,13 @@ type StreamRow = {
   embed_url: string | null;
 };
 
+type CoverageRow = {
+  movie_id: string;
+  provider: 'ophim' | 'kkphim';
+  state: string;
+  next_retry_at: string | null;
+};
+
 function json(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -88,7 +95,7 @@ async function invokePartnerSync(
   movie: MovieRow,
   provider: 'ophim' | 'kkphim',
   dryRun: boolean,
-): Promise<{ ok: boolean; status: number; body: Record<string, unknown> | null }> {
+): Promise<{ ok: boolean; matched: boolean; status: number; body: Record<string, unknown> | null }> {
   const query = new URLSearchParams({
     provider,
     movie_id: movie.id,
@@ -102,7 +109,19 @@ async function invokePartnerSync(
   });
   let body: Record<string, unknown> | null = null;
   try { body = await response.json() as Record<string, unknown>; } catch { /* status is enough */ }
-  return { ok: response.ok && body?.success !== false, status: response.status, body };
+  const details = Array.isArray(body?.details) ? body.details.map((item) => String(item || '').toLowerCase()) : [];
+  // A strict identity lookup that proves the partner does not have this title
+  // is a safe skip, not a broken sync. Treating HTTP 207 as a worker failure
+  // made the health brain retry valid no-match cases and obscured real errors.
+  const verifiedNoMatch = response.status === 207
+    && details.length > 0
+    && details.every((item) => item.includes('detail not found'));
+  return {
+    ok: verifiedNoMatch || (response.ok && body?.success !== false),
+    matched: !verifiedNoMatch,
+    status: response.status,
+    body,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -144,6 +163,14 @@ Deno.serve(async (req) => {
     : { data: [], error: null };
   if (streamError) return json({ success: false, error: `stream scan: ${streamError.message}` }, 500);
 
+  const { data: coverageRows, error: coverageError } = ids.length
+    ? await supabase.from('movie_provider_coverage')
+      .select('movie_id,provider,state,next_retry_at')
+      .in('movie_id', ids)
+      .in('provider', ['ophim', 'kkphim'])
+    : { data: [], error: null };
+  if (coverageError) return json({ success: false, error: `coverage scan: ${coverageError.message}` }, 500);
+
   const streamsByMovie = new Map<string, StreamRow[]>();
   for (const row of (streams || []) as StreamRow[]) {
     const current = streamsByMovie.get(row.movie_id) || [];
@@ -151,8 +178,23 @@ Deno.serve(async (req) => {
     streamsByMovie.set(row.movie_id, current);
   }
 
+  const missingCoverageByMovie = new Map<string, Array<'ophim' | 'kkphim'>>();
+  const now = Date.now();
+  for (const row of (coverageRows || []) as CoverageRow[]) {
+    const retryAt = Date.parse(String(row.next_retry_at || ''));
+    const retryReady = !Number.isFinite(retryAt) || retryAt <= now;
+    if (!retryReady || !['missing', 'unavailable', 'error', 'degraded'].includes(String(row.state || ''))) continue;
+    const current = missingCoverageByMovie.get(row.movie_id) || [];
+    current.push(row.provider);
+    missingCoverageByMovie.set(row.movie_id, current);
+  }
+
   const candidates = batch
-    .map((movie) => ({ movie, coverage: needsPartnerCoverage(movie, streamsByMovie.get(movie.id) || []) }))
+    .map((movie) => {
+      const missing = missingCoverageByMovie.get(movie.id)?.[0];
+      if (missing) return { movie, coverage: { provider: missing, missing: 1, primary: 0 } };
+      return { movie, coverage: needsPartnerCoverage(movie, streamsByMovie.get(movie.id) || []) };
+    })
     .filter((item): item is { movie: MovieRow; coverage: { provider: 'ophim' | 'kkphim'; missing: number; primary: number } } => item.coverage !== null)
     .sort((a, b) => b.coverage.missing - a.coverage.missing)
     .slice(0, limit);
@@ -160,6 +202,21 @@ Deno.serve(async (req) => {
   const results: Array<Record<string, unknown>> = [];
   for (const candidate of candidates) {
     const result = await invokePartnerSync(supabaseUrl, cronSecret, candidate.movie, candidate.coverage.provider, dryRun);
+    if (!dryRun) {
+      await supabase.from('movie_provider_coverage').upsert({
+        movie_id: candidate.movie.id,
+        provider: candidate.coverage.provider,
+        state: !result.matched ? 'unavailable' : result.ok ? 'pending' : 'error',
+        last_attempt_at: new Date().toISOString(),
+        next_retry_at: !result.matched
+          ? new Date(Date.now() + 7 * 86400_000).toISOString()
+          : result.ok
+            ? null
+            : new Date(Date.now() + 6 * 3600_000).toISOString(),
+        last_error: !result.matched ? 'No exact provider match' : result.ok ? '' : `Provider HTTP ${result.status}`,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'movie_id,provider' });
+    }
     results.push({
       movie_id: candidate.movie.id,
       slug: candidate.movie.slug,
@@ -167,6 +224,7 @@ Deno.serve(async (req) => {
       primary_episodes: candidate.coverage.primary,
       missing_partner_episodes: candidate.coverage.missing,
       ok: result.ok,
+      outcome: result.matched ? (result.ok ? 'synced' : 'error') : 'verified_no_match',
       status: result.status,
       result: result.body,
     });
@@ -174,6 +232,11 @@ Deno.serve(async (req) => {
 
   const nextPage = batch.length < scanLimit ? 1 : page + 1;
   if (!dryRun) {
+    if (candidates.length > 0) {
+      await supabase.rpc('refresh_movie_provider_coverage', {
+        p_movie_ids: candidates.map((candidate) => candidate.movie.id),
+      });
+    }
     await supabase.from('sync_cursors').upsert({ key: cursorKey, page: nextPage, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     await supabase.from('sync_logs').insert({
       function_name: 'sync-provider-backups',
@@ -185,7 +248,14 @@ Deno.serve(async (req) => {
       details: results.filter((result) => !result.ok).map((result) => `${result.slug}:${result.status}`),
       elapsed_ms: 0,
       success: results.every((result) => result.ok),
-      metadata: { page, next_page: nextPage, scan_limit: scanLimit, limit, candidates: results.length },
+      metadata: {
+        page,
+        next_page: nextPage,
+        scan_limit: scanLimit,
+        limit,
+        candidates: results.length,
+        verified_no_match: results.filter((result) => result.outcome === 'verified_no_match').length,
+      },
     });
   }
 

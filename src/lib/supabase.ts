@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const FALLBACK_SUPABASE_URL = 'https://dzpddbthdeqbkrcjlzap.supabase.co';
+const FALLBACK_SUPABASE_URL = 'https://ceoxbhsdodllziyxmbqr.supabase.co';
 const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
 
 const supabaseUrl =

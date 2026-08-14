@@ -10,6 +10,8 @@ import CountryHeroBanner from './components/CountryHeroBanner';
 import CountrySEOContent from './components/CountrySEOContent';
 import { useLazySection } from '@/hooks/useLazySection';
 import Pagination from '@/components/base/Pagination';
+import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
+import AdsterraNativeBanner from '@/components/feature/AdsterraNativeBanner';
 
 export interface CountryConfig {
   slug: string;
@@ -456,7 +458,7 @@ export default function CountryPage({ countrySlug }: Props) {
 
   if (!config) {
     return (
-      <div className="min-h-screen kp-cinema-page text-white">
+      <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
         <Navbar />
         <div className="flex flex-col items-center justify-center h-screen gap-4">
           <i className="ri-error-warning-line text-5xl text-white/20" />
@@ -504,7 +506,7 @@ export default function CountryPage({ countrySlug }: Props) {
   ];
 
   return (
-    <div className="min-h-screen kp-cinema-page text-white">
+    <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
       <SEO
         title={seoTitle}
         description={seoDescription}
@@ -521,8 +523,10 @@ export default function CountryPage({ countrySlug }: Props) {
 
       <main className="max-w-[1760px] mx-auto px-4 pb-12">
 
+        <AdsterraResponsiveBanner />
+
         {/* Sort Bar */}
-        <div className="flex items-center justify-between mb-5 gap-3 py-3 flex-col sm:flex-row">
+        <div className="catalog-toolbar flex items-center justify-between mb-5 gap-3 py-3 px-3 flex-col sm:flex-row">
           <div className="flex items-center gap-2">
             {!loading && sortedMovies.length > 0 && (
               <span className="text-sm text-white/35 flex items-center gap-1.5">
@@ -591,6 +595,8 @@ export default function CountryPage({ countrySlug }: Props) {
             <JumpToPage current={page} onGo={handleSetPage} />
           </>
         )}
+
+        {!loading && sortedMovies.length > 0 && <AdsterraNativeBanner />}
 
         {/* SEO Content */}
         <div ref={seoRef}>
