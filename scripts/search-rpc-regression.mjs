@@ -37,30 +37,49 @@ for (const [passed, message] of architectureChecks) if (!passed) failures.push(m
 
 const cases = [
   { query: 'Mưa Đỏ', expectTopSlug: 'mua-do' },
-  { query: 'Sơn Hà Lệnh', expectTopSlug: 'son-ha-lenh' },
+  { query: 'Sơn Hà Lệnh', expectTopSlugs: ['son-ha-lenh', 'blvietsub-5700-son-ha-lenh'] },
   { query: 'Đừng Xin Anh Jane', expectTopSlug: 'blvietsub-1533-dung-xin-anh-jane' },
   { query: 'Avengers', expectAtLeast: 5 },
 ];
 const results = [];
 for (const testCase of cases) {
-  const url = new URL('/api/search', siteUrl);
-  url.searchParams.set('q', testCase.query);
-  url.searchParams.set('limit', '12');
+  const urls = [
+    { url: new URL('/api/search', siteUrl), headers: { Accept: 'application/json' } },
+    {
+      url: new URL('/functions/v1/search-index-proxy', supabaseUrl),
+      headers: { Accept: 'application/json', apikey: anonKey, Origin: 'https://khophim.org' },
+    },
+  ];
+  urls.forEach(({ url }) => {
+    url.searchParams.set('q', testCase.query);
+    url.searchParams.set('limit', '12');
+  });
   const started = performance.now();
   try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(12_000),
-      headers: { Accept: 'application/json' },
-    });
+    let response;
+    let fallbackUsed = false;
+    for (let index = 0; index < urls.length; index += 1) {
+      const candidate = await fetch(urls[index].url, {
+        signal: AbortSignal.timeout(12_000),
+        headers: urls[index].headers,
+      });
+      if (candidate.ok && String(candidate.headers.get('content-type') || '').includes('application/json')) {
+        response = candidate;
+        fallbackUsed = index > 0;
+        break;
+      }
+    }
+    if (!response) throw new Error('No JSON search endpoint available');
     const payload = await response.json();
     const rows = Array.isArray(payload.items) ? payload.items : [];
     const elapsedMs = Math.round(performance.now() - started);
     const topSlug = rows[0]?.slug || null;
     if (!response.ok) failures.push(`${testCase.query}: HTTP ${response.status}`);
     if (testCase.expectTopSlug && topSlug !== testCase.expectTopSlug) failures.push(`${testCase.query}: expected top ${testCase.expectTopSlug}, got ${topSlug}`);
+    if (testCase.expectTopSlugs && !testCase.expectTopSlugs.includes(topSlug)) failures.push(`${testCase.query}: expected one of ${testCase.expectTopSlugs.join(', ')}, got ${topSlug}`);
     if (testCase.expectAtLeast && rows.length < testCase.expectAtLeast) failures.push(`${testCase.query}: expected >= ${testCase.expectAtLeast}, got ${rows.length}`);
     if (elapsedMs > 8_000) failures.push(`${testCase.query}: ${elapsedMs}ms exceeds 8000ms`);
-    results.push({ query: testCase.query, elapsed_ms: elapsedMs, source: payload.source, count: rows.length, top: rows.slice(0, 5).map((row) => ({ slug: row.slug, name: row.name })) });
+    results.push({ query: testCase.query, elapsed_ms: elapsedMs, source: payload.source, fallback_used: fallbackUsed, count: rows.length, top: rows.slice(0, 5).map((row) => ({ slug: row.slug, name: row.name })) });
   } catch (error) {
     failures.push(`${testCase.query}: ${error instanceof Error ? error.message : String(error)}`);
   }

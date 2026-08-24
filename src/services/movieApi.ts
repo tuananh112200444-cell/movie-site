@@ -2172,8 +2172,8 @@ export async function searchMoviesInSupabase(
         // work and bypasses request coalescing.
         return hasStrongSearchHit(edgeMovies) ? edgeMovies : [];
       }
-      // Both edge read paths failed. The caller can use the bundled static
-      // search shards without opening direct PostgREST queries per keystroke.
+      // Both edge read paths failed. Never bypass its open circuit with a direct browser PostgREST retry;
+      // use the bundled static search shards instead.
       return [];
     }
 

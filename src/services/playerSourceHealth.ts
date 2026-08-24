@@ -1,7 +1,10 @@
 const BAD_SOURCE_HOSTS_KEY = 'khophim.bad-source-hosts.v2';
 const SOURCE_HEALTH_LAST_FETCH_KEY = 'khophim.source-health.last-fetch.v2';
 const SOURCE_HEALTH_FETCH_TTL_MS = 5 * 60 * 1000;
-const SOURCE_HEALTH_TIMEOUT_MS = 3500;
+// This refresh runs in the background; the watch page only waits 250ms before
+// selecting its first source. Allow the Singapore rollup enough time to return
+// during peak load without delaying player startup.
+const SOURCE_HEALTH_TIMEOUT_MS = 8000;
 const SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000;
 export const SOURCE_HEALTH_UPDATED_EVENT = 'kp:source-health-updated';
 let sourceHealthInflight: Promise<void> | null = null;
