@@ -956,7 +956,7 @@ export default function MovieDetailPage() {
 
   /* ── Loading ── */
   if (loading) return (
-    <div className="angular-detail-page min-h-screen kp-cinema-page text-white" data-player-fix="blvietsub-embed-autoplay-20260704">
+    <div className="angular-detail-page min-h-screen kp-cinema-page text-white" data-player-fix="viewer-resilience-20260824">
       <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
       <Navbar />
       <main className="min-h-[calc(100dvh-4rem)] max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">
