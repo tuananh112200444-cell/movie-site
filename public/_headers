@@ -68,6 +68,10 @@
 /assets/*
   Cache-Control: public, max-age=0, must-revalidate
 
+/assets/404.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Content-Type: text/html; charset=utf-8
+
 /assets/SearchSuggestions-DZZtahkr.js
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
   Content-Type: application/javascript; charset=utf-8
