@@ -28,7 +28,7 @@ const EMPTY_SECTIONS: QueerSections = {
 };
 
 const MOVIES_PER_PAGE = 24;
-const QUEER_FALLBACK_URL = '/queer-fallback.json?v=202607041605';
+const QUEER_FALLBACK_URL = '/queer-fallback.json?v=202608231630';
 
 async function loadStaticQueerFallback(signal?: AbortSignal): Promise<MovieItem[]> {
   try {

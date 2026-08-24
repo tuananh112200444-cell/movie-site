@@ -1,4 +1,4 @@
-const endpoint = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/search-index-proxy?limit=5000';
+const endpoint = 'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/search-index-proxy?limit=5000';
 const queries = ['In Love Forever', 'Deep In', 'The Eternal Fragrance', 'Love Has Fireworks', 'Viral Hit'];
 
 const res = await fetch(endpoint);

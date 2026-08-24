@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useImageFallback } from '@/hooks/useImageFallback';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import type { MovieDetail } from '@/types/movie';
-import { getLandscapeImagePaths, getPortraitImagePaths, getPosterUrl, getThumbUrl, getMovieDisplayName, getOptimizedImageSrcSet } from '@/services/movieApi';
+import { getLandscapeImagePaths, getPortraitImagePaths, getMovieDisplayName, getOptimizedImageUrl } from '@/services/movieApi';
 import AudioLanguageBadges from '@/components/base/AudioLanguageBadges';
 import MovieCountdown from '@/components/base/MovieCountdown';
 
@@ -193,12 +193,12 @@ function buildCtrMovieTitle(movie: MovieDetail, displayTitle: string): string {
   const compactEpisode = /ho[aà]n\s*(t[aấ]t|th[aà]nh)|full|tr[oọ]n\s*b[oộ]/i.test(episode)
     ? 'Trọn Bộ'
     : episode;
-  const base = `Xem ${displayTitle}${compactEpisode ? ` ${compactEpisode}` : ''} ${lang} ${quality}`;
-  const withYear = `${base}${year} | KhoPhim`;
+  const base = `${displayTitle}${compactEpisode ? ` ${compactEpisode}` : ''} ${lang} ${quality}`;
+  const withYear = `${base}${year} - Thông Tin Phim | KhoPhim`;
   if (withYear.length <= 68) return withYear;
-  const withoutYear = `${base} | KhoPhim`;
+  const withoutYear = `${base} - Thông Tin Phim | KhoPhim`;
   if (withoutYear.length <= 68) return withoutYear;
-  return `Xem ${displayTitle} ${quality} | KhoPhim`;
+  return `${displayTitle} - Thông Tin Và Tập Phim | KhoPhim`;
 }
 
 function buildMovieSchema({
@@ -292,7 +292,7 @@ function buildMovieSchema({
       '@type': 'WebPage',
       '@id': `${canonical}#webpage`,
       url: canonical,
-      name: `Xem phim ${displayTitle}`,
+      name: `Thông tin phim ${displayTitle}`,
       description: cleanDescription,
       isPartOf: { '@type': 'WebSite', '@id': `${SITE_URL}/#website`, name: 'KhoPhim', url: SITE_URL },
       primaryImageOfPage: { '@type': 'ImageObject', url: poster },
@@ -311,8 +311,8 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
   const landscapeArtwork = getLandscapeImagePaths(movie);
   const posterPath = portraitArtwork.primary || '';
   const backdropPath = movie.hero_backdrop_url || landscapeArtwork.primary || posterPath;
-  const poster = useMemo(() => getPosterUrl(posterPath), [posterPath]);
-  const thumb = useMemo(() => getThumbUrl(backdropPath), [backdropPath]);
+  const poster = useMemo(() => getOptimizedImageUrl(posterPath, 520, 84), [posterPath]);
+  const thumb = useMemo(() => getOptimizedImageUrl(backdropPath, 1440, 78), [backdropPath]);
   const posterFallback = useImageFallback(posterPath, portraitArtwork.fallback, false, 520, 86, { preferredAspect: 'portrait' });
 
   const displayTitle = getMovieDisplayName(movie);
@@ -325,7 +325,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
   const seoDesc = useMemo(() => {
     const genreKeywords = movie.category?.map((c) => c.name).join(', ') ?? '';
     const episode = getEpisodeSeoLabel(movie);
-    const intro = `Xem ${displayTitle}${displayOrigin ? ` (${displayOrigin})` : ''}${episode ? ` ${episode}` : ''} ${movie.lang || 'Vietsub'} ${movie.quality || 'HD'} tại KhoPhim.`;
+    const intro = `Thông tin ${displayTitle}${displayOrigin ? ` (${displayOrigin})` : ''}${episode ? ` ${episode}` : ''}, bản ${movie.lang || 'Vietsub'} ${movie.quality || 'HD'} trên KhoPhim.`;
     const detail = [
       genreKeywords ? `Thể loại: ${genreKeywords}.` : '',
       movie.year ? `Năm ${movie.year}.` : '',

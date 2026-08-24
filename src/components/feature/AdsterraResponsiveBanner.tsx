@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { ADSTERRA_BANNERS_ENABLED } from '../../lib/advertising';
 
 const DESKTOP_AD = {
   key: 'bdb00121f91598ecc645ad05155f9af9',
@@ -16,6 +17,11 @@ const MOBILE_AD = {
 const AD_FRAME_ORIGIN = 'https://movie-site-eds.pages.dev';
 
 export default function AdsterraResponsiveBanner({ deferMs = 0 }: { deferMs?: number }) {
+  if (!ADSTERRA_BANNERS_ENABLED) return null;
+  return <ActiveAdsterraResponsiveBanner deferMs={deferMs} />;
+}
+
+function ActiveAdsterraResponsiveBanner({ deferMs = 0 }: { deferMs?: number }) {
   const mobile = useMediaQuery('(max-width: 767px)');
   const ad = mobile ? MOBILE_AD : DESKTOP_AD;
   const frameSrc = `${AD_FRAME_ORIGIN}/_ads/banner-${ad.width}x${ad.height}.html`;

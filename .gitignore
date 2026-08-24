@@ -3,7 +3,9 @@ out/
 dist/
 .env
 .env.local
+.wrangler/
 tmp_*
+motchill_page.html
 tools/video-pipeline/config.json
 .DS_Store
 npm-debug.log*

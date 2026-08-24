@@ -1,6 +1,9 @@
+import { ADSTERRA_BANNERS_ENABLED } from '../../lib/advertising';
+
 const AD_FRAME_SRC = 'https://movie-site-eds.pages.dev/_ads/banner-300x250.html';
 
 export default function AdsterraRectangleBanner() {
+  if (!ADSTERRA_BANNERS_ENABLED) return null;
   return (
     <aside className="adsterra-rectangle-banner" aria-label="Quảng cáo 300 x 250" data-ad-size="300x250">
       <span className="adsterra-rectangle-banner__label">Quảng cáo</span>

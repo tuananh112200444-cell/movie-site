@@ -30,10 +30,8 @@ export function useScrollReveal<T extends HTMLElement = HTMLDivElement>() {
     // Mark container so CSS can hide items safely
     container.classList.add('js-reveal-ready', 'js-stagger-ready');
 
-    const targets = container.querySelectorAll<HTMLElement>(
-      '.reveal, .reveal-left, .reveal-scale, .stagger-item',
-    );
-    if (targets.length === 0) return;
+    const targetSelector = '.reveal, .reveal-left, .reveal-scale, .stagger-item';
+    const targets = container.querySelectorAll<HTMLElement>(targetSelector);
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -61,6 +59,34 @@ export function useScrollReveal<T extends HTMLElement = HTMLDivElement>() {
 
     targets.forEach((el) => observer.observe(el));
 
+    // Home rails can replace fallback cards with fresh API cards after this
+    // effect has already captured its initial target list. Reveal those new
+    // nodes immediately; otherwise the persistent js-stagger-ready class keeps
+    // them at opacity: 0 forever.
+    const mutationObserver = new MutationObserver((mutations) => {
+      const addedTargets = new Set<HTMLElement>();
+
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (node.matches(targetSelector)) addedTargets.add(node);
+          node.querySelectorAll<HTMLElement>(targetSelector).forEach((el) => addedTargets.add(el));
+        }
+      }
+
+      const toRevealStagger: HTMLElement[] = [];
+      const toRevealOthers: HTMLElement[] = [];
+      addedTargets.forEach((el) => {
+        if (el.dataset.revealed === 'true') return;
+        if (el.classList.contains('stagger-item')) toRevealStagger.push(el);
+        else toRevealOthers.push(el);
+      });
+
+      if (toRevealStagger.length) batchApplyClass(toRevealStagger, 'staggered');
+      if (toRevealOthers.length) batchApplyClass(toRevealOthers, 'revealed');
+    });
+    mutationObserver.observe(container, { childList: true, subtree: true });
+
     // Safety fallback: after 1.5s force-reveal everything in case observer missed
     const fallback = setTimeout(() => {
       batchApplyClass(Array.from(targets), 'staggered');
@@ -69,6 +95,7 @@ export function useScrollReveal<T extends HTMLElement = HTMLDivElement>() {
 
     return () => {
       observer.disconnect();
+      mutationObserver.disconnect();
       clearTimeout(fallback);
     };
   }, []);

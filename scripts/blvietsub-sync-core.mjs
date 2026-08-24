@@ -318,7 +318,7 @@ function extractAttr(tag = '', name = '') {
   return decodeHtml(tag.match(new RegExp(`${escaped}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1] || '').trim();
 }
 
-function addParsedEpisode(episodes, episodeNumber, serverNumber, rawLink, type = 'embed', rawLabel = '') {
+function addParsedEpisode(episodes, episodeNumber, serverNumber, rawLink, type = 'embed', rawLabel = '', serverNameOverride = '') {
   if (!episodeNumber) return;
   const link = decodeHtml(String(rawLink || '').replace(/&amp;/g, '&')).trim();
   if (!link || isBlvietsubWatchUrl(link)) return;
@@ -335,7 +335,7 @@ function addParsedEpisode(episodes, episodeNumber, serverNumber, rawLink, type =
     const existingLink = (existing.link_embed || existing.link_m3u8 || '').replace(/\/+$/, '');
     if (existing.episode_number === episodeNumber && existingLink === normalizedLink) return;
   }
-  const serverName = `SV ${serverNumber || 1}`;
+  const serverName = serverNameOverride || `SV ${serverNumber || 1}`;
   const key = `${serverName}|${episodeNumber}`;
   if (episodes.has(key)) return;
   const isHls = type.toLowerCase() === 'm3u8' || /\.m3u8(?:[?#].*)?$/i.test(link);
@@ -364,6 +364,23 @@ function parseStreamingServerEpisodes(html = '') {
     const nextServer = (perEpisodeCount.get(episodeNumber) || 0) + 1;
     perEpisodeCount.set(episodeNumber, nextServer);
     addParsedEpisode(episodes, episodeNumber, nextServer, link, type, episodeId);
+  }
+  // Current WordPress player (August 2026): one button per episode. The
+  // trailing number in data-server-label/button text is the episode number;
+  // the label prefix identifies the server group (SS/HX/etc.).
+  for (const match of html.matchAll(/<button\b[^>]*class=["'][^"']*\bblv-server-button\b[^"']*["'][^>]*>[\s\S]*?<\/button>/gi)) {
+    const tag = match[0];
+    const link = extractAttr(tag, 'data-server-url');
+    const dataLabel = extractAttr(tag, 'data-server-label');
+    const buttonLabel = stripTags(tag);
+    const info = parseEpisodeInfo(buttonLabel || dataLabel);
+    if (!info.number || !link) continue;
+    const groupLabel = (dataLabel || 'BLVietsub')
+      .replace(/\s+0*\d+(?:\s+(?:end|raw|full))?\s*$/i, '')
+      .replace(/^server\s*/i, '')
+      .trim();
+    const serverName = `BLVietsub ${groupLabel || 'Server'}`;
+    addParsedEpisode(episodes, info.number, 1, link, 'embed', buttonLabel || dataLabel, serverName);
   }
   // Modern BLVietsub pages expose the same player links twice: structured
   // streaming-server nodes and legacy blv-episode-btn buttons. The legacy
@@ -928,9 +945,14 @@ export async function runBlvietsubSync({
       parsed: entries.length,
       sample: entries.slice(0, 5).map((entry) => ({
         title: entry.title,
+        origin_name: entry.originName,
         source_url: entry.sourceUrl,
+        image: entry.image,
+        year: entry.year,
+        updated_at: entry.updatedAt,
         episodes: entry.episodes.length,
         distinct_episodes: playableEpisodeCount(entry.episodes),
+        current_episode: maxPlayableEpisodeNumber(entry.episodes),
       })),
       errors,
       transient_errors: transientErrors.slice(0, 20),

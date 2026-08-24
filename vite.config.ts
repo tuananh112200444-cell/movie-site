@@ -17,50 +17,28 @@ function readReleaseId() {
   }
 }
 
-const releaseId = readReleaseId();
+const entryCacheRevision = '20260823-prod-v10e';
 
-function homeHeroPreloadPlugin() {
+function injectProductionReleaseMeta(releaseId: string) {
   return {
-    name: 'khophim-home-hero-preload',
-    transformIndexHtml() {
-      try {
-        const payload = JSON.parse(readFileSync(resolve(__dirname, 'public/home-fallback.json'), 'utf8')) as {
-          sections?: { trending?: Array<{ hero_backdrop_url?: string; poster_url?: string; thumb_url?: string }> };
-        };
-        const movie = payload.sections?.trending?.[0];
-        const mobilePath = String(movie?.poster_url || movie?.thumb_url || movie?.hero_backdrop_url || '').trim();
-        const desktopPath = String(movie?.hero_backdrop_url || movie?.thumb_url || movie?.poster_url || '').trim();
-        if (!mobilePath && !desktopPath) return [];
-        const resolveOriginal = (path: string) => /^https?:\/\//i.test(path)
-          ? path
-          : `https://img.ophim.live/uploads/movies/${path.replace(/^\/+/, '')}`;
-        // Keep these URLs byte-for-byte aligned with HeroBanner. A preload with
-        // a different width or quality is a separate request and cannot improve
-        // LCP even when it points to the same original poster.
-        const optimized = (original: string, width: number, quality: number) => {
-          if (/^https?:\/\/image\.tmdb\.org\/t\/p\//i.test(original)) {
-            const size = width <= 672 ? 'w500' : 'w1280';
-            return original.replace(/\/t\/p\/[^/]+\//i, `/t/p/${size}/`);
-          }
-          if (/^https?:\/\/phimimg\.com\//i.test(original)) {
-            return `/cdn-cgi/image/width=${width},quality=${quality},format=auto,fit=cover/${original}`;
-          }
-          return `https://wsrv.nl/?url=${encodeURIComponent(original)}&w=${width}&q=${quality}&output=webp&fit=cover&we`;
-        };
-        const mobileOriginal = resolveOriginal(mobilePath || desktopPath);
-        const desktopOriginal = resolveOriginal(desktopPath || mobilePath);
-        return [
-          { tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'image', href: optimized(mobileOriginal, 896, 78), media: '(max-width: 639px)', fetchpriority: 'high' } },
-          { tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'image', href: optimized(desktopOriginal, 1680, 82), media: '(min-width: 640px)', fetchpriority: 'high' } },
-        ];
-      } catch {
-        return [];
-      }
+    name: 'khophim-release-meta',
+    enforce: 'post' as const,
+    transformIndexHtml(html: string) {
+      return html.replace(
+        /<head>/,
+        `<head>\n    <meta name="khophim-release" content="${releaseId}">`,
+      );
     },
   };
 }
+
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(() => {
+  // `prebuild` owns release generation. Vite only reads that immutable value so
+  // Windows, CI and Cloudflare all publish the same manifest without a second
+  // write racing the build process.
+  const releaseId = readReleaseId();
+  return {
   define: {
     __BASE_PATH__: JSON.stringify(base),
     __IS_PREVIEW__: isPreview,
@@ -70,7 +48,6 @@ export default defineConfig({
     __KP_RELEASE_ID__: JSON.stringify(releaseId),
   },
   plugins: [
-    homeHeroPreloadPlugin(),
     react(),
     // Gzip + Brotli compression giup giam manh dung luong truyen tai.
     compression({
@@ -126,6 +103,7 @@ export default defineConfig({
       ],
       dts: true,
     }),
+    injectProductionReleaseMeta(releaseId),
   ],
   base,
   build: {
@@ -170,8 +148,8 @@ export default defineConfig({
         },
         /* Asset co hash de cache busting hieu qua. */
         assetFileNames: 'assets/[name]-[hash][extname]',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: `assets/[name]-[hash]-${entryCacheRevision}.js`,
+        entryFileNames: `assets/[name]-[hash]-${entryCacheRevision}.js`,
       },
       /* Tree-shaking tich cuc. */
       treeshake: {
@@ -190,4 +168,5 @@ export default defineConfig({
     port: 3000,
     host: "0.0.0.0",
   },
+  };
 });

@@ -19,6 +19,7 @@ assert.match(source, /targeted_gap_provider:/);
 assert.match(source, /An exact provider match may publish the same URL again/);
 assert.match(source, /Continue with the guarded exact-detail lookup/);
 assert.match(source, /internal\/nguonc-detail/);
+assert.match(source, /\^embed\\d\*\\\.streamc\\\.xyz\$/);
 assert.match(source, /MOVIE_DETAIL_PROXY_SECRET/);
 assert.match(edgeRouter, /pathname === '\/internal\/nguonc-detail'/);
 assert.match(edgeRouter, /crypto\.subtle\.timingSafeEqual/);

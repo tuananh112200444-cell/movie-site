@@ -1,13 +1,21 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { ADSTERRA_ENABLED } from '../../lib/advertising';
 
 const SCRIPT_SRC = 'https://pl30842367.effectivecpmnetwork.com/a9/71/37/a97137a855a0eea78c3794d6581791f2.js';
 
 function isProtectedRoute(pathname: string): boolean {
-  return /^\/xem-phim\/[^/]+(?:\/|$)/.test(pathname) || pathname.startsWith('/admin');
+  return /^\/xem-phim\/[^/]+(?:\/|$)/.test(pathname)
+    || pathname === '/search'
+    || pathname.startsWith('/admin');
 }
 
 export default function AdsterraSocialBar() {
+  if (!ADSTERRA_ENABLED) return null;
+  return <ActiveAdsterraSocialBar />;
+}
+
+function ActiveAdsterraSocialBar() {
   const { pathname } = useLocation();
 
   useEffect(() => {

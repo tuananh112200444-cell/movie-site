@@ -43,12 +43,19 @@ function chunk(items, size) {
 function episodeNumberFromText(value) {
   const text = String(value || '').toLowerCase();
   if (!text) return 0;
+  const decimal = text.match(/(?:^|\D)(\d{1,3})\.\d{1,2}(?:\D|$)/);
+  if (decimal) return Number(decimal[1] || 0) || 0;
   const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
   if (slash) return Number(slash[1] || 0) || 0;
   const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
   if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
   const matches = [...text.matchAll(/(\d{1,5})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
   return matches.length ? Math.max(...matches) : 0;
+}
+
+function isFractionalEpisodeRow(row) {
+  return [row?.episode_name, row?.name, row?.filename]
+    .some((value) => /(?:^|\D)\d{1,3}\.\d{1,2}(?:\D|$)/.test(String(value || '')) && /\bpart\s*\d+\b/i.test(String(value || '')));
 }
 
 function advertisedEpisode(movie) {
@@ -59,7 +66,8 @@ function advertisedEpisode(movie) {
 }
 
 function playableNumber(row) {
-  const directNumber = Math.max(
+  const fractional = isFractionalEpisodeRow(row);
+  const directNumber = fractional ? 0 : Math.max(
     Number(row.episode_number || 0) || 0,
     episodeNumberFromText(row.slug),
     episodeNumberFromText(row.episode_slug),
@@ -72,7 +80,7 @@ function playableNumber(row) {
       ? [row.server_data]
       : [];
   const nestedPlayable = nestedRows.some((ep) => String(ep?.link_m3u8 || '').trim() || String(ep?.link_embed || '').trim());
-  const nestedNumber = nestedRows.reduce((max, ep) => Math.max(
+  const nestedNumber = nestedRows.reduce((max, ep) => isFractionalEpisodeRow(ep) ? max : Math.max(
     max,
     Number(ep?.episode_number || 0) || 0,
     episodeNumberFromText(ep?.slug),
@@ -104,7 +112,8 @@ function sourceKind(row) {
 
 function normalizeEpisodeKey(row, nested = null) {
   const candidate = nested || row;
-  const number = Math.max(
+  const fractional = isFractionalEpisodeRow(candidate);
+  const number = fractional ? 0 : Math.max(
     Number(candidate?.episode_number || 0) || 0,
     episodeNumberFromText(candidate?.slug),
     episodeNumberFromText(candidate?.episode_slug),

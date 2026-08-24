@@ -48,6 +48,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 function episodeNumberFromText(value) {
   if (value == null) return 0;
   const text = String(value).toLowerCase();
+  const decimal = text.match(/(?:^|\D)(\d{1,3})\.\d{1,2}(?:\D|$)/);
+  if (decimal) return Number(decimal[1] || 0) || 0;
   const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
   if (slash) return Number(slash[1] || 0) || 0;
   const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
@@ -60,6 +62,11 @@ function episodeNumberFromText(value) {
   return matches.length ? Math.max(...matches) : 0;
 }
 
+function isFractionalEpisodeRow(row) {
+  return [row?.episode_name, row?.name, row?.filename]
+    .some((value) => /(?:^|\D)\d{1,3}\.\d{1,2}(?:\D|$)/.test(String(value || '')) && /\bpart\s*\d+\b/i.test(String(value || '')));
+}
+
 function advertisedEpisode(movie) {
   return Math.max(
     Number(movie.current_episode || 0) || 0,
@@ -70,6 +77,7 @@ function advertisedEpisode(movie) {
 function playableEpisodeNumber(row) {
   const hasPlayableUrl = Boolean(String(row.link_m3u8 || row.stream_url || '').trim() || String(row.link_embed || row.embed_url || '').trim());
   if (!hasPlayableUrl) return 0;
+  if (isFractionalEpisodeRow(row)) return 0;
   return Math.max(
     Number(row.episode_number || 0) || 0,
     episodeNumberFromText(row.episode_slug),
@@ -191,6 +199,7 @@ function sqlJson(value) {
 }
 
 function getEpisodeNumber(ep) {
+  if (isFractionalEpisodeRow(ep)) return 0;
   return episodeNumberFromText(ep?.name) || episodeNumberFromText(ep?.slug);
 }
 

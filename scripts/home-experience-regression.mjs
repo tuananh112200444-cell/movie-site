@@ -12,11 +12,14 @@ const app = await readFile('src/App.tsx', 'utf8');
 const main = await readFile('src/main.tsx', 'utf8');
 const smartCache = await readFile('src/utils/smartCache.ts', 'utf8');
 const discovery = await readFile('src/pages/home/components/HomeDiscoverySection.tsx', 'utf8');
-const catalogStats = await readFile('src/pages/home/components/CatalogStatsSection.tsx', 'utf8');
 const portalGateway = await readFile('src/pages/home/components/PortalGateway.tsx', 'utf8');
 const movieSection = await readFile('src/pages/home/components/MovieSection.tsx', 'utf8');
+const movieCard = await readFile('src/components/base/MovieCard.tsx', 'utf8');
+const movieDetail = await readFile('src/pages/movie-detail/page.tsx', 'utf8');
+const slugEncoder = await readFile('src/utils/slugEncoder.ts', 'utf8');
 const top10 = await readFile('src/pages/home/components/Top10TodaySection.tsx', 'utf8');
 const topCinema = await readFile('src/pages/home/components/TopCinemaMoviesSection.tsx', 'utf8');
+const imagePreloader = await readFile('src/utils/imagePreloader.ts', 'utf8');
 const viteConfig = await readFile('vite.config.ts', 'utf8');
 const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 const homeFallback = JSON.parse(await readFile('public/home-fallback.json', 'utf8'));
@@ -24,20 +27,16 @@ const stickyBanner = await readFile('src/components/feature/StickyBanner.tsx', '
 const navBanner = await readFile('src/components/feature/NavBanner.tsx', 'utf8');
 const headers = await readFile('public/_headers', 'utf8');
 const pagesWorker = await readFile('functions/[[path]].js', 'utf8');
+const movieSchedule = await readFile('src/utils/movieSchedule.ts', 'utf8');
 const failures = [];
-for (const snippet of [
-  '41.950',
-  '38.431',
-  '37.821',
-  'Số liệu hệ thống đã xác minh',
-  'Snapshot ngày {VERIFIED_AT}',
-]) {
-  if (!catalogStats.includes(snippet)) {
-    failures.push(`Homepage catalogue statistics are missing their verified contract: ${snippet}`);
-  }
+if (
+  !movieSchedule.includes("const text = String(value ?? '').trim()") ||
+  !movieSchedule.includes("const current = String(movie.episode_current ?? '')")
+) {
+  failures.push('Runtime provider episode values must be normalized before schedule parsing.');
 }
-if (!home.includes('<CatalogStatsSection />') || home.indexOf('<CatalogStatsSection />') > home.indexOf('fetchKey="onlyflix-moi"')) {
-  failures.push('The verified catalogue statistics must appear before the first movie shelf.');
+if (home.includes('<CatalogStatsSection />')) {
+  failures.push('Homepage must not publish a fixed catalogue count that drifts from production data.');
 }
 if (
   stickyBanner.includes('sessionStorage') ||
@@ -50,12 +49,12 @@ if (
 if (stickyBanner.includes('wsrv.nl') || !stickyBanner.includes("const BANNER_IMAGE = '/banners/winaz-top-20260722.gif?v=20260722'")) {
   failures.push('The sticky WinAZ banner must load its original animated GIF, not a converted WebP.');
 }
-if (!navBanner.includes('format=auto,anim=true') || !navBanner.includes('restoreOriginalBanner')) {
-  failures.push('Navigation GIF banners must preserve animation through Cloudflare and retain an original-GIF fallback.');
+if (navBanner.includes('/cdn-cgi/image/') || !navBanner.includes("if (pathname.endsWith('.gif'))") || !navBanner.includes('restoreOriginalBanner')) {
+  failures.push('Navigation GIF banners must avoid paid Cloudflare transformations and retain an original-GIF fallback.');
 }
 
-if (!movieApi.includes('phimimg\\.com|icdn\\.darkbytes\\.xyz')) {
-  failures.push('Image optimization must bypass origins that wsrv.nl rejects with HTTP 400.');
+if (!movieApi.includes('large phimimg originals') || movieApi.includes('phimimg\\.com|icdn\\.darkbytes\\.xyz')) {
+  failures.push('Large phimimg originals must use the shared resizing path instead of bypassing optimization.');
 }
 if (!movieApi.includes('unwrapCloudflareImageOrigin')) {
   failures.push('The shared image helper must recover an origin from an already-resized Cloudflare image URL.');
@@ -79,7 +78,7 @@ if (!home.includes('Kho phim được đồng bộ và kiểm tra nguồn phát 
 if (/getViewerCount|\}\s*xem/.test(trending)) {
   failures.push('Trending UI must not show generated viewer counts as real analytics.');
 }
-if (!/getPortraitImagePaths\(movie\)[\s\S]*?posterPath,[\s\S]*?posterFallback,[\s\S]*?isImagePreloaded\(getPosterUrl\(posterPath \|\| ''\)\)[\s\S]*?\n\s*240,\s*\n\s*78,\s*\n\s*\{ preferredAspect: 'portrait' \},\s*\n\s*\);/.test(trending)) {
+if (!/getPortraitImagePaths\(movie\)[\s\S]*?posterPath,[\s\S]*?posterFallback,[\s\S]*?isImagePreloaded\(getPosterUrl\(posterPath \|\| ''\)\)[\s\S]*?\n\s*320,\s*\n\s*84,\s*\n\s*\{ preferredAspect: 'portrait' \},\s*\n\s*\);/.test(trending)) {
   failures.push('Trending posters must pass their measured image budget through the fallback hook.');
 }
 if (lazySection.includes('3200 + Math.min(sectionIndex, 8) * 120')) {
@@ -103,8 +102,8 @@ if (!main.includes("new CustomEvent('kp:page-resumed')") || !lazySection.include
 if (!smartCache.includes("prefix: 'kp_home_proxy_', ttl: 30 * MINUTE")) {
   failures.push('Homepage warm cache must survive normal mobile app switching.');
 }
-if (!home.includes('loadStaticHomeFallback(fallbackController.signal, DESKTOP_HOME_SECTIONS)')) {
-  failures.push('Mobile static fallback must include every shelf for fast scrolling.');
+if (!home.includes("window.matchMedia('(max-width: 639px)').matches ? MOBILE_HOME_SECTIONS : DESKTOP_HOME_SECTIONS")) {
+  failures.push('Static homepage fallback must match the smaller mobile shelf contract.');
 }
 for (const [label, source] of [
   ['homepage fallback', home],
@@ -115,16 +114,35 @@ for (const [label, source] of [
   }
 }
 for (const snippet of [
-  'const timer = setTimeout(() => controller.abort(), 20_000);',
   'const upstreamPromise = fetchNewMoviesMultiSource(page);',
   'raceFirstValidWithTimeout<MovieListResponse>',
+  '], 5_500);',
 ]) {
   if (!movieApi.includes(snippet)) {
     failures.push(`Fresh movie lists must not wait on a slow primary source: ${snippet}`);
   }
 }
-if (!home.includes("'onlyflix-moi'") || !home.includes('title="Phim Đang Chiếu Rạp"')) {
-  failures.push('Homepage is missing the dedicated OnlyFlix cinema shelf.');
+if (home.includes('fetchKey="onlyflix-moi"') || home.includes("'onlyflix-moi'")) {
+  failures.push('Homepage must not restore the retired OnlyFlix premiere shelf.');
+}
+const trendingShelfIndex = home.indexOf('<TrendingSection movies={trendingMovies}');
+const queerShelfIndex = home.indexOf('title="Phim Đam Mỹ Mới Nhất"');
+if (trendingShelfIndex < 0 || queerShelfIndex <= trendingShelfIndex) {
+  failures.push('The newest queer shelf must render after the new-and-hot shelf.');
+}
+for (const contract of [
+  "fetchSection(supabase, 'phim-chieu-rap', false, limit, true)",
+  "if (sourceSite === 'phimapi') return `https://phimimg.com/",
+  "if (key !== 'phim-chieu-rap') return merged;",
+]) {
+  if (!proxy.includes(contract)) failures.push(`KKPhim cinema source contract is missing: ${contract}`);
+}
+for (const contract of [
+  "const preferKkphim = type === 'phim-chieu-rap';",
+  "{ url: `https://phimapi.com/v1/api/danh-sach/${type}?${q}`, site: 'phimapi', name: 'KKPhim' }",
+  'normalizeListArtworkUrl(item.poster_url, cdnBase)',
+]) {
+  if (!movieApi.includes(contract)) failures.push(`Client cinema fallback contract is missing: ${contract}`);
 }
 if (!proxy.includes("requestedSections.includes('onlyflix-moi')") || !proxy.includes("sectionPromises['onlyflix-moi'] = fetchOnlyflixTrendingMovies")) {
   failures.push('Home proxy is missing the OnlyFlix-only cinema section contract.');
@@ -146,9 +164,6 @@ for (const snippet of [
   if (!onlyflixSync.includes(snippet)) {
     failures.push(`OnlyFlix cinema sync must not replace its rail with an empty default period: ${snippet}`);
   }
-}
-if (home.indexOf('fetchKey="onlyflix-moi"') > home.indexOf('<HomeDiscoverySection')) {
-  failures.push('The OnlyFlix cinema shelf must be the first homepage content section.');
 }
 if (!proxy.includes('.abortSignal(timeoutSignal(3000))')) {
   failures.push('Homepage cache writes need enough time to persist the full section snapshot.');
@@ -185,7 +200,7 @@ if (!movieApi.includes("newMoviesEndpoint: '/danh-sach/phim-moi-cap-nhat'")) {
 if (!proxy.includes("fetchExternal('/danh-sach/phim-moi-cap-nhat")) {
   failures.push('Home proxy must use the live KKPhim latest-feed endpoint.');
 }
-if (!app.includes("if (!/^\\/xem-phim\\/[^/]+/.test(window.location.pathname)) return;")) {
+if (app.includes('warmPlayerSourceHealth')) {
   failures.push('Player source-health warming must not consume homepage bandwidth.');
 }
 for (const country of ['han-quoc', 'au-my', 'trung-quoc', 'thai-lan']) {
@@ -221,13 +236,43 @@ for (const snippet of [
 ]) {
   if (!proxy.includes(snippet)) failures.push(`Independent Top 10 brain is missing: ${snippet}`);
 }
-if (
-  !home.includes("'top10-single'") ||
-  !home.includes("'top10-series'") ||
-  !home.includes("homeData['top10-single']?.length") ||
-  !home.includes("homeData['top10-series']?.length")
-) {
+if (!home.includes("'top10-single'") || !home.includes("'top10-series'")
+  || !home.includes("...(homeData['top10-single'] ?? [])")
+  || !home.includes("...(homeData['top10-series'] ?? [])")) {
   failures.push('Homepage must request independent Top 10 single and series sections with compatibility fallbacks.');
+}
+for (const contract of [
+  "'vsmov-4k'",
+  "homeData['vsmov-4k']",
+  'Phim 4K Siêu Nét',
+  'viewAllLink="/phim-4k"',
+]) {
+  if (!home.includes(contract)) failures.push(`Homepage 4K shelf is missing: ${contract}`);
+}
+for (const contract of [
+  "const VSMOV_4K_URL = 'https://vsmov.com/api/danh-sach/4k?page=1'",
+  "sectionPromises['vsmov-4k'] = fetchVsmov4KMovies",
+  "quality: '4K'",
+  ".in('tmdb_id', chunk)",
+  'filterQuarantinedExactMovies',
+  'Object.values(freshSections).flat()',
+  'publicFreshSlugs',
+  'storedMovieIds',
+  '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}',
+  'stableSectionFallback',
+  'const [singaporeItems, kkphimPayload] = await Promise.all',
+  "freshSections['top10-single'] = mergeSectionWithPriority",
+  "freshSections['top10-series'] = mergeSectionWithPriority",
+]) {
+  if (!proxy.includes(contract)) failures.push(`VSMov 4K feed contract is missing: ${contract}`);
+}
+for (const [ok, message] of [
+  [movieCard.includes("preferredSource || 'vsmov'") && movieCard.includes("isVsmovFourK ? '4k'"), 'A VSMov 4K card must preserve its source/quality intent'],
+  [slugEncoder.includes("params.set('source'") && slugEncoder.includes("params.set('quality'"), 'Movie detail URLs must carry playback preferences'],
+  [movieDetail.includes('withPlaybackPreference') && movieDetail.includes("preferredSource === 'vsmov'"), 'Detail/watch navigation must preserve the 4K preference'],
+  [movieApi.includes('_preferredProvider?: string') && movieApi.includes('const rankedCandidates = candidates;'), 'Playback ranking must treat a requested source as identity metadata, not priority'],
+]) {
+  if (!ok) failures.push(message);
 }
 if (
   !top10.includes('Top 10 Phim Lẻ Hay Nhức Nách') ||
@@ -239,13 +284,13 @@ if (
 if (!top10.includes('w-[292px]') || top10.includes('className={`${HOME_POSTER_ITEM_CLASS} group cursor-pointer`}')) {
   failures.push('Mobile Top 10 must use readable landscape cards instead of narrow poster-only cards.');
 }
-if (!/isImagePreloaded[\s\S]*?\n\s*280,\s*\n\s*80,\s*\n\s*\{ preferredAspect: 'portrait' \},\s*\n\s*\);/.test(topCinema)) {
-  failures.push('Cinema posters must stay within the measured card-size image budget.');
+if (!/getPortraitImagePaths\(movie\)[\s\S]*?portraitPath,[\s\S]*?portraitFallback,[\s\S]*?isImagePreloaded\(getImageUrl\(portraitPath \|\| ''\)\)[\s\S]*?\n\s*480,\s*\n\s*86,\s*\n\s*\{ preferredAspect: 'portrait' \},\s*\n\s*\);/.test(topCinema)) {
+  failures.push('Cinema posters must use the provider-aware portrait artwork at a sharp card-size budget.');
 }
 if (!String(packageJson.scripts?.prebuild || '').includes('refresh-home-fallback.mjs')) {
   failures.push('Production builds must refresh the static homepage fallback before packaging.');
 }
-for (const section of ['trending', 'top10-single', 'top10-series', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh']) {
+for (const section of ['vsmov-4k', 'trending', 'top10-single', 'top10-series', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh']) {
   if (!Array.isArray(homeFallback.sections?.[section]) || homeFallback.sections[section].length < 6) {
     failures.push(`Static homepage fallback is missing a usable ${section} section.`);
   }
@@ -253,20 +298,11 @@ for (const section of ['trending', 'top10-single', 'top10-series', 'phim-chieu-r
 if (/Ã|Ä|áº|á»/.test(JSON.stringify(homeFallback))) {
   failures.push('Static homepage fallback contains mojibake and would corrupt Vietnamese titles offline.');
 }
-for (const contract of ['optimized(672, 78)', 'optimized(1680, 82)']) {
-  if (!viteConfig.includes(contract)) {
-    failures.push(`Build-time hero preload is out of sync with HeroBanner: ${contract}.`);
-  }
+if (viteConfig.includes('homeHeroPreloadPlugin')) {
+  failures.push('A SPA-wide build-time homepage preload must not waste bandwidth on detail/watch routes.');
 }
-for (const contract of [
-  'movie?.hero_backdrop_url || movie?.poster_url',
-  "original.replace(/\\/t\\/p\\/[^/]+\\//i, `/t/p/${size}/`)",
-  "'w500'",
-  "'w1280'",
-]) {
-  if (!viteConfig.includes(contract)) {
-    failures.push(`Build-time hero preload does not match the runtime LCP source: ${contract}.`);
-  }
+if (!imagePreloader.includes("link.setAttribute('fetchpriority', 'high')")) {
+  failures.push('The runtime homepage LCP preload must use high fetch priority.');
 }
 for (const snippet of [
   'The large hero is a landscape-only surface',

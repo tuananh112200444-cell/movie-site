@@ -26,9 +26,11 @@ const newestAuditMigration = fs.readFileSync(
   'supabase/migrations/20260813235000_add_newest_first_playback_audit.sql',
   'utf8',
 );
-
-const ophimOutageMultiplier = Number(movieApi.match(/OPHIM_ACTIVE_OUTAGE_MULTIPLIER\s*=\s*([\d.]+)/)?.[1] || 0);
-const kkphimOutageMultiplier = Number(movieApi.match(/KKPHIM_ACTIVE_OUTAGE_MULTIPLIER\s*=\s*([\d.]+)/)?.[1] || 0);
+const equalSchedulerMigration = fs.readFileSync(
+  'supabase/migrations/20260823093000_equal_provider_offpeak_scheduler.sql',
+  'utf8',
+);
+const unifiedProviderBrain = fs.readFileSync('supabase/functions/unified-provider-brain/index.ts', 'utf8');
 
 const checks = [
   [migration.includes('exists(select 1 from public.background_job_pause_state)'), 'Operator global pause is not respected'],
@@ -44,8 +46,8 @@ const checks = [
   [player.includes("addTemporaryPrefetch(`${streamcOrigin}/player.js?ver=1.9`, 'script')"), 'NguonC cold player script is not prefetched'],
   [player.includes("addTemporaryPreconnect('https://ssl.p.jwpcdn.com')"), 'NguonC JW Player origin is not preconnected'],
   [health.includes("Range: 'bytes=0-65535'") && health.includes('HLS playlist has no segment'), 'Stream health does not verify an actual media segment'],
-  [ophimOutageMultiplier > kkphimOutageMultiplier && kkphimOutageMultiplier >= 1, 'An active OPhim cluster outage is not demoted below the healthier priority provider'],
-  [movieApi.includes("sourceKind === 'ophim'") && movieApi.includes('OPHIM_ACTIVE_OUTAGE_MULTIPLIER'), 'OPhim outage penalty is not wired into source scoring'],
+  [!movieApi.includes('PREFERRED_SOURCE_BONUS') && !movieApi.includes('ACTIVE_OUTAGE_MULTIPLIER') && !movieApi.includes('getPriorityRankScore'), 'Frontend still assigns provider-specific priority'],
+  [movieApi.includes('pickBestEpisodeByScore') && movieApi.includes('STREAM_SERVER_CODES'), 'Frontend does not expose provider-neutral score selection'],
   [equalBrainMigration.includes('set_stream_playback_brain_fields') && equalBrainMigration.includes('calculate_playback_score'), 'Playback score is not precomputed in Supabase'],
   [equalBrainMigration.includes('backfill-stream-playback-brain-offpeak') && equalBrainMigration.includes('for update skip locked'), 'Legacy score backfill is not bounded and off-peak'],
   [backfillProgressMigration.includes('stream.playback_score is null') && backfillProgressMigration.includes('playback_provider_key(stream.source, stream.stream_url, stream.embed_url) is not null'), 'Legacy score backfill can repeatedly select non-target providers'],
@@ -53,7 +55,10 @@ const checks = [
   [equalBrainMigration.includes('providers=vsmov,nguonc'), 'Scheduled discovery does not include both VSMOV and NguonC'],
   [gapSync.includes("DEFAULT_PROVIDERS: Provider[] = ['vsmov', 'nguonc']") && gapSync.includes(".from('movie_provider_coverage')"), 'Gap sync is not driven by the provider coverage queue'],
   [detailProxy.includes(".order('playback_score', { ascending: false, nullsFirst: false })") && detailProxy.includes('source_playback_score'), 'Movie detail API does not return pre-ranked playback sources'],
-  [movieApi.includes('storedPlaybackScore * 3') && movieApi.includes("code === 'OPHIM' || code === 'KKPHIM' || code === 'VSMOV' || code === 'NGUONC'"), 'Frontend source selection is not provider-neutral'],
+  [movieApi.includes('effectiveStoredPlaybackScore * 3') && movieApi.includes('getRecentBadHostPenalty(ep)') && !movieApi.includes('STREAM_SERVER_PRIORITY'), 'Frontend source selection is not provider-neutral'],
+  [unifiedProviderBrain.includes("provider_policy: 'equal_parallel_health_score'") && unifiedProviderBrain.includes('Promise.all(selectedProviders.map'), 'Provider repair does not run equal adapters in the same scoring cycle'],
+  [equalSchedulerMigration.includes("('catalog:ophim-recent'") && equalSchedulerMigration.includes("('catalog:cobephim-recent'") && equalSchedulerMigration.includes("4, 3600, true"), 'Catalog APIs do not share one priority and interval'],
+  [equalSchedulerMigration.includes("'3-58/5 17-22 * * *'") && equalSchedulerMigration.includes("'12,42 4-6,11-16 * * *'"), 'Scheduler does not separate night work from Vietnam lunch/evening peaks'],
   [movieApi.includes('if (b.reliabilityScore !== a.reliabilityScore) return b.reliabilityScore - a.reliabilityScore;'), 'Clicked-episode score is not authoritative over unrelated server-wide quality'],
   [viewerBrainMigration.includes('calculate_playback_score_v2') && viewerBrainMigration.includes('playback_stable'), 'Real stable playback is not incorporated into the stored score'],
   [viewerBrainMigration.includes('not has_direct and successes = 0') && viewerBrainMigration.includes('least(raw_score, 420)'), 'Unverified third-party iframe can still outrank direct playback'],

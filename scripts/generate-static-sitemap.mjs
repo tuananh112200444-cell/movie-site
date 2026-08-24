@@ -17,7 +17,6 @@ const currentDate = today();
 const staticUrls = [
   { path: '/', lastmod: currentDate, changefreq: 'daily', priority: '1.0' },
   { path: '/vu-tru-dam-my', lastmod: currentDate, changefreq: 'daily', priority: '0.90' },
-  { path: '/the-loai/hoat-hinh', lastmod: currentDate, changefreq: 'weekly', priority: '0.82' },
   { path: '/the-loai/lich-su', lastmod: currentDate, changefreq: 'weekly', priority: '0.76' },
   { path: '/press/', lastmod: '2026-07-19', changefreq: 'monthly', priority: '0.60' },
   { path: '/sitemap', lastmod: currentDate, changefreq: 'weekly', priority: '0.60' },

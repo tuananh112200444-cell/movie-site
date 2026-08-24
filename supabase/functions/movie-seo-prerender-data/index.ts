@@ -72,6 +72,54 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: HEADERS });
 }
 
+function movieFromQualityRow(row: Record<string, unknown>): Record<string, unknown> | null {
+  const nested = Array.isArray(row.movies) ? row.movies[0] : row.movies;
+  if (!nested || typeof nested !== 'object') return null;
+  const movie = nested as Record<string, unknown>;
+  if (!movie.slug) return null;
+  const tier = String(row.index_tier || 'blocked');
+  const eligible = row.eligible_for_index === true;
+  return {
+    ...movie,
+    seo_has_playable_episode: eligible && (tier === 'playable' || tier === 'ongoing'),
+    seo_eligible_for_index: eligible,
+    seo_index_tier: tier,
+    seo_quality_score: Number(row.quality_score || 0),
+    seo_quality_reasons: row.reasons || [],
+    seo_quality_signals: row.signals || [],
+    seo_latest_episode_number: Number(row.latest_episode_number || 0),
+    seo_declared_total_episodes: Number(row.declared_total_episodes || 0),
+    seo_episode_progress_percent: Number(row.episode_progress_percent || 0),
+    seo_freshness_score: Number(row.freshness_score || 0),
+    seo_last_episode_change_at: row.last_episode_change_at || null,
+    seo_next_episode_at: row.next_episode_at || null,
+    seo_quality_checked_at: row.checked_at || null,
+  };
+}
+
+async function findQualityMovie(
+  supabase: ReturnType<typeof createClient>,
+  variants: string[],
+): Promise<{ movie: Record<string, unknown> | null; error: string }> {
+  for (const variant of variants) {
+    const { data, error } = await supabase
+      .from('movie_seo_quality_status')
+      .select(`
+        movie_id,slug,eligible_for_index,index_tier,quality_score,reasons,signals,checked_at,
+        latest_episode_number,declared_total_episodes,episode_progress_percent,freshness_score,
+        last_episode_change_at,next_episode_at,
+        movies!inner(${MOVIE_FIELDS})
+      `)
+      .eq('slug', variant)
+      .eq('movies.is_published', true)
+      .maybeSingle();
+    if (error) return { movie: null, error: error.message };
+    const movie = data ? movieFromQualityRow(data as unknown as Record<string, unknown>) : null;
+    if (movie) return { movie, error: '' };
+  }
+  return { movie: null, error: '' };
+}
+
 function hasPlayableLink(row: Record<string, unknown>): boolean {
   return ['link_m3u8', 'link_embed'].some((key) => {
     const value = String(row[key] || '').trim();
@@ -140,6 +188,14 @@ Deno.serve(async (req) => {
     slug.normalize('NFC'),
     decodeURIComponent(slug),
   ].filter(Boolean)));
+
+  // Every sitemap movie already has a row in movie_seo_quality_status. Read
+  // the movie and its persisted SEO decision in one joined request. The old
+  // path required one movie lookup plus three extra episode/quality queries,
+  // which caused bursts of Googlebot traffic to overload the database.
+  const qualityLookup = await findQualityMovie(supabase, variants);
+  if (qualityLookup.error) return json({ status: false, message: qualityLookup.error }, 503);
+  if (qualityLookup.movie) return json({ status: true, movie: qualityLookup.movie });
 
   for (const variant of variants) {
     const { data, error } = await supabase

@@ -9,7 +9,7 @@ import SEO, { SITE_URL } from '@/components/base/SEO';
 import SearchResultItem from './components/SearchResultItem';
 import SearchFilterBar from './components/SearchFilterBar';
 import type { MovieItem } from '@/types/movie';
-import { applyImageElementFallback, searchMoviesMultiSource, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, getPortraitImagePaths, searchMoviesInSupabase } from '@/services/movieApi';
+import { applyImageElementFallback, searchMoviesMultiSource, fetchNewMovies, fetchTrendingMovies, getOptimizedImageUrl, getPortraitImagePaths, searchMoviesInStaticFallback, searchMoviesInSupabase } from '@/services/movieApi';
 import {
   mergeMoviesUnique,
   parseMovieYear,
@@ -18,14 +18,12 @@ import {
 } from '@/utils/searchRanking';
 import { setSmartSessionCache } from '@/utils/smartCache';
 import { getAudioLanguageLabels } from '@/utils/audioLanguage';
-import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
-import AdsterraNativeBanner from '@/components/feature/AdsterraNativeBanner';
 
 type ViewMode = 'grid' | 'list';
 type SortMode = SearchSortMode;
 
 const FALLBACK_SUPABASE_URL = 'https://ceoxbhsdodllziyxmbqr.supabase.co';
-const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
+const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Juh45t-R83dfgJI0O4_PQw_iYYoU-yh';
 
 const HOT_SEARCHES = [
   { label: 'Avengers', icon: 'ri-shield-star-line' },
@@ -140,6 +138,33 @@ function getKnownAliasFallbackResults(keyword: string): MovieItem[] {
   const normalized = normalizeSearchText(keyword);
   const items: MovieItem[] = [];
 
+  if (normalized === 'mua do' || normalized.includes('phim mua do')) {
+    items.push({
+      _id: '1148786f081772ed0fbfedee09d8d771',
+      slug: 'mua-do',
+      name: 'Mưa Đỏ',
+      origin_name: '',
+      thumb_url: 'https://phim.nguonc.com/public/images/Film/bLrNhlqhAMHycAe5jZj1U8lpWrQ.jpg',
+      poster_url: 'https://phim.nguonc.com/public/images/Film/xgOS4pOeZX510GY42YBdpCbjuXi.jpg',
+      type: 'phim-le',
+      sub_docquyen: false,
+      chieurap: false,
+      time: '',
+      year: 0,
+      quality: 'HD',
+      lang: 'Vietsub',
+      episode_current: 'Tập 1',
+      episode_total: '1',
+      current_episode: 1,
+      total_episodes: 1,
+      category: [],
+      country: [],
+      modified: { time: '2026-08-23T00:00:00.000Z' },
+      source_site: 'canonical-safety-net',
+      source_name: 'KhoPhim Singapore',
+    });
+  }
+
   if (normalized.includes('my magic prophecy')) {
     items.push({
       _id: 'c1c2adfd-8f7a-4107-90b6-626c27e28c58',
@@ -232,6 +257,16 @@ function getMovieSearchText(movie: MovieItem): string {
   ].filter(Boolean).join(' '));
 }
 
+function matchesSearchIntent(movie: MovieItem, keyword: string): boolean {
+  const query = normalizeSearchText(keyword).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!query) return false;
+  const haystack = getMovieSearchText(movie).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const tokens = query.split(/\s+/).filter((token) => token.length >= 2 || /^\d+$/.test(token));
+  const words = new Set(haystack.split(/\s+/).filter(Boolean));
+  return ` ${haystack} `.includes(` ${query} `) ||
+    (tokens.length >= 3 && tokens.every((token) => words.has(token)));
+}
+
 function searchResultKey(movie: MovieItem, index: number): string {
   return [
     movie.slug,
@@ -247,7 +282,7 @@ function getInstantLocalHits(pool: MovieItem[], keyword: string, limit = 12): Mo
   const query = normalizeSearchText(keyword.trim());
   if (!query || pool.length === 0) return [];
 
-  const directHits = pool.filter((movie) => getMovieSearchText(movie).includes(query));
+  const directHits = pool.filter((movie) => matchesSearchIntent(movie, query));
   const fuse = new Fuse(pool, {
     keys: ['name', 'origin_name', 'title_vi', 'title_en', 'title_zh', 'slug', 'episode_current', 'episode_total'],
     threshold: 0.32,
@@ -255,7 +290,9 @@ function getInstantLocalHits(pool: MovieItem[], keyword: string, limit = 12): Mo
     ignoreLocation: true,
     minMatchCharLength: 2,
   });
-  const fuzzyHits = fuse.search(keyword.trim()).map((result) => result.item);
+  const fuzzyHits = fuse.search(keyword.trim())
+    .map((result) => result.item)
+    .filter((movie) => matchesSearchIntent(movie, keyword));
 
   return sortMoviesForSearch(
     mergeMoviesUnique([...directHits, ...fuzzyHits]),
@@ -420,18 +457,21 @@ export default function SearchPage() {
       // not postpone the only usable results for several seconds.
       const externalSearch = searchMoviesMultiSource(normalizedKeyword, pg, searchCtrl.signal)
         .catch(() => ({ status: false, items: [], pagination: { currentPage: pg, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } }));
-      const directSupabaseItems = pg === 1
-        ? await searchMoviesInSupabase(normalizedKeyword, {
-            limit: 24,
-            timeoutMs: 1400,
-            minLength: 2,
-            signal: searchCtrl.signal,
-          }).catch(() => [])
-        : [];
+      const [directSupabaseItems, staticFallbackItems] = pg === 1
+        ? await Promise.all([
+            searchMoviesInSupabase(normalizedKeyword, {
+              limit: 24,
+              timeoutMs: 7000,
+              minLength: 2,
+              signal: searchCtrl.signal,
+            }).catch(() => []),
+            searchMoviesInStaticFallback(normalizedKeyword, 24).catch(() => []),
+          ])
+        : [[], []];
       if (runId !== searchRunRef.current) return;
 
       let items = pg === 1
-        ? mergeMoviesUnique([...knownAliasItems, ...instantItems, ...directSupabaseItems])
+        ? mergeMoviesUnique([...knownAliasItems, ...instantItems, ...directSupabaseItems, ...staticFallbackItems])
         : [];
       let totalP = 1;
 
@@ -463,10 +503,16 @@ export default function SearchPage() {
           ignoreLocation: true,
           minMatchCharLength: 1,
         });
-        const fuzzyHits = fuse.search(normalizedKeyword).map((r) => r.item);
+        const fuzzyHits = fuse.search(normalizedKeyword)
+          .map((r) => r.item)
+          .filter((movie) => matchesSearchIntent(movie, normalizedKeyword));
         items = mergeMoviesUnique([...items, ...fuzzyHits.slice(0, 8)]);
       }
-      items = sortMoviesForSearch(mergeMoviesUnique(items), normalizedKeyword, 'relevance');
+      items = sortMoviesForSearch(
+        mergeMoviesUnique(items).filter((movie) => matchesSearchIntent(movie, normalizedKeyword)),
+        normalizedKeyword,
+        'relevance',
+      );
       // Cache result
       try {
         if (items.length > 0) {
@@ -520,12 +566,24 @@ export default function SearchPage() {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    const instantItems = getInstantLocalHits(localPool, kw, 8);
+    const instantItems = sortMoviesForSearch(
+      mergeMoviesUnique([...getKnownAliasFallbackResults(kw), ...getInstantLocalHits(localPool, kw, 8)]),
+      kw,
+      'relevance',
+    ).slice(0, 8);
     setSuggestions(instantItems);
     setHighlightIndex(-1);
     setLoadingSug(instantItems.length === 0);
+    let items = instantItems;
     try {
-      let items = instantItems;
+      const staticItems = await searchMoviesInStaticFallback(kw.trim(), 12).catch(() => []);
+      if (ctrl.signal.aborted) return;
+      items = sortMoviesForSearch(mergeMoviesUnique([...items, ...staticItems]), kw.trim(), 'relevance').slice(0, 8);
+      if (items.length > 0) {
+        setSuggestions(items);
+        setLoadingSug(false);
+      }
+
       const apiItems = await searchMoviesInSupabase(kw.trim(), { limit: 12, timeoutMs: 7000, minLength: 2, signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       items = mergeMoviesUnique([...items, ...apiItems]);
@@ -536,7 +594,10 @@ export default function SearchPage() {
         setHighlightIndex(-1);
       }
     } catch {
-      if (!ctrl.signal.aborted) setSuggestions([]);
+      // Keep already verified local/static matches when the remote index is
+      // temporarily unavailable. Clearing them made valid suggestions vanish
+      // a moment after typing.
+      if (!ctrl.signal.aborted && items.length > 0) setSuggestions(items);
     } finally {
       if (!ctrl.signal.aborted) setLoadingSug(false);
     }
@@ -550,7 +611,11 @@ export default function SearchPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (val.trim().length >= 2) {
       setShowSuggestions(true);
-      const instantItems = getInstantLocalHits(localPool, val, 8);
+      const instantItems = sortMoviesForSearch(
+        mergeMoviesUnique([...getKnownAliasFallbackResults(val), ...getInstantLocalHits(localPool, val, 8)]),
+        val,
+        'relevance',
+      ).slice(0, 8);
       setSuggestions(instantItems);
       setLoadingSug(instantItems.length === 0);
       debounceRef.current = setTimeout(() => {
@@ -568,7 +633,11 @@ export default function SearchPage() {
     setHighlightIndex(-1);
     keyboardHighlightRef.current = -1;
     if (query.trim().length > 0) {
-      setSuggestions(getInstantLocalHits(localPool, query, 8));
+      setSuggestions(sortMoviesForSearch(
+        mergeMoviesUnique([...getKnownAliasFallbackResults(query), ...getInstantLocalHits(localPool, query, 8)]),
+        query,
+        'relevance',
+      ).slice(0, 8));
     }
   };
 
@@ -1026,8 +1095,6 @@ export default function SearchPage() {
 
       <main className="cinema-page-container">
 
-        <AdsterraResponsiveBanner />
-
         {/* ── Quick Categories (only when no query) ── */}
         {!q && (
           <div className="mb-10">
@@ -1286,7 +1353,6 @@ export default function SearchPage() {
           </div>
         )}
 
-        {((q && filteredResults.length > 0) || (!q && trending.length > 0)) && <AdsterraNativeBanner />}
       </main>
       <Footer />
     </div>

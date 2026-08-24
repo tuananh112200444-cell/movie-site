@@ -4,16 +4,14 @@ import Navbar from '../../components/feature/Navbar';
 import Footer from '../../components/feature/Footer';
 import LazyMovieSection from './components/LazyMovieSection';
 import ContinueWatching from './components/ContinueWatching';
-import CatalogStatsSection from './components/CatalogStatsSection';
 import StickyBanner from '../../components/feature/StickyBanner';
 import AdsterraNativeBanner from '../../components/feature/AdsterraNativeBanner';
 import AdsterraResponsiveBanner from '../../components/feature/AdsterraResponsiveBanner';
 import EditorialHero from './components/EditorialHero';
-import EditorialSpotlight from './components/EditorialSpotlight';
 import EditorialMoodGrid from './components/EditorialMoodGrid';
 import TrendingSection from './components/TrendingSection';
 import SEO, { SITE_URL } from '../../components/base/SEO';
-import { fetchHomePageData, getOptimizedImageUrl } from '../../services/movieApi';
+import { fetchHomePageData, fetchQueerUniverseSections, getOptimizedImageUrl } from '../../services/movieApi';
 import { prefetchCriticalRoutes } from '../../utils/prefetchRoute';
 import { injectPreloadLink, preloadBatch } from '../../utils/imagePreloader';
 import { removeSmartSessionCache, setSmartSessionCache } from '../../utils/smartCache';
@@ -66,19 +64,6 @@ function VietnamPoetryBanner() {
 const homeSchema = [
   {
     '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'KhoPhim - Trang Chủ', item: `${SITE_URL}/` },
-      { '@type': 'ListItem', position: 2, name: 'Phim Lẻ Vietsub HD', item: `${SITE_URL}/phim-le` },
-      { '@type': 'ListItem', position: 3, name: 'Phim Bộ Vietsub HD', item: `${SITE_URL}/phim-bo` },
-      { '@type': 'ListItem', position: 4, name: 'Phim Chiếu Rạp', item: `${SITE_URL}/phim-chieu-rap` },
-      { '@type': 'ListItem', position: 5, name: 'Phim Hàn Quốc Vietsub', item: `${SITE_URL}/phim-han-quoc` },
-      { '@type': 'ListItem', position: 6, name: 'Phim Trung Quốc Vietsub', item: `${SITE_URL}/phim-trung-quoc` },
-      { '@type': 'ListItem', position: 7, name: 'Phim Âu Mỹ Vietsub', item: `${SITE_URL}/phim-au-my` },
-    ],
-  },
-  {
-    '@context': 'https://schema.org',
     '@type': 'ItemList',
     name: 'Thể Loại Phim Tại KhoPhim',
     description: 'Danh sách các thể loại phim vietsub HD miễn phí tại KhoPhim (khophim.org)',
@@ -104,67 +89,6 @@ const homeSchema = [
   },
   {
     '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    '@id': `${SITE_URL}/#website`,
-    name: 'KhoPhim',
-    alternateName: [
-      'KhoPhim', 'Kho Phim', 'khophim', 'kho phim',
-      'khophim', 'khophim.org', 'kho phim', 'KhoPhim',
-      'kho phim online', 'kho phim miễn phí', 'kho phim vietsub',
-      'kho phim hd', 'kho phim 2026', 'kho phim mới nhất',
-      'Xem Phim Online Miễn Phí', 'KhoPhim.com',
-    ],
-    url: SITE_URL,
-    description: 'KhoPhim tổng hợp phim lẻ, phim bộ, phim chiếu rạp, hoạt hình và anime. Danh sách phim cùng trạng thái tập được cập nhật theo dữ liệu hiện có.',
-    inLanguage: 'vi',
-    potentialAction: [
-      {
-        '@type': 'SearchAction',
-        target: {
-          '@type': 'EntryPoint',
-          urlTemplate: `${SITE_URL}/search?q={search_term_string}`,
-        },
-        'query-input': 'required name=search_term_string',
-      },
-    ],
-  },
-  {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    '@id': `${SITE_URL}/#organization`,
-    name: 'KhoPhim',
-    alternateName: ['Kho Phim', 'khophim.org'],
-    url: SITE_URL,
-    description: 'KhoPhim là website tra cứu và xem thông tin phim, phim lẻ, phim bộ, phim chiếu rạp, hoạt hình và anime tại khophim.org.',
-    logo: {
-      '@type': 'ImageObject',
-      '@id': `${SITE_URL}/#logo`,
-      url: 'https://khophim.org/brand/khophim-logo-v2.png',
-      width: 1024,
-      height: 1024,
-      caption: 'Biểu trưng KhoPhim',
-    },
-    image: {
-      '@id': `${SITE_URL}/#logo`,
-    },
-    areaServed: {
-      '@type': 'Country',
-      name: 'Vietnam',
-    },
-    knowsLanguage: 'vi',
-    sameAs: [
-      'https://khophim.org',
-      'https://www.khophim.org',
-    ],
-    contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'customer support',
-      availableLanguage: 'Vietnamese',
-      areaServed: 'VN',
-    },
-  },
-  {
-    '@context': 'https://schema.org',
     '@type': 'FAQPage',
     mainEntity: [
       {
@@ -180,7 +104,7 @@ const homeSchema = [
         name: 'KhoPhim có những thể loại phim nào?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'KhoPhim có đầy đủ các thể loại: phim hành động, phim tình cảm, phim kinh dị, phim hài hước, phim viễn tưởng, phim hoạt hình, phim tâm lý, phim phiêu lưu, phim cổ trang, phim hình sự, phim chiến tranh, phim gia đình. Ngoài ra còn có phim lẻ, phim bộ, phim chiếu rạp, TV shows, phim Hàn Quốc vietsub, phim Trung Quốc cổ trang, phim Âu Mỹ Hollywood, phim Thái Lan, phim Nhật Bản anime. Cập nhật phim mới 2026 hàng ngày.',
+          text: 'KhoPhim phân loại phim theo định dạng, thể loại và quốc gia. Nhãn và trạng thái tập được hiển thị theo dữ liệu hiện có của từng phim.',
         },
       },
       {
@@ -196,7 +120,7 @@ const homeSchema = [
         name: 'Có thể xem phim mới nhất 2026 ở đâu?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'KhoPhim cập nhật phim mới 2026 hàng ngày liên tục. Bạn có thể xem phim mới nhất tại trang chủ hoặc vào mục Phim Mới Cập Nhật. Phim từ Hàn Quốc, Trung Quốc, Âu Mỹ, Việt Nam đều có vietsub đầy đủ.',
+          text: 'Bạn có thể mở mục Phim Mới Cập Nhật để xem các phim vừa thay đổi dữ liệu. Ngôn ngữ và loại phụ đề được hiển thị theo nguồn hiện có của từng phim.',
         },
       },
       {
@@ -212,7 +136,7 @@ const homeSchema = [
         name: 'Phim trên KhoPhim có phụ đề tiếng Việt không?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Phần lớn phim nước ngoài trên KhoPhim đều có phụ đề tiếng Việt (vietsub) hoặc được lồng tiếng Việt, giúp người xem dễ theo dõi nội dung. Phim Hàn, phim Trung, phim Âu Mỹ đều có vietsub chuẩn.',
+          text: 'Nhãn Vietsub, thuyết minh hoặc lồng tiếng được hiển thị khi nguồn của phim cung cấp. Người xem nên kiểm tra nhãn ngôn ngữ trên từng trang phim.',
         },
       },
     ],
@@ -303,22 +227,22 @@ function HomeAngularIndex() {
   );
 }
 
-const ALL_SECTIONS = ['trending', 'top10-series', 'top10-single', 'onlyflix-moi', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
+const ALL_SECTIONS = ['vsmov-4k', 'trending', 'top10-series', 'top10-single', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
 const DESKTOP_HOME_SECTIONS = ALL_SECTIONS;
-const MOBILE_HOME_SECTIONS = ALL_SECTIONS;
-const HOME_CACHE_KEY = 'kp_home_proxy_v6_short';
-const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5'];
+const MOBILE_HOME_SECTIONS = ['vsmov-4k', 'trending', 'top10-series', 'top10-single', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh'];
+const HOME_CACHE_KEY = 'kp_home_proxy_v8_kkcinema';
+const HOME_STORAGE_CACHE_KEYS = ['kp_home_proxy_v2', 'kp_home_proxy_v3', 'kp_home_proxy_v4', 'kp_home_proxy_v5', 'kp_home_proxy_v6_short', 'kp_home_proxy_v7_short'];
 const QUEER_PORTAL_PATH = '/vu-tru-dam-my';
 const HOME_FALLBACK_URL = '/home-fallback.json';
 const HOME_CACHE_TTL = 15 * 60 * 1000;
 const HOME_REFRESH_ON_RETURN_MS = 60 * 1000;
-const MAX_STATIC_HOME_FALLBACK_AGE_MS = 6 * 60 * 60 * 1000;
+const MAX_STATIC_HOME_FALLBACK_AGE_MS = 48 * 60 * 60 * 1000;
 
 function normalizeHomeSections(sections?: Record<string, MovieItem[]>): Record<string, MovieItem[]> {
   return sections ? { ...sections } : {};
 }
 
-type EditorialSectionTone = 'cinema' | 'hot' | 'premiere' | 'ranking' | 'rated' | 'trailer' | 'anime' | 'series' | 'single' | 'western' | 'china' | 'korea' | 'thai' | 'mood';
+type EditorialSectionTone = 'cinema' | 'hot' | 'ranking' | 'rated' | 'trailer' | 'anime' | 'series' | 'single' | 'western' | 'china' | 'korea' | 'thai' | 'mood';
 
 function EditorialSectionFrame({
   number,
@@ -442,6 +366,8 @@ export default function Home() {
   );
   const [homeLoading, setHomeLoading] = useState(() => !hasHomeMovies(warmHomeRef.current ?? {}));
   const [homeError, setHomeError] = useState(false);
+  const [queerMovies, setQueerMovies] = useState<MovieItem[]>([]);
+  const [queerLoading, setQueerLoading] = useState(true);
   const homeDataRef = useRef(homeData);
   const lastHomeFetchRef = useRef(0);
 
@@ -499,7 +425,10 @@ export default function Home() {
       fallbackController = new AbortController();
       // The fallback is one compact local file. Parse every shelf so a fast
       // mobile scroll never lands on an empty, network-dependent section.
-      loadStaticHomeFallback(fallbackController.signal, DESKTOP_HOME_SECTIONS)
+      loadStaticHomeFallback(
+        fallbackController.signal,
+        window.matchMedia('(max-width: 639px)').matches ? MOBILE_HOME_SECTIONS : DESKTOP_HOME_SECTIONS,
+      )
         .then((fallbackSections) => {
           if (cancelled || !hasHomeMovies(fallbackSections)) return;
           setHomeData((current) => {
@@ -543,6 +472,31 @@ export default function Home() {
       window.removeEventListener('pageshow', handlePageShow);
     };
   }, []);
+
+  useEffect(() => {
+    if (activePortal === 'queer') {
+      setQueerLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setQueerLoading(true);
+    fetchQueerUniverseSections({
+      signal: controller.signal,
+      limit: compactMobile ? 9 : 18,
+      timeoutMs: 5000,
+    })
+      .then((sections) => {
+        if (!controller.signal.aborted) {
+          setQueerMovies(sections.newUpdates.length ? sections.newUpdates : sections.featured);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setQueerLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [activePortal, compactMobile]);
 
   // ── Prefetch JS chunks sau khi paint xong ──
   useEffect(() => {
@@ -644,16 +598,31 @@ export default function Home() {
         <EditorialHero movies={heroMovies} loading={bannerLoading} />
       </div>
 
+      <p className="mx-auto max-w-[1760px] px-4 pb-2 pt-3 text-xs leading-5 text-white/40 sm:px-6">
+        Kho phim được đồng bộ và kiểm tra nguồn phát tự động. Trạng thái tập, ngôn ngữ và chất lượng được hiển thị theo dữ liệu hiện có của từng phim.
+      </p>
+
       <main className="editorial-home-shell">
         <HomeAngularIndex />
         <ContinueWatching />
+
+        <EditorialSectionFrame number="4K" code="ULTRA HD" tone="cinema">
+          <LazyMovieSection
+            fetchType="type" fetchKey="vsmov-4k" limit={compactMobile ? 9 : 17}
+            title="Phim 4K Siêu Nét" viewAllLink="/phim-4k"
+            cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
+            movies={homeData['vsmov-4k'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
         <AdsterraNativeBanner />
 
         <EditorialSectionFrame number="01" code="NOW SCREENING" tone="cinema">
           <LazyMovieSection
             fetchType="type" fetchKey="phim-chieu-rap" limit={compactMobile ? 9 : 18}
             title="Phim Đang Chiếu Rạp" viewAllLink="/phim-chieu-rap"
-            cols={6} rootMargin="120px" sectionIndex={0} theme="cinematic"
+            cols={6} rootMargin="120px" sectionIndex={1} theme="cinematic"
             movies={homeData['phim-chieu-rap'] ?? []}
             loading={homeLoading}
           />
@@ -663,20 +632,19 @@ export default function Home() {
           <TrendingSection movies={trendingMovies} loading={bannerLoading} />
         </EditorialSectionFrame>
 
-        <AdsterraResponsiveBanner />
-
-        <EditorialSectionFrame number="03" code="NEW PREMIERE" tone="premiere">
-          <EditorialSpotlight
-            movies={homeData['onlyflix-moi'] ?? []}
-            loading={homeLoading}
-            title="Phim Điện Ảnh Mới Coóng"
-            eyebrow="Vừa lên kệ tại KhoPhim"
-            description="Những bộ phim mới đáng để bạn dành trọn một buổi tối."
-            viewAllLink="/phim-le"
+        <EditorialSectionFrame number="BL" code="QUEER UNIVERSE" tone="mood">
+          <LazyMovieSection
+            fetchType="type" fetchKey="queer-universe" limit={compactMobile ? 9 : 18}
+            title="Phim Đam Mỹ Mới Nhất" viewAllLink={QUEER_PORTAL_PATH}
+            cols={6} rootMargin="120px" sectionIndex={2} theme="trending"
+            movies={queerMovies}
+            loading={queerLoading}
           />
         </EditorialSectionFrame>
 
-        <EditorialSectionFrame number="04" code="DAILY CHART" tone="ranking">
+        <AdsterraResponsiveBanner />
+
+        <EditorialSectionFrame number="03" code="DAILY CHART" tone="ranking">
           <DeferredHomeSection minHeight={compactMobile ? 220 : 300}>
             <Suspense fallback={<div className="h-[220px] sm:h-[300px] skeleton" />}>
               <Top10TodaySection
@@ -689,7 +657,8 @@ export default function Home() {
           </DeferredHomeSection>
         </EditorialSectionFrame>
 
-        <EditorialSectionFrame number="05" code="BIG SCREEN" tone="cinema">
+        {!compactMobile && <>
+        <EditorialSectionFrame number="04" code="BIG SCREEN" tone="cinema">
           <DeferredHomeSection minHeight={compactMobile ? 230 : 310}>
             <Suspense fallback={<div className="h-[230px] sm:h-[310px] skeleton" />}>
               <TopCinemaMoviesSection initialMovies={homeData['phim-chieu-rap'] ?? []} loading={homeLoading} />
@@ -697,7 +666,7 @@ export default function Home() {
           </DeferredHomeSection>
         </EditorialSectionFrame>
 
-        <EditorialSectionFrame number="06" code="CRITICS' CHOICE" tone="rated">
+        <EditorialSectionFrame number="05" code="CRITICS' CHOICE" tone="rated">
           <DeferredHomeSection minHeight={compactMobile ? 220 : 300}>
             <Suspense fallback={<div className="h-[220px] sm:h-[300px] skeleton" />}>
               <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} />
@@ -705,15 +674,16 @@ export default function Home() {
           </DeferredHomeSection>
         </EditorialSectionFrame>
 
-        <EditorialSectionFrame number="07" code="COMING SOON" tone="trailer">
+        <EditorialSectionFrame number="06" code="COMING SOON" tone="trailer">
           <DeferredHomeSection minHeight={190}>
             <Suspense fallback={<div className="h-[190px] skeleton" />}>
               <TrailerMoviesSection />
             </Suspense>
           </DeferredHomeSection>
         </EditorialSectionFrame>
+        </>}
 
-        <EditorialSectionFrame number="08" code="ANIME ARCHIVE" tone="anime">
+        <EditorialSectionFrame number="07" code="ANIME ARCHIVE" tone="anime">
           <LazyMovieSection
             fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 9 : 18}
             title="Kho Tàng Anime Mới Nhất" viewAllLink="/hoat-hinh"
@@ -723,7 +693,7 @@ export default function Home() {
           />
         </EditorialSectionFrame>
 
-        <EditorialSectionFrame number="09" code="SERIES INDEX" tone="series">
+        <EditorialSectionFrame number="08" code="SERIES INDEX" tone="series">
           <LazyMovieSection
             fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 15}
             title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
@@ -732,7 +702,7 @@ export default function Home() {
             loading={homeLoading}
           />
         </EditorialSectionFrame>
-        <EditorialSectionFrame number="10" code="FEATURE FILMS" tone="single">
+        <EditorialSectionFrame number="09" code="FEATURE FILMS" tone="single">
           <LazyMovieSection
             fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 15}
             title="Phim Lẻ Đang Hot" viewAllLink="/phim-le"
@@ -742,7 +712,8 @@ export default function Home() {
           />
         </EditorialSectionFrame>
 
-        <EditorialSectionFrame number="11" code="WESTERN FRAME" tone="western">
+        {!compactMobile && <>
+        <EditorialSectionFrame number="10" code="WESTERN FRAME" tone="western">
           <LazyMovieSection
             fetchType="country" fetchKey="au-my" limit={compactMobile ? 9 : 18}
             title="Phim Âu Mỹ" viewAllLink="/phim-au-my"
@@ -751,7 +722,7 @@ export default function Home() {
             loading={homeLoading}
           />
         </EditorialSectionFrame>
-        <EditorialSectionFrame number="12" code="ORIENTAL FRAME" tone="china">
+        <EditorialSectionFrame number="11" code="ORIENTAL FRAME" tone="china">
           <LazyMovieSection
             fetchType="country" fetchKey="trung-quoc" limit={compactMobile ? 9 : 18}
             title="Phim Trung Quốc" viewAllLink="/phim-trung-quoc"
@@ -760,7 +731,7 @@ export default function Home() {
             loading={homeLoading}
           />
         </EditorialSectionFrame>
-        <EditorialSectionFrame number="13" code="K-DRAMA FRAME" tone="korea">
+        <EditorialSectionFrame number="12" code="K-DRAMA FRAME" tone="korea">
           <LazyMovieSection
             fetchType="country" fetchKey="han-quoc" limit={compactMobile ? 9 : 18}
             title="Phim Hàn Quốc" viewAllLink="/phim-han-quoc"
@@ -769,7 +740,7 @@ export default function Home() {
             loading={homeLoading}
           />
         </EditorialSectionFrame>
-        <EditorialSectionFrame number="14" code="THAI FRAME" tone="thai">
+        <EditorialSectionFrame number="13" code="THAI FRAME" tone="thai">
           <LazyMovieSection
             fetchType="country" fetchKey="thai-lan" limit={compactMobile ? 9 : 18}
             title="Phim Thái Lan" viewAllLink="/phim-thai-lan"
@@ -778,14 +749,14 @@ export default function Home() {
             loading={homeLoading}
           />
         </EditorialSectionFrame>
+        </>}
 
-        <EditorialSectionFrame number="15" code="MOOD INDEX" tone="mood">
+        <EditorialSectionFrame number="14" code="MOOD INDEX" tone="mood">
           <EditorialMoodGrid onOpenQueer={() => setActivePortal('queer')} />
         </EditorialSectionFrame>
 
         <div className="cinematic-bottom-info">
           <VietnamPoetryBanner />
-          <CatalogStatsSection />
         </div>
 
         {/* Bottom sections — lazy render khi gần cuối trang */}

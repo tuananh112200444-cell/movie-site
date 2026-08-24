@@ -74,6 +74,7 @@ interface SeasonIdentity {
 
 interface VerifiedDetail {
   detail: TmdbDetail;
+  englishDetail: TmdbDetail | null;
   mediaType: MediaType;
   tmdbId: number;
   season: TmdbSeasonDetail | null;
@@ -181,13 +182,19 @@ function identityMatches(movie: MovieRow, detail: TmdbDetail, mediaType: MediaTy
 }
 
 function hasMetadataGap(movie: MovieRow): boolean {
+  const source = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
+  const titleVi = String(movie.title_vi || movie.name || '').trim();
+  const titleEn = String(movie.title_en || '').trim();
+  const missingQueerEnglishTitle = /blvietsub|glvietsub/.test(source)
+    && (!titleEn || normalize(titleEn) === normalize(titleVi));
   return !Number(movie.tmdb_id || 0)
     || textLength(movie.content) < 80
     || stringList(movie.actor).length === 0
     || stringList(movie.director).length === 0
     || taxonomyList(movie.category).length === 0
     || taxonomyList(movie.country).length === 0
-    || !String(movie.poster_url || movie.thumb_url || '').trim();
+    || !String(movie.poster_url || movie.thumb_url || '').trim()
+    || missingQueerEnglishTitle;
 }
 
 function tmdbImage(path: string | null | undefined, size = 'w500'): string {
@@ -220,9 +227,9 @@ async function tmdbFetch<T>(path: string, params: Record<string, string> = {}): 
   return await response.json() as T;
 }
 
-async function fetchDetail(tmdbId: number, mediaType: MediaType): Promise<TmdbDetail | null> {
+async function fetchDetail(tmdbId: number, mediaType: MediaType, language = 'vi-VN'): Promise<TmdbDetail | null> {
   return tmdbFetch<TmdbDetail>(`/${mediaType}/${tmdbId}`, {
-    language: 'vi-VN',
+    language,
     include_video_language: 'vi,en,null',
     append_to_response: 'credits,videos',
   });
@@ -280,7 +287,14 @@ async function resolveVerifiedDetail(movie: MovieRow): Promise<VerifiedDetail | 
     if (!detail || !identityMatches(movie, detail, expected)) return null;
     const seasonDetail = season ? await fetchSeason(resolvedId, season.number) : null;
     if (season && Number(String(seasonDetail?.air_date || '').slice(0, 4)) !== Number(movie.year || 0)) return null;
-    return { detail, mediaType: expected, tmdbId: resolvedId, season: seasonDetail, resolvedMissingId: true };
+    return {
+      detail,
+      englishDetail: await fetchDetail(resolvedId, expected, 'en-US'),
+      mediaType: expected,
+      tmdbId: resolvedId,
+      season: seasonDetail,
+      resolvedMissingId: true,
+    };
   }
   const explicit = String(movie.tmdb_media_type || '').toLowerCase();
   const candidates: MediaType[] = explicit === 'movie' || explicit === 'tv'
@@ -294,11 +308,17 @@ async function resolveVerifiedDetail(movie: MovieRow): Promise<VerifiedDetail | 
   if (verified.length !== 1) return null;
   const seasonDetail = season ? await fetchSeason(tmdbId, season.number) : null;
   if (season && Number(String(seasonDetail?.air_date || '').slice(0, 4)) !== Number(movie.year || 0)) return null;
-  return { ...verified[0], tmdbId, season: seasonDetail, resolvedMissingId: false };
+  return {
+    ...verified[0],
+    englishDetail: await fetchDetail(tmdbId, verified[0].mediaType, 'en-US'),
+    tmdbId,
+    season: seasonDetail,
+    resolvedMissingId: false,
+  };
 }
 
 function metadataPatch(movie: MovieRow, resolved: VerifiedDetail, replaceDuplicateSeasonContent: boolean): Record<string, unknown> {
-  const { detail, mediaType, season } = resolved;
+  const { detail, englishDetail, mediaType, season } = resolved;
   const patch: Record<string, unknown> = {};
   const overview = String((season && replaceDuplicateSeasonContent ? season.overview : '') || detail.overview || '').trim();
   const actors = (detail.credits?.cast || []).map((item) => String(item.name || '').trim()).filter(Boolean).slice(0, 16);
@@ -309,6 +329,11 @@ function metadataPatch(movie: MovieRow, resolved: VerifiedDetail, replaceDuplica
   const countries = (detail.production_countries || []).map((item) => ({ id: item.iso_3166_1 || slugify(item.name), name: item.name, slug: slugify(item.name) })).filter((item) => item.name && item.slug).slice(0, 4);
   const poster = tmdbImage(season?.poster_path) || tmdbImage(detail.poster_path) || tmdbImage(detail.backdrop_path, 'w780');
   const backdrop = tmdbImage(detail.backdrop_path, 'w780') || poster;
+  const vietnameseTitle = String(detail.title || detail.name || '').trim();
+  const englishTitle = String(englishDetail?.title || englishDetail?.name || detail.original_title || detail.original_name || '').trim();
+  const originalTitle = String(englishDetail?.original_title || englishDetail?.original_name || detail.original_title || detail.original_name || '').trim();
+  const currentVietnameseTitle = String(movie.title_vi || movie.name || '').trim();
+  const currentEnglishTitle = String(movie.title_en || '').trim();
 
   if ((textLength(movie.content) < 80 || replaceDuplicateSeasonContent) && textLength(overview) >= 80 && visibleText(movie.content) !== visibleText(overview)) patch.content = overview;
   if (stringList(movie.actor).length === 0 && actors.length) patch.actor = actors;
@@ -318,6 +343,11 @@ function metadataPatch(movie: MovieRow, resolved: VerifiedDetail, replaceDuplica
   if (!String(movie.poster_url || '').trim() && poster) patch.poster_url = poster;
   if (!String(movie.thumb_url || '').trim() && backdrop) patch.thumb_url = backdrop;
   if (!String(movie.trailer_url || '').trim() && youtubeTrailer(detail)) patch.trailer_url = youtubeTrailer(detail);
+  if (!String(movie.title_vi || '').trim() && vietnameseTitle) patch.title_vi = vietnameseTitle;
+  if (englishTitle && (!currentEnglishTitle || normalize(currentEnglishTitle) === normalize(currentVietnameseTitle))
+    && normalize(englishTitle) !== normalize(currentVietnameseTitle)) patch.title_en = englishTitle;
+  if (!String(movie.title_original || '').trim() && originalTitle) patch.title_original = originalTitle;
+  if (!String(movie.origin_name || '').trim() && originalTitle) patch.origin_name = originalTitle;
   if (!Number(movie.tmdb_id || 0)) patch.tmdb_id = resolved.tmdbId;
   if (!String(movie.tmdb_media_type || '').trim()) patch.tmdb_media_type = mediaType;
   if (Number.isFinite(Number(detail.popularity))) patch.tmdb_popularity = Number(detail.popularity || 0);
@@ -391,8 +421,37 @@ serve(async (req) => {
           await recordStatus(supabase, movieId, 'verified_no_change', { tmdb_id: resolved.tmdbId, media_type: resolved.mediaType });
           continue;
         }
+        const resolvedTmdbId = Number(patch.tmdb_id || resolved.tmdbId || 0) || 0;
+        if (resolvedTmdbId > 0) {
+          const { data: existingOwner, error: ownerError } = await supabase
+            .from('movies')
+            .select('id,slug')
+            .eq('tmdb_id', resolvedTmdbId)
+            .neq('id', movieId)
+            .limit(1)
+            .maybeSingle();
+          if (ownerError) throw new Error(ownerError.message);
+          if (existingOwner?.id) {
+            skippedIdentity++;
+            await recordStatus(supabase, movieId, 'skipped_identity', {
+              tmdb_id: resolvedTmdbId,
+              reason: 'tmdb_id_owned_by_canonical_movie',
+              canonical_movie_id: existingOwner.id,
+              canonical_slug: existingOwner.slug,
+            });
+            continue;
+          }
+        }
         patch.updated_at = new Date().toISOString();
         const { error } = await supabase.from('movies').update(patch).eq('id', movieId);
+        if (error?.code === '23505' && /movies_tmdb_id_unique/i.test(error.message || '')) {
+          skippedIdentity++;
+          await recordStatus(supabase, movieId, 'skipped_identity', {
+            tmdb_id: resolvedTmdbId || resolved.tmdbId,
+            reason: 'tmdb_id_unique_race',
+          });
+          continue;
+        }
         if (error) throw new Error(error.message);
         enriched++;
         changedSlugs.push(String(movie.slug));

@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useMemo, forwardRef, useEffect } from 'r
 import type { EpisodeData, EpisodeServer, MovieDetail } from '@/types/movie';
 import {
   getAnonymousServerDisplay,
-  pickBestEpisodeByPriority,
+  pickBestEpisodeByScore,
   detectServerType,
   getServerTypeStyle,
   epSortKey,
@@ -113,16 +113,23 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     const [activeTab, setActiveTab] = useState<'episodes' | 'trailer'>('episodes');
     const [episodesCollapsed, setEpisodesCollapsed] = useState(true);
     const [isDesktopEpisodeLayout, setIsDesktopEpisodeLayout] = useState(false);
-    const [showSourceOptions, setShowSourceOptions] = useState(false);
+    const [showSourceOptions, setShowSourceOptions] = useState(
+      () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+    );
     const [serverTypeTab, setServerTypeTab] = useState<'all' | 'khophim' | 'vietsub' | 'thuyetminh' | 'longtieng' | 'other'>('all');
     const hasScheduledState = useMemo(
-      () => Boolean(
-        movie.next_episode_at ||
-        movie.release_at ||
-        movie.schedule_type ||
-        episodes.some((server) => server.server_data?.some((ep) => ep.is_scheduled))
-      ),
-      [episodes, movie.next_episode_at, movie.release_at, movie.schedule_type],
+      () => {
+        const status = String(movie.status || '').trim().toLowerCase();
+        const isCompleted = ['completed', 'complete', 'hoan-tat', 'hoàn tất'].includes(status);
+        const pendingRelease = Boolean(movie.release_at) && !isCompleted;
+        return Boolean(
+          movie.next_episode_at ||
+          movie.schedule_type ||
+          pendingRelease ||
+          episodes.some((server) => server.server_data?.some((ep) => ep.is_scheduled))
+        );
+      },
+      [episodes, movie.next_episode_at, movie.release_at, movie.schedule_type, movie.status],
     );
     const serverNow = useServerNow(hasScheduledState);
     const scheduledCountdown = useMemo(() => getMovieCountdownInfo(movie, serverNow), [movie, serverNow]);
@@ -342,7 +349,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
         ? sameAudioServers
         : sameAudioServers.filter((srv) => detectServerType(getServerIdentityText(srv)) === serverTypeTab);
       const availableServers = tabMatchedServers.length > 0 ? tabMatchedServers : sameAudioServers;
-      const best = pickBestEpisodeByPriority(availableServers);
+      const best = pickBestEpisodeByScore(availableServers);
       if (best) {
         onSwitchServer(availableServers[best.serverIndex].originalIndex);
         onSelectEp(best.episode);
@@ -411,10 +418,10 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
     const sourceHealthMessage = selectableServerOptions.length > 1
       ? `${selectableServerOptions.length - 1} nguồn dự phòng cho tập này`
       : activeSourceHasWarning
-        ? 'Nguồn hiện tại có dấu hiệu lỗi · hệ thống đang tìm dự phòng'
+        ? 'Nguồn hiện tại có dấu hiệu lỗi · chưa có dự phòng cùng tập'
         : activeHealthStatus === 'ok'
           ? 'Nguồn đã được kiểm tra và sẵn sàng'
-          : 'Đã chọn nguồn phát · sẽ tự chuyển khi phát hiện lỗi';
+          : 'Nguồn duy nhất hiện có cho tập này';
 
     return (
       <div
@@ -647,7 +654,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                         className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-white/70 transition hover:border-white/20 hover:bg-white/[0.1] hover:text-white touch-manipulation"
                       >
                         <i className="ri-server-line" />
-                        <span>{showSourceOptions ? 'Ẩn nguồn' : 'Đổi nguồn'}</span>
+                        <span>{showSourceOptions ? 'Ẩn nguồn' : `Đổi nguồn (${selectableServerOptions.length})`}</span>
                         <i className={`${showSourceOptions ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} text-base`} />
                       </button>
                     )}

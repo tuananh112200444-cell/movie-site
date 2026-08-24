@@ -1,18 +1,29 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 
 let offsetMs = 0;
 let offsetPromise: Promise<number> | null = null;
 
 async function loadServerOffset(): Promise<number> {
   if (!offsetPromise) {
-    offsetPromise = Promise.resolve(supabase.rpc('get_server_now'))
-      .then(({ data, error }) => {
-        if (error || !data) return 0;
-        const serverMs = new Date(String(data)).getTime();
+    offsetPromise = (async () => {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 2_000);
+      try {
+        const response = await fetch('/api/time', {
+          signal: controller.signal,
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) return 0;
+        const payload = await response.json() as { now?: string };
+        const serverMs = new Date(String(payload.now || '')).getTime();
         return Number.isFinite(serverMs) ? serverMs - Date.now() : 0;
-      })
-      .catch(() => 0);
+      } catch {
+        return 0;
+      } finally {
+        window.clearTimeout(timer);
+      }
+    })();
   }
   offsetMs = await offsetPromise;
   return offsetMs;

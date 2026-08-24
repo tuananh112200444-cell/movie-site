@@ -29,16 +29,19 @@ requireText(sitemap, 'hasSeoBase(movie, 120) && hasHttpsTrailer(movie)', 'upcomi
 requireText(sitemap, "eq('index_tier', 'upcoming')", 'upcoming sitemap still scans the entire movie catalogue instead of the eligible tier');
 requireText(sitemap, 'qualityByMovieId.get(movie.id) === true', 'sitemap admits unchecked database movies');
 requireText(sitemap, '.filter((movie) => isUpcoming(movie) || isTrailer(movie))', 'upcoming sitemap is empty or unfiltered');
-requireText(sitemap, 'xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"', 'trailer sitemap lacks video namespace');
-requireText(sitemap, '<video:player_loc allow_embed="yes">', 'trailer sitemap lacks an embeddable player URL');
+if (sitemap.includes('xmlns:video=') || sitemap.includes('<video:video>')) {
+  failures.push('movie information sitemap must not claim trailer watch-page eligibility');
+}
 
 requireText(prerenderData, 'seo_eligible_for_index', 'prerender API does not expose the database quality decision');
 requireText(prerenderData, ": 'unreviewed'", 'legacy playable pages have no safe compatibility state while quality coverage expands');
 requireText(prerenderData, 'seo_index_tier', 'prerender API does not expose lifecycle tier');
-requireText(worker, "qualityTier === 'upcoming'", 'Cloudflare prerender does not honor upcoming quality approval');
-requireText(worker, '!qualityChecked', 'legacy playable pages lose indexing before asynchronous quality coverage reaches them');
-requireText(worker, "'@type': 'VideoObject'", 'eligible trailer pages lack VideoObject schema');
-requireText(worker, 'embedUrl: trailerEmbedUrl', 'VideoObject does not identify the actual trailer');
+requireText(worker, "if (tier === 'upcoming') return Boolean(getTrailerEmbedUrl(movie.trailer_url));", 'upcoming cohort pages do not require a real embeddable trailer');
+requireText(worker, 'const isIndexable = isHighValueIndexCandidate(movie)', 'Cloudflare prerender does not honor the strict public cohort gate');
+if (worker.includes("'@type': 'VideoObject'") || worker.includes('embedUrl: trailerEmbedUrl')) {
+  failures.push('movie information pages must not expose complementary trailers as VideoObject watch pages');
+}
+requireText(worker, '<h2>Trailer ${escapeHtml(name)}</h2>', 'eligible trailer pages must keep a visible trailer for users');
 requireText(worker, "'sitemap-movies-upcoming.xml'", 'root sitemap index omits upcoming movies');
 if (worker.includes("|| pathname === '/sitemap-movies-upcoming.xml'")) {
   throw new Error('upcoming sitemap is incorrectly retired by the legacy chunk cleanup route');

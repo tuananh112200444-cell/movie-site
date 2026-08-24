@@ -40,27 +40,32 @@ interface HlsQualityLevel {
 }
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
-const MAX_STREAM_RECOVERY_ATTEMPTS = 2;
-const MAX_NON_FATAL_NETWORK_RETRIES = 2;
-const STALL_RECOVERY_DELAY_MS = 2500;
-const STALL_PROGRESS_CHECK_MS = 2500;
+const MAX_STREAM_RECOVERY_ATTEMPTS = 3;
+const MAX_NON_FATAL_NETWORK_RETRIES = 5;
+const STALL_RECOVERY_DELAY_MS = 10_000;
+const STALL_PROGRESS_CHECK_MS = 3_000;
 const STALL_MIN_PROGRESS_SECONDS = 0.05;
 // A provider can briefly resume after a fragment timeout, which previously
 // reset the ordinary recovery counter and left viewers in an endless
 // play-buffer-play loop. Treat only a burst of genuine low-buffer waits as a
 // terminal failure; isolated waits remain recoverable.
-const REPEATED_STALL_WINDOW_MS = 25_000;
-const MAX_REPEATED_SHORT_STALLS = 3;
+const REPEATED_STALL_WINDOW_MS = 90_000;
+const MAX_REPEATED_SHORT_STALLS = 4;
+const MIN_FATAL_STALL_MS = 45_000;
+const RECOVERY_COOLDOWN_MS = 12_000;
 const PLAYER_LOGO_URL = '/brand/khophim-favicon-v2-96.png';
 const STABLE_PLAYBACK_SECONDS = 15;
-const PLAYBACK_HEARTBEAT_SECONDS = 60;
+// Five-minute samples retain long-watch evidence without turning every active
+// viewer into a database write every minute. Startup/stable/fatal events remain
+// immediate, so source failover does not wait for this heartbeat.
+const PLAYBACK_HEARTBEAT_SECONDS = 300;
 
 function getPlaybackProfile() {
   if (typeof window === 'undefined') {
     return {
-      maxBufferLength: 36,
-      maxMaxBufferLength: 72,
-      maxBufferSize: 55_000_000,
+      maxBufferLength: 24,
+      maxMaxBufferLength: 48,
+      maxBufferSize: 36_000_000,
       backBufferLength: 20,
     };
   }
@@ -81,15 +86,15 @@ function getPlaybackProfile() {
     return {
       maxBufferLength: slowNetwork ? 18 : 24,
       maxMaxBufferLength: slowNetwork ? 36 : 48,
-      maxBufferSize: slowNetwork ? 24_000_000 : 34_000_000,
-      backBufferLength: 10,
+      maxBufferSize: slowNetwork ? 24_000_000 : 36_000_000,
+      backBufferLength: 15,
     };
   }
 
   return {
-    maxBufferLength: 45,
-    maxMaxBufferLength: 90,
-    maxBufferSize: 70_000_000,
+    maxBufferLength: 36,
+    maxMaxBufferLength: 72,
+    maxBufferSize: 64_000_000,
     backBufferLength: 30,
   };
 }
@@ -126,6 +131,17 @@ function getBufferedAhead(video: HTMLVideoElement): number {
   return 0;
 }
 
+function finitePlaybackTime(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function seekVideoSafely(video: HTMLVideoElement, value: unknown): void {
+  const target = finitePlaybackTime(value);
+  if (target <= 0 || !Number.isFinite(video.duration) || target >= video.duration - 2) return;
+  if (Math.abs(video.currentTime - target) > 0.5) video.currentTime = target;
+}
+
 function pickStableStartLevel(levels: Hls['levels']): number {
   if (!levels.length) return -1;
   const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -154,7 +170,13 @@ function pickStableStartLevel(levels: Hls['levels']): number {
 function capToLowerAutoLevel(hls: Hls): boolean {
   if (hls.levels.length <= 1) return false;
   const current = hls.currentLevel >= 0 ? hls.currentLevel : hls.nextLoadLevel;
-  const next = Math.max(0, (current > 0 ? current : hls.levels.length - 1) - 1);
+  const baseline = current >= 0 ? current : hls.levels.length - 1;
+  if (baseline <= 0) {
+    hls.autoLevelCapping = 0;
+    hls.nextLevel = 0;
+    return false;
+  }
+  const next = baseline - 1;
   hls.autoLevelCapping = next;
   hls.nextLevel = next;
   return true;
@@ -196,7 +218,7 @@ export default function LightweightHlsPlayer({
   const nonFatalNetworkRetryRef = useRef(0);
   const streamRecoveryRef = useRef(0);
   const repeatedStallTimesRef = useRef<number[]>([]);
-  const repeatedStallEscalatedRef = useRef(false);
+  const lastStallRecoveryAtRef = useRef(0);
   const pageActiveRef = useRef(typeof document === 'undefined' ? true : !document.hidden);
   const wasPageSuspendedRef = useRef(false);
   const suspendedTimeRef = useRef(0);
@@ -209,12 +231,23 @@ export default function LightweightHlsPlayer({
   const sourceOpenedAtRef = useRef(Date.now());
   const firstPlayingAtRef = useRef(0);
   const watchedSecondsRef = useRef(0);
-  const lastMetricPlaybackTimeRef = useRef(Math.max(0, initialTime));
+  const lastMetricPlaybackTimeRef = useRef(finitePlaybackTime(initialTime));
   const stallCountRef = useRef(0);
   const stallSecondsRef = useRef(0);
   const stallStartedAtRef = useRef(0);
   const stableReportedRef = useRef(false);
   const heartbeatBucketRef = useRef(0);
+  const initialTimeRef = useRef(finitePlaybackTime(initialTime));
+  const appliedExternalSeekRef = useRef<{ src: string; time: number } | null>(null);
+  const callbacksRef = useRef({
+    onTimeUpdate,
+    onEnded,
+    onVideoEnded,
+    onFatalError,
+    onPlaybackStarted,
+    onPlaybackQuality,
+    onPlayerIssue,
+  });
 
   const [loaded, setLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -236,17 +269,54 @@ export default function LightweightHlsPlayer({
   const [pipActive, setPipActive] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
 
+  // Callback identity changes must never rebuild MediaSource. Keep the latest
+  // handlers in a ref so parent renders (progress, countdowns, health UI) are
+  // completely independent from the HLS lifecycle.
+  useEffect(() => {
+    callbacksRef.current = {
+      onTimeUpdate,
+      onEnded,
+      onVideoEnded,
+      onFatalError,
+      onPlaybackStarted,
+      onPlaybackQuality,
+      onPlayerIssue,
+    };
+  }, [onTimeUpdate, onEnded, onVideoEnded, onFatalError, onPlaybackStarted, onPlaybackQuality, onPlayerIssue]);
+
+  // An explicit resume/restart may seek within the current source, but seeking
+  // must not destroy and recreate the HLS instance.
+  useEffect(() => {
+    const target = finitePlaybackTime(initialTime);
+    initialTimeRef.current = target;
+    const lastApplied = appliedExternalSeekRef.current;
+    if (lastApplied?.src === src && Math.abs(lastApplied.time - target) < 0.01) return;
+    appliedExternalSeekRef.current = { src, time: target };
+
+    const video = videoRef.current;
+    if (!video) return;
+    const seek = () => seekVideoSafely(video, target);
+    if (video.readyState >= 1) {
+      seek();
+      return;
+    }
+    video.addEventListener('loadedmetadata', seek, { once: true });
+    return () => video.removeEventListener('loadedmetadata', seek);
+  }, [src, initialTime]);
+
   useEffect(() => {
     sourceOpenedAtRef.current = Date.now();
     firstPlayingAtRef.current = 0;
     watchedSecondsRef.current = 0;
-    lastMetricPlaybackTimeRef.current = Math.max(0, initialTime);
+    lastMetricPlaybackTimeRef.current = initialTimeRef.current;
     stallCountRef.current = 0;
     stallSecondsRef.current = 0;
     stallStartedAtRef.current = 0;
+    repeatedStallTimesRef.current = [];
+    lastStallRecoveryAtRef.current = 0;
     stableReportedRef.current = false;
     heartbeatBucketRef.current = 0;
-  }, [src, initialTime]);
+  }, [src, retryNonce]);
 
   /* Keep the media element and HLS instance alive across ordinary tab changes.
      Rebuilding here resets playback to the stale initialTime (often zero). */
@@ -256,7 +326,7 @@ export default function LightweightHlsPlayer({
       const video = videoRef.current;
       pageActiveRef.current = false;
       wasPageSuspendedRef.current = true;
-      suspendedTimeRef.current = video?.currentTime || 0;
+      suspendedTimeRef.current = finitePlaybackTime(video?.currentTime);
       wasPlayingBeforeSuspendRef.current = Boolean(video && !video.paused && !video.ended);
     };
     const resume = () => {
@@ -265,14 +335,14 @@ export default function LightweightHlsPlayer({
       if (!wasPageSuspendedRef.current) return;
       wasPageSuspendedRef.current = false;
       const video = videoRef.current;
-      const resumeAt = suspendedTimeRef.current;
-      setHasError(false);
-      setErrorMsg('');
+      const resumeAt = finitePlaybackTime(suspendedTimeRef.current);
       if (!video) return;
-      if (resumeAt > 0 && Math.abs(video.currentTime - resumeAt) > 0.5) {
-        video.currentTime = resumeAt;
-      }
-      hlsRef.current?.startLoad(resumeAt >= 0 ? resumeAt : -1);
+      seekVideoSafely(video, resumeAt);
+      const hls = hlsRef.current;
+      // pagehide/visibility does not stop HLS. Calling startLoad on every
+      // pageshow seeks and rebuilds fragment loading even when the stream is
+      // healthy, which looks like a movie reload.
+      if (hls && !hls.loadingEnabled) hls.startLoad(resumeAt || -1, true);
       if (wasPlayingBeforeSuspendRef.current) void video.play().catch(() => {});
     };
     const onVisibilityChange = () => document.hidden ? suspend() : resume();
@@ -290,7 +360,7 @@ export default function LightweightHlsPlayer({
     const onOffline = () => {
       const video = videoRef.current;
       networkOfflineRef.current = true;
-      offlineTimeRef.current = video?.currentTime || 0;
+      offlineTimeRef.current = finitePlaybackTime(video?.currentTime);
       wasPlayingBeforeOfflineRef.current = Boolean(video && !video.paused && !video.ended);
       setIsBuffering(true);
       setErrorMsg('M\u1ea5t k\u1ebft n\u1ed1i m\u1ea1ng, \u0111ang ch\u1edd k\u1ebft n\u1ed1i l\u1ea1i...');
@@ -301,21 +371,17 @@ export default function LightweightHlsPlayer({
       setHasError(false);
       setErrorMsg('');
       const video = videoRef.current;
-      const resumeAt = offlineTimeRef.current;
+      const resumeAt = finitePlaybackTime(offlineTimeRef.current);
       if (!video) return;
-      if (resumeAt > 0 && Math.abs(video.currentTime - resumeAt) > 0.5) {
-        video.currentTime = resumeAt;
-      }
+      seekVideoSafely(video, resumeAt);
       if (hlsRef.current) {
-        hlsRef.current.startLoad(resumeAt > 0 ? resumeAt : -1);
+        if (!hlsRef.current.loadingEnabled) hlsRef.current.startLoad(resumeAt || -1, true);
       } else if (video.currentSrc || video.src) {
         let restored = false;
         const restoreNativePlayback = () => {
           if (restored) return;
           restored = true;
-          if (resumeAt > 0 && Number.isFinite(video.duration) && resumeAt < video.duration - 2) {
-            video.currentTime = resumeAt;
-          }
+          seekVideoSafely(video, resumeAt);
           if (wasPlayingBeforeOfflineRef.current) void video.play().catch(() => {});
         };
         video.addEventListener('loadedmetadata', restoreNativePlayback, { once: true });
@@ -452,16 +518,18 @@ export default function LightweightHlsPlayer({
         capLevelToPlayerSize: true,
         startLevel: -1,
         testBandwidth: true,
-        fragLoadingTimeOut: 12000,
-        manifestLoadingTimeOut: 6000,
-        levelLoadingTimeOut: 6000,
-        fragLoadingMaxRetry: 3,
-        manifestLoadingMaxRetry: 2,
-        levelLoadingMaxRetry: 2,
+        abrBandWidthFactor: 0.8,
+        abrBandWidthUpFactor: 0.65,
+        fragLoadingTimeOut: 25_000,
+        manifestLoadingTimeOut: 10_000,
+        levelLoadingTimeOut: 10_000,
+        fragLoadingMaxRetry: 5,
+        manifestLoadingMaxRetry: 3,
+        levelLoadingMaxRetry: 3,
         fragLoadingRetryDelay: 1000,
         levelLoadingRetryDelay: 1000,
         manifestLoadingRetryDelay: 1000,
-        fragLoadingMaxRetryTimeout: 8000,
+        fragLoadingMaxRetryTimeout: 16_000,
       });
       hlsRef.current = hls;
       let startupSettled = false;
@@ -472,14 +540,14 @@ export default function LightweightHlsPlayer({
         setHasError(true);
         setIsBuffering(false);
         setErrorMsg('Nguồn phim không phản hồi');
-        onPlayerIssue?.({
+        callbacksRef.current.onPlayerIssue?.({
           event_type: 'hls_fatal',
           playback_time: video.currentTime,
           duration: video.duration || 0,
           buffered_ahead: getBufferedAhead(video),
           error_message: 'manifest startup watchdog exceeded 18 seconds',
         });
-        onFatalError?.();
+        callbacksRef.current.onFatalError?.();
       }, 18_000);
 
       setTimeout(() => {
@@ -507,7 +575,7 @@ export default function LightweightHlsPlayer({
         setSelectedLevel(-1);
         setLoaded(true);
         video.playbackRate = playbackRate;
-        if (initialTime > 0) video.currentTime = initialTime;
+        seekVideoSafely(video, initialTimeRef.current);
         if (autoPlay) video.play().catch(() => {});
       });
 
@@ -524,7 +592,7 @@ export default function LightweightHlsPlayer({
             nonFatalNetworkRetryRef.current += 1;
             setIsBuffering(true);
             setErrorMsg('Đang tải lại đoạn phim...');
-            onPlayerIssue?.({
+            callbacksRef.current.onPlayerIssue?.({
               event_type: 'hls_retry',
               playback_time: video.currentTime,
               duration: video.duration || 0,
@@ -533,35 +601,40 @@ export default function LightweightHlsPlayer({
             });
             if (
               nonFatalNetworkRetryRef.current >= MAX_NON_FATAL_NETWORK_RETRIES &&
-              getBufferedAhead(video) < 0.75
+              getBufferedAhead(video) < 0.75 &&
+              stallStartedAtRef.current > 0 &&
+              Date.now() - stallStartedAtRef.current >= MIN_FATAL_STALL_MS
             ) {
               setHasError(true);
               setErrorMsg('Nguồn phim phản hồi chậm');
-              onPlayerIssue?.({
+              callbacksRef.current.onPlayerIssue?.({
                 event_type: 'hls_fatal',
                 playback_time: video.currentTime,
                 duration: video.duration || 0,
                 buffered_ahead: getBufferedAhead(video),
                 error_message: `${details || 'network retry limit reached'} after ${nonFatalNetworkRetryRef.current} retries`,
               });
-              onFatalError?.();
+              callbacksRef.current.onFatalError?.();
               return;
             }
             capToLowerAutoLevel(hls);
-            hls.startLoad(video.currentTime);
+            if (!hls.loadingEnabled) hls.startLoad(finitePlaybackTime(video.currentTime) || -1, true);
           }
           return;
         }
         if (data.fatal) {
           const details = String(data.details || data.type || 'fatal network error');
           const isManifestStartupFailure = /manifest/i.test(details) && video.readyState === 0;
-          const maxNetworkRetries = isManifestStartupFailure ? 1 : 3;
+          // hls.js has already exhausted its configured network retries before
+          // emitting a fatal network error. One application-level resume is
+          // enough; repeating startLoad creates a visible reload loop.
+          const maxNetworkRetries = 1;
           if (data.type === 'networkError' && fatalRetryRef.current < maxNetworkRetries) {
             fatalRetryRef.current += 1;
             capToLowerAutoLevel(hls);
             setIsBuffering(true);
             setErrorMsg(`Đang kết nối lại nguồn phim (${fatalRetryRef.current}/${maxNetworkRetries})...`);
-            onPlayerIssue?.({
+            callbacksRef.current.onPlayerIssue?.({
               event_type: 'hls_fatal_retry',
               playback_time: video.currentTime,
               duration: video.duration || 0,
@@ -570,12 +643,15 @@ export default function LightweightHlsPlayer({
             });
             setTimeout(() => {
               if (isManifestStartupFailure) hls.loadSource(src);
-              hls.startLoad(video.currentTime);
+              hls.startLoad(
+                finitePlaybackTime(video.currentTime) || -1,
+                !isManifestStartupFailure,
+              );
             }, 1500 * fatalRetryRef.current);
           } else if (data.type === 'mediaError' && fatalRetryRef.current < 3) {
             fatalRetryRef.current += 1;
             setErrorMsg(`Đang sửa lỗi giải mã (${fatalRetryRef.current}/3)...`);
-            onPlayerIssue?.({
+            callbacksRef.current.onPlayerIssue?.({
               event_type: 'hls_media_retry',
               playback_time: video.currentTime,
               duration: video.duration || 0,
@@ -588,14 +664,14 @@ export default function LightweightHlsPlayer({
             window.clearTimeout(startupWatchdog);
             setHasError(true);
             setErrorMsg('Không thể tải video');
-            onPlayerIssue?.({
+            callbacksRef.current.onPlayerIssue?.({
               event_type: 'hls_fatal',
               playback_time: video.currentTime,
               duration: video.duration || 0,
               buffered_ahead: getBufferedAhead(video),
               error_message: String(data.details || data.type || 'fatal hls error'),
             });
-            onFatalError?.();
+            callbacksRef.current.onFatalError?.();
           }
         }
       });
@@ -629,21 +705,21 @@ export default function LightweightHlsPlayer({
         setHasError(true);
         setIsBuffering(false);
         setErrorMsg('Nguồn phim không phản hồi');
-        onPlayerIssue?.({
+        callbacksRef.current.onPlayerIssue?.({
           event_type: 'native_hls_error',
           playback_time: video.currentTime,
           duration: video.duration || 0,
           buffered_ahead: getBufferedAhead(video),
           error_message: 'native hls startup watchdog exceeded 18 seconds',
         });
-        onFatalError?.();
+        callbacksRef.current.onFatalError?.();
       }, 18_000);
       const onMeta = () => {
         nativeStartupSettled = true;
         window.clearTimeout(nativeStartupWatchdog);
         setLoaded(true);
         video.playbackRate = playbackRate;
-        if (initialTime > 0) video.currentTime = initialTime;
+        seekVideoSafely(video, initialTimeRef.current);
         if (autoPlay) video.play().catch(() => {});
       };
       const onErr = () => {
@@ -657,14 +733,14 @@ export default function LightweightHlsPlayer({
         window.clearTimeout(nativeStartupWatchdog);
         setHasError(true);
         setErrorMsg('Không thể phát stream');
-        onPlayerIssue?.({
+        callbacksRef.current.onPlayerIssue?.({
           event_type: 'native_hls_error',
           playback_time: video.currentTime,
           duration: video.duration || 0,
           buffered_ahead: getBufferedAhead(video),
           error_message: 'native hls video error',
         });
-        onFatalError?.();
+        callbacksRef.current.onFatalError?.();
       };
       video.addEventListener('loadedmetadata', onMeta);
       video.addEventListener('error', onErr);
@@ -688,7 +764,7 @@ export default function LightweightHlsPlayer({
     setHasError(true);
     setErrorMsg('Trình duyệt không hỗ trợ HLS');
     return undefined;
-  }, [src, autoPlay, initialTime, onFatalError, onPlayerIssue, retryNonce]);
+  }, [src, autoPlay, retryNonce]);
 
   /* ── Video events ── */
   useEffect(() => {
@@ -717,33 +793,43 @@ export default function LightweightHlsPlayer({
       if (!hls || video.paused || video.ended) return;
       if (getBufferedAhead(video) > 1.5) return;
 
+      const now = Date.now();
+      const stalledFor = stallStartedAtRef.current > 0 ? now - stallStartedAtRef.current : 0;
+      if (stalledFor < STALL_RECOVERY_DELAY_MS) return;
+      if (now - lastStallRecoveryAtRef.current < RECOVERY_COOLDOWN_MS) return;
+      lastStallRecoveryAtRef.current = now;
+
       streamRecoveryRef.current += 1;
-      if (streamRecoveryRef.current > MAX_STREAM_RECOVERY_ATTEMPTS) {
+      const repeatedStalls = repeatedStallTimesRef.current.length >= MAX_REPEATED_SHORT_STALLS;
+      if (
+        streamRecoveryRef.current > MAX_STREAM_RECOVERY_ATTEMPTS &&
+        stalledFor >= MIN_FATAL_STALL_MS &&
+        (repeatedStalls || getBufferedAhead(video) < 0.25)
+      ) {
         setHasError(true);
         setErrorMsg('Nguồn phim phản hồi chậm');
-        onPlayerIssue?.({
+        callbacksRef.current.onPlayerIssue?.({
           event_type: 'stall_fatal',
           playback_time: video.currentTime,
           duration: video.duration || 0,
           buffered_ahead: getBufferedAhead(video),
-          error_message: 'stream stalled after max recovery attempts',
+          error_message: `stream stalled for ${stalledFor}ms after ${streamRecoveryRef.current} recovery attempts`,
         });
-        onFatalError?.();
+        callbacksRef.current.onFatalError?.();
         return;
       }
 
       const didLowerQuality = capToLowerAutoLevel(hls);
       setIsBuffering(true);
       setErrorMsg(didLowerQuality ? 'Mạng chậm, đang giảm chất lượng và tải lại...' : 'Đang kết nối lại nguồn phim...');
-      onPlayerIssue?.({
+      callbacksRef.current.onPlayerIssue?.({
         event_type: 'stall_recovery',
         playback_time: video.currentTime,
         duration: video.duration || 0,
         buffered_ahead: getBufferedAhead(video),
-        error_message: didLowerQuality ? 'stall recovery lowered quality' : 'stall recovery restarted load',
+        error_message: didLowerQuality ? 'stall recovery lowered quality' : 'stall recovery kept active fragment load',
       });
-      hls.stopLoad();
-      hls.startLoad(video.currentTime);
+      if (!hls.loadingEnabled) hls.startLoad(finitePlaybackTime(video.currentTime) || -1, true);
       video.play().catch(() => {});
     };
     const ensureStallMonitor = () => {
@@ -767,30 +853,13 @@ export default function LightweightHlsPlayer({
       clearStallTimer();
       if (!video.paused && !video.ended && !document.hidden && navigator.onLine !== false) {
         const now = Date.now();
-        if (!stallStartedAtRef.current) {
+        const isNewStall = !stallStartedAtRef.current;
+        if (isNewStall) {
           stallStartedAtRef.current = now;
           stallCountRef.current += 1;
-        }
-        repeatedStallTimesRef.current = repeatedStallTimesRef.current
-          .filter((time) => now - time <= REPEATED_STALL_WINDOW_MS);
-        if (getBufferedAhead(video) < 0.75) repeatedStallTimesRef.current.push(now);
-
-        if (
-          !repeatedStallEscalatedRef.current
-          && repeatedStallTimesRef.current.length >= MAX_REPEATED_SHORT_STALLS
-        ) {
-          repeatedStallEscalatedRef.current = true;
-          setHasError(true);
-          setErrorMsg('Nguồn phim bị gián đoạn liên tục');
-          onPlayerIssue?.({
-            event_type: 'stall_fatal',
-            playback_time: video.currentTime,
-            duration: video.duration || 0,
-            buffered_ahead: getBufferedAhead(video),
-            error_message: `repeated short stalls (${repeatedStallTimesRef.current.length} within ${REPEATED_STALL_WINDOW_MS}ms)`,
-          });
-          onFatalError?.();
-          return;
+          repeatedStallTimesRef.current = repeatedStallTimesRef.current
+            .filter((time) => now - time <= REPEATED_STALL_WINDOW_MS);
+          if (getBufferedAhead(video) < 0.75) repeatedStallTimesRef.current.push(now);
         }
       }
       stallTimerRef.current = setTimeout(recoverStalledStream, STALL_RECOVERY_DELAY_MS);
@@ -808,7 +877,7 @@ export default function LightweightHlsPlayer({
       nonFatalNetworkRetryRef.current = 0;
       clearStallTimer();
       ensureStallMonitor();
-      if (!video.paused && !video.ended && navigator.onLine !== false) onPlaybackStarted?.();
+      if (!video.paused && !video.ended && navigator.onLine !== false) callbacksRef.current.onPlaybackStarted?.();
     };
     const onCanPlay = () => {
       setIsBuffering(false);
@@ -821,13 +890,14 @@ export default function LightweightHlsPlayer({
       lastTimeRef.current = now;
       setCurrentTime(video.currentTime);
       setDuration(video.duration || 0);
-      onTimeUpdate?.(video.currentTime, video.duration || 0);
+      callbacksRef.current.onTimeUpdate?.(video.currentTime, video.duration || 0);
       const metricDelta = video.currentTime - lastMetricPlaybackTimeRef.current;
       if (metricDelta > 0 && metricDelta <= 3) watchedSecondsRef.current += metricDelta;
       lastMetricPlaybackTimeRef.current = video.currentTime;
       const emitPlaybackQuality = (eventType: 'playback_stable' | 'playback_heartbeat') => {
-        if (!onPlaybackQuality || !firstPlayingAtRef.current) return;
-        onPlaybackQuality({
+        const reportPlaybackQuality = callbacksRef.current.onPlaybackQuality;
+        if (!reportPlaybackQuality || !firstPlayingAtRef.current) return;
+        reportPlaybackQuality({
           event_type: eventType,
           playback_time: video.currentTime,
           duration: video.duration || 0,
@@ -847,10 +917,13 @@ export default function LightweightHlsPlayer({
         heartbeatBucketRef.current = heartbeatBucket;
         emitPlaybackQuality('playback_heartbeat');
       }
-      if (getBufferedAhead(video) > 2) {
+      const bufferedAhead = getBufferedAhead(video);
+      if (bufferedAhead > 2) {
         setErrorMsg('');
         streamRecoveryRef.current = 0;
         nonFatalNetworkRetryRef.current = 0;
+      }
+      if (bufferedAhead > 12) {
         repeatedStallTimesRef.current = [];
       }
     };
@@ -861,8 +934,8 @@ export default function LightweightHlsPlayer({
     const onEnd = () => {
       setIsPlaying(false);
       stopStallMonitor();
-      onEnded?.();
-      onVideoEnded?.();
+      callbacksRef.current.onEnded?.();
+      callbacksRef.current.onVideoEnded?.();
     };
     const onFS = () => {
       const docEl = document as Document & { webkitFullscreenElement?: Element };
@@ -913,7 +986,7 @@ export default function LightweightHlsPlayer({
       stopStallMonitor();
       clearStallTimer();
     };
-  }, [onTimeUpdate, onEnded, onVideoEnded, onFatalError, onPlaybackStarted, onPlaybackQuality, onPlayerIssue]);
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -931,7 +1004,11 @@ export default function LightweightHlsPlayer({
         case ' ': case 'k': e.preventDefault(); togglePlay(); break;
         case 'f': case 'F': toggleFullscreen(); break;
         case 'm': case 'M': toggleMute(); break;
-        case 'ArrowRight': v.currentTime = Math.min(v.currentTime + 5, v.duration); break;
+        case 'ArrowRight': {
+          const end = Number.isFinite(v.duration) ? v.duration : v.currentTime + 5;
+          v.currentTime = Math.min(v.currentTime + 5, end);
+          break;
+        }
         case 'ArrowLeft': v.currentTime = Math.max(v.currentTime - 5, 0); break;
         case 'ArrowUp': changeVolume(Math.min(v.volume + 0.1, 1)); break;
         case 'ArrowDown': changeVolume(Math.max(v.volume - 0.1, 0)); break;
@@ -1161,6 +1238,23 @@ export default function LightweightHlsPlayer({
     seekToPct(pct);
   }, [seekToPct]);
 
+  const retryStream = useCallback(() => {
+    // The error UI temporarily replaces the video node, so its ref is null at
+    // click time. Preserve the last React/ref snapshot and remount the media
+    // element before rebuilding HLS.
+    const resumeAt = Math.max(
+      finitePlaybackTime(initialTimeRef.current),
+      finitePlaybackTime(currentTime),
+      finitePlaybackTime(lastPlaybackSecondRef.current),
+    );
+    if (Number.isFinite(resumeAt) && resumeAt > 0) initialTimeRef.current = resumeAt;
+    setLoaded(false);
+    setIsBuffering(true);
+    setHasError(false);
+    setErrorMsg('');
+    setRetryNonce((value) => value + 1);
+  }, [currentTime]);
+
   if (hasError) {
     return (
       <div className="aspect-video w-full bg-[#0d0f1a] rounded-xl flex items-center justify-center border border-white/5">
@@ -1169,7 +1263,7 @@ export default function LightweightHlsPlayer({
           <p className="text-white/50 text-sm">{errorMsg || 'Không thể tải video'}</p>
           <button
             type="button"
-            onClick={() => setRetryNonce((value) => value + 1)}
+            onClick={retryStream}
             className="mt-3 rounded-lg border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold text-white/70 hover:bg-white/15 hover:text-white"
           >
             Thử lại stream

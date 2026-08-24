@@ -1,9 +1,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { findCanonicalMovieByIdentity } from '../_shared/movie-identity.ts';
+import { findCanonicalMovieByIdentity, retireSourceMovieDuplicate } from '../_shared/movie-identity.ts';
+import { resolveLocalizedMovieTitles } from '../_shared/tmdb-title-localization.ts';
 
 const BASE = 'https://www.glvietsub.net';
 const SOURCE = 'glvietsub';
+const TMDB_READ_ACCESS_TOKEN = Deno.env.get('TMDB_READ_ACCESS_TOKEN') || '';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -39,6 +41,18 @@ function titleAliases(...values: unknown[]): string[] {
     if (prefix && prefix.length >= 3) aliases.add(prefix);
   }
   return [...aliases];
+}
+
+async function enrichEntryTitles(entry: Record<string, unknown>): Promise<void> {
+  const localized = await resolveLocalizedMovieTitles({
+    titleVi: String(entry.name || ''),
+    sourceOriginal: String(entry.originName || ''),
+    year: Number(entry.year || 0),
+    tmdbToken: TMDB_READ_ACCESS_TOKEN,
+  });
+  entry.titleEn = localized.titleEn;
+  entry.titleOriginal = localized.titleOriginal || String(entry.originName || '');
+  entry.tmdbId = localized.tmdbId;
 }
 
 async function fetchText(url: string, timeout = 18_000, init: RequestInit = {}) {
@@ -135,6 +149,88 @@ function unwrapEmbed(payload: Record<string, unknown>): string {
   return decode(iframe || raw).replaceAll('\\/', '/').trim();
 }
 
+function playbackIdentity(url: unknown): string {
+  const raw = decode(String(url || '')).replaceAll('\\/', '/').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'youtu.be') {
+      const videoId = parsed.pathname.split('/').filter(Boolean)[0] || '';
+      return videoId ? `youtube:${videoId}` : '';
+    }
+    if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
+      const embedId = parsed.pathname.match(/^\/(?:embed|shorts)\/([^/?#]+)/i)?.[1];
+      const videoId = embedId || parsed.searchParams.get('v') || '';
+      return videoId ? `youtube:${videoId}` : '';
+    }
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return raw.replace(/\/$/, '');
+  }
+}
+
+function isYouTubePlaybackUrl(url: unknown): boolean {
+  try {
+    const host = new URL(String(url || '')).hostname.toLowerCase().replace(/^www\./, '');
+    return host === 'youtu.be' || host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com';
+  } catch {
+    return false;
+  }
+}
+
+async function youtubePlaybackTitle(url: string): Promise<string> {
+  try {
+    const identity = playbackIdentity(url);
+    const videoId = identity.startsWith('youtube:') ? identity.slice('youtube:'.length) : '';
+    if (!videoId) return '';
+    // YouTube oEmbed returns 404 for /embed/... URLs. Resolve metadata through
+    // the canonical watch URL so trailer detection is deterministic.
+    const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+    const endpoint = `https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`;
+    const payload = JSON.parse(await fetchText(endpoint, 8_000)) as Record<string, unknown>;
+    return plain(String(payload.title || '')).trim();
+  } catch {
+    return '';
+  }
+}
+
+function isTrailerPlaybackTitle(title: string): boolean {
+  return /(?:^|[\s[(\-:])(?:official\s+)?(?:trailer|teaser|pilot\d*|prelude|preview)(?:$|[\s\])\-:])|\b(?:concept\s+teaser|pilot\s+trailer|pre[\s-]?series|upcoming|coming\s+soon|rumou?red\s+to\s+premiere|press\s+conference)\b|\b(?:trailer|teaser)\s+chính\s+thức\b|ตัวอย่าง|งานแถลงข่าว|예고|予告|预告|預告|\|\s*GMMTV\s*2026\s*$/i.test(title);
+}
+
+function rejectRepeatedEpisodePlaybackUrls(rows: Array<Record<string, unknown>>) {
+  const ownerByUrl = new Map<string, number>();
+  for (const row of rows) {
+    if (row.invalid_playback_reason) continue;
+    if (row.special) continue;
+    const episodeNumber = Number(row.episode_number || 0);
+    const identity = playbackIdentity(row.link_embed || row.link_m3u8);
+    if (!identity || episodeNumber <= 0) continue;
+    const owner = ownerByUrl.get(identity);
+    if (owner === undefined || episodeNumber < owner) ownerByUrl.set(identity, episodeNumber);
+  }
+
+  const episodes: Array<Record<string, unknown>> = [];
+  const duplicateEpisodes: Array<Record<string, unknown>> = [];
+  for (const row of rows) {
+    if (row.invalid_playback_reason) {
+      duplicateEpisodes.push(row);
+      continue;
+    }
+    const episodeNumber = Number(row.episode_number || 0);
+    const identity = playbackIdentity(row.link_embed || row.link_m3u8);
+    const owner = identity ? ownerByUrl.get(identity) : undefined;
+    if (!row.special && episodeNumber > 0 && owner !== undefined && owner !== episodeNumber) {
+      duplicateEpisodes.push({ ...row, duplicate_of_episode: owner, playback_identity: identity });
+      continue;
+    }
+    episodes.push(row);
+  }
+  return { episodes, duplicateEpisodes };
+}
+
 async function playerUrls(postId: string, type: string, serverCount: number): Promise<string[]> {
   const candidates = (await Promise.all(Array.from(
     { length: Math.min(serverCount, 6) },
@@ -192,7 +288,13 @@ async function parseDetail(sourceUrl: string) {
     const urls = postId && serverCount
       ? await playerUrls(postId, type, serverCount)
       : /^https?:\/\//i.test(directRawEmbed) ? [decode(directRawEmbed)] : [];
-    return urls.map((url, index) => ({
+    const youtubeTitles = new Map<string, string>();
+    await Promise.all(urls.filter(isYouTubePlaybackUrl).map(async (url) => {
+      youtubeTitles.set(url, await youtubePlaybackTitle(url));
+    }));
+    return urls.map((url, index) => {
+      const youtubeTitle = youtubeTitles.get(url) || '';
+      return {
       episode_number: episode.number,
       episode_name: episode.special
         ? `${episode.label.replace(/\s*RAW\b/i, '').trim() || 'Tập Đặc Biệt'}${episode.raw ? ' RAW' : ''}`
@@ -202,9 +304,16 @@ async function parseDetail(sourceUrl: string) {
       link_embed: url,
       raw: episode.raw,
       special: episode.special,
-    }));
+      invalid_playback_reason: youtubeTitle && isTrailerPlaybackTitle(youtubeTitle) ? 'youtube_trailer' : '',
+      playback_title: youtubeTitle,
+    };
+    });
   });
-  const episodes: Array<Record<string, unknown>> = episodeGroups.flat();
+  // GLVietsub can temporarily publish two episode buttons that resolve to the
+  // same immutable player URL. A reachable URL is not proof that it belongs to
+  // a new episode, so keep the earliest numbered owner and quarantine the rest.
+  const parsedPlayback = rejectRepeatedEpisodePlaybackUrls(episodeGroups.flat());
+  const episodes = parsedPlayback.episodes;
   const regularEpisodes = episodes.filter((row) => !row.special);
   const translatedNumbers = regularEpisodes.filter((row) => !row.raw).map((row) => Number(row.episode_number || 0));
   const rawNumbers = regularEpisodes.filter((row) => row.raw).map((row) => Number(row.episode_number || 0));
@@ -215,6 +324,7 @@ async function parseDetail(sourceUrl: string) {
   return {
     sourceUrl, sourceSlug, name, originName, year, expectedEpisodes,
     currentEpisode, rawEpisode, playableEpisode, episodes,
+    duplicateEpisodes: parsedPlayback.duplicateEpisodes,
     content: plain(meta(html, 'description') || first(html, /class=["']mota["'][^>]*>([\s\S]*?)<\/span>/i)),
     image: meta(html, 'og:image') || first(html, /<img[^>]+(?:alt=["'][^"']*["'][^>]+)?src=["']([^"']+wp-content\/uploads\/[^"']+)/i),
     category: /phim-bach-hop|Bách Hợp/i.test(html) ? [{ name: 'Bách Hợp', slug: 'bach-hop' }] : [{ name: 'Đam Mỹ / BL', slug: 'dam-my' }],
@@ -223,9 +333,8 @@ async function parseDetail(sourceUrl: string) {
 }
 
 async function findMovie(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
-  const fields = 'id,slug,name,origin_name,normalized_name,year,source_site,current_episode,total_episodes,is_published';
+  const fields = 'id,slug,name,origin_name,title_vi,title_en,title_original,tmdb_id,normalized_name,year,source_site,current_episode,total_episodes,is_published';
   const { data: bySource } = await db.from('movies').select(fields).eq('source_url', entry.sourceUrl).limit(1).maybeSingle();
-  if (bySource?.id) return bySource;
   // Match through punctuation-safe normalized values. Raw titles can contain
   // commas/parentheses that alter PostgREST .or() syntax and silently prevent
   // GL episodes from attaching to an existing BL canonical movie.
@@ -236,21 +345,35 @@ async function findMovie(db: ReturnType<typeof createClient>, entry: Record<stri
     [entry.name, entry.originName].map((value) => plain(String(value || '')).trim()).filter(Boolean),
   ));
   const normalizedNames = Array.from(new Set(aliases.map((value) => slugify(value)).filter(Boolean)));
-  return await findCanonicalMovieByIdentity(db, {
+  const canonical = await findCanonicalMovieByIdentity(db, {
     names: aliases,
     normalizedNames,
     year: entry.year,
+    provider: SOURCE,
+    providerSlug: entry.sourceSlug,
+    providerId: entry.sourceSlug,
+    tmdbId: entry.tmdbId,
+    originalTitle: entry.titleOriginal || entry.originName,
+    localizedTitle: entry.name,
+    movieType: 'series',
+    createSlug: `glvietsub-${entry.sourceSlug}`,
+    sourceName: 'GLVietsub',
   });
+  return canonical || bySource || null;
 }
 
 async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
   let movie = await findMovie(db, entry);
   let created = false;
   const now = new Date().toISOString();
+  const titleEn = String(entry.titleEn || (entry.originName !== entry.name ? entry.originName : '')).trim();
+  const titleOriginal = String(entry.titleOriginal || entry.originName || '').trim();
   if (!movie) {
     const payload = {
       slug: `glvietsub-${entry.sourceSlug}`, name: entry.name, origin_name: entry.originName,
-      title_en: entry.originName, title_original: entry.originName, normalized_name: slugify(String(entry.name)),
+      title_vi: entry.name, title_en: titleEn, title_original: titleOriginal,
+      tmdb_id: entry.tmdbId || null,
+      normalized_name: slugify([entry.name, entry.originName, titleEn, titleOriginal].filter(Boolean).join(' ')),
       content: entry.content, type: 'series', status: 'ongoing', thumb_url: entry.image, poster_url: entry.image,
       quality: 'HD', lang: 'Vietsub', episode_current: `Tập ${entry.currentEpisode}`,
       episode_total: String(entry.expectedEpisodes || entry.currentEpisode), current_episode: entry.currentEpisode,
@@ -274,6 +397,10 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
       episode_total: String(Math.max(Number(entry.expectedEpisodes || 0), nextCurrent)),
       is_published: nextCurrent > 0,
     });
+    const currentTitleEn = String(movie.title_en || '').trim();
+    if (titleEn && (!currentTitleEn || slugify(currentTitleEn) === slugify(String(entry.name || '')))) update.title_en = titleEn;
+    if (titleOriginal && !String(movie.title_original || '').trim()) update.title_original = titleOriginal;
+    if (entry.tmdbId && !movie.tmdb_id) update.tmdb_id = entry.tmdbId;
     const { error } = await db.from('movies').update(update).eq('id', movie.id);
     if (error) throw error;
   }
@@ -308,6 +435,38 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
     else { const { error } = await db.from('streams').insert(streamPayload); if (error) throw error; }
     rows += 1;
   }
+  for (const duplicate of (entry.duplicateEpisodes || []) as Array<Record<string, unknown>>) {
+    const episodeNumber = Number(duplicate.episode_number || 0);
+    const episodeSlug = String(duplicate.slug || '').trim();
+    const serverName = String(duplicate.server_name || '').trim();
+    const embedUrl = String(duplicate.link_embed || '').trim();
+    if (!episodeNumber || !episodeSlug || !serverName || !embedUrl) continue;
+    const { error: duplicateEpisodeError } = await db.from('movie_episodes').delete()
+      .eq('movie_id', movie.id)
+      .eq('source', SOURCE)
+      .eq('episode_number', episodeNumber)
+      .eq('server_name', serverName)
+      .eq('link_embed', embedUrl);
+    if (duplicateEpisodeError) throw duplicateEpisodeError;
+    // Verified duplicate playback quarantine contract: the parser proved this
+    // exact provider/movie/episode/server/embed URL is either a trailer or is
+    // already owned by another episode. This is not negative feed absence.
+    const { error: duplicateStreamError } = await db.from('streams').update({
+      is_active: false,
+      health_status: 'blocked',
+      failure_count: 3,
+      last_error: duplicate.invalid_playback_reason === 'youtube_trailer'
+        ? `Rejected GL playback: YouTube trailer (${String(duplicate.playback_title || '').slice(0, 140)})`
+        : `Duplicate playback URL already belongs to episode ${Number(duplicate.duplicate_of_episode || 0)}`,
+      last_checked_at: now,
+    })
+      .eq('movie_id', movie.id)
+      .eq('source', SOURCE)
+      .eq('episode_slug', episodeSlug)
+      .eq('server_name', serverName)
+      .eq('embed_url', embedUrl);
+    if (duplicateStreamError) throw duplicateStreamError;
+  }
   const translatedEpisodes = (entry.episodes as Array<Record<string, unknown>>)
     .filter((episode) => !episode.raw);
   // Verified localized replacement contract: a RAW row is removed only after
@@ -337,10 +496,23 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
     }
   }
   await db.from('movie_api_cache').update({ expires_at: new Date().toISOString() }).eq('slug', movie.slug);
-  return { slug: movie.slug, created, rows, current_episode: entry.currentEpisode, total_episodes: entry.expectedEpisodes };
+  return {
+    slug: movie.slug,
+    created,
+    rows,
+    rejected_playback_rows: ((entry.duplicateEpisodes || []) as Array<Record<string, unknown>>).length,
+    current_episode: entry.currentEpisode,
+    total_episodes: entry.expectedEpisodes,
+  };
 }
 
 async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
+  await enrichEntryTitles(entry);
+  const { data: sourceBeforeStore } = await db.from('movies')
+    .select('id,slug,source_site,source_name')
+    .eq('source_url', entry.sourceUrl)
+    .limit(1)
+    .maybeSingle();
   const result = await storeEntryLegacy(db, entry);
   const movie = await findMovie(db, entry);
   if (!movie?.id) throw new Error('Stored movie could not be resolved');
@@ -350,17 +522,35 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
   const rawEpisode = Number(entry.rawEpisode || 0);
   const playableEpisode = Number(entry.playableEpisode || 0);
   const hasPlayableEpisode = playableEpisode > 0 && (entry.episodes as Array<Record<string, unknown>>).length > 0;
-  const nextCurrent = Math.max(Number(movie.current_episode || 0), translatedEpisode);
+  const { data: localizedRows, error: localizedRowsError } = await db.from('movie_episodes')
+    .select('episode_number')
+    .eq('movie_id', movie.id)
+    .eq('source', SOURCE)
+    .neq('audio_type', 'raw')
+    .order('episode_number', { ascending: false })
+    .limit(1);
+  if (localizedRowsError) throw localizedRowsError;
+  const verifiedTranslatedEpisode = Math.max(
+    translatedEpisode,
+    Number((localizedRows?.[0] as Record<string, unknown> | undefined)?.episode_number || 0),
+  );
+  // For a GL-owned movie, current_episode means the highest localized episode,
+  // not the highest early-access RAW episode. Other canonical sources retain
+  // their own higher translated progress.
+  const nextCurrent = movie.source_site === SOURCE
+    ? verifiedTranslatedEpisode
+    : Math.max(Number(movie.current_episode || 0), verifiedTranslatedEpisode);
   const nextPlayable = Math.max(Number(movie.total_episodes || 0), playableEpisode);
   const displayEpisode = nextCurrent > 0
     ? `Tập ${nextCurrent}`
     : rawEpisode > 0 ? `Tập ${rawEpisode} RAW` : 'Đang cập nhật';
   const displayLanguage = nextCurrent > 0 ? 'Vietsub' : rawEpisode > 0 ? 'RAW · Chưa phụ đề' : 'Đang cập nhật';
-  const aliases = titleAliases(entry.originName);
+  const aliases = titleAliases(entry.originName, entry.titleEn, entry.titleOriginal);
+  const titleEn = String(entry.titleEn || aliases.at(-1) || entry.originName || '').trim();
+  const titleOriginal = String(entry.titleOriginal || entry.originName || '').trim();
   const update: Record<string, unknown> = {
     last_synced_at: now,
     title_vi: entry.name,
-    title_en: aliases.at(-1) || entry.originName,
     content: entry.content,
     status: hasPlayableEpisode ? 'ongoing' : 'upcoming',
     episode_current: displayEpisode,
@@ -370,6 +560,10 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
     lang: displayLanguage,
     is_published: Boolean(movie.is_published) || hasPlayableEpisode,
   };
+  const currentTitleEn = String(movie.title_en || '').trim();
+  if (titleEn && (!currentTitleEn || slugify(currentTitleEn) === slugify(String(entry.name || '')))) update.title_en = titleEn;
+  if (titleOriginal && !String(movie.title_original || '').trim()) update.title_original = titleOriginal;
+  if (entry.tmdbId && !movie.tmdb_id) update.tmdb_id = entry.tmdbId;
   if (movie.source_site === 'tmdb-catalog') Object.assign(update, {
     name: entry.name,
     normalized_name: slugify(String(entry.name)),
@@ -387,6 +581,13 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
 
   const { error: updateError } = await db.from('movies').update(update).eq('id', movie.id);
   if (updateError) throw updateError;
+  if (sourceBeforeStore?.id && sourceBeforeStore.id !== movie.id) {
+    await retireSourceMovieDuplicate(db, {
+      source: sourceBeforeStore,
+      target: movie,
+      provider: SOURCE,
+    });
+  }
   const { error: seoError } = await db.rpc('refresh_movie_seo_quality', { p_movie_id: movie.id });
   if (seoError) throw seoError;
   await db.from('home_page_cache').update({ expires_at: now }).in('id', ['homepage_v3', 'search_index_v4_rows']);
@@ -409,8 +610,9 @@ serve(async (req) => {
   const dryRun = url.searchParams.get('dry_run') === '1';
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 3), 8));
   const explicitSlug = slugify(url.searchParams.get('slug') || '');
+  const recentOnly = url.searchParams.get('recent') === '1';
   let backfillOffset = 0;
-  if (!explicitSlug && !dryRun) {
+  if (!explicitSlug && !recentOnly && !dryRun) {
     const { data: cursor } = await db.from('sync_cursors').select('page').eq('key', 'glvietsub-feed-backfill').maybeSingle();
     backfillOffset = Math.max(0, Number(cursor?.page || 0));
   }
@@ -420,6 +622,12 @@ serve(async (req) => {
   let normalizedBackfillOffset = 0;
   if (explicitSlug) {
     discovered = [`${BASE}/phim-bo/${explicitSlug}`];
+  } else if (recentOnly) {
+    // Viewer-facing freshness lane: GLVietsub puts recently updated titles on
+    // its homepage. Revisit that small window all day without rotating the
+    // full sitemap during viewing peaks.
+    const latestHtml = await fetchText(`${BASE}/`);
+    discovered = discoverDetailUrls(latestHtml, limit);
   } else {
     const [latestHtml, sitemapOne, sitemapTwo] = await Promise.all([
       fetchText(`${BASE}/`),
@@ -461,7 +669,8 @@ serve(async (req) => {
       if (!parsed.entry) throw new Error(parsed.error || 'Unknown parse failure');
       const entry = parsed.entry;
       if (!entry.name) throw new Error('Missing movie identity');
-      if (!entry.episodes.length) {
+      const hasRejectedPlayback = Array.isArray(entry.duplicateEpisodes) && entry.duplicateEpisodes.length > 0;
+      if (!entry.episodes.length && !hasRejectedPlayback) {
         // Coming-soon pages are valid catalogue entries, not connector
         // failures. They must remain unpublished and must not open the circuit
         // or prevent later playable movies in the same archive window.
@@ -492,8 +701,9 @@ serve(async (req) => {
       }
     }
   }
-  const result = { success: errors.length === 0, dry_run: dryRun, scanned: discovered.length, stored, skipped_unplayable: skippedUnplayable, errors, circuit_open: consecutiveFailures >= 3, elapsed_ms: Date.now() - started };
-  if (!explicitSlug && !dryRun) {
+  const mode = explicitSlug ? 'slug' : recentOnly ? 'recent' : 'archive';
+  const result = { success: errors.length === 0, dry_run: dryRun, mode, scanned: discovered.length, stored, skipped_unplayable: skippedUnplayable, errors, circuit_open: consecutiveFailures >= 3, elapsed_ms: Date.now() - started };
+  if (!explicitSlug && !recentOnly && !dryRun) {
     const nextPage = archiveCount > 0
       ? (normalizedBackfillOffset + archiveBatchSize) % archiveCount
       : 0;

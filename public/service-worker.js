@@ -6,6 +6,7 @@
 // KhoPhim caches.
 
 const LEGACY_CACHE_RE = /^(khophim|workbox)/i;
+const PROTECTED_WATCH_PATH_RE = /^\/xem-phim(?:\/|$)/;
 
 async function clearKhophimCaches() {
   if (!self.caches) return;
@@ -17,11 +18,28 @@ async function clearKhophimCaches() {
   );
 }
 
+async function hasActiveWatchClient() {
+  const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  return clients.some((client) => {
+    try {
+      return PROTECTED_WATCH_PATH_RE.test(new URL(client.url).pathname);
+    } catch {
+      return false;
+    }
+  });
+}
+
 self.addEventListener('install', (event) => {
-  // Do not skipWaiting: activating over an open legacy tab fires that tab's
-  // old controllerchange handler, which reloads a movie mid-playback. The
-  // cleanup worker activates only after the visitor naturally closes/reloads.
-  event.waitUntil(clearKhophimCaches());
+  event.waitUntil(
+    (async () => {
+      await clearKhophimCaches();
+      // Installed PWAs can remain alive in the background, which otherwise
+      // leaves this cleanup worker waiting indefinitely and keeps serving the
+      // old app shell. Activate immediately for normal pages, but never take
+      // over while a visitor is on a protected watch route.
+      if (!(await hasActiveWatchClient())) await self.skipWaiting();
+    })()
+  );
 });
 
 self.addEventListener('activate', (event) => {

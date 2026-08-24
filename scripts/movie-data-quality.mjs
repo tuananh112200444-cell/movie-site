@@ -67,6 +67,8 @@ function chunk(items, size) {
 function episodeNumberFromText(value) {
   if (value == null) return 0;
   const text = String(value).toLowerCase();
+  const decimal = text.match(/(?:^|\D)(\d{1,3})\.\d{1,2}(?:\D|$)/);
+  if (decimal) return Number(decimal[1] || 0) || 0;
   if (/\b(full|hoan tat|hoàn tất|complete|completed)\b/.test(text)) return 0;
   const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
   if (slash) return Number(slash[1] || 0) || 0;
@@ -74,6 +76,11 @@ function episodeNumberFromText(value) {
   if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
   const matches = [...text.matchAll(/(\d{1,9})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
   return matches.length ? Math.max(...matches) : 0;
+}
+
+function isFractionalEpisodeRow(row) {
+  return [row?.episode_name, row?.name, row?.filename]
+    .some((value) => /(?:^|\D)\d{1,3}\.\d{1,2}(?:\D|$)/.test(String(value || '')) && /\bpart\s*\d+\b/i.test(String(value || '')));
 }
 
 function advertisedEpisode(movie) {
@@ -138,6 +145,7 @@ function isCatalogOnlyMovie(movie) {
 }
 
 function playableEpisodeNumber(row) {
+  if (isFractionalEpisodeRow(row)) return 0;
   const hasPlayableUrl = Boolean(String(row.link_m3u8 || row.stream_url || '').trim() || String(row.link_embed || row.embed_url || '').trim());
   const directNumber = Math.max(
     Number(row.episode_number || 0) || 0,
@@ -147,7 +155,7 @@ function playableEpisodeNumber(row) {
   );
   const serverData = row.server_data;
   const nestedRows = Array.isArray(serverData) ? serverData : serverData && typeof serverData === 'object' ? [serverData] : [];
-  const nestedNumber = nestedRows.reduce((max, ep) => Math.max(
+  const nestedNumber = nestedRows.reduce((max, ep) => isFractionalEpisodeRow(ep) ? max : Math.max(
     max,
     Number(ep?.episode_number || 0) || 0,
     episodeNumberFromText(ep?.slug),

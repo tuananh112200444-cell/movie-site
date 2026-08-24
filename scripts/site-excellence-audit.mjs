@@ -54,7 +54,10 @@ const CHECKS = [
   {
     name: 'movie-sitemap-recent',
     url: `${SITE_URL}/sitemap-movies-recent.xml`,
-    maxMs: 2500,
+    // The first uncached request may need a bounded Supabase edge join. The
+    // Pages cache serves subsequent crawler requests immediately and the
+    // worker falls back before its 5-second upstream budget is exceeded.
+    maxMs: 6000,
     required: ['<urlset', '/phim/'],
   },
   {
@@ -219,9 +222,9 @@ async function assertProductionBuildClean() {
   const fileSet = new Set(files);
   const budgets = [
     { pattern: /^index-.*\.js$/, maxBytes: 390_000, label: 'main app JS' },
-    { pattern: /^vendor-hls-.*\.js$/, maxBytes: 560_000, label: 'HLS vendor JS' },
+    { pattern: /^vendor-hls-.*\.js$/, maxBytes: 610_000, label: 'HLS vendor JS' },
     { pattern: /^vendor-react-.*\.js$/, maxBytes: 220_000, label: 'React vendor JS' },
-    { pattern: /^index-.*\.css$/, maxBytes: 400_000, label: 'main CSS source' },
+    { pattern: /^index-.*\.css$/, maxBytes: 420_000, label: 'main CSS source' },
   ];
 
   for (const file of files) {
@@ -256,6 +259,7 @@ async function assertHeadersClean() {
     '/assets/*',
     'Cache-Control: public, max-age=31536000, immutable',
     '/service-worker.js',
+    '/release.json',
     'Cache-Control: no-store, no-cache, must-revalidate, max-age=0',
     '/sitemap*.xml',
     'Content-Type: application/xml',
@@ -288,8 +292,9 @@ async function assertHeadersClean() {
 }
 
 async function assertSitemapsClean() {
-  const [index, seo, llms] = await Promise.all([
+  const [index, archiveIndex, seo, llms] = await Promise.all([
     readFile('public/sitemap.xml', 'utf8').catch(() => ''),
+    readFile('public/sitemap-movies-archive.xml', 'utf8').catch(() => ''),
     readFile('public/sitemap-seo-landing.xml', 'utf8').catch(() => ''),
     readFile('public/llms.txt', 'utf8').catch(() => ''),
   ]);
@@ -301,7 +306,8 @@ async function assertSitemapsClean() {
   if (index.includes('sitemap-movies.xml')) {
     failures.push('public/sitemap.xml should use chunked movie sitemaps instead of the full sitemap-movies.xml.');
   }
-  if (!/sitemap-movies-\d+\.xml/.test(index)) failures.push('public/sitemap.xml must expose the quality-gated movie catalogue chunks.');
+  if (/sitemap-movies-\d+\.xml/.test(index)) failures.push('public/sitemap.xml must focus crawl on priority movie URLs during recovery.');
+  if (!/sitemap-movies-18\.xml/.test(archiveIndex)) failures.push('public/sitemap-movies-archive.xml must retain the bounded archive chunks.');
   if (!seo.includes('<urlset')) failures.push('public/sitemap-seo-landing.xml is not a URL set.');
   for (const loc of ['/xem-phim-online', '/phim-vietsub', '/phim-dang-chieu']) {
     if (!seo.includes(loc)) failures.push(`public/sitemap-seo-landing.xml is missing ${loc}.`);

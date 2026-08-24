@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const externalBaseUrl = process.env.KHOPHIM_E2E_BASE?.replace(/\/$/, '');
+
 export default defineConfig({
   testDir: './tests',
   timeout: 45_000,
@@ -9,7 +11,7 @@ export default defineConfig({
   retries: 1,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: externalBaseUrl || 'http://127.0.0.1:4173',
     browserName: 'chromium',
     channel: 'chrome',
     trace: 'retain-on-failure',
@@ -26,7 +28,7 @@ export default defineConfig({
       use: { ...devices['Pixel 7'] },
     },
   ],
-  webServer: {
+  webServer: externalBaseUrl ? undefined : {
     command: 'npm run preview -- --host 127.0.0.1 --port 4173',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: true,

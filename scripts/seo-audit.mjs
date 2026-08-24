@@ -115,20 +115,20 @@ for (const requiredSnippet of [
     addError(`functions/[[path]].js is missing host SEO guard: ${requiredSnippet}`);
   }
 }
-if (cloudflareFunction.includes("'X-Sitemap-Retired': 'index-bloat-cleanup'")) {
-  addError('Cloudflare SEO worker must not retire quality-gated numbered movie sitemaps.');
+if (!cloudflareFunction.includes("pathname === '/sitemap-movies-archive.xml'")) {
+  addError('Cloudflare SEO worker must keep the bounded archive sitemap available outside the recovery sitemap.');
 }
 if (!cloudflareFunction.includes('EDGE_SITEMAP_CHUNK_SIZE = 1000')
   || cloudflareFunction.includes('page_size=50000')) {
   addError('Cloudflare SEO worker must split the quality-gated movie sitemap into bounded 1,000-URL chunks.');
 }
 for (const requiredDiscoverySnippet of [
-  'fetchStaticMovieLinks(context, cleanPath)',
+  'fetchStaticMovieLinks(context, cleanPath, page)',
   '/home-fallback.json',
   "'@type': 'ItemList'",
-  'await renderStaticPrerender(pathname, context)',
-  "response.headers.get('X-Movie-Chunk-Count')",
-  'movieChunkCount !== advertisedChunkCount',
+  'await renderStaticPrerender(request, context)',
+  "X-Sitemap-Proxy': 'cloudflare-pages-priority-index'",
+  'renderMovieSitemapIndexXml({ archive:',
   'repairSitemapMojibake(await response.text())',
   'const maxAttempts = movieChunkMatch ? 2 : 1',
   "movieChunkMatch && cachedCount === '0'",
@@ -147,9 +147,8 @@ if (!cloudflareFunction.includes('the-loai|quoc-gia|danh-sach')) {
 if (!cloudflareFunction.includes("potentialAction: hasPlayableEpisode ? { '@type': 'WatchAction', target: watchUrl }")) {
   addError('Movie prerender WatchAction must target the dedicated watch page.');
 }
-if (!/['\"]@type['\"]:\s*['\"]VideoObject['\"]/.test(cloudflareFunction)
-  || !cloudflareFunction.includes('embedUrl: trailerEmbedUrl')) {
-  addError('Movie detail prerender must expose a real trailer VideoObject for eligible upcoming pages.');
+if (/['\"]@type['\"]:\s*['\"]VideoObject['\"]/.test(cloudflareFunction)) {
+  addError('Movie information pages must not advertise a complementary trailer as a watch-page VideoObject.');
 }
 if (!cloudflareFunction.includes('apikey: SUPABASE_PUBLIC_KEY')
   || !cloudflareFunction.includes('Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`')) {
@@ -257,23 +256,25 @@ if (!childSitemaps.includes(ongoingMovieSitemap)) {
   addError(`sitemap.xml is missing the freshness-ranked ongoing movie sitemap: ${ongoingMovieSitemap}`);
 }
 const movieChunks = childSitemaps.filter((loc) => /\/sitemap-movies-\d+\.xml$/.test(loc));
-if (movieChunks.length < 18) {
-  addError(`sitemap.xml must expose all bounded quality-gated movie chunks; found ${movieChunks.length}, expected at least 18.`);
+if (movieChunks.length !== 0) {
+  addError(`Recovery sitemap.xml must focus crawl on priority URLs; found ${movieChunks.length} archive chunks.`);
 }
 if (!childSitemaps.includes(`${SITE_URL}/feed.xml`)) {
   addError('sitemap.xml is missing the curated recent-movie RSS feed.');
 }
+const archiveSitemapIndex = await read('public/sitemap-movies-archive.xml');
+const archiveMovieChunks = extractLocs(archiveSitemapIndex);
 for (let page = 1; page <= 18; page += 1) {
   const chunkLoc = `${SITE_URL}/sitemap-movies-${page}.xml`;
-  if (!childSitemaps.includes(chunkLoc)) {
-    addError(`sitemap.xml is missing bounded movie chunk: ${chunkLoc}`);
+  if (!archiveMovieChunks.includes(chunkLoc)) {
+    addError(`Archive sitemap index is missing bounded movie chunk: ${chunkLoc}`);
   }
 }
 
 const curatedMovieXml = await read('public/sitemap-movies-recent.xml');
 const curatedMovieLocs = extractLocs(curatedMovieXml);
-if (curatedMovieLocs.length < 100 || curatedMovieLocs.length > 750) {
-  addError(`Curated movie sitemap must contain 100-750 URLs during recovery; found ${curatedMovieLocs.length}.`);
+if (curatedMovieLocs.length < 40 || curatedMovieLocs.length > 120) {
+  addError(`Curated recent sitemap must contain 40-120 identity-backed cohort URLs; found ${curatedMovieLocs.length}.`);
 }
 for (const loc of childSitemaps) {
   if (!loc.startsWith(`${SITE_URL}/`)) {
@@ -497,8 +498,8 @@ if (/\bkeywords="[^"]{250,}"/i.test(homePage)) {
 if (/reviewRating|itemType="https:\/\/schema\.org\/Rating"|ratingValue.*8/.test(movieReview)) {
   addError('Movie editorial content must not publish a fabricated fixed rating.');
 }
-if (!cloudflareFunction.includes("SEO_PRERENDER_VERSION = '20260810-internal-discovery-v17'")) {
-  addError('SEO prerender cache must use the internal-discovery release after link-graph changes.');
+if (!cloudflareFunction.includes("SEO_PRERENDER_VERSION = '20260820-cohort-parity-v24'")) {
+  addError('SEO prerender cache must use the cohort parity release.');
 }
 if (!cloudflareFunction.includes("includes('noindex')) return;")) {
   addError('Transient noindex movie prerenders must never be stored in the shared edge cache.');
@@ -506,21 +507,20 @@ if (!cloudflareFunction.includes("includes('noindex')) return;")) {
 if (!cloudflareFunction.includes("if (ep === 'trailer' || ep.includes('trailer')) return true;")) {
   addError('An explicit trailer episode label must remain authoritative during movie lifecycle transitions.');
 }
-if (!cloudflareFunction.includes("qualityTier === 'upcoming'") || !cloudflareFunction.includes('&& hasPlayableEpisode')) {
-  addError('Quality-approved playable movies must recover from stale lifecycle labels.');
+if (!cloudflareFunction.includes('function isHighValueIndexCandidate(movie)')
+  || !cloudflareFunction.includes('Number(movie.seo_quality_score || 0) < 85')
+  || !cloudflareFunction.includes('tmdbId <= 0')) {
+  addError('Movie indexability must use the strict, identity-backed public cohort gate.');
 }
-if (!cloudflareFunction.includes('!qualityChecked') || !cloudflareFunction.includes('&& isTrailerOnly') || !cloudflareFunction.includes('Boolean(trailerEmbedUrl && name && poster && content.length >= 120)')) {
-  addError('Fallback trailer pages must require a real embeddable trailer before indexing.');
+if (!cloudflareFunction.includes("{ code: 'KKPHIM'")
+  || !cloudflareFunction.includes("{ code: 'VSMOV'")
+  || !cloudflareFunction.includes("{ code: 'NGUONC'")
+  || !cloudflareFunction.includes('hasPlayableProviderDetail(normalizedPayload, slug)')
+  || !cloudflareFunction.includes('provider identity contributes no score')) {
+  addError('Provider-neutral detail fallback must preserve exact movie identity without secondary metadata overwrites.');
 }
-if (!cloudflareFunction.includes('...ophimMovie,')
-  || !cloudflareFunction.includes('Object.entries(primaryMovie)')
-  || !cloudflareFunction.includes('name: ophimMovie.name || primaryMovie.name')) {
-  addError('Secondary title metadata must not overwrite substantive primary movie data.');
-}
-if (!cloudflareFunction.includes('const isIndexableFallback = !qualityChecked')
-  || !cloudflareFunction.includes('(hasPlayableEpisode || (isTrailerOnly && Boolean(trailerEmbedUrl)))')
-  || !cloudflareFunction.includes('Boolean(name && poster && content.length >= 20)')) {
-  addError('Unverified fallback movie data must use one stable, content-gated indexability rule.');
+if (cloudflareFunction.includes('const isIndexableFallback = !qualityChecked')) {
+  addError('Unverified fallback movie data must not bypass the public cohort gate.');
 }
 if (seoLandingUrls.some((entry) => entry.path === '/dien-vien')) {
   addError('The noindex actor directory must not be included in the indexable SEO sitemap.');

@@ -4,6 +4,8 @@ export type PlayerIssueEventType =
   | 'playback_started'
   | 'playback_stable'
   | 'playback_heartbeat'
+  | 'source_failover'
+  | 'player_manual_reload'
   | 'hls_retry'
   | 'hls_fatal_retry'
   | 'hls_media_retry'
@@ -46,6 +48,9 @@ export interface PlayerIssuePayload {
 const recentReports = new Map<string, number>();
 const REPORT_THROTTLE_MS = 60_000;
 const PLAYBACK_SESSION_KEY = 'khophim.playback-session.v1';
+// Emergency pressure relief: keep the telemetry contract in place while
+// suppressing anonymous database writes until the Supabase project recovers.
+const PLAYER_DIAGNOSTICS_ENABLED = false;
 
 function getPlaybackSessionId(): string | null {
   if (typeof window === 'undefined') return null;
@@ -111,7 +116,7 @@ function getDeviceInfo(): {
 }
 
 export function reportPlayerIssue(payload: PlayerIssuePayload): void {
-  if (!payload.event_type) return;
+  if (!PLAYER_DIAGNOSTICS_ENABLED || !payload.event_type) return;
   const timeBucket = Math.floor((payload.playback_time ?? 0) / 30);
   const key = [
     payload.event_type,

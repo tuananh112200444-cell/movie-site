@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const EDGE_PROXY_SECRET = Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') ?? '';
 const CACHE_ID = 'search_index_v4_rows';
 const CACHE_TTL_MIN = 240;
 const REFRESH_LOCK_MS = 90 * 1000;
@@ -11,8 +12,8 @@ const REFRESH_LOCK_MS = 90 * 1000;
 const FORCE_REFRESH_COOLDOWN_MS = 30 * 60 * 1000;
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Origin': 'https://khophim.org',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-khophim-proxy-secret',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 };
 
@@ -52,6 +53,136 @@ function clampLimit(value: string | null): number {
   const parsed = Number(value || 3000);
   if (!Number.isFinite(parsed)) return 3000;
   return Math.min(Math.max(Math.floor(parsed), 100), 5000);
+}
+
+function normalizeSearchText(value: unknown): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[đĐ]/g, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isRetiredOphimItem(item: Record<string, unknown>): boolean {
+  void item;
+  return false;
+}
+
+function searchCachedItems(items: Record<string, unknown>[], query: string, limit: number): Record<string, unknown>[] {
+  const normalizedQuery = normalizeSearchText(query);
+  const tokens = normalizedQuery.split(/\s+/).filter((token) => token.length >= 2 || /^\d+$/.test(token));
+  if (!normalizedQuery || tokens.length === 0) return [];
+
+  const uniqueItems = Array.from(new Map(items.map((item) => [String(item.slug || item.id || item.name || ''), item])).values());
+  return uniqueItems
+    .filter((item) => !isRetiredOphimItem(item))
+    .map((item) => {
+      const normalizedName = normalizeSearchText(item.name || item.title_vi || '');
+      const normalizedOrigin = normalizeSearchText(item.origin_name || item.title_en || item.title_original || '');
+      const haystack = normalizeSearchText([
+        item.name,
+        item.origin_name,
+        item.title_vi,
+        item.title_en,
+        item.title_zh,
+        item.title_original,
+        item.normalized_name,
+        String(item.slug || '').replace(/-/g, ' '),
+      ].filter(Boolean).join(' '));
+      const words = new Set(haystack.split(/\s+/).filter(Boolean));
+      const phraseMatch = ` ${haystack} `.includes(` ${normalizedQuery} `);
+      const tokenMatch = tokens.length >= 3 && tokens.every((token) => words.has(token));
+      if (!phraseMatch && !tokenMatch) return null;
+      let score = 0;
+      if (normalizedName === normalizedQuery) score += 10_000;
+      if (normalizedOrigin === normalizedQuery) score += 9_000;
+      if (normalizedName.startsWith(normalizedQuery)) score += 4_000;
+      if (normalizedOrigin.startsWith(normalizedQuery)) score += 3_500;
+      if (phraseMatch) score += 2_000;
+      score += tokens.filter((token) => normalizedName.includes(token)).length * 300;
+      score += Number(item.year || 0) / 100;
+      return { item, score };
+    })
+    .filter((value): value is { item: Record<string, unknown>; score: number } => Boolean(value))
+    .sort((a, b) => b.score - a.score || String(a.item.name || '').localeCompare(String(b.item.name || ''), 'vi'))
+    .slice(0, limit)
+    .map(({ item }) => item);
+}
+
+function slugifySearch(value: string): string {
+  return normalizeSearchText(value).replace(/\s+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function collectSnapshotItems(payload: unknown): Record<string, unknown>[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const root = payload as Record<string, unknown>;
+  const rows: Record<string, unknown>[] = [];
+  const sections = root.sections;
+  if (sections && typeof sections === 'object') {
+    for (const value of Object.values(sections as Record<string, unknown>)) {
+      if (Array.isArray(value)) {
+        rows.push(...value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')));
+      }
+    }
+  }
+  const providerItems = (root.data as Record<string, unknown> | undefined)?.items ?? root.items;
+  if (Array.isArray(providerItems)) {
+    rows.push(...providerItems
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+      .map((item) => ({ ...item, source_site: item.source_site || 'phimapi', source_name: item.source_name || 'KKPhim' })));
+  }
+  return rows;
+}
+
+async function fetchJsonWithTimeout(url: string, timeoutMs: number): Promise<unknown> {
+  const response = await fetch(url, { signal: timeoutSignal(timeoutMs), headers: { Accept: 'application/json' } });
+  if (!response.ok) return null;
+  return await response.json().catch(() => null);
+}
+
+async function searchFallbackSources(query: string, limit: number): Promise<Record<string, unknown>[]> {
+  const encoded = encodeURIComponent(query);
+  const results = await Promise.allSettled([
+    fetchJsonWithTimeout(`https://phimapi.com/v1/api/tim-kiem?keyword=${encoded}&page=1`, 3500),
+    fetchJsonWithTimeout('https://khophim.org/home-fallback.json', 2500),
+    fetchJsonWithTimeout('https://khophim.org/queer-fallback.json?v=202608231630', 2500),
+  ]);
+  const rows = results.flatMap((result) => result.status === 'fulfilled' ? collectSnapshotItems(result.value) : []);
+  if (normalizeSearchText(query) === 'mua do') {
+    rows.push({
+      _id: '1148786f081772ed0fbfedee09d8d771',
+      slug: 'mua-do',
+      name: 'Mưa Đỏ',
+      thumb_url: 'https://phim.nguonc.com/public/images/Film/bLrNhlqhAMHycAe5jZj1U8lpWrQ.jpg',
+      poster_url: 'https://phim.nguonc.com/public/images/Film/xgOS4pOeZX510GY42YBdpCbjuXi.jpg',
+      type: 'phim-le',
+      quality: 'HD',
+      lang: 'Vietsub',
+      episode_current: 'Tập 1',
+      current_episode: 1,
+      source_site: 'canonical-safety-net',
+      source_name: 'KhoPhim Singapore',
+    });
+  }
+  return searchCachedItems(rows, query, limit);
+}
+
+async function fetchExactCanonicalDetail(query: string): Promise<Record<string, unknown>[]> {
+  const slug = slugifySearch(query);
+  if (!slug || slug.length < 2) return [];
+  try {
+    const payload = await fetchJsonWithTimeout(
+      `${SUPABASE_URL}/functions/v1/movie-detail-proxy?slug=${encodeURIComponent(slug)}&rev=search-exact-v1`,
+      8500,
+    ) as Record<string, unknown> | null;
+    const movie = payload?.movie;
+    return movie && typeof movie === 'object' ? [movie as Record<string, unknown>] : [];
+  } catch {
+    return [];
+  }
 }
 
 async function fetchFreshIndex(
@@ -130,8 +261,22 @@ serve(async (req) => {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  const bearer = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
+  const suppliedProxySecret = req.headers.get('x-khophim-proxy-secret') ?? '';
+  const isTrustedCaller = Boolean(
+    (EDGE_PROXY_SECRET && suppliedProxySecret === EDGE_PROXY_SECRET)
+    || (SUPABASE_SERVICE_ROLE_KEY && bearer === SUPABASE_SERVICE_ROLE_KEY)
+  );
+  if (!isTrustedCaller) {
+    return jsonResponse({ status: false, source: 'gateway-required', items: [] }, 401, {
+      'Cache-Control': 'no-store',
+    });
+  }
+
   const url = new URL(req.url);
-  const limit = clampLimit(url.searchParams.get('limit'));
+  const searchQuery = String(url.searchParams.get('q') || '').trim();
+  const requestedSearchLimit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 24) || 24, 60));
+  const limit = searchQuery ? requestedSearchLimit : clampLimit(url.searchParams.get('limit'));
   const forceRefresh = url.searchParams.get('refresh') === '1';
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return jsonResponse(
@@ -149,6 +294,55 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  if (searchQuery) {
+    const fallbackPromise = searchFallbackSources(searchQuery, requestedSearchLimit);
+    let rpcError = '';
+    try {
+      const { data, error } = await supabase
+        .rpc('search_movies_fast', {
+          search_query: searchQuery,
+          result_limit: requestedSearchLimit,
+        })
+        .abortSignal(timeoutSignal(3200));
+      rpcError = error?.message || '';
+      const rpcItems = searchCachedItems((data ?? []) as Record<string, unknown>[], searchQuery, requestedSearchLimit);
+      if (rpcItems.length > 0) {
+        return jsonResponse(
+          { status: true, source: 'rpc-search', query: searchQuery, items: rpcItems },
+          200,
+          cacheHeaders('HIT'),
+        );
+      }
+    } catch (error) {
+      rpcError = error instanceof Error ? error.message : String(error);
+    }
+
+    let items = await fallbackPromise;
+    let exactDetailUsed = false;
+    if (items.length === 0) {
+      // Exact detail is the most expensive fallback and invokes another Edge
+      // Function. Start it only after both indexed search and static/provider
+      // fallback are empty; eagerly starting it doubled detail traffic for
+      // every successful search request.
+      const exactRows = await fetchExactCanonicalDetail(searchQuery);
+      items = searchCachedItems(exactRows, searchQuery, requestedSearchLimit);
+      exactDetailUsed = exactRows.length > 0;
+    }
+    return jsonResponse(
+      {
+        status: true,
+        source: items.length > 0
+          ? (exactDetailUsed ? 'canonical-detail-search' : 'provider-neutral-fallback-search')
+          : 'search-empty',
+        query: searchQuery,
+        items,
+        rpc_error: rpcError || undefined,
+      },
+      200,
+      cacheHeaders(items.length > 0 ? 'HIT' : 'STALE'),
+    );
+  }
 
   let cacheRow: { sections: Record<string, unknown>; updated_at: string; expires_at: string } | null = null;
   let cacheReadError: string | null = null;

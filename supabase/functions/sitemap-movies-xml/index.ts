@@ -28,6 +28,7 @@ interface MovieItem {
   id?: string;
   slug?: string;
   name?: string;
+  origin_name?: string;
   thumb_url?: string;
   poster_url?: string;
   modified?: { time?: string };
@@ -43,6 +44,12 @@ interface MovieItem {
   trailer_url?: string;
   status?: string;
   year?: number;
+  tmdb_id?: number | string;
+  actor?: unknown[];
+  director?: unknown[];
+  category?: unknown[];
+  country?: unknown[];
+  source_site?: string;
   total_episodes?: number;
   next_episode_at?: string;
   seo_index_tier?: string;
@@ -171,30 +178,43 @@ function hasSeoBase(movie: MovieItem, minimumContentLength: number): boolean {
     && year <= new Date().getUTCFullYear() + 2;
 }
 
+function isHighValueCohortMovie(movie: MovieItem): boolean {
+  const currentYear = new Date().getUTCFullYear();
+  const name = String(movie.name || '').trim();
+  const originName = String(movie.origin_name || '').trim();
+  const description = String(movie.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const image = String(movie.poster_url || movie.thumb_url || '').trim();
+  const year = getSeoYear(movie);
+  const tmdbId = Number(movie.tmdb_id || 0);
+  const hasBrokenText = /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(`${name} ${originName} ${description}`);
+  return movie.seo_eligible_for_index === true
+    && Number(movie.seo_quality_score || 0) >= 85
+    && name.length >= 2
+    && originName.length >= 2
+    && description.length >= 160
+    && image.length > 0
+    && year >= 1888
+    && year <= currentYear + 2
+    && tmdbId > 0
+    && Array.isArray(movie.actor) && movie.actor.some(Boolean)
+    && Array.isArray(movie.category) && movie.category.length > 0
+    && Array.isArray(movie.country) && movie.country.length > 0
+    && !hasBrokenText;
+}
+
+function contentFingerprint(movie: MovieItem): string {
+  return String(movie.content || '')
+    .replace(/<[^>]+>/g, ' ')
+    .toLocaleLowerCase('vi-VN')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function isIndexableMovie(movie: MovieItem): boolean {
   if (isUpcoming(movie) || isTrailer(movie)) {
     return hasSeoBase(movie, 120) && hasHttpsTrailer(movie);
   }
   return hasSeoBase(movie, 80) && isLikelyPlayable(movie);
-}
-
-function toTrailerPlayerUrl(value?: string): string {
-  const raw = String(value || '').trim();
-  if (!/^https:\/\//i.test(raw)) return '';
-  try {
-    const url = new URL(raw);
-    if (url.hostname === 'youtu.be') {
-      const id = url.pathname.split('/').filter(Boolean)[0] || '';
-      return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : raw;
-    }
-    if (/(^|\.)youtube\.com$/i.test(url.hostname)) {
-      const id = url.searchParams.get('v') || (/^\/(?:embed|shorts)\/([^/?#]+)/.exec(url.pathname)?.[1] ?? '');
-      return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : raw;
-    }
-    return raw;
-  } catch {
-    return '';
-  }
 }
 
 function getFreshnessScore(movie: MovieItem): number {
@@ -355,14 +375,16 @@ async function fetchEligibleUpcomingMovies(limit = 5000): Promise<MovieItem[]> {
       movie_id,
       quality_score,
       movies!inner(
-        id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,
+        id,slug,name,origin_name,thumb_url,poster_url,updated_at,episode_current,current_episode,
         content,is_published,seo_catalog_status,catalog_source,release_at,
-        tmdb_popularity,trailer_url,status,year
+        tmdb_popularity,trailer_url,status,year,tmdb_id,actor,director,category,country,source_site
       )
     `)
     .eq('eligible_for_index', true)
     .eq('index_tier', 'upcoming')
     .eq('movies.is_published', true)
+    .gte('quality_score', 85)
+    .not('movies.tmdb_id', 'is', null)
     .order('quality_score', { ascending: false })
     .order('checked_at', { ascending: false })
     .limit(Math.min(5000, Math.max(1, limit)));
@@ -391,14 +413,16 @@ async function fetchEligibleOngoingMovies(limit = 5000): Promise<MovieItem[]> {
       freshness_score,
       last_episode_change_at,
       movies!inner(
-        id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,
+        id,slug,name,origin_name,thumb_url,poster_url,updated_at,episode_current,current_episode,
         total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,
-        release_at,tmdb_popularity,trailer_url,status,year
+        release_at,tmdb_popularity,trailer_url,status,year,tmdb_id,actor,director,category,country,source_site
       )
     `)
     .eq('eligible_for_index', true)
     .eq('index_tier', 'ongoing')
     .eq('movies.is_published', true)
+    .gte('quality_score', 85)
+    .not('movies.tmdb_id', 'is', null)
     .order('freshness_score', { ascending: false })
     .order('last_episode_change_at', { ascending: false, nullsFirst: false })
     .order('quality_score', { ascending: false })
@@ -436,14 +460,16 @@ async function fetchEligibleRecentMovies(limit = 5000): Promise<MovieItem[]> {
       freshness_score,
       last_episode_change_at,
       movies!inner(
-        id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,
+        id,slug,name,origin_name,thumb_url,poster_url,updated_at,episode_current,current_episode,
         total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,
-        release_at,tmdb_popularity,trailer_url,status,year
+        release_at,tmdb_popularity,trailer_url,status,year,tmdb_id,actor,director,category,country,source_site
       )
     `)
     .eq('eligible_for_index', true)
     .in('index_tier', ['playable', 'ongoing', 'upcoming'])
     .eq('movies.is_published', true)
+    .gte('quality_score', 85)
+    .not('movies.tmdb_id', 'is', null)
     .order('last_episode_change_at', { ascending: false, nullsFirst: false })
     .order('freshness_score', { ascending: false })
     .order('quality_score', { ascending: false })
@@ -481,15 +507,14 @@ async function fetchEligibleMovies(offset = 0, limit = 50000): Promise<MovieItem
         freshness_score,
         last_episode_change_at,
         movies!inner(
-          id,slug,name,thumb_url,poster_url,updated_at,episode_current,current_episode,
+          id,slug,name,origin_name,thumb_url,poster_url,updated_at,episode_current,current_episode,
           total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,
-          release_at,tmdb_popularity,trailer_url,status,year
+          release_at,tmdb_popularity,trailer_url,status,year,tmdb_id,actor,director,category,country,source_site
         )
       `)
       .eq('eligible_for_index', true)
       .in('index_tier', ['playable', 'ongoing', 'upcoming'])
       .eq('movies.is_published', true)
-      .order('quality_score', { ascending: false })
       .order('movie_id', { ascending: true })
       .range(from, Math.min(from + pageSize - 1, endExclusive - 1));
     if (error) throw error;
@@ -520,15 +545,15 @@ function getSitemapOptions(req: Request): { offset: number; limit: number; outpu
   const ongoing = url.searchParams.get('ongoing') === '1';
 
   if (upcoming) {
-    return { offset: 0, limit: 50000, outputLimit: Math.min(5000, pageSize), includeOphim: false, mode: 'upcoming' };
+    return { offset: 0, limit: 50000, outputLimit: 20, includeOphim: false, mode: 'upcoming' };
   }
 
   if (ongoing) {
-    return { offset: 0, limit: 50000, outputLimit: Math.min(5000, pageSize), includeOphim: false, mode: 'ongoing' };
+    return { offset: 0, limit: 50000, outputLimit: 60, includeOphim: false, mode: 'ongoing' };
   }
 
   if (recent) {
-    return { offset: 0, limit: 2000, outputLimit: Math.min(500, pageSize), includeOphim: false, mode: 'recent' };
+    return { offset: 0, limit: 2000, outputLimit: 100, includeOphim: false, mode: 'recent' };
   }
 
   if (Number.isFinite(page) && page > 0) {
@@ -547,7 +572,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       : options.mode === 'ongoing'
         ? fetchEligibleOngoingMovies(options.outputLimit)
         : options.mode === 'recent'
-          ? fetchEligibleRecentMovies(Math.max(2000, options.outputLimit * 10))
+          ? fetchEligibleRecentMovies(options.limit)
           : options.mode === 'all'
           ? fetchEligibleMovies(options.offset, options.limit)
           : fetchSupabaseMovies(options.offset, options.limit, options.mode),
@@ -571,6 +596,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     }
   }
   const seen = new Set<string>();
+  const seenContent = new Set<string>();
   let movies = [...supabaseMovies, ...ophimMovies]
     .filter((movie) => {
       const slug = movie.slug?.trim();
@@ -580,7 +606,12 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       // Local rows must explicitly pass the materialized SEO quality view.
       // This keeps sitemap URLs aligned with the prerender index decision.
       if (!movie.id) return true;
-      return movie.seo_eligible_for_index === true || qualityByMovieId.get(movie.id) === true;
+      const qualityEligible = movie.seo_eligible_for_index === true || qualityByMovieId.get(movie.id) === true;
+      if (!qualityEligible || !isHighValueCohortMovie(movie)) return false;
+      const fingerprint = contentFingerprint(movie);
+      if (!fingerprint || seenContent.has(fingerprint)) return false;
+      seenContent.add(fingerprint);
+      return true;
     });
 
   if (options.mode === 'upcoming') {
@@ -593,7 +624,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       .sort((a, b) => getRecentUpdateScore(b) - getRecentUpdateScore(a));
   } else if (options.mode === 'recent') {
     movies = movies
-      .filter((movie) => !isUpcoming(movie))
+      .filter((movie) => !isUpcoming(movie) && !isOngoingTier(movie))
       .sort((a, b) => getRecentUpdateScore(b) - getRecentUpdateScore(a));
   } else {
     movies = movies.sort(compareMovieSeoOrder);
@@ -607,13 +638,6 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     const image = toImageUrl(movie.thumb_url || movie.poster_url || '');
     const title = cleanImageTitle(movie.name || slug, slug);
     const modifiedTime = movie.seo_last_episode_change_at || movie.updated_at || movie.release_at || movie.modified?.time;
-    const trailerPlayer = toTrailerPlayerUrl(movie.trailer_url);
-    const description = repairMojibake(String(movie.content || ''))
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 1900);
-
     return `  <url>
     <loc>${escapeXml(loc)}</loc>
     <lastmod>${toLastMod(modifiedTime)}</lastmod>
@@ -622,13 +646,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     <image:image>
       <image:loc>${escapeXml(image)}</image:loc>
       <image:title>${escapeXml(title)}</image:title>
-    </image:image>` : ''}${trailerPlayer && image && description ? `
-    <video:video>
-      <video:thumbnail_loc>${escapeXml(image)}</video:thumbnail_loc>
-      <video:title>${escapeXml(`Trailer ${title}`)}</video:title>
-      <video:description>${escapeXml(description)}</video:description>
-      <video:player_loc allow_embed="yes">${escapeXml(trailerPlayer)}</video:player_loc>
-    </video:video>` : ''}
+    </image:image>` : ''}
   </url>`;
   }).join('\n');
 
@@ -636,8 +654,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     count: movies.length,
     xml: `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
-  xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${urls}
 </urlset>`,
   };

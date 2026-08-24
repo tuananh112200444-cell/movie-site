@@ -29,7 +29,26 @@ async function collectFiles(directory) {
 let artifactFiles = [];
 try {
   artifactFiles = await collectFiles('out/assets');
-  await readFile('out/release.json', 'utf8');
+  const [publicReleaseRaw, outReleaseRaw, outHtml, updaterSource, viteSource] = await Promise.all([
+    readFile('public/release.json', 'utf8'),
+    readFile('out/release.json', 'utf8'),
+    readFile('out/index.html', 'utf8'),
+    readFile('src/components/base/UpdateCoordinator.tsx', 'utf8'),
+    readFile('vite.config.ts', 'utf8'),
+  ]);
+  const publicRelease = JSON.parse(publicReleaseRaw);
+  const outRelease = JSON.parse(outReleaseRaw);
+  const htmlRelease = outHtml.match(/<meta name="khophim-release" content="([^"]+)"/)?.[1] || '';
+  if (!publicRelease.release_id || publicRelease.release_id !== outRelease.release_id || publicRelease.release_id !== htmlRelease) {
+    failures.push('Release id must match in public manifest, deploy manifest and HTML meta');
+  }
+  for (const marker of ['const releaseId = readReleaseId();', 'injectProductionReleaseMeta(releaseId)']) {
+    if (!viteSource.includes(marker)) failures.push(`Vite release generation is missing ${marker}`);
+  }
+  if (/\/assets\/[^"']+\.js\?v=/.test(outHtml)) failures.push('Hashed production modules must not be duplicated with a query-string identity');
+  for (const marker of ['prepareReleaseAssets', 'khophim-release', "content-type", "^\\/xem-phim", "^\\/admin", "focusout", '2 * 60 * 1000']) {
+    if (!updaterSource.includes(marker)) failures.push(`UpdateCoordinator is missing ${marker}`);
+  }
 } catch (error) {
   failures.push(`Production artifact is incomplete: ${error.message}`);
 }

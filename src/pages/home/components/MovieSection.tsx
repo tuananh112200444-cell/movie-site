@@ -290,7 +290,7 @@ export default function MovieSection({
 
   if (loading && movies.length === 0) {
     return (
-      <section className="home-section-surface mb-8 md:mb-12">
+      <section ref={sectionRef} className="home-section-surface mb-8 md:mb-12">
         {/* Header Skeleton */}
         <div className="flex items-center gap-3 mb-4 px-1">
           <div className={`w-7 h-7 rounded-md skeleton ${t.iconBorder} flex-shrink-0`} />

@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import { ADSTERRA_BANNERS_ENABLED } from '../../lib/advertising';
 
 const ZONE_ID = '9f5c539f1e2214dda5ba8d5cc9d05a24';
 const SCRIPT_SRC = `https://pl30842366.effectivecpmnetwork.com/${ZONE_ID}/invoke.js`;
 
 export default function AdsterraNativeBanner() {
+  if (!ADSTERRA_BANNERS_ENABLED) return null;
+  return <ActiveAdsterraNativeBanner />;
+}
+
+function ActiveAdsterraNativeBanner() {
   const sectionRef = useRef<HTMLElement>(null);
   const slotRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);

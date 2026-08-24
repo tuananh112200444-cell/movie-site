@@ -1,0 +1,1 @@
+-- Migration history marker imported with the Singapore database snapshot.

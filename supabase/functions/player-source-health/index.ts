@@ -11,6 +11,16 @@ type PlayerErrorEvent = {
   created_at: string;
 };
 
+type PlayerErrorRollup = {
+  bucket_start: string;
+  event_type: string;
+  source_host: string;
+  server_name: string;
+  player_mode: string;
+  event_count: number;
+  session_count: number;
+};
+
 type HostHealth = {
   host: string;
   cluster: string;
@@ -40,6 +50,7 @@ const SOURCE_CRITICAL_EVENTS = new Set([
 ]);
 
 const SOURCE_RECOVERY_EVENTS = new Set([
+  'source_failover',
   'stall_recovery',
   'hls_retry',
   'hls_fatal_retry',
@@ -47,7 +58,8 @@ const SOURCE_RECOVERY_EVENTS = new Set([
 ]);
 const SOURCE_SUCCESS_EVENTS = new Set(['playback_started']);
 
-const DB_HEALTH_TIMEOUT_MS = 2800;
+const ROLLUP_HEALTH_TIMEOUT_MS = 8000;
+const RAW_HEALTH_TIMEOUT_MS = 2800;
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
   const allowed = [
@@ -217,6 +229,48 @@ function summarizeHostHealth(events: PlayerErrorEvent[]): HostHealth[] {
     .slice(0, 20);
 }
 
+function summarizeRollupHostHealth(rows: PlayerErrorRollup[]): HostHealth[] {
+  const hosts = new Map<string, HostHealth>();
+  for (const row of rows) {
+    const host = normalizeHost(row.source_host);
+    if (!host) continue;
+    const sessionCount = Math.max(0, Number(row.session_count || 0));
+    const eventType = String(row.event_type || '');
+    const current = hosts.get(host) ?? {
+      host,
+      cluster: getSourceCluster(host),
+      score: 0,
+      critical: 0,
+      recovery: 0,
+      success: 0,
+      failure_rate: 0,
+      total: 0,
+      server_names: [],
+      player_modes: [],
+    };
+    if (SOURCE_CRITICAL_EVENTS.has(eventType)) {
+      current.critical += sessionCount;
+      current.score += sessionCount * (eventType === 'stall_fatal' ? 5 : 4);
+    } else if (SOURCE_RECOVERY_EVENTS.has(eventType)) {
+      current.recovery += sessionCount;
+    } else if (SOURCE_SUCCESS_EVENTS.has(eventType)) {
+      current.success += sessionCount;
+    }
+    current.total += sessionCount;
+    addUnique(current.server_names, row.server_name);
+    addUnique(current.player_modes, row.player_mode);
+    hosts.set(host, current);
+  }
+
+  return [...hosts.values()]
+    .map((item) => ({
+      ...item,
+      failure_rate: Number(((item.critical + 2) / (item.critical + item.success + 4)).toFixed(4)),
+    }))
+    .filter((item) => item.critical >= 3 && item.score >= 12 && item.failure_rate >= 0.40)
+    .sort((a, b) => b.score - a.score || b.critical - a.critical || a.host.localeCompare(b.host));
+}
+
 function deduplicatePlaybackEvents(events: PlayerErrorEvent[]): PlayerErrorEvent[] {
   const seen = new Set<string>();
   const output: PlayerErrorEvent[] = [];
@@ -276,19 +330,43 @@ Deno.serve(async (req) => {
       { auth: { persistSession: false } },
     );
 
-    const { data, error } = await supabase
-      .from('player_error_events')
-      .select('playback_session_id, movie_slug, episode_slug, event_type, source_host, server_name, player_mode, created_at')
-      .gte('created_at', since)
-      .in('event_type', [...SOURCE_CRITICAL_EVENTS, ...SOURCE_RECOVERY_EVENTS, ...SOURCE_SUCCESS_EVENTS])
-      .order('created_at', { ascending: false })
-      .limit(limit)
-      .abortSignal(AbortSignal.timeout(DB_HEALTH_TIMEOUT_MS));
+    const healthEventTypes = [...SOURCE_CRITICAL_EVENTS, ...SOURCE_RECOVERY_EVENTS, ...SOURCE_SUCCESS_EVENTS];
+    const { data: rollupData, error: rollupError } = await supabase
+      .from('player_error_rollups')
+      .select('bucket_start,event_type,source_host,server_name,player_mode,event_count,session_count')
+      .gte('bucket_start', since)
+      .in('event_type', healthEventTypes)
+      .order('bucket_start', { ascending: false })
+      .limit(5000)
+      .abortSignal(AbortSignal.timeout(ROLLUP_HEALTH_TIMEOUT_MS));
 
-    if (error) return fallbackHealth(serializeError(error), corsHeaders);
+    let badHosts: HostHealth[];
+    let scannedEvents = 0;
+    let balancedEventCount = 0;
+    let source = 'rollup';
 
-    const balancedEvents = deduplicatePlaybackEvents((data ?? []) as PlayerErrorEvent[]);
-    const badHosts = summarizeHostHealth(balancedEvents);
+    if (!rollupError && (rollupData?.length ?? 0) > 0) {
+      const rows = (rollupData ?? []) as PlayerErrorRollup[];
+      badHosts = summarizeRollupHostHealth(rows);
+      scannedEvents = rows.reduce((total, row) => total + Number(row.event_count || 0), 0);
+      balancedEventCount = rows.reduce((total, row) => total + Number(row.session_count || 0), 0);
+    } else {
+      const { data, error } = await supabase
+        .from('player_error_events')
+        .select('playback_session_id, movie_slug, episode_slug, event_type, source_host, server_name, player_mode, created_at')
+        .gte('created_at', since)
+        .in('event_type', healthEventTypes)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+        .abortSignal(AbortSignal.timeout(RAW_HEALTH_TIMEOUT_MS));
+
+      if (error) return fallbackHealth(serializeError(error), corsHeaders);
+      const balancedEvents = deduplicatePlaybackEvents((data ?? []) as PlayerErrorEvent[]);
+      badHosts = summarizeHostHealth(balancedEvents);
+      scannedEvents = (data ?? []).length;
+      balancedEventCount = balancedEvents.length;
+      source = 'raw-fallback';
+    }
     const clusterOutages = summarizeClusterOutages(badHosts);
 
     return json({
@@ -297,8 +375,9 @@ Deno.serve(async (req) => {
       since,
       window_hours: hours,
       penalty_minutes: 30,
-      scanned_events: (data ?? []).length,
-      balanced_events: balancedEvents.length,
+      source,
+      scanned_events: scannedEvents,
+      balanced_events: balancedEventCount,
       bad_hosts: badHosts,
       cluster_outages: clusterOutages,
     }, 200, corsHeaders);

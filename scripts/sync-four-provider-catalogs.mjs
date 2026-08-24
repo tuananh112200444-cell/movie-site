@@ -1,7 +1,7 @@
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const EDGE_URL = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-ophim-movies';
+const EDGE_URL = 'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/sync-ophim-movies';
 const cronSecret = String(process.env.SUPABASE_CRON_SECRET || '').trim();
 if (!cronSecret) throw new Error('SUPABASE_CRON_SECRET is required');
 

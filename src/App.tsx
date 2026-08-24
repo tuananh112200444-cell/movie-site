@@ -10,7 +10,6 @@ import { ThemeProvider } from "./context/ThemeContext";
 import AppErrorBoundary from "./components/base/AppErrorBoundary";
 import UpdateCoordinator from "./components/base/UpdateCoordinator";
 import AdsterraSocialBar from "./components/feature/AdsterraSocialBar";
-import { warmPlayerSourceHealth } from "./services/playerSourceHealth";
 
 const BackToTop = lazy(() => import("./components/base/BackToTop"));
 const CWVMonitor = lazy(() => import("./components/base/CWVMonitor"));
@@ -192,25 +191,6 @@ function SkipToContent() {
 }
 
 function App() {
-  useEffect(() => {
-    // Source-health data is useful only when an actual player is about to be
-    // mounted. Fetching it on the homepage spent bandwidth and produced a
-    // distracting failed request when the optional diagnostics endpoint was
-    // unavailable.
-    if (!/^\/xem-phim\/[^/]+/.test(window.location.pathname)) return;
-    const run = () => void warmPlayerSourceHealth();
-    const win = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    if (win.requestIdleCallback) {
-      const id = win.requestIdleCallback(run, { timeout: 15000 });
-      return () => win.cancelIdleCallback?.(id);
-    }
-    const timer = window.setTimeout(run, 12000);
-    return () => window.clearTimeout(timer);
-  }, []);
-
   return (
     <AppErrorBoundary>
       <ThemeProvider>

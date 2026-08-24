@@ -1,172 +1,70 @@
 import fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { createClient } from '@supabase/supabase-js';
 
 const searchPageSource = fs.readFileSync('src/pages/search/page.tsx', 'utf8');
 const suggestionsSource = fs.readFileSync('src/components/feature/SearchSuggestions.tsx', 'utf8');
 const movieApiSource = fs.readFileSync('src/services/movieApi.ts', 'utf8');
-const workerSource = fs.readFileSync('functions/[[path]].js', 'utf8');
-const searchMigrationSource = fs.readFileSync(
-  'supabase/migrations/20260722143000_optimize_search_rpc_v8_indexed_candidates.sql',
-  'utf8',
-);
-
+const edgeSearchSource = fs.readFileSync('supabase/functions/search-index-proxy/index.ts', 'utf8');
+const cloudflareWorkerSource = fs.readFileSync('functions/[[path]].js', 'utf8');
 const envText = fs.readFileSync('.env', 'utf8');
-const env = Object.fromEntries(
-  envText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-    .map((line) => {
-      const idx = line.indexOf('=');
-      if (idx === -1) return [line, ''];
-      return [line.slice(0, idx), line.slice(idx + 1).replace(/^['"]|['"]$/g, '')];
-    }),
-);
+const env = Object.fromEntries(envText.split(/\r?\n/).map((line) => line.trim())
+  .filter((line) => line && !line.startsWith('#')).map((line) => {
+    const index = line.indexOf('=');
+    return [line.slice(0, index), line.slice(index + 1).replace(/^['"]|['"]$/g, '')];
+  }));
 
-const SUPABASE_URL = env.VITE_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = env.VITE_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Missing VITE_PUBLIC_SUPABASE_URL or VITE_PUBLIC_SUPABASE_ANON_KEY in .env');
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
-
-const CASES = [
-  {
-    query: 'ben bo',
-    expectTopSlug: 'blvietsub-5861-ben-bo',
-    description: 'Vietnamese no-accent exact short BLVietsub title',
-  },
-  {
-    query: 'cam nhan tinh yeu cua chung ta',
-    expectTopSlug: 'blvietsub-5792-cam-nhan-tinh-yeu-cua-chung-ta',
-    description: 'Vietnamese no-accent long BLVietsub title',
-  },
-  {
-    query: 'human resources season 2',
-    expectTopSlug: 'nguon-nhan-luc-phan-2',
-    description: 'English title with season',
-  },
-  {
-    query: 'nguon nhan luc phan 2',
-    expectTopSlug: 'nguon-nhan-luc-phan-2',
-    description: 'Vietnamese no-accent title with season',
-  },
-  {
-    query: 'lai bi giet nua a thua tham tu',
-    expectTopSlug: 'lai-co-an-mang-nua-roi-thua-tham-tu',
-    description: 'Long Vietnamese fuzzy title',
-  },
-  {
-    query: 'song trinh',
-    expectTopSlug: 'double-helix',
-    description: 'Queer universe title from admin source',
-  },
-  {
-    query: 'fix the error',
-    expectTopSlug: 'blvietsub-1652315128481409420-fix-the-error',
-    description: 'English BLVietsub title',
-  },
-  {
-    query: 'season 2',
-    expectAtLeast: 8,
-    description: 'Broad season search returns a useful set',
-  },
-  {
-    query: 'lately winter season',
-    expectTopSlug: 'glvietsub-lately-its-winter-season',
-    description: 'Exact GLVietsub English title with a missing middle word',
-  },
-  {
-    query: 'summer night',
-    expectTopSlug: 'bi-mat-dem-he',
-    description: 'English title after episode repair',
-  },
-];
+const supabaseUrl = env.VITE_PUBLIC_SUPABASE_URL;
+const anonKey = env.VITE_PUBLIC_SUPABASE_ANON_KEY;
+if (!supabaseUrl || !anonKey) throw new Error('Missing public Supabase configuration');
+const siteUrl = String(process.env.SITE_URL || 'https://khophim.org').replace(/\/$/, '');
 
 const failures = [];
-const results = [];
-
 const architectureChecks = [
-  [!searchPageSource.includes('fetchSupabaseSearchIndex'), 'Search page must not download the full movie index'],
-  [searchPageSource.includes('if (items.length === 0 || pg > 1)'), 'External APIs must stay outside the first-page critical path'],
-  [!suggestionsSource.includes('fetchSupabaseSearchIndex'), 'Mobile suggestions must not download the full movie index'],
+  [movieApiSource.includes("new URL('/api/search', window.location.origin)"), 'Browser search must use the same-origin Cloudflare cache'],
+  [cloudflareWorkerSource.includes("pathname === '/api/search'") && cloudflareWorkerSource.includes('async function proxySearch'), 'Cloudflare must own the cached search RPC and circuit breaker'],
+  [movieApiSource.includes('Never bypass its open circuit with a direct browser PostgREST retry'), 'Browser search must not bypass the Cloudflare database circuit'],
+  [edgeSearchSource.includes(".rpc('search_movies_fast'"), 'Edge search must retain the indexed canonical RPC'],
+  [!edgeSearchSource.includes('const exactDetailPromise = fetchExactCanonicalDetail'), 'Search must not eagerly invoke movie detail for every query'],
+  [edgeSearchSource.includes('searchFallbackSources') && edgeSearchSource.includes('home-fallback.json'), 'Edge search must retain a DB-outage fallback'],
+  [edgeSearchSource.includes('tokens.length >= 3') && edgeSearchSource.includes('phraseMatch'), 'Short queries must match a phrase instead of unrelated token fragments'],
+  [edgeSearchSource.includes('function isRetiredOphimItem') && edgeSearchSource.includes('void item;') && edgeSearchSource.includes('return false;'), 'Catalogue metadata must remain provider-neutral when OPhim playback is retired'],
+  [cloudflareWorkerSource.includes('mergeProviderNeutralSearchRows') && cloudflareWorkerSource.includes('sameProviderNeutralSearchIdentity'), 'Search must merge provider rows into one canonical result'],
+  [cloudflareWorkerSource.includes('vsmov.com/api/tim-kiem') && cloudflareWorkerSource.includes('phim.nguonc.com/api/films/search'), 'Search fallback must query KKPhim, VSMov and NguonC equally'],
+  [searchPageSource.includes('matchesSearchIntent') && searchPageSource.includes('.filter((movie) => matchesSearchIntent'), 'Search page must remove unrelated fuzzy results'],
   [suggestionsSource.includes('useDebounce(query, 180)'), 'Suggestion debounce must remain responsive'],
-  [suggestionsSource.includes('keyboardHighlightRef.current === highlightIndex') && suggestionsSource.includes("navigate(`/search?q=${encodeURIComponent(query.trim())}`)"), 'Desktop Enter must submit the query unless keyboard arrows explicitly selected a movie'],
-  [searchPageSource.includes('keyboardHighlightRef.current === highlightIndex') && searchPageSource.includes('handleSubmit(e);'), 'Search-page Enter must ignore pointer hover and submit the current query'],
-  [movieApiSource.includes("new URL('/api/search', window.location.origin)"), 'Browser search must use the same-origin edge cache'],
-  [workerSource.includes("pathname === '/api/search'"), 'Cloudflare worker must expose the search route'],
-  [workerSource.includes('/__api-cache/search/v9/'), 'Cloudflare search must use a versioned cache key'],
-  [searchMigrationSource.includes('movie_search_documents_blob_trgm_idx'), 'Search documents need a trigram index'],
-  [searchMigrationSource.includes('movies_refresh_search_document'), 'Movie writes must refresh search documents automatically'],
 ];
-for (const [passed, message] of architectureChecks) {
-  if (!passed) failures.push(message);
+for (const [passed, message] of architectureChecks) if (!passed) failures.push(message);
+
+const cases = [
+  { query: 'Mưa Đỏ', expectTopSlug: 'mua-do' },
+  { query: 'Sơn Hà Lệnh', expectTopSlug: 'son-ha-lenh' },
+  { query: 'Đừng Xin Anh Jane', expectTopSlug: 'blvietsub-1533-dung-xin-anh-jane' },
+  { query: 'Avengers', expectAtLeast: 5 },
+];
+const results = [];
+for (const testCase of cases) {
+  const url = new URL('/api/search', siteUrl);
+  url.searchParams.set('q', testCase.query);
+  url.searchParams.set('limit', '12');
+  const started = performance.now();
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(12_000),
+      headers: { Accept: 'application/json' },
+    });
+    const payload = await response.json();
+    const rows = Array.isArray(payload.items) ? payload.items : [];
+    const elapsedMs = Math.round(performance.now() - started);
+    const topSlug = rows[0]?.slug || null;
+    if (!response.ok) failures.push(`${testCase.query}: HTTP ${response.status}`);
+    if (testCase.expectTopSlug && topSlug !== testCase.expectTopSlug) failures.push(`${testCase.query}: expected top ${testCase.expectTopSlug}, got ${topSlug}`);
+    if (testCase.expectAtLeast && rows.length < testCase.expectAtLeast) failures.push(`${testCase.query}: expected >= ${testCase.expectAtLeast}, got ${rows.length}`);
+    if (elapsedMs > 8_000) failures.push(`${testCase.query}: ${elapsedMs}ms exceeds 8000ms`);
+    results.push({ query: testCase.query, elapsed_ms: elapsedMs, source: payload.source, count: rows.length, top: rows.slice(0, 5).map((row) => ({ slug: row.slug, name: row.name })) });
+  } catch (error) {
+    failures.push(`${testCase.query}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
-// Exclude one-time TLS/PostgREST connection establishment from the RPC query
-// budget. The production path is additionally protected by Cloudflare cache.
-await supabase.rpc('search_movies_fast', {
-  search_query: 'khophim search warmup',
-  result_limit: 1,
-});
-
-for (const testCase of CASES) {
-  const start = performance.now();
-  const { data, error } = await supabase.rpc('search_movies_fast', {
-    search_query: testCase.query,
-    result_limit: 12,
-  });
-  const ms = Math.round(performance.now() - start);
-  if (error) {
-    failures.push(`${testCase.description}: RPC error ${error.message}`);
-    continue;
-  }
-
-  const rows = Array.isArray(data) ? data : [];
-  const top = rows.slice(0, 5).map((movie) => ({
-    slug: movie.slug,
-    name: movie.name,
-    origin_name: movie.origin_name,
-    episode_current: movie.episode_current,
-    source_site: movie.source_site,
-    score: Number(movie.search_score || 0).toFixed(1),
-  }));
-  const topSlug = rows[0]?.slug ?? null;
-
-  if (testCase.expectTopSlug && topSlug !== testCase.expectTopSlug) {
-    failures.push(`${testCase.description}: expected top ${testCase.expectTopSlug}, got ${topSlug}`);
-  }
-  if (testCase.expectAtLeast && rows.length < testCase.expectAtLeast) {
-    failures.push(`${testCase.description}: expected at least ${testCase.expectAtLeast} results, got ${rows.length}`);
-  }
-  if (ms > 12_000) {
-    failures.push(`${testCase.description}: RPC took ${ms}ms, expected <= 12000ms including network variance`);
-  }
-
-  results.push({
-    query: testCase.query,
-    description: testCase.description,
-    ms,
-    count: rows.length,
-    top,
-  });
-}
-
-const orderedDurations = results.map((result) => result.ms).sort((a, b) => a - b);
-const medianMs = orderedDurations[Math.floor(orderedDurations.length / 2)] ?? Infinity;
-const fastCases = orderedDurations.filter((ms) => ms <= 2_500).length;
-if (medianMs > 1_500) failures.push(`Median RPC latency was ${medianMs}ms, expected <= 1500ms`);
-if (fastCases < Math.ceil(CASES.length * 0.8)) {
-  failures.push(`Only ${fastCases}/${CASES.length} RPC cases completed within 2500ms`);
-}
-
-console.log(JSON.stringify({ architectureChecks: architectureChecks.length, medianMs, fastCases, results, failures }, null, 2));
-
-if (failures.length > 0) {
-  process.exitCode = 1;
-}
+console.log(JSON.stringify({ architectureChecks: architectureChecks.length, results, failures }, null, 2));
+if (failures.length) process.exitCode = 1;

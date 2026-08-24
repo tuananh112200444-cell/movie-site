@@ -18,7 +18,7 @@ import {
   deduplicateAndLimitServers,
   pickBestServerIndex,
   hasPlayableUrl,
-  pickBestEpisodeByPriority,
+  pickBestEpisodeByScore,
   epSortKey,
   getPosterUrl,
 } from '@/services/movieApi';
@@ -36,6 +36,23 @@ const MovieDetailPlayerSection = lazy(() => import('./components/MovieDetailPlay
 
 function getPlayableSourceUrl(ep: EpisodeData): string {
   return ep.link_m3u8?.trim() || ep.link_embed?.trim() || '';
+}
+
+const PLAYBACK_PREFERENCE_PROVIDERS = new Set(['vsmov', 'kkphim', 'nguonc']);
+
+function episodeMatchesProvider(ep: EpisodeData, serverName: string, provider: string): boolean {
+  const identity = `${ep.source_provider || ''} ${serverName} ${ep.link_m3u8 || ''} ${ep.link_embed || ''}`.toLowerCase();
+  if (provider === 'vsmov') return /vsmov|streamvsmov/.test(identity);
+  if (provider === 'kkphim') return /kkphim|phimapi|phim1280/.test(identity);
+  if (provider === 'nguonc') return /nguonc|nguồn\s*c|streamc\.xyz/.test(identity);
+  return false;
+}
+
+function hasPlayableProviderSource(servers: EpisodeServer[], provider: string): boolean {
+  return servers.some((server) => (server.server_data ?? []).some((episode) =>
+    hasPlayableUrl(episode) && !episode.is_scheduled &&
+    episodeMatchesProvider(episode, server.server_name || '', provider)
+  ));
 }
 
 function resolveOriginalServerIndex(targetServer: EpisodeServer, originalServers: EpisodeServer[]): number {
@@ -211,7 +228,7 @@ function normalizeRequestedEpisode(routeEpisode?: string): string {
 function warmSourceHealthWithinStartupBudget(): Promise<void> {
   const health = warmPlayerSourceHealth();
   return new Promise((resolve) => {
-    const timer = window.setTimeout(resolve, 900);
+    const timer = window.setTimeout(resolve, 250);
     health.finally(() => {
       window.clearTimeout(timer);
       resolve();
@@ -231,6 +248,25 @@ export default function MovieDetailPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const isWatchPage = location.pathname.startsWith('/xem-phim/');
+  const preferredSource = useMemo(() => {
+    const source = String(searchParams.get('source') || '').trim().toLowerCase();
+    return PLAYBACK_PREFERENCE_PROVIDERS.has(source) ? source : '';
+  }, [searchParams]);
+  const preferredQuality = useMemo(() => {
+    const quality = String(searchParams.get('quality') || '').trim().toLowerCase();
+    return quality === '4k' ? '4k' : '';
+  }, [searchParams]);
+  const playbackPreferenceSuffix = useMemo(() => {
+    const params = new URLSearchParams();
+    if (preferredSource) params.set('source', preferredSource);
+    if (preferredQuality) params.set('quality', preferredQuality);
+    const query = params.toString();
+    return query ? `?${query}` : '';
+  }, [preferredQuality, preferredSource]);
+  const withPlaybackPreference = useCallback(
+    (path: string) => `${path}${playbackPreferenceSuffix}`,
+    [playbackPreferenceSuffix],
+  );
   const { showToast } = useToast();
   const { addEntry } = useWatchHistory();
   const { getResume, saveProgress, clearProgress } = useResumeWatch();
@@ -254,10 +290,15 @@ export default function MovieDetailPage() {
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingProgressRef = useRef<{ time: number; duration: number } | null>(null);
   const playbackTimeRef = useRef(0);
+  const activeSourceSelectedAtRef = useRef(Date.now());
   const lastProgressSavedAtRef = useRef(0);
   const activeEpRef = useRef<string | null>(null);
   const relatedFetchedRef = useRef(false);
   const resumeCheckedKeyRef = useRef('');
+
+  useEffect(() => {
+    activeSourceSelectedAtRef.current = Date.now();
+  }, [activeEp?.link_embed, activeEp?.link_m3u8, activeEp?.slug]);
 
   // Warm the shared viewer-health map as soon as the watch route opens. The
   // former app-level idle task ran only on a hard refresh and could start 15s
@@ -284,8 +325,8 @@ export default function MovieDetailPage() {
     if (isWatchPage || !slug) return;
     const legacyEpisode = searchParams.get('tap');
     if (!legacyEpisode) return;
-    navigate(`/xem-phim/${slug}/${encodeURIComponent(legacyEpisode)}`, { replace: true });
-  }, [isWatchPage, navigate, searchParams, slug]);
+    navigate(withPlaybackPreference(`/xem-phim/${slug}/${encodeURIComponent(legacyEpisode)}`), { replace: true });
+  }, [isWatchPage, navigate, searchParams, slug, withPlaybackPreference]);
 
   useEffect(() => {
     activeEpRef.current = activeEp?.slug ?? null;
@@ -326,12 +367,14 @@ export default function MovieDetailPage() {
   useEffect(() => {
     if (!slug) return;
     const isFresh = searchParams.has('fresh');
-    const source = searchParams.get('source') || undefined;
+    const source = preferredSource || undefined;
     let cancelled = false;
     let autoRecoverySucceeded = false;
     const recoveryTimers: number[] = [];
     if (isFresh) {
-      setSearchParams({}, { replace: true });
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('fresh');
+      setSearchParams(nextParams, { replace: true });
     }
     setLoading(true);
     setError(null);
@@ -343,9 +386,10 @@ export default function MovieDetailPage() {
     setRelated([]);
     window.scrollTo({ top: 0, behavior: 'auto' });
 
-    // Start detail and global source-health requests together. On a watch URL,
-    // spend at most 900ms waiting for known provider outages before selecting
-    // the first source; a slow health endpoint can never block the page longer.
+    // Start detail and global source-health requests together. A short 250ms
+    // budget applies already-cached outage knowledge without holding the first
+    // player render behind a slow health refresh. Late health still triggers
+    // the guarded same-episode handoff below.
     const detailRequest = fetchMovieDetail(slug, isFresh, source);
     const initialSourceHealth = isWatchPage
       ? warmSourceHealthWithinStartupBudget()
@@ -363,7 +407,10 @@ export default function MovieDetailPage() {
         setDetail(resolvedData);
         const deduped = deduplicateAndLimitServers(resolvedData.episodes ?? []);
         if (deduped.length > 0) {
-          const bestIdx = pickBestServerIndex(deduped);
+          const preferred = preferredSource
+            ? pickBestEpisodeByScore(deduped, undefined, preferredSource)
+            : null;
+          const bestIdx = preferred?.serverIndex ?? pickBestServerIndex(deduped);
           const origIdx = (resolvedData.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
           setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
         } else {
@@ -374,7 +421,7 @@ export default function MovieDetailPage() {
           // two chances to finish, then update the player without requiring
           // the viewer to reload. Preview-only pages never enter this loop.
           if (!isPreviewOnlyDetail(data)) {
-            for (const delay of [4000, 12000]) {
+            for (const delay of [4000, 12_050]) {
               recoveryTimers.push(window.setTimeout(() => {
                 if (
                   cancelled ||
@@ -389,7 +436,10 @@ export default function MovieDetailPage() {
                     if (recoveredServers.length === 0) return;
                     autoRecoverySucceeded = true;
                     setDetail(recovered);
-                    const bestIdx = pickBestServerIndex(recoveredServers);
+                    const preferred = preferredSource
+                      ? pickBestEpisodeByScore(recoveredServers, undefined, preferredSource)
+                      : null;
+                    const bestIdx = preferred?.serverIndex ?? pickBestServerIndex(recoveredServers);
                     const originalIdx = (recovered.episodes ?? []).findIndex(
                       (server) => server === recoveredServers[bestIdx],
                     );
@@ -413,7 +463,10 @@ export default function MovieDetailPage() {
                 setDetail(resolvedData);
                 const deduped = deduplicateAndLimitServers(resolvedData.episodes ?? []);
                 if (deduped.length > 0) {
-                  const bestIdx = pickBestServerIndex(deduped);
+                  const preferred = preferredSource
+                    ? pickBestEpisodeByScore(deduped, undefined, preferredSource)
+                    : null;
+                  const bestIdx = preferred?.serverIndex ?? pickBestServerIndex(deduped);
                   const origIdx = (resolvedData.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
                   setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
                 }
@@ -434,7 +487,7 @@ export default function MovieDetailPage() {
       cancelled = true;
       recoveryTimers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [slug]);
+  }, [preferredSource, slug]);
 
   // Related content is non-critical. Fetch it only after the visitor approaches
   // the lower page sections, so the player never competes with source APIs.
@@ -475,7 +528,7 @@ export default function MovieDetailPage() {
     return deduplicateAndLimitServers(detail?.episodes ?? []);
   }, [detail?.episodes]);
 
-  const displayMovie = useMemo(() => {
+  const displayMovieBase = useMemo(() => {
     if (!detail?.movie) return null;
     const hasPlayableFullMovie = filteredEpisodes.some((server) =>
       (server.server_data ?? []).some((episode) => {
@@ -508,6 +561,19 @@ export default function MovieDetailPage() {
       episode_current: `Tập ${highestEpisode}`,
     };
   }, [detail?.movie, filteredEpisodes]);
+
+  const hasPreferredPlayableSource = useMemo(
+    () => Boolean(preferredSource && hasPlayableProviderSource(filteredEpisodes, preferredSource)),
+    [filteredEpisodes, preferredSource],
+  );
+
+  const displayMovie = useMemo(() => {
+    if (!displayMovieBase) return null;
+    if (preferredQuality === '4k' && preferredSource === 'vsmov' && hasPreferredPlayableSource) {
+      return { ...displayMovieBase, quality: '4K' };
+    }
+    return displayMovieBase;
+  }, [displayMovieBase, hasPreferredPlayableSource, preferredQuality, preferredSource]);
 
   const hasEpisodes = useMemo(() => {
     return filteredEpisodes.length > 0 && filteredEpisodes.some((s) =>
@@ -545,7 +611,10 @@ export default function MovieDetailPage() {
         addWarmupHint('preconnect', origin),
       ];
 
-      if (firstPlayableEpisode.link_m3u8 && shouldWarmMoviePlayer()) {
+      // An episode can expose both a direct HLS URL and a provider iframe.
+      // Do not download our HLS runtime while the selected iframe downloads
+      // its own player/runtime; load it only for a direct-only episode.
+      if (firstPlayableEpisode.link_m3u8 && !firstPlayableEpisode.link_embed && shouldWarmMoviePlayer()) {
         runWhenIdle(() => {
           import('./components/LightweightHlsPlayer').catch(() => {});
         }, 1800);
@@ -593,17 +662,17 @@ export default function MovieDetailPage() {
     if (numberedEpisodes.length < 2) return;
     const firstEpisode = numberedEpisodes[0];
     const episodePath = encodeURIComponent(firstEpisode.slug || firstEpisode.name || 'tap-1');
-    navigate(`/xem-phim/${slug}/${episodePath}`, { replace: true });
-  }, [detail?.movie, detailEpisodeLinks, isWatchPage, navigate, requestedEpisode, slug]);
+    navigate(withPlaybackPreference(`/xem-phim/${slug}/${episodePath}`), { replace: true });
+  }, [detail?.movie, detailEpisodeLinks, isWatchPage, navigate, requestedEpisode, slug, withPlaybackPreference]);
   const requestedEpisodeUnavailable = useMemo(
     () => Boolean(
       isWatchPage &&
       requestedEpisode &&
       detail &&
       !isTrailerOnly &&
-      !pickBestEpisodeByPriority(filteredEpisodes, requestedEpisode)
+      !pickBestEpisodeByScore(filteredEpisodes, requestedEpisode, preferredSource)
     ),
-    [detail, filteredEpisodes, isTrailerOnly, isWatchPage, requestedEpisode],
+    [detail, filteredEpisodes, isTrailerOnly, isWatchPage, preferredSource, requestedEpisode],
   );
 
   useEffect(() => {
@@ -615,7 +684,7 @@ export default function MovieDetailPage() {
     const activeMatchesRequest = Boolean(activeEp && requestedEpisode &&
       matchesRequestedEpisode(activeEp));
     const requested = requestedEpisode
-      ? pickBestEpisodeByPriority(filteredEpisodes, requestedEpisode)
+      ? pickBestEpisodeByScore(filteredEpisodes, requestedEpisode, preferredSource)
       : null;
     if (activeEp && (!requestedEpisode || (activeMatchesRequest && requested))) return;
     // A watch URL is an exact contract. If /25 has no playable source, never
@@ -629,14 +698,14 @@ export default function MovieDetailPage() {
       return;
     }
     const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
-    const best = requested ?? pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
+    const best = requested ?? pickBestEpisodeByScore(filteredEpisodes, latestEpSlug, preferredSource);
     if (!best) return;
     const originalIdx = resolveOriginalServerIndex(filteredEpisodes[best.serverIndex], detail.episodes);
     playbackTimeRef.current = 0;
     setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
     setActiveEp(best.episode);
     setInitialSeekTime(0);
-  }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly, isWatchPage, requestedEpisode]);
+  }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly, isWatchPage, preferredSource, requestedEpisode]);
 
   const trailerEmbedUrl = useMemo(
     () => (detail?.movie?.trailer_url ? getTrailerEmbedUrl(detail.movie.trailer_url) : null),
@@ -679,7 +748,10 @@ export default function MovieDetailPage() {
     // same-episode handoff before the viewer has meaningfully started
     // watching, so a confirmed provider outage cannot keep the initial
     // selection on a dead CDN shard. Preserve the live seek position.
-    if (currentPlaybackTime >= 8) return;
+    // Opaque iframe players cannot report currentTime to the parent. A wall
+    // clock guard is therefore required in addition to playbackTime, otherwise
+    // a late health response can replace an iframe the viewer is already using.
+    if (currentPlaybackTime >= 8 || Date.now() - activeSourceSelectedAtRef.current >= 8_000) return;
     const allAlternativeServers = filteredEpisodes
       .map((server) => ({
         ...server,
@@ -702,7 +774,7 @@ export default function MovieDetailPage() {
     const alternativeServers = healthyAlternativeServers.length > 0
       ? healthyAlternativeServers
       : allAlternativeServers;
-    const best = pickBestEpisodeByPriority(alternativeServers, activeEp.slug || activeEp.name);
+    const best = pickBestEpisodeByScore(alternativeServers, activeEp.slug || activeEp.name);
     if (!best) return;
     const resumeAt = Math.max(
       playbackTimeRef.current,
@@ -721,22 +793,23 @@ export default function MovieDetailPage() {
       return;
     }
     flushProgress();
-    playbackTimeRef.current = Math.max(0, seekTime);
+    const safeSeekTime = Number.isFinite(seekTime) && seekTime > 0 ? seekTime : 0;
+    playbackTimeRef.current = safeSeekTime;
     setActiveEp(ep);
-    setInitialSeekTime(seekTime);
+    setInitialSeekTime(safeSeekTime);
     setShowResumeBanner(false);
     if (detail?.movie) addEntry(detail.movie as unknown as MovieItem, ep.slug, ep.name);
-    if (slug && seekTime === 0) {
+    if (slug && safeSeekTime === 0) {
       const info = getResume(slug, ep.slug);
       setResumeInfo(info);
       setShowResumeBanner(info.shouldResume);
     }
     if (isWatchPage && slug) {
       const episodePath = encodeURIComponent(ep.slug || ep.name || 'tap-1');
-      navigate(`/xem-phim/${slug}/${episodePath}`, { replace: true });
+      navigate(withPlaybackPreference(`/xem-phim/${slug}/${episodePath}`), { replace: true });
     }
     setTimeout(() => playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-  }, [detail, slug, addEntry, flushProgress, getResume, isWatchPage, navigate, showToast]);
+  }, [detail, slug, addEntry, flushProgress, getResume, isWatchPage, navigate, showToast, withPlaybackPreference]);
 
   const handleSwitchServer = useCallback((filteredIdx: number) => {
     const targetServer = filteredEpisodes[filteredIdx];
@@ -803,8 +876,9 @@ export default function MovieDetailPage() {
 
   const handleResume = useCallback(() => {
     if (!resumeInfo) return;
-    playbackTimeRef.current = Math.max(0, resumeInfo.time);
-    setInitialSeekTime(resumeInfo.time);
+    const resumeAt = Number.isFinite(resumeInfo.time) && resumeInfo.time > 0 ? resumeInfo.time : 0;
+    playbackTimeRef.current = resumeAt;
+    setInitialSeekTime(resumeAt);
     setShowResumeBanner(false);
   }, [resumeInfo]);
 
@@ -828,7 +902,7 @@ export default function MovieDetailPage() {
     setActiveEp(null);
     setShowResumeBanner(false);
     try {
-      const data = await fetchMovieDetail(slug, true);
+      const data = await fetchMovieDetail(slug, true, preferredSource || undefined);
       if (!data) {
         setError('Không thể tải thông tin phim');
         showToast('Không tìm thấy nguồn phim nào khác.', 'error');
@@ -840,7 +914,7 @@ export default function MovieDetailPage() {
       let recoveredSource = false;
       if (deduped.length > 0) {
         const recovered = targetEpisode
-          ? pickBestEpisodeByPriority(deduped, targetEpisode)
+          ? pickBestEpisodeByScore(deduped, targetEpisode, preferredSource)
           : null;
         if (recovered) {
           recoveredSource = true;
@@ -850,7 +924,10 @@ export default function MovieDetailPage() {
           setActiveEp(recovered.episode);
           setInitialSeekTime(resumeAt);
         } else {
-          const bestIdx = pickBestServerIndex(deduped);
+          const preferred = preferredSource
+            ? pickBestEpisodeByScore(deduped, undefined, preferredSource)
+            : null;
+          const bestIdx = preferred?.serverIndex ?? pickBestServerIndex(deduped);
           const origIdx = (data.episodes ?? []).findIndex((ep) => ep === deduped[bestIdx]);
           playbackTimeRef.current = 0;
           setActiveServer(origIdx >= 0 ? origIdx : bestIdx);
@@ -869,7 +946,7 @@ export default function MovieDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [flushProgress, requestedEpisode, showToast, slug]);
+  }, [flushProgress, preferredSource, requestedEpisode, showToast, slug]);
 
   const handleFavToggle = useCallback(() => {
     if (!detail?.movie) return;
@@ -961,10 +1038,10 @@ export default function MovieDetailPage() {
                 return;
               }
               const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
-              const best = pickBestEpisodeByPriority(filteredEpisodes, latestEpSlug);
+              const best = pickBestEpisodeByScore(filteredEpisodes, latestEpSlug, preferredSource);
               const selected = best?.episode;
               const episodePath = selected ? `/${encodeURIComponent(selected.slug || selected.name || 'tap-1')}` : '';
-              navigate(`/xem-phim/${slug ?? ''}${episodePath}`);
+              navigate(withPlaybackPreference(`/xem-phim/${slug ?? ''}${episodePath}`));
             }}
           />
           <div className="cinema-page-container">
@@ -981,7 +1058,7 @@ export default function MovieDetailPage() {
                 <h2 id="detail-episodes-title" className="font-black text-white sm:text-lg">Danh sách tập</h2>
                 <p className="mt-0.5 text-xs text-white/60">{detailEpisodeLinks.length} tập · mở trong chế độ xem tập trung</p>
               </div>
-              <Link to={`/xem-phim/${slug ?? ''}`} className="flex min-h-11 items-center gap-1.5 rounded-xl bg-red-500 px-3 text-xs font-bold text-white touch-manipulation">
+              <Link to={withPlaybackPreference(`/xem-phim/${slug ?? ''}`)} className="flex min-h-11 items-center gap-1.5 rounded-xl bg-red-500 px-3 text-xs font-bold text-white touch-manipulation">
                 <i className="ri-play-fill" /> Xem phim
               </Link>
             </div>
@@ -989,7 +1066,7 @@ export default function MovieDetailPage() {
               {detailEpisodeLinks.map((episode) => (
                 <Link
                   key={`${episode.slug}-${episode.name}`}
-                  to={`/xem-phim/${slug ?? ''}/${encodeURIComponent(episode.slug || episode.name || 'tap-1')}`}
+                  to={withPlaybackPreference(`/xem-phim/${slug ?? ''}/${encodeURIComponent(episode.slug || episode.name || 'tap-1')}`)}
                   className="detail-episode-button flex min-h-11 items-center justify-center rounded-xl border border-white/10 px-2 text-xs font-bold text-white/80 transition-colors hover:border-red-500/50 hover:bg-red-500/15 hover:text-white touch-manipulation"
                 >
                   {episode.name || episode.slug}
@@ -1004,7 +1081,7 @@ export default function MovieDetailPage() {
         <div className="cinema-page-container pt-20 sm:pt-24">
           <div className="movie-watch-topbar mb-3 flex items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
             <div className="min-w-0">
-              <Link to={`/phim/${slug ?? ''}`} className="inline-flex min-h-11 items-center gap-1 text-xs text-white/55 hover:text-red-300 touch-manipulation">
+              <Link to={withPlaybackPreference(`/phim/${slug ?? ''}`)} className="inline-flex min-h-11 items-center gap-1 text-xs text-white/55 hover:text-red-300 touch-manipulation">
                 <i className="ri-arrow-left-line" /> Thông tin phim
               </Link>
               <h1 className="truncate text-lg font-black text-white sm:text-2xl tracking-[-0.02em]">{movie.name}</h1>

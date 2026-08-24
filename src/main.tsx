@@ -2,7 +2,7 @@
 import './polyfills'
 import './i18n'
 import { createRoot, type Root } from 'react-dom/client'
-import './styles/remixicon-local.css'
+import './styles/remixicon-used.css'
 import './index.css'
 import App from './App.tsx'
 import { pruneSmartClientCaches } from './utils/smartCache'
@@ -48,6 +48,7 @@ void import('./utils/performance').then(({ reportWebVitals }) => reportWebVitals
 
 const STALE_TAB_RELOAD_MS = 30 * 60 * 1000;
 const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|dynamically imported module/i;
+const LEGACY_SW_RELOAD_GUARD_KEY = 'kp_sw_removed_reload_v2';
 
 function safeSessionGet(key: string): string | null {
   try {
@@ -87,9 +88,17 @@ async function clearLegacyKhophimCaches(): Promise<void> {
   }
 }
 
+function refreshSafePageAfterLegacyWorkerRemoval(): void {
+  if (document.hidden || /^\/xem-phim(?:\/|$)/.test(window.location.pathname)) return;
+  if (safeSessionGet(LEGACY_SW_RELOAD_GUARD_KEY) === '1') return;
+  safeSessionSet(LEGACY_SW_RELOAD_GUARD_KEY, '1');
+  window.setTimeout(() => window.location.reload(), 120);
+}
+
 async function removeLegacyServiceWorkers(): Promise<void> {
   if (!('serviceWorker' in navigator)) return;
   try {
+    const wasControlled = Boolean(navigator.serviceWorker.controller);
     const registrations = await navigator.serviceWorker.getRegistrations();
     if (!registrations.length) {
       await clearLegacyKhophimCaches();
@@ -106,8 +115,9 @@ async function removeLegacyServiceWorkers(): Promise<void> {
     }));
     await clearLegacyKhophimCaches();
 
-    if (navigator.serviceWorker.controller) {
+    if (wasControlled || navigator.serviceWorker.controller) {
       reportClientIssue('service_worker_removed', 'legacy service worker unregistered');
+      refreshSafePageAfterLegacyWorkerRemoval();
     }
   } catch {
     // Do not block app startup if a browser blocks service worker APIs.
@@ -166,8 +176,8 @@ if ('serviceWorker' in navigator) {
 
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type !== 'KHOPHIM_SW_REMOVED') return;
-    if (safeSessionGet('kp_sw_removed_reload_v1') === '1') return;
     reportClientIssue('service_worker_removed', 'legacy service worker removed');
+    refreshSafePageAfterLegacyWorkerRemoval();
   });
 }
 

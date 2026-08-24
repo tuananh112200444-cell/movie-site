@@ -5,11 +5,10 @@ import { normalizeSearchText } from '../utils/searchHelper';
 import { setSmartSessionCache } from '../utils/smartCache';
 import { supabase } from '@/lib/supabase';
 import { isRecentlyBadExactSourceHost, isRecentlyBadSourceCluster } from '@/services/playerSourceHealth';
-import { normalizeVerifiedSeasonNumbering } from '../../supabase/functions/_shared/episode-numbering';
+import { getProviderEpisodeNumber, isFractionalProviderEpisode, normalizeVerifiedSeasonNumbering } from '../../supabase/functions/_shared/episode-numbering';
 
 declare const __IS_PREVIEW__: boolean;
 
-const BASE_URL = 'https://ophim1.com';
 export const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 
 function normalizeRelativeImagePath(path: string): string {
@@ -89,10 +88,9 @@ async function fetchDetailRaw(url: string, timeoutMs = 10000, retries = 2): Prom
 }
 
 /* ─═══════════════════════════════════════════
-   MOVIE DETAIL — SUPABASE FIRST, OPHIM FALLBACK
-   Step 1: Try Supabase (storage).
-   Step 2: If empty, call OPhim API directly (source of truth).
-   NEVER merge metadata — OPhim and Supabase IDs may differ.
+   MOVIE DETAIL — CANONICAL SINGAPORE CATALOGUE
+   Supabase stores every supported provider and the player selects a healthy
+   stream by score. The retired OPhim provider is rejected at every boundary.
    ════════════════════════════════════════════ */
 
 /* ════════════════════════════════════════════
@@ -100,7 +98,31 @@ async function fetchDetailRaw(url: string, timeoutMs = 10000, retries = 2): Prom
    ════════════════════════════════════════════ */
 function detailHasPlayableEpisodes(detail: MovieDetailResponse | null): boolean {
   if (!detail?.episodes?.length) return false;
-  return detail.episodes.some((srv) => srv.server_data?.some((ep) => hasPlayableUrl(ep)) ?? false);
+  return detail.episodes.some((srv) => srv.server_data?.some((ep) =>
+    !isRetiredOphimEpisode(ep, srv.server_name) && hasPlayableUrl(ep)
+  ) ?? false);
+}
+
+function isRetiredOphimEpisode(ep: EpisodeData, serverName = ''): boolean {
+  const identity = `${ep.source_provider || ''} ${serverName}`.toLowerCase();
+  if (/(?:^|[^a-z0-9])ophim(?:[^a-z0-9]|$)|opstream/i.test(identity)) return true;
+  return [ep.link_m3u8, ep.link_embed].some((value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return false;
+    try {
+      const host = new URL(raw).hostname.toLowerCase().replace(/^www\./, '');
+      return host === 'ophim1.com' || host.endsWith('.ophim1.com') || /opstream/i.test(host);
+    } catch {
+      return /ophim1\.com|opstream/i.test(raw);
+    }
+  });
+}
+
+function isRetiredOphimCatalogItem(value: unknown): boolean {
+  // Provider-neutral catalogue: retain movie metadata and retire only broken
+  // playback URLs in the detail/player layer.
+  void value;
+  return false;
 }
 
 function isAuthoritativeNoPlaybackDetail(detail: MovieDetailResponse | null): boolean {
@@ -167,7 +189,6 @@ function validateOphimExactMatch(
    OPTIMIZED: chỉ gọi 2 nguồn nhanh nhất (OPhim + KKPhim)
    ════════════════════════════════════════════ */
 const LIST_SOURCES = [
-  { base: 'https://ophim1.com',  name: 'OPhim',   site: 'ophim', timeout: 5000, listEndpoint: '/v1/api/danh-sach/', newMoviesEndpoint: '/v1/api/danh-sach/phim-moi-cap-nhat', mirror: null },
   // KKPhim exposes the latest-feed route without the /v1/api prefix. Its
   // category routes still use /v1/api, which are built separately below.
   { base: 'https://phimapi.com', name: 'KKPhim',  site: 'phimapi', timeout: 5000, listEndpoint: '/v1/api/danh-sach/', newMoviesEndpoint: '/danh-sach/phim-moi-cap-nhat', mirror: 'https://phimapi.net' },
@@ -257,7 +278,6 @@ export async function fetchNewMoviesMultiSource(page = 1): Promise<MovieListResp
    OPTIMIZED: chỉ 2 nguồn nhanh nhất để giảm latency
    ════════════════════════════════════════════ */
 const SEARCH_SOURCES = [
-  { base: 'https://ophim1.com',  name: 'OPhim',  site: 'ophim', timeout: 1400, searchEndpoint: '/v1/api/tim-kiem', mirror: null },
   { base: 'https://phimapi.com', name: 'KKPhim', site: 'phimapi', timeout: 1400, searchEndpoint: '/v1/api/tim-kiem', mirror: 'https://phimapi.net' },
 ] as const;
 
@@ -288,6 +308,13 @@ async function fetchSearchJSON<T>(url: string, timeoutMs: number, signal?: Abort
 }
 
 export async function searchMoviesMultiSource(keyword: string, page = 1, signal?: AbortSignal): Promise<MovieListResponse> {
+  if (!ALLOW_BROWSER_PROVIDER_FALLBACK) {
+    return {
+      status: true,
+      items: [],
+      pagination: { totalItems: 0, totalItemsPerPage: 0, currentPage: page, totalPages: 0 },
+    };
+  }
   if (!keyword.trim()) return { status: true, items: [], pagination: { currentPage: 1, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
 
   const encoded = encodeURIComponent(keyword.trim());
@@ -604,6 +631,19 @@ function unwrapCloudflareImageOrigin(value: string): string {
   return current;
 }
 
+/**
+ * OPhim's current API advertises the CDN host separately from bare artwork
+ * filenames. Some persisted/list-normalized rows joined those values at the
+ * host root, although the files live under /uploads/movies/. Repair only that
+ * proven malformed shape; already-canonical paths and other providers remain
+ * untouched.
+ */
+function normalizeKnownOphimImageUrl(value: string): string {
+  const match = value.match(/^(https:\/\/(?:img\.ophimimg\.com|img\.ophim\.live))\/([^/?#]+)([?#].*)?$/i);
+  if (!match) return value;
+  return `${match[1]}/uploads/movies/${match[2]}${match[3] || ''}`;
+}
+
 export function getMovieDisplayName(item: {
   name?: string;
   title_vi?: string;
@@ -654,7 +694,9 @@ export function getLandscapeImagePaths(movie: MovieArtworkFields): { primary?: s
 }
 
 export function getImageUrl(path: string): string {
-  const normalizedPath = unwrapCloudflareImageOrigin(String(path || ''));
+  const normalizedPath = normalizeKnownOphimImageUrl(
+    unwrapCloudflareImageOrigin(String(path || '')),
+  );
   if (!normalizedPath || /^(?:null|undefined|about:blank|javascript:|data:)/i.test(normalizedPath)) return FALLBACK_IMG;
   if (/^\/\//.test(normalizedPath)) return `https:${normalizedPath}`;
   const hit = imgUrlCache.get(normalizedPath);
@@ -723,15 +765,8 @@ export function getOptimizedImageUrl(path: string, width = 360, quality = 82): s
   const maxQuality = isDesktop ? 88 : 84;
   const safeWidth = Math.max(180, Math.min(Math.round(width * density), maxWidth));
   const safeQuality = Math.max(minQuality, Math.min(quality, maxQuality));
-  // phimimg rejects the shared wsrv proxy, but Cloudflare can resize it
-  // reliably at our own edge before it reaches the browser.
-  if (
-    /^https?:\/\/phimimg\.com\//i.test(original)
-    && typeof window !== 'undefined'
-    && /(^|\.)khophim\.org$/i.test(window.location.hostname)
-  ) {
-    return `/cdn-cgi/image/width=${safeWidth},quality=${safeQuality},format=auto,fit=cover/${original}`;
-  }
+  // Use the shared free resizing proxy for large phimimg originals. Mobile
+  // detail pages previously downloaded 800 kB source JPEGs for 96 px posters.
   if (shouldBypassImageProxy(original)) return original;
   const encoded = encodeURIComponent(original);
   return `https://wsrv.nl/?url=${encoded}&w=${safeWidth}&q=${safeQuality}&output=webp&fit=cover&we`;
@@ -760,7 +795,7 @@ function isVolatileOphimVodImage(url: string): boolean {
 }
 
 function shouldBypassImageProxy(url: string): boolean {
-  return /^https?:\/\/(image\.tmdb\.org|blogger\.googleusercontent\.com|[^/]+\.bp\.blogspot\.com|i\.ibb\.co|pic1\.iqiyipic\.com|vcover-hz-pic\.wetvinfo\.com|phimimg\.com|icdn\.darkbytes\.xyz)\//i.test(url);
+  return /^https?:\/\/(image\.tmdb\.org|blogger\.googleusercontent\.com|[^/]+\.bp\.blogspot\.com|i\.ibb\.co|pic1\.iqiyipic\.com|vcover-hz-pic\.wetvinfo\.com|icdn\.darkbytes\.xyz)\//i.test(url);
 }
 
 export function getImageFallbacks(primaryPath?: string, altPath?: string): string[] {
@@ -894,11 +929,35 @@ function parseItems(data: Record<string, unknown>): MovieListResponse['items'] {
   return Array.isArray(items) ? items as MovieListResponse['items'] : [];
 }
 
-function toMovieListResponse(data: Record<string, unknown>): MovieListResponse {
-  if ((data as Record<string, unknown>).data) {
-    return { status: true, items: parseItems(data), pagination: parsePagination(data) };
+function normalizeListArtworkUrl(value: string | undefined, cdnBase: string): string {
+  const url = String(value || '').trim();
+  if (!url || !cdnBase) return url;
+  if (/^https?:\/\//i.test(url)) return normalizeKnownOphimImageUrl(url);
+  if (/^\/\//.test(url)) {
+    const absolute = `https:${url}`;
+    const repaired = normalizeKnownOphimImageUrl(absolute);
+    return repaired === absolute ? url : repaired;
   }
-  return data as unknown as MovieListResponse;
+  return normalizeKnownOphimImageUrl(
+    `${cdnBase.replace(/\/$/, '')}/${url.replace(/^\/+/, '')}`,
+  );
+}
+
+function toMovieListResponse(data: Record<string, unknown>): MovieListResponse {
+  const nested = asRecord(data.data);
+  const result = nested
+    ? { status: true, items: parseItems(data), pagination: parsePagination(data) }
+    : data as unknown as MovieListResponse;
+  const cdnBase = String(nested?.APP_DOMAIN_CDN_IMAGE ?? data.APP_DOMAIN_CDN_IMAGE ?? '').trim();
+  if (!cdnBase) return result;
+  return {
+    ...result,
+    items: (result.items ?? []).map((item) => ({
+      ...item,
+      thumb_url: normalizeListArtworkUrl(item.thumb_url, cdnBase),
+      poster_url: normalizeListArtworkUrl(item.poster_url, cdnBase),
+    })),
+  };
 }
 function withSourceMetadata(
   result: MovieListResponse,
@@ -963,12 +1022,49 @@ function sortListItems(
 // Keep this list aligned with the production `movies` table. `chieurap` used
 // to be present in an upstream payload but is not a database column; selecting
 // it made every direct list request fail with PostgREST 42703/HTTP 400.
-const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, normalized_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, updated_at, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
 // Minimal public contract used when an optional column is renamed/removed in
 // production. Cards remain usable while the richer schema is being repaired.
 const SUPABASE_LIST_CORE_SELECT = 'id, slug, name, origin_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, category, country, is_published, updated_at, source_site, source_name';
 const SUPABASE_LIST_PAGE_SIZE = 36;
+const SUPABASE_LIST_CACHE_TTL_MS = 5 * 60 * 1000;
+const SUPABASE_LIST_CACHE_LIMIT = 120;
 let supabaseListUsesCoreContract = false;
+
+type SupabaseListParams = {
+  type?: string;
+  category?: string;
+  country?: string;
+  year?: string;
+  page?: number;
+  keyword?: string;
+  sortField?: string;
+  sortType?: 'asc' | 'desc';
+};
+
+const supabaseListResultCache = new Map<string, { expiresAt: number; value: MovieListResponse | null }>();
+const supabaseListInflight = new Map<string, Promise<MovieListResponse | null>>();
+
+function supabaseListCacheKey(params: SupabaseListParams): string {
+  return JSON.stringify({
+    type: params.type ?? '',
+    category: params.category ?? '',
+    country: params.country ?? '',
+    year: params.year ?? '',
+    page: Math.max(1, params.page ?? 1),
+    keyword: normalizeSearchText(params.keyword?.trim() ?? ''),
+    sortField: params.sortField ?? '',
+    sortType: params.sortType ?? 'desc',
+  });
+}
+
+function rememberSupabaseList(key: string, value: MovieListResponse | null): void {
+  if (supabaseListResultCache.size >= SUPABASE_LIST_CACHE_LIMIT) {
+    const oldestKey = supabaseListResultCache.keys().next().value as string | undefined;
+    if (oldestKey) supabaseListResultCache.delete(oldestKey);
+  }
+  supabaseListResultCache.set(key, { expiresAt: Date.now() + SUPABASE_LIST_CACHE_TTL_MS, value });
+}
 
 function typeFilterValues(type?: string): string[] {
   if (!type || type === 'phim-moi-cap-nhat') return [];
@@ -980,16 +1076,7 @@ function typeFilterValues(type?: string): string[] {
   return [type];
 }
 
-async function fetchMoviesFromSupabaseList(params: {
-  type?: string;
-  category?: string;
-  country?: string;
-  year?: string;
-  page?: number;
-  keyword?: string;
-  sortField?: string;
-  sortType?: 'asc' | 'desc';
-}): Promise<MovieListResponse | null> {
+async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): Promise<MovieListResponse | null> {
   if (!ENABLE_SUPABASE_TEXT_SEARCH) return null;
   // Cinema membership is maintained by the home proxy/upstream catalog. The
   // production movies table has no `chieurap` column, so do not issue an
@@ -1000,13 +1087,44 @@ async function fetchMoviesFromSupabaseList(params: {
   const to = from + SUPABASE_LIST_PAGE_SIZE - 1;
 
   try {
-    const needsExactCount = Boolean(
-      params.type || params.category || params.country || params.year || params.keyword?.trim()
-    );
+    if (typeof window !== 'undefined' && !import.meta.env.DEV) {
+      // Keyword searches use the canonical /api/search RPC path. Ordinary
+      // catalogue pages share one five-minute Edge cache across all viewers.
+      if (params.keyword?.trim()) return null;
+      const edgeUrl = new URL('/api/movies', window.location.origin);
+      if (params.type) edgeUrl.searchParams.set('type', params.type);
+      if (params.category) edgeUrl.searchParams.set('category', params.category);
+      if (params.country) edgeUrl.searchParams.set('country', params.country);
+      if (params.year) edgeUrl.searchParams.set('year', params.year);
+      edgeUrl.searchParams.set('page', String(page));
+      if (params.sortField) edgeUrl.searchParams.set('sortField', params.sortField);
+      edgeUrl.searchParams.set('sortType', params.sortType ?? 'desc');
+      edgeUrl.searchParams.set('v', '1');
+      const response = await fetch(edgeUrl.toString(), {
+        cache: 'force-cache',
+        headers: { Accept: 'application/json' },
+      });
+      if (response.ok) {
+        const payload = await response.json() as MovieListResponse;
+        const rawItems = (payload.items ?? []) as unknown as Record<string, unknown>[];
+        const items = sortListItems(
+          rawItems.filter((item) => !isRetiredOphimCatalogItem(item)).map(toSupabaseMovieItem),
+          params.sortField,
+          params.sortType,
+        ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer');
+        return { ...payload, items };
+      }
+      // Continue with the same Singapore database contract when the Pages
+      // Worker route is unavailable; never fall back to an external catalogue.
+    }
+
     const buildQuery = (selectFields: string, coreContract: boolean) => {
       let query = supabase
         .from('movies')
-        .select(selectFields, { count: needsExactCount ? 'exact' : 'estimated' })
+        // Exact filtered counts forced PostgreSQL to scan the whole matching
+        // catalogue for every shelf/page. Estimated count keeps pagination
+        // useful without putting viewer requests behind an expensive COUNT.
+        .select(selectFields, { count: 'estimated' })
         .eq('is_published', true);
 
       const typeValues = typeFilterValues(params.type);
@@ -1056,7 +1174,9 @@ async function fetchMoviesFromSupabaseList(params: {
     if (error || !data || data.length === 0) return null;
 
     const items = sortListItems(
-      (data as unknown as Record<string, unknown>[]).map(toSupabaseMovieItem),
+      (data as unknown as Record<string, unknown>[])
+        .filter((item) => !isRetiredOphimCatalogItem(item))
+        .map(toSupabaseMovieItem),
       params.sortField,
       params.sortType,
     ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer');
@@ -1075,6 +1195,27 @@ async function fetchMoviesFromSupabaseList(params: {
   } catch {
     return null;
   }
+}
+
+async function fetchMoviesFromSupabaseList(params: SupabaseListParams): Promise<MovieListResponse | null> {
+  const key = supabaseListCacheKey(params);
+  const cached = supabaseListResultCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached) supabaseListResultCache.delete(key);
+
+  const existing = supabaseListInflight.get(key);
+  if (existing) return existing;
+
+  const request = fetchMoviesFromSupabaseListUncached(params)
+    .then((value) => {
+      rememberSupabaseList(key, value);
+      return value;
+    })
+    .finally(() => {
+      if (supabaseListInflight.get(key) === request) supabaseListInflight.delete(key);
+    });
+  supabaseListInflight.set(key, request);
+  return request;
 }
 
 export async function fetchNewMovies(page = 1): Promise<MovieListResponse> {
@@ -1117,8 +1258,11 @@ export async function fetchMoviesByType(
   sortField?: string,
   sortType: 'asc' | 'desc' = 'desc'
 ): Promise<MovieListResponse> {
-  const supabaseResult = await fetchMoviesFromSupabaseList({ type, page, sortField, sortType });
-  if (supabaseResult) return supabaseResult;
+  const preferKkphim = type === 'phim-chieu-rap';
+  if (!preferKkphim) {
+    const supabaseResult = await fetchMoviesFromSupabaseList({ type, page, sortField, sortType });
+    if (supabaseResult) return supabaseResult;
+  }
 
   if (type === 'phim-sap-chieu') {
     const latest = await fetchNewMoviesMultiSource(page).catch(() => null);
@@ -1133,14 +1277,15 @@ export async function fetchMoviesByType(
   if (sortField) { q.set('sort_field', sortField); q.set('sort_type', sortType); }
 
   // OPTIMIZED: chỉ gọi 2 nguồn chính + 1 mirror
-  const urls = [
-    `https://ophim1.com/v1/api/danh-sach/${type}?${q}`,
-    `https://phimapi.com/v1/api/danh-sach/${type}?${q}`,
+  void preferKkphim;
+  const providers = [
+    { url: `https://phimapi.com/v1/api/danh-sach/${type}?${q}`, site: 'phimapi', name: 'KKPhim' },
   ];
 
-  const promises = urls.map((url) =>
-    fetchJSON<Record<string, unknown>>(url, 6000)
+  const promises = providers.map((provider) =>
+    fetchJSON<Record<string, unknown>>(provider.url, 6000)
       .then(toMovieListResponse)
+      .then((res) => withSourceMetadata(res, provider.site, provider.name))
       .then((res) => ((res.items?.length ?? 0) > 0 && isExpectedPage(res, page) ? res : null))
       .catch(() => null)
   );
@@ -1158,6 +1303,11 @@ export async function fetchMoviesByType(
     if (filteredItems.length > 0 || type !== 'phim-sap-chieu') {
       return withFilteredItemsPagination(result, sortListItems(filteredItems, sortField, sortType), page);
     }
+  }
+
+  if (preferKkphim) {
+    const supabaseFallback = await fetchMoviesFromSupabaseList({ type, page, sortField, sortType });
+    if (supabaseFallback) return supabaseFallback;
   }
 
   if (type === 'phim-sap-chieu') {
@@ -1197,7 +1347,6 @@ export async function fetchMoviesByCategory(params: {
 
   // OPTIMIZED: chỉ 3 nguồn chính
   const urls = [
-    `https://ophim1.com/v1/api/danh-sach/${type}?${q}`,
     `https://phimapi.com/v1/api/danh-sach/${type}?${q}`,
   ];
 
@@ -1306,7 +1455,7 @@ function promiseAllSettledWithTimeout<T>(promises: Promise<T>[], timeoutMs: numb
    MOVIE DETAIL — EDGE FUNCTION PROXY (production CORS bypass)
    ════════════════════════════════════════════ */
 const FALLBACK_SUPABASE_URL = 'https://ceoxbhsdodllziyxmbqr.supabase.co';
-const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Mqk6aVxJjetKY8St_20QWA_Wc2zxBd0';
+const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Juh45t-R83dfgJI0O4_PQw_iYYoU-yh';
 const SUPABASE_URL = typeof import.meta.env !== 'undefined'
   ? ((import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined) ||
      (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
@@ -1321,35 +1470,50 @@ const SUPABASE_ANON_KEY = typeof import.meta.env !== 'undefined'
 const ENABLE_SUPABASE_TEXT_SEARCH =
   typeof import.meta.env === 'undefined' || import.meta.env.VITE_DISABLE_SUPABASE_TEXT_SEARCH !== 'true';
 const ENABLE_SUPABASE_SEARCH_RPC =
-  typeof import.meta.env !== 'undefined' && import.meta.env.VITE_ENABLE_SUPABASE_SEARCH_RPC === 'true';
-async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false): Promise<MovieDetailResponse | null> {
+  typeof import.meta.env === 'undefined' || import.meta.env.VITE_ENABLE_SUPABASE_SEARCH_RPC !== 'false';
+// Production catalogue decisions belong to the canonical edge API. Direct
+// browser calls to providers duplicated requests, bypassed identity guards and
+// exposed visitors to upstream instability. Keep them only for local diagnosis.
+const ALLOW_BROWSER_PROVIDER_FALLBACK = import.meta.env.DEV;
+async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, source?: string): Promise<MovieDetailResponse | null> {
   if (!SUPABASE_URL) return null;
-  try {
+  const endpoints = typeof window !== 'undefined'
+    ? [
+        // Production has one same-origin path. The Cloudflare gateway owns
+        // cache, circuit breaking and provider fallback; retrying the private
+        // Supabase Function directly doubled work and produced CORS preflights.
+        { url: new URL('/api/movie-detail', window.location.origin), timeoutMs: 7_500, headers: undefined },
+      ]
+    : [{ url: new URL('https://khophim.org/api/movie-detail'), timeoutMs: 9_000, headers: undefined }];
+
+  for (const endpoint of endpoints) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
-    const url = new URL('/api/movie-detail', typeof window !== 'undefined' ? window.location.origin : 'https://khophim.org');
-    url.searchParams.set('slug', slug);
-    if (forceRefresh) url.searchParams.set('refresh', '1');
-    const res = await fetch(
-      url.toString(),
-      {
+    const timer = setTimeout(() => controller.abort(), endpoint.timeoutMs);
+    endpoint.url.searchParams.set('slug', slug);
+    // Version the public Edge cache key whenever stream-health/scoring rules
+    // change so a healthy revalidated source is not shadowed by an older POP.
+    endpoint.url.searchParams.set('rev', '20260823-provider-score-v10');
+    if (forceRefresh) endpoint.url.searchParams.set('refresh', '1');
+    if (source) endpoint.url.searchParams.set('source', source);
+
+    try {
+      const res = await fetch(endpoint.url.toString(), {
         signal: controller.signal,
-        cache: 'no-store',
-      
-      }
-    );
-    clearTimeout(timer);
-    if (!res.ok) {
-      console.warn(`[movieApi] Proxy returned ${res.status} for slug=${slug}`);
-      return null;
+        cache: forceRefresh ? 'no-store' : 'default',
+        headers: { Accept: 'application/json', ...(endpoint.headers ?? {}) },
+      });
+      const contentType = res.headers.get('content-type') ?? '';
+      if (!res.ok || !contentType.toLowerCase().includes('application/json')) continue;
+      const data = await res.json() as MovieDetailResponse;
+      if (data?.movie?.slug || data?.movie?.name) return data;
+    } catch (e) {
+      if (!isAbortLikeError(e) && import.meta.env.DEV) console.warn('[movieApi] Proxy fetch failed:', e);
+    } finally {
+      clearTimeout(timer);
     }
-    const data = await res.json() as MovieDetailResponse;
-    if (!data?.movie?.slug && !data?.movie?.name) return null;
-    return data;
-  } catch (e) {
-    if (!isAbortLikeError(e)) console.warn('[movieApi] Proxy fetch failed:', e);
-    return null;
   }
+
+  return null;
 }
 
 /* ════════════════════════════════════════════
@@ -1488,9 +1652,12 @@ function parseMovieDetailPayload(payload: Record<string, unknown>, fallbackSlug?
    OPTIMIZED: chỉ gọi 2 mirrors nhanh nhất
    ════════════════════════════════════════════ */
 async function fetchMovieDetailFromOPhim(slug: string, allowSearchFallback = true): Promise<MovieDetailResponse | null> {
-  const urls = [
-    `https://ophim1.com/v1/api/phim/${encodeURIComponent(slug)}`,
-  ];
+  void slug;
+  void allowSearchFallback;
+  return null;
+  /* Legacy parser retained below for migration archaeology only. */
+  if (!ALLOW_BROWSER_PROVIDER_FALLBACK) return null;
+  const urls: string[] = [];
 
   // ── Fetch ALL mirrors IN PARALLEL — winner is first valid response ──
   const controllers = urls.map(() => new AbortController());
@@ -1555,9 +1722,7 @@ async function fetchMovieDetailFromOPhim(slug: string, allowSearchFallback = tru
    OPHIM SEARCH FALLBACK — find correct slug when detail 404
    ════════════════════════════════════════════ */
 async function searchOphimForSlug(keyword: string): Promise<string | null> {
-  const urls = [
-    `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=1`,
-  ];
+  const urls: string[] = [];
   const promises = urls.map(async (url) => {
     try {
       const data = await fetchDetailRaw(url, 3500, 0);
@@ -1574,9 +1739,7 @@ async function searchOphimForSlug(keyword: string): Promise<string | null> {
 }
 
 async function searchOphimCandidates(keyword: string, limit = 8): Promise<Record<string, unknown>[]> {
-  const urls = [
-    `https://ophim1.com/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=${limit}`,
-  ];
+  const urls: string[] = [];
   const promises = urls.map(async (url) => {
     try {
       const data = await fetchDetailRaw(url, 3500, 0);
@@ -1946,7 +2109,6 @@ export async function searchMoviesInSupabase(
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 2500);
   const hasStrongSearchHit = (movies: MovieItem[]): boolean => {
     const normalizedQuery = normalizeSearchText(kw);
-    const compactQuery = normalizedQuery.replace(/\s+/g, '');
     const tokens = normalizedQuery
       .split(/\s+/)
       .map((token) => token.trim())
@@ -1964,21 +2126,19 @@ export async function searchMoviesInSupabase(
         movie.normalized_name,
         movie.slug?.replace(/-/g, ' '),
       ].filter(Boolean).join(' '));
-      const compactHaystack = haystack.replace(/\s+/g, '');
-      if (haystack.includes(normalizedQuery)) return true;
-      if (compactQuery.length >= 6 && compactHaystack.includes(compactQuery)) return true;
-      return tokens.length >= 3 && tokens.every((token) => haystack.includes(token));
+      const words = new Set(haystack.split(/\s+/).filter(Boolean));
+      if (` ${haystack} `.includes(` ${normalizedQuery} `)) return true;
+      return tokens.length >= 3 && tokens.every((token) => words.has(token));
     });
   };
   try {
-    // Browser traffic uses the same-origin Cloudflare search endpoint first.
-    // Popular queries are answered at the POP and cold queries still use the
-    // same canonical RPC. Node/maintenance scripts retain the direct path.
+    // Production search is served by the same-origin Cloudflare gateway. It
+    // coalesces identical terms at the POP and opens a short circuit when the
+    // database is unhealthy, without a browser CORS preflight.
     if (typeof window !== 'undefined') {
       const edgeUrl = new URL('/api/search', window.location.origin);
       edgeUrl.searchParams.set('q', kw);
       edgeUrl.searchParams.set('limit', String(limit));
-      edgeUrl.searchParams.set('v', 'canonical-v2');
       const edgeResponse = await fetch(edgeUrl.toString(), {
         signal: controller.signal,
         cache: 'force-cache',
@@ -1987,16 +2147,20 @@ export async function searchMoviesInSupabase(
       if (edgeResponse.ok) {
         const edgePayload = await edgeResponse.json() as { items?: Record<string, unknown>[] };
         const edgeMovies = sortMoviesForSearch(
-          mergeMoviesUnique(((edgePayload.items ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem)),
+          mergeMoviesUnique(((edgePayload.items ?? []) as Record<string, unknown>[])
+            .filter((item) => !isRetiredOphimCatalogItem(item))
+            .map(toSupabaseMovieItem)),
           kw,
           'relevance',
         ).slice(0, limit);
-        if (edgeMovies.length > 0 && hasStrongSearchHit(edgeMovies)) return edgeMovies;
+        // The Edge response is the canonical result, including an empty one.
+        // Retrying the same RPC directly from every browser doubles cold-query
+        // work and bypasses request coalescing.
+        return hasStrongSearchHit(edgeMovies) ? edgeMovies : [];
       }
-      // The edge endpoint and the direct RPC use the same database. Retrying
-      // the RPC after a 5xx only duplicates a known failing request and delays
-      // the independent source fallback on the search page.
-      if (edgeResponse.status >= 500) return [];
+      // The gateway already owns the independent provider/static fallback.
+      // Never bypass its open circuit with a direct browser PostgREST retry.
+      return [];
     }
 
     if (ENABLE_SUPABASE_SEARCH_RPC && !supabaseSearchRpcUnavailable) {
@@ -2009,7 +2173,9 @@ export async function searchMoviesInSupabase(
 
       if (!rpcError && Array.isArray(rpcData)) {
         const rpcMovies = sortMoviesForSearch(
-          mergeMoviesUnique((rpcData as Record<string, unknown>[]).map(toSupabaseMovieItem)),
+          mergeMoviesUnique((rpcData as Record<string, unknown>[])
+            .filter((item) => !isRetiredOphimCatalogItem(item))
+            .map(toSupabaseMovieItem)),
           kw,
           'relevance',
         ).slice(0, limit);
@@ -2032,6 +2198,11 @@ export async function searchMoviesInSupabase(
       return [];
     }
   }
+
+  // Production browsers always use the canonical, edge-cached RPC above.
+  // Falling through to a wide ILIKE/OR scan multiplies database work exactly
+  // when that canonical endpoint is already under pressure.
+  if (typeof window !== 'undefined') return [];
 
   const safeKw = escapePostgrestIlike(kw);
   const normalizedKw = normalizeSearchText(kw);
@@ -2111,7 +2282,9 @@ export async function searchMoviesInSupabase(
       }
     }
 
-    const baseItems = Array.from(recordsById.values()).map(toSupabaseMovieItem);
+    const baseItems = Array.from(recordsById.values())
+      .filter((item) => !isRetiredOphimCatalogItem(item))
+      .map(toSupabaseMovieItem);
     return sortMoviesForSearch(mergeMoviesUnique(baseItems), kw, 'relevance').slice(0, limit);
   } catch (e) {
     if ((e as Error)?.name !== 'AbortError') {
@@ -2122,6 +2295,135 @@ export async function searchMoviesInSupabase(
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', abortFromParent);
   }
+}
+
+type StaticMovieFallbackPayload = {
+  sections?: Record<string, unknown>;
+};
+
+let staticSearchFallbackCache: MovieItem[] | null = null;
+let staticSearchFallbackInflight: Promise<MovieItem[]> | null = null;
+
+function collectStaticFallbackRows(payload: StaticMovieFallbackPayload | null | undefined): Record<string, unknown>[] {
+  if (!payload?.sections || typeof payload.sections !== 'object') return [];
+  const rows: Record<string, unknown>[] = [];
+  for (const value of Object.values(payload.sections)) {
+    if (Array.isArray(value)) {
+      rows.push(...value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')));
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      const items = (value as { items?: unknown }).items;
+      if (Array.isArray(items)) {
+        rows.push(...items.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')));
+      }
+    }
+  }
+  return rows;
+}
+
+function toStaticFallbackMovie(row: Record<string, unknown>): MovieItem | null {
+  const slug = String(row.slug || '').trim();
+  const name = String(row.name || row.title_vi || row.origin_name || '').trim();
+  if (!slug || !name) return null;
+  return normalizeMovieEpisodeCounts({
+    ...(row as unknown as MovieItem),
+    _id: String(row._id || row.id || slug),
+    slug,
+    name,
+    origin_name: String(row.origin_name || ''),
+    thumb_url: String(row.thumb_url || row.poster_url || ''),
+    poster_url: String(row.poster_url || ''),
+    type: String(row.type || 'phim-le'),
+    quality: String(row.quality || 'HD'),
+    lang: String(row.lang || ''),
+    year: Number(row.year || 0),
+    episode_current: String(row.episode_current || ''),
+    episode_total: String(row.episode_total || ''),
+    current_episode: Number(row.current_episode || 0) || undefined,
+    total_episodes: Number(row.total_episodes || 0) || undefined,
+    category: normalizeTaxonomy<MovieCategory>(row.category),
+    country: normalizeTaxonomy<MovieCountry>(row.country),
+    sub_docquyen: false,
+    chieurap: false,
+    time: String(row.time || ''),
+    modified: row.modified && typeof row.modified === 'object'
+      ? row.modified as MovieItem['modified']
+      : { time: String(row.updated_at || row.created_at || new Date(0).toISOString()) },
+    source_site: String(row.source_site || 'static-fallback'),
+    source_name: String(row.source_name || 'KhoPhim fallback'),
+  });
+}
+
+async function loadStaticSearchFallback(): Promise<MovieItem[]> {
+  if (staticSearchFallbackCache) return staticSearchFallbackCache;
+  if (staticSearchFallbackInflight) return staticSearchFallbackInflight;
+
+  staticSearchFallbackInflight = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    try {
+      const results = await Promise.allSettled([
+        fetch('/home-fallback.json', { signal: controller.signal, cache: 'force-cache' }),
+        fetch(QUEER_FALLBACK_URL, { signal: controller.signal, cache: 'force-cache' }),
+      ]);
+      const payloads = await Promise.all(results.map(async (result) => {
+        if (result.status !== 'fulfilled' || !result.value.ok) return null;
+        return result.value.json().catch(() => null) as Promise<StaticMovieFallbackPayload | null>;
+      }));
+      staticSearchFallbackCache = mergeMoviesUnique(
+        payloads
+          .flatMap((payload) => collectStaticFallbackRows(payload))
+          .map(toStaticFallbackMovie)
+          .filter((movie): movie is MovieItem => Boolean(movie)),
+      );
+      return staticSearchFallbackCache;
+    } catch {
+      return [];
+    } finally {
+      clearTimeout(timer);
+      staticSearchFallbackInflight = null;
+    }
+  })();
+
+  return staticSearchFallbackInflight;
+}
+
+function matchesStaticSearchFallback(movie: MovieItem, keyword: string): boolean {
+  const query = normalizeSearchText(keyword).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!query) return false;
+  const haystack = normalizeSearchText([
+    movie.name,
+    movie.origin_name,
+    movie.title_vi,
+    movie.title_en,
+    movie.title_zh,
+    movie.title_original,
+    movie.slug?.replace(/-/g, ' '),
+    movie.category?.map((item) => `${item.name} ${item.slug}`).join(' '),
+    movie.country?.map((item) => `${item.name} ${item.slug}`).join(' '),
+  ].filter(Boolean).join(' ')).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (haystack.includes(query)) return true;
+  const compactQuery = query.replace(/\s+/g, '');
+  if (compactQuery.length >= 6 && haystack.replace(/\s+/g, '').includes(compactQuery)) return true;
+  const tokens = query.split(' ').filter((token) => token.length >= 2 || /^\d+$/.test(token));
+  return tokens.length >= 2 && tokens.every((token) => haystack.includes(token));
+}
+
+/**
+ * Build-generated catalog snapshot used only when the live database/search RPC
+ * is unavailable. It keeps common and queer-source searches useful without
+ * placing a second database request on the failure path.
+ */
+export async function searchMoviesInStaticFallback(keyword: string, limit = 24): Promise<MovieItem[]> {
+  const kw = keyword.trim();
+  if (kw.length < 2) return [];
+  const movies = await loadStaticSearchFallback();
+  return sortMoviesForSearch(
+    movies.filter((movie) => matchesStaticSearchFallback(movie, kw)),
+    kw,
+    'relevance',
+  ).slice(0, Math.max(1, limit));
 }
 
 // Bump when the canonical catalog changes materially so open tabs do not keep
@@ -2216,7 +2518,7 @@ const QUEER_UNIVERSE_TERMS = [
 ];
 const QUEER_SOURCE_TERMS = ['blvietsub', 'bl vietsub', 'bl-vietsub', 'glvietsub', 'gl vietsub', 'vu tru dam my'];
 const BLVIETSUB_SLUG_PREFIX = 'blvietsub-';
-const QUEER_FALLBACK_URL = '/queer-fallback.json?v=202607041605';
+const QUEER_FALLBACK_URL = '/queer-fallback.json?v=202608231630';
 const SUPABASE_QUEER_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
 const BLVIETSUB_SEARCH_TERMS = [
   'bl',
@@ -2324,10 +2626,8 @@ function getEpisodeNumberFromText(value?: string): number {
 }
 
 function getEpisodeNumberFromData(ep: EpisodeData): number {
-  if (isSpecialEpisode(ep)) return 0;
-  const explicit = Number(ep.episode_number ?? 0);
-  if (Number.isFinite(explicit) && explicit > 0) return explicit;
-  return getEpisodeNumberFromText(ep.slug) || getEpisodeNumberFromText(ep.name);
+  if (isSpecialEpisode(ep) || isFractionalProviderEpisode(ep)) return 0;
+  return getProviderEpisodeNumber(ep);
 }
 
 function getMaxEpisodeNumberFromServers(servers: EpisodeServer[] = []): number {
@@ -2965,6 +3265,9 @@ async function fetchMovieDetailFromBlvietsubForMovie(movie?: Partial<MovieDetail
 }
 
 async function fetchMovieDetailFromOPhimForMovie(movie?: Partial<MovieDetail> | Partial<MovieItem> | null): Promise<MovieDetailResponse | null> {
+  void movie;
+  return null;
+  /* Legacy identity matcher retained below for migration archaeology only. */
   if (!isQueerMovieDetail(movie)) return null;
 
   const movieRecord = movie as Record<string, unknown>;
@@ -3178,6 +3481,45 @@ export async function searchQueerUniverseMovies(
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 2500);
 
   try {
+    if (typeof window !== 'undefined' && !import.meta.env.DEV) {
+      const catalogUrl = new URL(`${SUPABASE_URL}/functions/v1/home-proxy`);
+      catalogUrl.searchParams.set('sections', 'queer');
+      const searchPromise = searchMoviesInSupabase(kw, {
+        limit: Math.max(limit, 24),
+        timeoutMs: options.timeoutMs ?? 2500,
+        minLength,
+        signal: controller.signal,
+      });
+      const [searchResponse, catalogResponse] = await Promise.allSettled([
+        searchPromise,
+        fetch(catalogUrl.toString(), {
+          signal: controller.signal,
+          cache: 'default',
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+        }),
+      ]);
+      const candidates: MovieItem[] = [];
+      if (searchResponse.status === 'fulfilled') {
+        candidates.push(...searchResponse.value);
+      }
+      if (catalogResponse.status === 'fulfilled' && catalogResponse.value.ok) {
+        const payload = await catalogResponse.value.json() as { sections?: { queer?: Record<string, unknown>[] } };
+        candidates.push(...((payload.sections?.queer ?? []) as Record<string, unknown>[])
+          .filter((item) => !isRetiredOphimCatalogItem(item))
+          .map(toSupabaseMovieItem));
+      }
+      const queerCandidates = mergeMoviesUnique(candidates).filter((movie) => isQueerMovieDetail(movie));
+      const matching = queerCandidates.filter((movie) => matchesBlvietsubSearch(movie, kw));
+      return sortMoviesForSearch(
+        matching.length > 0 ? matching : (isQueerSearchIntent(kw) ? queerCandidates : []),
+        kw,
+        'relevance',
+      ).slice(0, limit);
+    }
+
     const safeKw = escapePostgrestIlike(kw);
     const normalizedKw = normalizeSearchText(kw);
     const safeNormalizedKw = escapePostgrestIlike(normalizedKw);
@@ -3342,7 +3684,33 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
   byYear: Record<string, MovieItem[]>;
 }> {
   const limit = options.limit ?? 18;
-  const poolLimit = Math.max(limit, 1000);
+  const buildSections = (items: MovieItem[]) => {
+    const sorted = uniqueMoviesBySlug(items).filter((movie) => {
+      const artwork = `${movie.poster_url || ''} ${movie.thumb_url || ''}`.trim();
+      return Boolean(artwork) && !/vietnam-flag-watercolor-760\.jpg/i.test(artwork);
+    }).sort((a, b) => {
+      const ta = getMovieUpdateTime(a);
+      const tb = getMovieUpdateTime(b);
+      if (tb !== ta) return tb - ta;
+      return (b.year || 0) - (a.year || 0);
+    });
+    const byYear: Record<string, MovieItem[]> = {};
+    for (const movie of sorted) {
+      if (!movie.year) continue;
+      const key = String(movie.year);
+      if (!byYear[key]) byYear[key] = [];
+      if (byYear[key].length < limit) byYear[key].push(movie);
+    }
+    return {
+      featured: sorted.slice(0, limit),
+      newUpdates: sorted.slice(0, limit),
+      byYear,
+    };
+  };
+  // The regular mobile home only renders nine queer titles. Fetching 1,000
+  // complete movie rows transferred ~190 kB and delayed layout by seconds.
+  // Keep enough candidates for per-year grouping without scanning the library.
+  const poolLimit = Math.min(320, Math.max(144, limit * 8));
   const controller = new AbortController();
   const abortFromParent = () => controller.abort();
   if (options.signal?.aborted) {
@@ -3353,6 +3721,14 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 4500);
 
   try {
+    if (typeof window !== 'undefined' && !import.meta.env.DEV) {
+      // Production Pages currently runs as a static SPA. `/api/home` is
+      // therefore rewritten to index.html and cannot be parsed as JSON. Reuse
+      // the canonical Singapore home-proxy client used by every other rail.
+      const payload = await fetchHomePageData(['queer'], { signal: controller.signal });
+      return buildSections((payload.sections.queer ?? []) as MovieItem[]);
+    }
+
     const { data: markedRows } = await supabase
       .from('movies')
       .select(SUPABASE_QUEER_LIST_SELECT)
@@ -3457,7 +3833,8 @@ export function epSortKey(ep: EpisodeData): number {
 
 export function isSpecialEpisode(ep?: Pick<EpisodeData, 'name' | 'slug'> | null): boolean {
   const text = `${ep?.slug || ''} ${ep?.name || ''}`.toLowerCase();
-  return text.includes('tap-dac-biet') || text.includes('tập đặc biệt') || text.includes('special episode');
+  return text.includes('tap-dac-biet') || text.includes('tập đặc biệt') || text.includes('special episode')
+    || (/(?:^|\D)\d{1,3}\.\d{1,2}(?:\D|$)/.test(String(ep?.name || '')) && /\bpart\s*\d+\b/i.test(String(ep?.name || '')));
 }
 
 const detailInflight = new Map<string, Promise<MovieDetailResponse | null>>();
@@ -3517,13 +3894,13 @@ function withNullTimeout<T>(
    ════════════════════════════════════════════ */
 async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailResponse | null> {
   const sources = [
-    { url: `https://phimapi.com/phim/${encodeURIComponent(slug)}`, name: 'phimapi' },
-    { url: `https://phimapi.net/phim/${encodeURIComponent(slug)}`, name: 'phimapi-net' },
+    { url: `https://phimapi.com/phim/${encodeURIComponent(slug)}` },
+    { url: `https://phimapi.net/phim/${encodeURIComponent(slug)}` },
   ];
 
   const controllers: AbortController[] = [];
 
-  const promises = sources.map(({ url, name }) => {
+  const promises = sources.map(({ url }) => {
     const ctrl = new AbortController();
     controllers.push(ctrl);
     const t = setTimeout(() => { try { ctrl.abort(); } catch { /* noop */ } }, 4500);
@@ -3541,11 +3918,9 @@ async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailRe
           // Chỉ log warn nếu slug mismatch để debug, không reject
           const extSlug = String(result.movie.slug || '').trim().toLowerCase().normalize('NFC');
           const expectedSlug = slug.trim().toLowerCase().normalize('NFC');
-          if (import.meta.env.DEV && extSlug && extSlug !== expectedSlug) {
-            console.warn(
-              `[fetchMovieDetailFromExternal] Slug mismatch (accepted): expected "${expectedSlug}" got "${extSlug}" from ${name}`
-            );
-          }
+          // A provider returning HTTP 200 for a different slug is not a valid
+          // fallback. Reject it rather than attaching another movie's stream.
+          if (extSlug && extSlug !== expectedSlug) return null;
           return result;
         }
         throw new Error('Invalid response format');
@@ -3568,7 +3943,7 @@ async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailRe
 
 export async function fetchMovieDetail(slug: string, forceRefresh = false, source?: string): Promise<MovieDetailResponse | null> {
   const detailSourceKey = source || 'default';
-  const cacheKey = `detail_v7_${detailSourceKey}_${slug}`;
+  const cacheKey = `detail_v10_no_ophim_${detailSourceKey}_${slug}`;
   const inflightKey = `${detailSourceKey}:${slug}`;
   // Xóa cache key cũ nếu còn sót
   apiCache.delete(`detail_${slug}`);
@@ -3600,11 +3975,6 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
   const promise = (async (): Promise<MovieDetailResponse | null> => {
     let blvietsubPromise: Promise<MovieDetailResponse | null> | undefined;
 
-    // ── PRIORITY: If source=ophim or slug looks like CJK/non-ASCII, try OPhim FIRST ──
-    const isOphimSource = source === 'ophim';
-    const looksLikeCjk = Array.from(slug).some((char) => char.charCodeAt(0) > 127);
-    const preferOphim = isOphimSource || looksLikeCjk;
-
     let ophim: MovieDetailResponse | null = null;
     let sb: MovieDetailResponse | null = null;
     let proxy: MovieDetailResponse | null = null;
@@ -3612,49 +3982,38 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
     let queerOphim: MovieDetailResponse | null = null;
     let externalPromise: Promise<MovieDetailResponse | null> | undefined;
 
-    if (preferOphim) {
-      const ophimPromise = fetchMovieDetailFromOPhim(slug, false);
-      const sbPromise = fetchMovieDetailFromSupabase(slug);
-      const proxyPromise = fetchMovieDetailFromProxy(slug, forceRefresh);
-      externalPromise = fetchMovieDetailFromExternal(slug);
-      blvietsubPromise = fetchMovieDetailFromBlvietsub(slug);
-      const quickPlayable = await raceFirstValidWithTimeout(
-        [
-          proxyPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
-          sbPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
-          ...(looksLikeCjk ? [ophimPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null)] : []),
-        ],
-        3500
-      );
-      if (quickPlayable) {
-        if (isQueerMovieDetail(quickPlayable.movie)) {
-          const freshQueerDetail = await getFreshQueerDetailWithTimeout(quickPlayable, blvietsubPromise, ophimPromise, 2200);
-          if (freshQueerDetail) {
-            if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using fresh merged queer detail for "${slug}" (source=ophim/CJK)`);
-            setCached(cacheKey, freshQueerDetail);
-            return freshQueerDetail;
-          }
-          refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, blvietsubPromise, ophimPromise);
-        }
-        if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using fresh stored/proxy source for "${slug}" (source=ophim/CJK)`);
-        const mergedQuick = await mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900, slug);
-        setCached(cacheKey, mergedQuick);
-        return mergedQuick;
-      }
-      if (!ophim && !sb && !proxy && !blvietsub) {
-        [ophim, sb, proxy, blvietsub] = await Promise.all([ophimPromise, sbPromise, proxyPromise, blvietsubPromise!]);
-      }
-    } else {
-      // Default path: let the edge proxy serve DB/cache first. Direct Supabase is a fallback
-      // so a large click burst does not double the database queries for every movie open.
-      const proxyPromise = fetchMovieDetailFromProxy(slug, forceRefresh);
+    {
+      // Provider-neutral path: the edge proxy and database return every stored
+      // server, then the player selects by measured score. A source query is
+      // an identity hint only and never changes source selection.
+      // Production has one canonical read path. Calling PostgREST directly in
+      // parallel consumed an extra database connection for every detail open
+      // and the request was routinely aborted under peak pool pressure. Keep
+      // that legacy diagnostic fallback only in local development.
+      const proxyPromise = fetchMovieDetailFromProxy(slug, forceRefresh, source);
+      const supabaseFallbackPromise = import.meta.env.DEV
+        ? fetchMovieDetailFromSupabase(slug, 4200).catch(() => null)
+        : Promise.resolve<MovieDetailResponse | null>(null);
+      // Start the exact-slug provider fallback immediately. The canonical edge
+      // path still gets a short head start, but a saturated catalogue database
+      // must not hold an otherwise valid detail page for 8.5–14 seconds.
+      const immediateExternalPromise = fetchMovieDetailFromExternal(slug).catch(() => null);
+      externalPromise = immediateExternalPromise;
 
-      const quickPlayable = await raceFirstValidWithTimeout(
-        [
-          proxyPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)).catch(() => null),
-        ],
-        1800
-      );
+      // The proxy is not a preferred provider: it is the canonical, scored
+      // union of every provider. Give that neutral result a sub-second head
+      // start, then race every already-running exact-slug source together.
+      const proxyPlayablePromise = proxyPromise
+        .then((data) => (detailHasPlayableEpisodes(data) ? data : null))
+        .catch(() => null);
+      const playablePromises = [
+        proxyPlayablePromise,
+        supabaseFallbackPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)),
+        immediateExternalPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)),
+      ];
+      const canonicalQuickPlayable = await withNullTimeout(proxyPlayablePromise, 900);
+      const quickPlayable = canonicalQuickPlayable
+        ?? await raceFirstValidWithTimeout(playablePromises, 4_100);
       if (quickPlayable) {
         if (isQueerMovieDetail(quickPlayable.movie)) {
           if (isBlvietsubMovie(quickPlayable.movie)) {
@@ -3675,7 +4034,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using first quick playable source for "${slug}"`);
         // The edge bootstrap already contains metadata and playable episodes.
         // External enrichment must never delay first render/player startup.
-        externalPromise = fetchMovieDetailFromExternal(slug);
+        externalPromise ??= fetchMovieDetailFromExternal(slug);
         setCached(cacheKey, quickPlayable);
         void mergeExternalDetailIfFast(quickPlayable, externalPromise, forceRefresh ? 3500 : 900, slug)
           .then((merged) => setCached(cacheKey, merged))
@@ -3686,7 +4045,6 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       // The proxy already missed its fast-path budget. From here all fallbacks
       // must run in parallel; awaiting proxy -> Supabase -> provider serially
       // produced 15–20 second blank detail pages during Supabase incidents.
-      const supabaseFallbackPromise = fetchMovieDetailFromSupabase(slug, 4200).catch(() => null);
       const ophimFallbackPromise = slug.startsWith(BLVIETSUB_SLUG_PREFIX)
         ? Promise.resolve(null)
         : withNullTimeout(fetchMovieDetailFromOPhim(slug, false), 4500);
@@ -3747,19 +4105,28 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       { src: 'supabase', data: sb },
       { src: 'blvietsub', data: blvietsub },
       { src: 'ophim', data: ophim },
-  
     ];
 
-    // Only CJK/non-ASCII slugs need direct OPhim priority. A source=ophim query
-    // can point at stale upstream data, so stored/proxy data must win when newer.
-    if (looksLikeCjk && ophim && detailHasPlayableEpisodes(ophim)) {
-      if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using OPhim as priority source for "${slug}" (source=ophim/CJK)`);
-      void fetchMovieDetailFromProxy(slug, true).catch(() => null);
-      setCached(cacheKey, ophim);
-      return ophim;
-    }
+    const detailQualityScore = (detail: MovieDetailResponse | null): number => {
+      if (!detail) return -1;
+      let playable = 0;
+      let direct = 0;
+      const episodeKeys = new Set<string>();
+      for (const server of detail.episodes ?? []) {
+        for (const episode of server.server_data ?? []) {
+          if (!hasPlayableUrl(episode)) continue;
+          playable += 1;
+          episodeKeys.add(String(episode.slug || episode.name || playable));
+          if (episode.link_m3u8 || isDirectFileUrl(String(episode.link_embed || ''))) direct += 1;
+        }
+      }
+      const metadata = [detail.movie?.name, detail.movie?.origin_name, detail.movie?.poster_url, detail.movie?.thumb_url]
+        .filter(Boolean).length;
+      return episodeKeys.size * 100 + playable * 10 + direct * 20 + metadata;
+    };
+    candidates.sort((a, b) => detailQualityScore(b.data) - detailQualityScore(a.data));
 
-    // Find first candidate with playable episodes
+    // Find the highest-scoring candidate with playable episodes.
     for (const cand of candidates) {
       if (cand.data && detailHasPlayableEpisodes(cand.data)) {
         if (import.meta.env.DEV) console.log(`[fetchMovieDetail] Using ${cand.src} for "${slug}" (has episodes)`);
@@ -3930,19 +4297,11 @@ interface ServerQualityInfo {
   hasM3u8: boolean;
   hasEmbed: boolean;
 }
-export const STREAM_SERVER_PRIORITY = ['KHOPHIM', 'SUPABASE', 'OPHIM', 'KKPHIM', 'VSMOV', 'NGUONC', 'DM', 'SS', 'OK', 'ABYSS', 'VK'] as const;
+export const STREAM_SERVER_CODES = ['KHOPHIM', 'SUPABASE', 'KKPHIM', 'VSMOV', 'NGUONC', 'OPHIM', 'DM', 'SS', 'OK', 'ABYSS', 'VK'] as const;
 const SERVER_RECENT_BAD_HOST_PENALTY = 1800;
 const SERVER_RECENT_BAD_HOST_TTL_MS = 30 * 60 * 1000;
-const OPHIM_ACTIVE_OUTAGE_MULTIPLIER = 2.4;
-const KKPHIM_ACTIVE_OUTAGE_MULTIPLIER = 1.35;
-const OPHIM_PREFERRED_SOURCE_BONUS = 380;
 const OPSTREAM_IFRAME_BLOCK_PENALTY = 1050;
 const STREAMC_IFRAME_ONLY_PENALTY = 1800;
-const KKPHIM_PREFERRED_SOURCE_BONUS = 360;
-const RESILIENT_DIRECT_SOURCE_BONUS = 620;
-const TRUSTED_PLATFORM_SOURCE_BONUS = 460;
-const THIRD_PARTY_EMBED_SOURCE_BONUS = 80;
-const SSPLAY_ABYSS_CLUSTER_PENALTY = 680;
 const FRESH_STREAM_HEALTH_TTL_MS = 6 * 60 * 60 * 1000;
 
 export type EpisodeSourceKind =
@@ -3968,7 +4327,7 @@ function normalizeServerPriorityText(value: string): string {
     .trim();
 }
 
-function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): number {
+function getServerSourceCodeIndex(server: EpisodeServer, episode?: EpisodeData): number {
   const text = normalizeServerPriorityText([
     server.server_name,
     episode?.source_provider,
@@ -4010,16 +4369,16 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('SUPABASE')
   );
   if (hasOphimSource) {
-    return STREAM_SERVER_PRIORITY.indexOf('OPHIM');
+    return STREAM_SERVER_CODES.indexOf('OPHIM');
   }
   if (hasKkPhimSource) {
-    return STREAM_SERVER_PRIORITY.indexOf('KKPHIM');
+    return STREAM_SERVER_CODES.indexOf('KKPHIM');
   }
   if (hasVsmovSource) {
-    return STREAM_SERVER_PRIORITY.indexOf('VSMOV');
+    return STREAM_SERVER_CODES.indexOf('VSMOV');
   }
   if (hasNguoncSource) {
-    return STREAM_SERVER_PRIORITY.indexOf('NGUONC');
+    return STREAM_SERVER_CODES.indexOf('NGUONC');
   }
   if (
     tokens.has('KHOPHIM') ||
@@ -4027,7 +4386,7 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('KHOPHIM') ||
     compact.includes('VIDEOKHOPHIMORG')
   ) {
-    return STREAM_SERVER_PRIORITY.indexOf('KHOPHIM');
+    return STREAM_SERVER_CODES.indexOf('KHOPHIM');
   }
   if (
     tokens.has('SUPABASE') ||
@@ -4038,10 +4397,10 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('ADMIN') ||
     compact.includes('MANUAL')
   ) {
-    return STREAM_SERVER_PRIORITY.indexOf('SUPABASE');
+    return STREAM_SERVER_CODES.indexOf('SUPABASE');
   }
   if (hasDailymotionSource && !isOwnHlsSource) {
-    return STREAM_SERVER_PRIORITY.indexOf('DM');
+    return STREAM_SERVER_CODES.indexOf('DM');
   }
   if (
     tokens.has('DM') ||
@@ -4051,14 +4410,14 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('DAILY') ||
     compact.includes('DAILYLY')
   ) {
-    return STREAM_SERVER_PRIORITY.indexOf('DM');
+    return STREAM_SERVER_CODES.indexOf('DM');
   }
   if (
     tokens.has('SS') ||
     tokens.has('SSPLAY') ||
     compact.includes('SSPLAY')
   ) {
-    return STREAM_SERVER_PRIORITY.indexOf('SS');
+    return STREAM_SERVER_CODES.indexOf('SS');
   }
   if (
     tokens.has('ABYSS') ||
@@ -4066,10 +4425,10 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     compact.includes('ABYSSPLAYER') ||
     compact.includes('SHORTICU')
   ) {
-    return STREAM_SERVER_PRIORITY.indexOf('ABYSS');
+    return STREAM_SERVER_CODES.indexOf('ABYSS');
   }
 
-  const rank = STREAM_SERVER_PRIORITY.findIndex((code) =>
+  const rank = STREAM_SERVER_CODES.findIndex((code) =>
     code !== 'SUPABASE' && code !== 'KKPHIM' && (
     tokens.has(code) ||
     compact.includes(`SERVER${code}`) ||
@@ -4078,7 +4437,7 @@ function getServerPriorityRank(server: EpisodeServer, episode?: EpisodeData): nu
     )
   );
 
-  return rank >= 0 ? rank : STREAM_SERVER_PRIORITY.length;
+  return rank >= 0 ? rank : STREAM_SERVER_CODES.length;
 }
 
 function refreshQueerDetailCacheInBackground(
@@ -4222,26 +4581,17 @@ export function getEpisodeSourceKind(ep?: EpisodeData | null): EpisodeSourceKind
 function getSourceResilienceScore(ep: EpisodeData): number {
   switch (getEpisodeSourceKind(ep)) {
     case 'own_direct':
-      return RESILIENT_DIRECT_SOURCE_BONUS + 170;
     case 'direct_hls':
-      return RESILIENT_DIRECT_SOURCE_BONUS;
+      return 120;
     case 'direct_file':
-      return RESILIENT_DIRECT_SOURCE_BONUS - 60;
+      return 110;
     case 'ophim':
-      return TRUSTED_PLATFORM_SOURCE_BONUS + 80;
     case 'kkphim':
-      return TRUSTED_PLATFORM_SOURCE_BONUS + 60;
     case 'dailymotion':
-      // Dailymotion can return HTTP 200 while refusing playback inside its
-      // iframe for an individual video/domain. Treat it as a fallback, not a
-      // preferred source, because parent-side health probes cannot see that UI.
-      return TRUSTED_PLATFORM_SOURCE_BONUS - 360;
     case 'stable_embed':
-      return TRUSTED_PLATFORM_SOURCE_BONUS + 60;
     case 'third_party_embed':
-      return THIRD_PARTY_EMBED_SOURCE_BONUS;
     case 'ssplay_abyss':
-      return -SSPLAY_ABYSS_CLUSTER_PENALTY;
+      return 30;
     case 'known_bad':
       return -1200;
     case 'blvietsub_page':
@@ -4263,17 +4613,7 @@ function getRecentBadHostPenalty(ep: EpisodeData): number {
       .filter(Boolean)));
     if (!hosts.length) return 0;
     if (hosts.some((host) => isRecentlyBadSourceCluster(host))) {
-      const sourceKind = getEpisodeSourceKind(ep);
-      // OPhim remains available as a last resort, but an independently
-      // confirmed multi-shard outage must outweigh its normal primary-source
-      // bonus. KKPhim keeps a smaller outage penalty because current browser
-      // telemetry still shows materially more successful sessions there.
-      const multiplier = sourceKind === 'ophim'
-        ? OPHIM_ACTIVE_OUTAGE_MULTIPLIER
-        : sourceKind === 'kkphim'
-          ? KKPHIM_ACTIVE_OUTAGE_MULTIPLIER
-          : 1;
-      return Math.round(SERVER_RECENT_BAD_HOST_PENALTY * multiplier);
+      return SERVER_RECENT_BAD_HOST_PENALTY;
     }
     const badPaths = hosts.filter((host) => isRecentlyBadExactSourceHost(host));
     if (!badPaths.length) return 0;
@@ -4281,30 +4621,16 @@ function getRecentBadHostPenalty(ep: EpisodeData): number {
     // path is a small startup cost; only penalize the entire episode heavily
     // after every available playback path has recent viewer failures.
     if (badPaths.length < hosts.length) return 220;
-    const sourceKind = getEpisodeSourceKind(ep);
-    const multiplier = sourceKind === 'ophim'
-      ? OPHIM_ACTIVE_OUTAGE_MULTIPLIER
-      : sourceKind === 'kkphim'
-        ? KKPHIM_ACTIVE_OUTAGE_MULTIPLIER
-        : 1;
-    return Math.round(SERVER_RECENT_BAD_HOST_PENALTY * multiplier);
+    return SERVER_RECENT_BAD_HOST_PENALTY;
   } catch {
     return 0;
   }
 }
 
-function getPriorityRankScore(rank: number): number {
-  const code = STREAM_SERVER_PRIORITY[rank];
-  if (code === 'OPHIM' || code === 'KKPHIM' || code === 'VSMOV' || code === 'NGUONC') {
-    return 4 * 95;
-  }
-  return rank < STREAM_SERVER_PRIORITY.length
-    ? (STREAM_SERVER_PRIORITY.length - rank) * 95
-    : 0;
-}
-
 function getBestPlayableEpisodeScore(server: EpisodeServer): number {
-  const playable = (server.server_data ?? []).filter((ep) => hasPlayableUrl(ep) && !ep.is_scheduled);
+  const playable = (server.server_data ?? []).filter((ep) =>
+    hasPlayableUrl(ep) && !ep.is_scheduled && !isRetiredOphimEpisode(ep, server.server_name)
+  );
   if (!playable.length) return -10000;
 
   return playable.reduce((best, ep) => {
@@ -4321,7 +4647,6 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   const lower = url.toLowerCase();
   let score = 0;
   const hasBrowserManagedStreamcEmbed = /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
-
   if (!url) return -10000;
   if (!m3u8 && embed && isBlvietsubWatchPageUrl(embed)) return -10000;
   const storedPlaybackScore = Number(ep.source_playback_score);
@@ -4330,6 +4655,12 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
     // primary ranking signal; live cross-viewer outage evidence remains a
     // final override so a newly failing cluster can be bypassed immediately.
     const transportBonus = m3u8 ? 40 : isDirectFileUrl(embed) ? 30 : 10;
+    // A high score produced by a fast HTML response is not playback proof.
+    // Opaque iframes cannot report media progress to the parent, so cap their
+    // stored score below any segment-verified direct source.
+    const effectiveStoredPlaybackScore = !m3u8 && embed && !isDirectFileUrl(embed)
+      ? Math.min(storedPlaybackScore, 420)
+      : storedPlaybackScore;
     // A server-side probe can score a StreamC HTML response as fast/healthy
     // even when its X-Frame-Options blocks playback on khophim.org. Keep the
     // source selectable as a last resort, but never let that probe-only score
@@ -4337,13 +4668,13 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
     const browserEmbedPenalty = !m3u8 && hasBrowserManagedStreamcEmbed
       ? STREAMC_IFRAME_ONLY_PENALTY
       : 0;
-    return storedPlaybackScore * 3 + transportBonus - browserEmbedPenalty - getRecentBadHostPenalty(ep);
+    return effectiveStoredPlaybackScore * 3 + transportBonus - browserEmbedPenalty
+      - getRecentBadHostPenalty(ep);
   }
   score += getSourceResilienceScore(ep);
   const healthStatus = String(ep.source_health_status || '').trim().toLowerCase();
   const failureCount = Number(ep.source_failure_count || 0);
   const responseMs = Number(ep.source_response_time_ms || 0);
-  const sourcePriority = Number(ep.source_priority || 0);
   const checkedAt = Date.parse(String(ep.source_last_checked_at || ''));
   const healthIsFresh = Number.isFinite(checkedAt)
     && checkedAt <= Date.now()
@@ -4373,20 +4704,13 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
     else if (responseMs >= 4500) score -= 45;
   }
 
-  if (Number.isFinite(sourcePriority) && sourcePriority > 0) {
-    score += Math.min(sourcePriority, 250) * 0.25;
-  }
-
   if (m3u8) score += /\.m3u8(?:[?#].*)?$/i.test(m3u8) ? 130 : 115;
   if (/\.(mp4|webm|mov)(?:[?#].*)?$/i.test(embed)) score += 110;
-  if (host.includes('video.khophim.org') || host.includes('supabase.co')) score += 120;
-  if (host.includes('opstream') || host.includes('ophim') || lower.includes('ophim')) score += OPHIM_PREFERRED_SOURCE_BONUS;
   // Production telemetry shows opstream iframe endpoints frequently refuse
   // third-party embedding even though their health probe returns a response.
   // Keep them available when they are the only source, but prefer any healthy
   // independent source. Direct OPhim HLS is not affected by this penalty.
   if (!m3u8 && embed && host.includes('opstream')) score -= OPSTREAM_IFRAME_BLOCK_PENALTY;
-  if (host.includes('phimapi.com') || host.includes('phimapi.net') || host.includes('kkphim') || lower.includes('kkphimplayer')) score += KKPHIM_PREFERRED_SOURCE_BONUS;
   if (lower.includes('.m3u8')) score += 70;
   if (host.includes('versondd.top') || host.includes('short.icu')) score -= 1200;
   if (host === 'blvietsub.com' || host === 'www.blvietsub.com') score -= 900;
@@ -4422,8 +4746,6 @@ export function getServerQualityScore(server: EpisodeServer): number {
   // Prefer longer episode list (more complete)
   const epCount = server.server_data?.length ?? 0;
   if (epCount > 0) score += Math.min(epCount, 10);
-  const priorityRank = getServerPriorityRank(server, firstEp);
-  score += getPriorityRankScore(priorityRank);
   return score;
 }
 
@@ -4518,6 +4840,23 @@ export function findHighestQualityEpisodeBySlug(
   });
 }
 
+function isConclusivePlaybackFailure(message: unknown): boolean {
+  return /(?:HTTP|segment|playlist|manifest)\s*(?:404|410)\b|\b(?:ENOTFOUND|NXDOMAIN)\b|name not resolved|could not resolve host|connection refused/i
+    .test(String(message || ''));
+}
+
+function isBrowserManagedProbeException(embed: string): boolean {
+  return /https?:\/\/player\.phimapi\.com\/player\//i.test(embed) ||
+    /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
+}
+
+function isBrowserManagedHardFailureException(embed: string): boolean {
+  // PhimAPI's direct CDN can return a false server-side 404 while its player
+  // iframe remains usable in Viet Nam. StreamC is exempt only from cloud 403
+  // probes; an actual 404/DNS failure there is conclusive.
+  return /https?:\/\/player\.phimapi\.com\/player\//i.test(embed);
+}
+
 /** Kiểm tra episode có ít nhất một URL phát được không */
 export function hasPlayableUrl(ep: EpisodeData): boolean {
   const embed = String(ep.link_embed || '').trim();
@@ -4525,12 +4864,11 @@ export function hasPlayableUrl(ep: EpisodeData): boolean {
   if (!hasUrl) return false;
   const healthStatus = String(ep.source_health_status || '').trim().toLowerCase();
   const failureCount = Number(ep.source_failure_count || 0);
-  const browserManagedProbeException =
-    /https?:\/\/player\.phimapi\.com\/player\//i.test(embed) ||
-    /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
+  const browserManagedException = isBrowserManagedProbeException(embed);
   if (healthStatus === 'dead') return false;
+  if (healthStatus === 'failed' && isConclusivePlaybackFailure(ep.source_last_error) && !isBrowserManagedHardFailureException(embed)) return false;
   if (healthStatus === 'failed' && failureCount >= 3) return false;
-  if (healthStatus === 'blocked' && !browserManagedProbeException) return false;
+  if (healthStatus === 'blocked' && !browserManagedException) return false;
   return true;
 }
 
@@ -4551,7 +4889,6 @@ export function pickBestEpisodeAcrossServers(
     episode: EpisodeData;
     score: number;
     reliabilityScore: number;
-    priorityRank: number;
   }[] = [];
 
   for (let si = 0; si < episodes.length; si++) {
@@ -4568,10 +4905,7 @@ export function pickBestEpisodeAcrossServers(
       let epScore = srvScore;
       epScore += getEpisodeQualityScore(ep);
       epScore += reliabilityScore;
-      const priorityRank = getServerPriorityRank(srv, ep);
-      epScore += getPriorityRankScore(priorityRank);
-
-      allOptions.push({ serverIndex: si, episode: ep, score: epScore, reliabilityScore, priorityRank });
+      allOptions.push({ serverIndex: si, episode: ep, score: epScore, reliabilityScore });
     }
   }
 
@@ -4584,19 +4918,20 @@ export function pickBestEpisodeAcrossServers(
     // into reliabilityScore, so a newly failing source is still bypassed.
     if (b.reliabilityScore !== a.reliabilityScore) return b.reliabilityScore - a.reliabilityScore;
     if (b.score !== a.score) return b.score - a.score;
-    return a.priorityRank - b.priorityRank;
+    return a.serverIndex - b.serverIndex;
   });
   const best = allOptions[0];
   return { serverIndex: best.serverIndex, episode: best.episode };
 }
-export function pickBestEpisodeByPriority(
+export function pickBestEpisodeByScore(
   episodes: EpisodeServer[],
   targetEpSlug?: string,
-): { serverIndex: number; episode: EpisodeData; priorityLabel: string | null } | null {
+  _preferredProvider?: string,
+): { serverIndex: number; episode: EpisodeData; sourceLabel: string | null } | null {
   const candidates: {
     serverIndex: number;
     episode: EpisodeData;
-    priorityRank: number;
+    sourceCodeIndex: number;
     reliabilityScore: number;
     qualityScore: number;
     sourceKind: EpisodeSourceKind;
@@ -4607,6 +4942,7 @@ export function pickBestEpisodeByPriority(
 
   episodes.forEach((server, serverIndex) => {
     for (const episode of server.server_data ?? []) {
+      if (isRetiredOphimEpisode(episode, server.server_name)) continue;
       if (targetText) {
         const episodeNumber = getEpisodeNumberFromData(episode);
         const matchesTarget =
@@ -4620,7 +4956,7 @@ export function pickBestEpisodeByPriority(
       candidates.push({
         serverIndex,
         episode,
-        priorityRank: getServerPriorityRank(server, episode),
+        sourceCodeIndex: getServerSourceCodeIndex(server, episode),
         sourceKind: getEpisodeSourceKind(episode),
         failureCluster: getEpisodeFailureCluster(episode),
         reliabilityScore,
@@ -4633,16 +4969,17 @@ export function pickBestEpisodeByPriority(
   });
 
   if (!candidates.length) return null;
+  const rankedCandidates = candidates;
   // RAW is a useful early-access choice, but must never silently replace a
   // translated episode when the viewer did not explicitly request an episode.
-  const selectableCandidates = !targetText && candidates.some((candidate) =>
+  const selectableCandidates = !targetText && rankedCandidates.some((candidate) =>
     String(candidate.episode.audio_type || '').toLowerCase() !== 'raw' &&
     !/\braw\b/i.test(String(candidate.episode.name || ''))
   )
-    ? candidates.filter((candidate) =>
+    ? rankedCandidates.filter((candidate) =>
         String(candidate.episode.audio_type || '').toLowerCase() !== 'raw' &&
         !/\braw\b/i.test(String(candidate.episode.name || '')))
-    : candidates;
+    : rankedCandidates;
   const hasIndependentSource = selectableCandidates.some((candidate) => candidate.failureCluster !== 'ssplay_abyss');
 
   selectableCandidates.sort((a, b) => {
@@ -4654,15 +4991,15 @@ export function pickBestEpisodeByPriority(
     if (b.reliabilityScore !== a.reliabilityScore) return b.reliabilityScore - a.reliabilityScore;
     if (b.qualityScore !== a.qualityScore) return b.qualityScore - a.qualityScore;
     if (Boolean(aDirect) !== Boolean(bDirect)) return bDirect ? 1 : -1;
-    return a.priorityRank - b.priorityRank;
+    return a.serverIndex - b.serverIndex;
   });
 
   const best = selectableCandidates[0];
-  const priorityLabel = best.priorityRank < STREAM_SERVER_PRIORITY.length
-    ? STREAM_SERVER_PRIORITY[best.priorityRank]
+  const sourceLabel = best.sourceCodeIndex < STREAM_SERVER_CODES.length
+    ? STREAM_SERVER_CODES[best.sourceCodeIndex]
     : null;
 
-  return { serverIndex: best.serverIndex, episode: best.episode, priorityLabel };
+  return { serverIndex: best.serverIndex, episode: best.episode, sourceLabel };
 }
 /* ════════════════════════════════════════════
    AUTO-PICK BEST SERVER — static score + latency
@@ -4794,7 +5131,9 @@ export function deduplicateAndLimitServers(episodes: EpisodeServer[]): EpisodeSe
   const playableOnly = episodes
     .map((srv) => {
       const originalData = srv.server_data ?? [];
-      const cleanData = originalData.filter((ep) => ep.is_scheduled || hasPlayableUrl(ep));
+      const cleanData = originalData.filter((ep) =>
+        !isRetiredOphimEpisode(ep, srv.server_name) && (ep.is_scheduled || hasPlayableUrl(ep))
+      );
       return cleanData.length === originalData.length ? srv : { ...srv, server_data: cleanData };
     })
     .filter((srv) => srv.server_data.length > 0);
@@ -4806,10 +5145,6 @@ export function deduplicateAndLimitServers(episodes: EpisodeServer[]): EpisodeSe
     const scoreA = getServerQualityScore(a);
     const scoreB = getServerQualityScore(b);
     if (scoreA !== scoreB) return scoreB - scoreA;
-
-    const rankA = getServerPriorityRank(a, a.server_data?.[0]);
-    const rankB = getServerPriorityRank(b, b.server_data?.[0]);
-    if (rankA !== rankB) return rankA - rankB;
 
     const typeA = order[detectServerType(a.server_name ?? '')] ?? 99;
     const typeB = order[detectServerType(b.server_name ?? '')] ?? 99;
@@ -4938,10 +5273,9 @@ function shouldSuppressStoredStream(row: Record<string, unknown> | null): boolea
   const healthStatus = String(row.health_status || '').trim().toLowerCase();
   const failureCount = Number(row.failure_count || 0);
   const embedUrl = String(row.embed_url || '').trim();
-  const browserManagedProbeException =
-    /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl) ||
-    /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl);
-  if (healthStatus === 'blocked' && !browserManagedProbeException) return true;
+  const browserManagedException = isBrowserManagedProbeException(embedUrl);
+  if (healthStatus === 'failed' && isConclusivePlaybackFailure(row.last_error) && !isBrowserManagedHardFailureException(embedUrl)) return true;
+  if (healthStatus === 'blocked' && !browserManagedException) return true;
   return healthStatus === 'dead' || (healthStatus === 'failed' && failureCount >= 3);
 }
 
@@ -5052,6 +5386,14 @@ export async function getMergedEpisodes(
     const slug = ep.slug || `tap-${num}`;
     const serverName = ep.server_name || 'Nguồn';
     const source = String(ep.source || 'manual');
+    if (isRetiredOphimEpisode({
+      name: String(ep.episode_name || ''),
+      slug: String(ep.slug || ''),
+      filename: '',
+      link_embed: String(ep.link_embed || ''),
+      link_m3u8: String(ep.link_m3u8 || ''),
+      source_provider: source,
+    }, serverName)) continue;
     const isHidden = isHiddenEpisodeSource(source);
     const sourceOrigin: 'admin' | 'ophim' = ['ophim', 'phimapi', 'kkphim'].includes(source.toLowerCase()) ? 'ophim' : 'admin';
     if (!isHidden && num > maxEpisodeNumber) maxEpisodeNumber = num;
@@ -5132,6 +5474,7 @@ export async function getMergedEpisodes(
       // Legacy array format (server_data is array of episodes — rare, ~105 rows)
       const sds = row.server_data as EpisodeData[];
       for (const ep of sds) {
+        if (isRetiredOphimEpisode(ep, serverName)) continue;
         const epNum = epSortKey(ep);
         if (epNum > maxEpisodeNumber && epNum !== Infinity) maxEpisodeNumber = epNum;
         const epSlug = ep.slug || ep.name || '';
@@ -5173,6 +5516,8 @@ export async function getMergedEpisodes(
 
     if (num > maxEpisodeNumber) maxEpisodeNumber = num;
 
+    if (isRetiredOphimEpisode(epData, serverName)) continue;
+
     if (!hasStoredPlaybackHttpUrl(epData)) continue;
     const healthRow = getStoredEpisodeHealthRow(storedStreamHealthIndex, serverName, slug, num, epData);
     if (shouldSuppressStoredStream(healthRow)) continue;
@@ -5206,19 +5551,26 @@ export async function getMergedEpisodes(
     if (shouldSuppressStoredStream(sm)) continue;
     const streamUrl = String(sm.stream_url || '').trim();
     const embedUrl = String(sm.embed_url || '').trim();
+    if (isRetiredOphimEpisode({
+      name: String(sm.episode_slug || ''),
+      slug: String(sm.episode_slug || ''),
+      filename: '',
+      link_embed: embedUrl,
+      link_m3u8: streamUrl,
+      source_provider: String(sm.provider_key || sm.source || ''),
+    }, String(sm.server_name || ''))) continue;
 
     // STRICT: skip dead streams — no playable URL
     if (!normalizeStoredPlaybackUrl(streamUrl) && !normalizeStoredPlaybackUrl(embedUrl)) continue;
     const healthStatus = String(sm.health_status || 'unchecked').toLowerCase();
     const failureCount = Number(sm.failure_count || 0);
     const lastError = String(sm.last_error || '');
-    const browserManagedProbeException =
-      /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl) ||
-      /https?:\/\/[^/]*streamc\.xyz\//i.test(embedUrl);
+    const browserManagedException = isBrowserManagedProbeException(embedUrl);
     if (
       healthStatus === 'dead' ||
+      (healthStatus === 'failed' && isConclusivePlaybackFailure(lastError) && !isBrowserManagedHardFailureException(embedUrl)) ||
       (healthStatus === 'failed' && failureCount >= 3) ||
-      (healthStatus === 'blocked' && !browserManagedProbeException)
+      (healthStatus === 'blocked' && !browserManagedException)
     ) continue;
     const directStreamFailed = healthStatus === 'degraded' && lastError.startsWith('Direct stream failed:');
 
@@ -5433,37 +5785,49 @@ export function evictAllMovieCaches(slug: string): void {
 // Alias backward-compatible
 export { evictAllMovieCaches as evictDetailCache };
 
-export async function fetchHomePageData(
-  sections: string[],
-  options: { signal?: AbortSignal } = {},
-): Promise<{
+type HomePageDataResult = {
   status: boolean;
   source: 'cache' | 'stale' | 'fresh';
   sections: Record<string, Movie[]>;
-}> {
-  if (!SUPABASE_URL) {
-    throw new Error('Supabase config missing');
-  }
-  if (!SUPABASE_ANON_KEY) {
-    throw new Error('Supabase anon key missing');
-  }
+};
 
-  const url = new URL(`${SUPABASE_URL}/functions/v1/home-proxy`);
+const homePageDataInflight = new Map<string, Promise<HomePageDataResult>>();
+
+export function fetchHomePageData(
+  sections: string[],
+  options: { signal?: AbortSignal } = {},
+): Promise<HomePageDataResult> {
+  const key = [...new Set(sections)].sort().join(',');
+  const existing = homePageDataInflight.get(key);
+  if (existing) return existing;
+
+  const request = fetchHomePageDataUncached(sections, options)
+    .finally(() => {
+      if (homePageDataInflight.get(key) === request) homePageDataInflight.delete(key);
+    });
+  homePageDataInflight.set(key, request);
+  return request;
+}
+
+async function fetchHomePageDataUncached(
+  sections: string[],
+  options: { signal?: AbortSignal } = {},
+): Promise<HomePageDataResult> {
+  const url = typeof window !== 'undefined'
+    ? new URL('/api/home', window.location.origin)
+    : new URL('https://khophim.org/api/home');
   url.searchParams.set('sections', sections.join(','));
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort(options.signal?.reason);
   if (options.signal?.aborted) controller.abort(options.signal.reason);
   else options.signal?.addEventListener('abort', abortFromCaller, { once: true });
-  const timer = setTimeout(() => controller.abort(), 20_000);
+  const timer = setTimeout(() => controller.abort(), 8_000);
 
   try {
     const res = await fetch(url.toString(), {
       signal: controller.signal,
       cache: 'default',
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
+      headers: { Accept: 'application/json' },
     });
     clearTimeout(timer);
     if (!res.ok) {
@@ -5478,6 +5842,7 @@ export async function fetchHomePageData(
     const parsedSections: Record<string, Movie[]> = {};
     for (const [key, items] of Object.entries(data.sections)) {
       parsedSections[key] = (items as unknown[])
+        .filter((item) => !isRetiredOphimCatalogItem(item))
         .map((it) => parseMovieItem(it))
         .filter((movie): movie is Movie => Boolean(
           movie
@@ -5485,6 +5850,16 @@ export async function fetchHomePageData(
           && movie.name
           && (movie.thumb_url || movie.poster_url)
         ));
+    }
+
+    // The Top 10 ranking query is optional and may be unavailable while the
+    // Singapore database pool recovers. Reuse the already-filtered main rails
+    // so the layout remains complete without resurrecting unplayable cards.
+    if (sections.includes('top10-single') && (parsedSections['top10-single']?.length ?? 0) < 6) {
+      parsedSections['top10-single'] = (parsedSections['phim-le'] ?? []).slice(0, 10);
+    }
+    if (sections.includes('top10-series') && (parsedSections['top10-series']?.length ?? 0) < 6) {
+      parsedSections['top10-series'] = (parsedSections['phim-bo'] ?? []).slice(0, 10);
     }
 
     if (import.meta.env.DEV) {

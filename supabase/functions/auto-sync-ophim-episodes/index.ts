@@ -437,6 +437,16 @@ serve(async (req) => {
     );
   }
 
+  return new Response(JSON.stringify({
+    success: false,
+    retired: true,
+    error: 'OPhim episode synchronization is permanently disabled',
+  }), {
+    status: 410,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
+
+  /* Legacy implementation retained below for audit/recovery only. */
   const startTime = Date.now();
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

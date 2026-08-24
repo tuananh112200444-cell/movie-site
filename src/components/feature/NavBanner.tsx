@@ -13,11 +13,10 @@ function optimizedBannerImage(image: string): string {
   const absolute = image.startsWith('/') ? `https://khophim.org${image}` : image;
   const pathname = absolute.split('?')[0].toLowerCase();
 
-  // Cloudflare keeps animation when anim=true and serves a much smaller
-  // animated WebP to supporting browsers. The original GIF remains fallback.
+  // Keep animated banners on their original URL. Routing them through
+  // /cdn-cgi/image creates paid Cloudflare Images transformations.
   if (pathname.endsWith('.gif')) {
-    const source = image.startsWith('/') ? image : absolute;
-    return `https://khophim.org/cdn-cgi/image/width=728,quality=75,format=auto,anim=true${source.startsWith('/') ? '' : '/'}${source}`;
+    return absolute;
   }
 
   return `https://wsrv.nl/?url=${encodeURIComponent(absolute)}&w=728&q=76&output=webp&we`;

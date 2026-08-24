@@ -7,6 +7,9 @@ const checks = [
   { name: 'rss', path: '/feed.xml', status: 200, has: ['<rss','rel="hub"','/phim/'] },
   { name: 'robots', path: '/robots.txt', status: 200, has: ['Sitemap:'] },
   { name: 'press', path: '/press/', status: 200, has: ['Thông tin thương hiệu','khophim-logo-v2'] },
+  { name: 'api-time', path: '/api/time', status: 200, contentType: 'application/json', has: ['"now"'] },
+  { name: 'api-source-health', path: '/api/player-source-health?hours=1&limit=5', status: 200, contentType: 'application/json', has: ['"bad_hosts"'] },
+  { name: 'api-multi-source-detail', path: '/api/movie-detail?slug=cap-doi-trai-nguoc', status: 200, contentType: 'application/json', has: ['"movie"','"episodes"','"server_name"'] },
   { name: 'home-googlebot', path: '/', status: 200, has: ['index, follow','application/ld+json','KhoPhim'], bot: true },
   { name: 'seo-landing-googlebot', path: '/xem-phim-online', status: 200, has: ['index, follow','rel="canonical"','Xem Phim Online'], bot: true },
   { name: 'movie-googlebot', path: '/phim/quyet-chien-tai-mohenjo', status: 200, has: ['rel="canonical"','Movie','role=actor'], bot: true },
@@ -21,7 +24,9 @@ async function check(item) {
       const response = await fetch(`${SITE}${item.path}`, { redirect: 'follow', signal: AbortSignal.timeout(TIMEOUT), headers: item.bot ? { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' } : {} });
       const body = await response.text();
       const missing = item.has.filter((value) => !body.includes(value));
-      return { name:item.name, ok:response.status===item.status && missing.length===0, status:response.status, missing, attempts:attempt, elapsed_ms:Date.now()-started };
+      const contentType = response.headers.get('content-type') || '';
+      const contentTypeOk = !item.contentType || contentType.toLowerCase().includes(item.contentType);
+      return { name:item.name, ok:response.status===item.status && missing.length===0 && contentTypeOk, status:response.status, content_type:contentType, expected_content_type:item.contentType || null, missing, attempts:attempt, elapsed_ms:Date.now()-started };
     } catch (error) {
       lastError = error;
       if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 300));

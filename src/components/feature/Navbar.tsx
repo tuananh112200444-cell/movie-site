@@ -516,7 +516,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {pathname !== '/' && <StickyBanner />}
+        {pathname !== '/' && !/^\/(?:phim|xem-phim)\//.test(pathname) && <StickyBanner />}
         
         {/* Mobile Search Overlay */}
         {searchOpen && (

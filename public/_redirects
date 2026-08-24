@@ -4,10 +4,6 @@
 # Dynamic XML endpoints are handled once in functions/[[path]].js. Keeping a
 # second rewrite layer here bypasses timeout, fallback and cache safeguards.
 
-# Never let missing JS/CSS assets fall through to index.html.
-# A stale browser requesting an old chunk must receive a real 404, not HTML
-# with a JavaScript URL, otherwise dynamic imports crash with MIME errors.
-/assets/* /404.html 404
-
-# React Router SPA fallback.
+# React Router SPA fallback. Do not add a top-level 404.html: Cloudflare Pages
+# uses its absence as the signal to serve index.html for deep SPA routes.
 /* /index.html 200

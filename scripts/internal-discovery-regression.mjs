@@ -32,15 +32,6 @@ for (const sourcePath of internalLinkSources) {
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input) => {
   const url = String(input);
-  if (url.includes('/sitemap-index')) {
-    return new Response(`<?xml version="1.0" encoding="UTF-8"?>
-      <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-        <sitemap><loc>https://khophim.org/sitemap-movies-1.xml</loc></sitemap>
-        <sitemap><loc>https://khophim.org/sitemap-movies-2.xml</loc></sitemap>
-      </sitemapindex>`, {
-      headers: { 'Content-Type': 'application/xml', 'X-Movie-Chunk-Count': '2' },
-    });
-  }
   if (url.includes('/sitemap-movies-xml')) {
     return new Response(`<?xml version="1.0" encoding="UTF-8"?>
       <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
