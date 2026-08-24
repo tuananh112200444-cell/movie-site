@@ -34,3 +34,19 @@ export function hasValidPublishableApiKey(req: Request): boolean {
   if (!supplied) return false;
   return collectConfiguredPublicKeys().has(supplied);
 }
+
+export function withPublicReadCors(response: Response, origin: string | null): Response {
+  const normalized = String(origin || '').trim().toLowerCase();
+  const allowed = normalized === 'https://khophim.org'
+    || normalized === 'https://www.khophim.org'
+    || /^https:\/\/[a-z0-9-]+\.movie-site-eds\.pages\.dev$/.test(normalized)
+    || /^http:\/\/(?:localhost|127\.0\.0\.1):(?:3000|4173|5173)$/.test(normalized);
+  const headers = new Headers(response.headers);
+  headers.set('Access-Control-Allow-Origin', allowed ? normalized : 'https://khophim.org');
+  headers.set('Vary', 'Origin');
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
