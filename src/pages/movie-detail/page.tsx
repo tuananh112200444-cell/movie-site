@@ -959,7 +959,7 @@ export default function MovieDetailPage() {
     <div className="angular-detail-page min-h-screen kp-cinema-page text-white" data-player-fix="blvietsub-embed-autoplay-20260704">
       <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
       <Navbar />
-      <main className="max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">
+      <main className="min-h-[calc(100dvh-4rem)] max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">
         <div className="flex flex-row gap-3 sm:gap-8 mb-8">
           <div className="flex-shrink-0 w-24 sm:w-40 md:w-52 skeleton rounded-xl" style={{ aspectRatio: '2/3' }} />
           <div className="flex-1 space-y-3 pt-2">

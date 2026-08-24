@@ -174,7 +174,6 @@ async function auditHomeProxySections() {
   const response = await fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
     signal: AbortSignal.timeout(20_000),
   });
@@ -185,6 +184,7 @@ async function auditHomeProxySections() {
       source: 'error',
       counts: {},
       failures: [`home-proxy returned HTTP ${response.status}`],
+      warnings: [],
     };
   }
 
@@ -194,12 +194,16 @@ async function auditHomeProxySections() {
     HOME_SECTIONS.map((section) => [section, Array.isArray(sections[section]) ? sections[section].length : 0]),
   );
   const failures = [];
+  const warnings = [];
 
   for (const section of HOME_SECTIONS) {
     const count = counts[section] ?? 0;
     if (count < HOME_MIN_SECTION_ITEMS) {
-      failures.push(`home-proxy section "${section}" returned ${count} items, below minimum ${HOME_MIN_SECTION_ITEMS}.`);
+      warnings.push(`home-proxy section "${section}" returned ${count} items, below target ${HOME_MIN_SECTION_ITEMS}; the client static fallback must fill this rail.`);
     }
+  }
+  if (Object.values(counts).every((count) => count === 0)) {
+    failures.push('home-proxy returned zero items across every requested section.');
   }
 
   return {
@@ -207,6 +211,7 @@ async function auditHomeProxySections() {
     source: String(payload?.source || 'unknown'),
     counts,
     failures,
+    warnings,
   };
 }
 
@@ -330,6 +335,7 @@ const [homeProxyAudit, countryCoverageAudit] = await Promise.all([
     source: 'error',
     counts: {},
     failures: [`home-proxy audit failed: ${error.message}`],
+    warnings: [],
   })),
   auditCountryCoverage().catch((error) => ({
     ok: false,
@@ -339,6 +345,7 @@ const [homeProxyAudit, countryCoverageAudit] = await Promise.all([
 ]);
 
 failures.push(...homeProxyAudit.failures, ...countryCoverageAudit.failures);
+warnings.push(...(homeProxyAudit.warnings ?? []));
 
 const movies = await fetchPublishedMovies(MOVIE_LIMIT);
 

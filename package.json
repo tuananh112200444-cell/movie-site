@@ -78,8 +78,6 @@
     "release:gate": "node scripts/release-gate.mjs",
     "release:smoke": "node scripts/production-smoke.mjs",
     "cloudflare:functions:test": "npx wrangler pages functions build functions --outdir .wrangler/functions-build",
-    "cloudflare:functions:bundle": "npx wrangler pages functions build functions --outdir .wrangler/functions-bundle --minify --fallback-service ASSETS && node scripts/finalize-pages-worker.mjs",
-    "deploy:production": "npm run build && npm run cloudflare:functions:test && npm run cloudflare:functions:bundle && npx wrangler pages deploy out --project-name movie-site --branch main && npm run release:smoke",
     "sync:blvietsub": "node scripts/sync-blvietsub-external.mjs",
     "sync:blvietsub:dry": "node scripts/sync-blvietsub-external.mjs --dry-run",
     "sync:cobephim": "node scripts/sync-cobephim-external.mjs",
