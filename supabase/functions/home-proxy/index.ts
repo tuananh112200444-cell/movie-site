@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { hasValidPublishableApiKey } from '../_shared/public-api-key.ts';
+import { hasValidPublishableApiKey, withPublicReadCors } from '../_shared/public-api-key.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -1502,7 +1502,7 @@ async function applySupabaseOverrides(
 }
 
 /* ── Main ── */
-serve(async (req) => {
+async function handleRequest(req: Request): Promise<Response> {
   /* Handle OPTIONS preflight immediately */
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -1874,4 +1874,6 @@ serve(async (req) => {
     'Cache-Control': homeCacheControl(60),
     'X-Cache': 'MISS',
   });
-});
+}
+
+serve(async (req) => withPublicReadCors(await handleRequest(req), req.headers.get('origin')));
