@@ -110,6 +110,7 @@ const checks = [
   [detailProxy.includes("healthStatus === 'failed' && failureCount >= 3"), 'The detail API and frontend must suppress a telemetry-failed stream at the same threshold'],
   [sourceHealth.includes('SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000') && sourceHealth.includes('SOURCE_HEALTH_UPDATED_EVENT') && sourceHealth.includes('function getSourceCluster') && sourceHealth.includes('map[`cluster:${cluster}`]'), 'Cross-viewer host and independently-confirmed cluster penalties must remain active for the advertised window and notify an open player'],
   [main.indexOf("import './polyfills'") >= 0 && main.indexOf("import './polyfills'") < main.indexOf("react-dom/client") && polyfills.includes('Array.prototype.at'), 'The player compatibility shim must run before React and lazy HLS chunks on Safari 14'],
+  [main.includes("ASSET_RECOVERY_REVISION = '20260824-v2'") && main.includes('rootElement.dataset.kpAssetRevision = ASSET_RECOVERY_REVISION'), 'The post-header recovery release must use a fresh entry-module URL for browsers exposed to the transient asset miss'],
   [
     playerBox.includes('hlsCluster !== embedCluster')
       && playerBox.includes('if (switchToFallbackServer()) return;')
