@@ -1488,7 +1488,10 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
         },
         {
           url: new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`),
-          timeoutMs: 9_000,
+          // A cold Edge isolate can exceed nine seconds while assembling a
+          // large multi-provider catalogue. Keep the loading state bounded,
+          // but never turn a slow valid movie into a false 404.
+          timeoutMs: 18_000,
           // A short hedge removes an entire failed Pages round trip during
           // quota/fail-open windows, while a healthy gateway normally wins
           // before this public read starts.
@@ -1536,7 +1539,7 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
     return null;
   });
 
-  const result = await raceFirstValidWithTimeout(requests, 9_250);
+  const result = await raceFirstValidWithTimeout(requests, 18_250);
   if (result) controllers.forEach((controller) => controller.abort());
   return result;
 }

@@ -43,7 +43,7 @@ const checks = [
   [movieApi.includes("host.includes('short.icu')) return 'known_bad'"), 'Client source scoring must reject the dead short.icu host'],
   [detailProxy.includes("host === 'short.icu'"), 'Movie detail API must suppress the dead short.icu host'],
   [!movieApi.includes('PREFERRED_SOURCE_BONUS') && !movieApi.includes('ACTIVE_OUTAGE_MULTIPLIER'), 'Provider identity must not add a source bonus or multiplier'],
-  [movieApi.includes("case 'ophim':\n    case 'kkphim':\n    case 'dailymotion':\n    case 'stable_embed':\n    case 'third_party_embed':\n    case 'ssplay_abyss':\n      return 30;"), 'All valid embed APIs must begin with the same transport score'],
+  [/case 'ophim':\r?\n\s*case 'kkphim':\r?\n\s*case 'dailymotion':\r?\n\s*case 'stable_embed':\r?\n\s*case 'third_party_embed':\r?\n\s*case 'ssplay_abyss':\r?\n\s*return 30;/.test(movieApi), 'All valid embed APIs must begin with the same transport score'],
   [movieApi.includes('effectiveStoredPlaybackScore * 3') && movieApi.includes('getRecentBadHostPenalty(ep)'), 'Measured backend score and live failures must drive source selection'],
   [playerSection.includes('const activeMatch = activeServerData.find') && playerSection.includes('onSelectEp(activeMatch);'), 'Episode switching must preserve the source explicitly selected by the viewer'],
   [playerSection.includes('`${selectableServerOptions.length - 1} nguồn dự phòng cho tập này`'), 'Source summary must count only backups that contain the active episode'],

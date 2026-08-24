@@ -68,7 +68,7 @@ const checks = [
   [hero.includes('hidden sm:block') && hero.includes('loading="eager"') && hero.includes('fetchPriority="high"') && !hero.includes('backdropFallback'), 'Desktop LCP backdrop must load eagerly while remaining hidden on mobile'],
   [navbar.includes('/brand/khophim-favicon-v2-96.png'), 'Navigation must use the compact brand asset'],
   [movieApi.includes("new URL('/api/movie-detail'"), 'Movie detail must use the same-origin edge cache'],
-  [movieApi.includes('delayMs: 150') && movieApi.includes('raceFirstValidWithTimeout(requests, 9_250)'), 'Movie detail must hedge the public Singapore read so a Pages quota failure cannot add a full extra network round trip'],
+  [movieApi.includes('delayMs: 150') && movieApi.includes('timeoutMs: 18_000') && movieApi.includes('raceFirstValidWithTimeout(requests, 18_250)'), 'Movie detail must hedge the public Singapore read and tolerate a cold multi-provider response without producing a false 404'],
   [movieApi.includes('External enrichment must never delay first render/player startup') && movieApi.includes('void mergeExternalDetailIfFast'), 'External detail enrichment must remain outside the critical render path'],
   [movieApi.includes('BLVIETSUB_DETAIL_DEDUPE_MS') && movieApi.includes('blvietsubDetailInflight'), 'Repeated BLVietsub detail failures must be deduplicated on the client'],
   [movieApi.includes('OPSTREAM_IFRAME_BLOCK_PENALTY') && movieApi.includes("!m3u8 && embed && host.includes('opstream')"), 'Telemetry-confirmed blocked OPhim iframes must not outrank healthy independent sources'],
