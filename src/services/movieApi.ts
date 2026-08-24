@@ -1479,27 +1479,43 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
   if (!SUPABASE_URL) return null;
   const endpoints = typeof window !== 'undefined'
     ? [
-        // Production has one same-origin path. The Cloudflare gateway owns
-        // cache, circuit breaking and provider fallback; retrying the private
-        // Supabase Function before it fails doubled work. The second endpoint
-        // is a sequential read-only fallback for Pages quota/fail-open windows.
-        { url: new URL('/api/movie-detail', window.location.origin), timeoutMs: 7_500, headers: undefined },
+        {
+          url: new URL('/api/movie-detail', window.location.origin),
+          timeoutMs: 7_500,
+          delayMs: 0,
+          headers: undefined,
+          allowRefresh: true,
+        },
         {
           url: new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`),
           timeoutMs: 9_000,
+          // A short hedge removes an entire failed Pages round trip during
+          // quota/fail-open windows, while a healthy gateway normally wins
+          // before this public read starts.
+          delayMs: 150,
           headers: { apikey: SUPABASE_ANON_KEY },
+          allowRefresh: false,
         },
       ]
-    : [{ url: new URL('https://khophim.org/api/movie-detail'), timeoutMs: 9_000, headers: undefined }];
+    : [{
+        url: new URL('https://khophim.org/api/movie-detail'),
+        timeoutMs: 9_000,
+        delayMs: 0,
+        headers: undefined,
+        allowRefresh: true,
+      }];
 
-  for (const endpoint of endpoints) {
+  const controllers: AbortController[] = [];
+  const requests = endpoints.map(async (endpoint): Promise<MovieDetailResponse | null> => {
+    if (endpoint.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, endpoint.delayMs));
     const controller = new AbortController();
+    controllers.push(controller);
     const timer = setTimeout(() => controller.abort(), endpoint.timeoutMs);
     endpoint.url.searchParams.set('slug', slug);
     // Version the public Edge cache key whenever stream-health/scoring rules
     // change so a healthy revalidated source is not shadowed by an older POP.
     endpoint.url.searchParams.set('rev', '20260823-provider-score-v10');
-    if (forceRefresh) endpoint.url.searchParams.set('refresh', '1');
+    if (forceRefresh && endpoint.allowRefresh) endpoint.url.searchParams.set('refresh', '1');
     if (source) endpoint.url.searchParams.set('source', source);
 
     try {
@@ -1509,7 +1525,7 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
         headers: { Accept: 'application/json', ...(endpoint.headers ?? {}) },
       });
       const contentType = res.headers.get('content-type') ?? '';
-      if (!res.ok || !contentType.toLowerCase().includes('application/json')) continue;
+      if (!res.ok || !contentType.toLowerCase().includes('application/json')) return null;
       const data = await res.json() as MovieDetailResponse;
       if (data?.movie?.slug || data?.movie?.name) return data;
     } catch (e) {
@@ -1517,9 +1533,12 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
     } finally {
       clearTimeout(timer);
     }
-  }
+    return null;
+  });
 
-  return null;
+  const result = await raceFirstValidWithTimeout(requests, 9_250);
+  if (result) controllers.forEach((controller) => controller.abort());
+  return result;
 }
 
 /* ════════════════════════════════════════════
