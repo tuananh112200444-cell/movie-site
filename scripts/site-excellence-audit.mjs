@@ -277,16 +277,15 @@ async function assertHeadersClean() {
     const block = `${route}\n  ${cacheHeader}`;
     if (!headers.includes(block)) failures.push(`public/_headers should keep ${route} on smart short cache.`);
   }
-  for (const excludedRoute of [
-    '/assets/*',
-    '/images/*',
-    '/banners/*',
-    '/robots.txt',
-    '/llms.txt',
-    '/home-fallback.json',
-    '/queer-fallback.json',
-  ]) {
-    if (!routes.includes(excludedRoute)) failures.push(`public/_routes.json should exclude ${excludedRoute} from Pages Functions.`);
+  try {
+    const parsedRoutes = JSON.parse(routes);
+    const includes = Array.isArray(parsedRoutes.include) ? parsedRoutes.include : [];
+    if (includes.includes('/*')) failures.push('Pages Functions must not run on every viewer request and exhaust the daily quota.');
+    for (const requiredRoute of ['/api/*', '/internal/*', '/sitemap*', '/feed.xml', '/phim/*']) {
+      if (!includes.includes(requiredRoute)) failures.push(`public/_routes.json should include ${requiredRoute}.`);
+    }
+  } catch {
+    failures.push('public/_routes.json must be valid JSON.');
   }
   return failures;
 }

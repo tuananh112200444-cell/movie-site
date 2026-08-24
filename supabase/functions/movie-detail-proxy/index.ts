@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { getProviderEpisodeNumber, normalizeVerifiedSeasonNumbering } from '../_shared/episode-numbering.ts';
+import { hasValidPublishableApiKey } from '../_shared/public-api-key.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -2147,9 +2148,10 @@ serve(async (req) => {
     (MOVIE_DETAIL_PROXY_SECRET && suppliedProxySecret === MOVIE_DETAIL_PROXY_SECRET)
     || (SUPABASE_SERVICE_ROLE_KEY && bearer === SUPABASE_SERVICE_ROLE_KEY)
   );
+  const isPublicReadRequest = req.method === 'GET' && hasValidPublishableApiKey(req);
   const { searchParams } = new URL(req.url);
   const requestedForceRefresh = searchParams.get('refresh') === '1';
-  if (!isPrivilegedProxyRequest) {
+  if (!isPrivilegedProxyRequest && !isPublicReadRequest) {
     return jsonResponse({ status: false, message: 'Unauthorized' }, 401, {
       'Cache-Control': 'no-store',
     });
