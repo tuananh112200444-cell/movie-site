@@ -62,6 +62,7 @@ const checks = [
   [!vite.includes('appendAssetVersion') && !vite.includes('renderBuiltUrl') && !vite.includes('$1?v=') && html.includes('src="/src/main.tsx"'), 'Hashed Vite assets must have one URL identity without query-string duplication'],
   [html.includes("w.setTimeout(function(){if('requestIdleCallback'in w)w.requestIdleCallback(loadGtm,{timeout:5000});else loadGtm();},10000)"), 'GTM must have a real minimum delay after the critical viewing path'],
   [!html.includes('fonts.googleapis.com/css2') && html.includes("font-family:system-ui"), 'External web fonts must not block the first movie render'],
+  [html.includes('<link rel="preconnect" href="https://ceoxbhsdodllziyxmbqr.supabase.co" crossorigin="anonymous">'), 'The primary Singapore catalogue connection must start before the application requests movie detail'],
   [!app.includes('warmPlayerSourceHealth') && page.includes('warmSourceHealthWithinStartupBudget'), 'Source-health warming must be owned by the watch page and bounded by its startup budget'],
   [page.includes('if (isWatchPage || !showBottom || !detail?.movie || !slug || relatedFetchedRef.current) return;') && !page.includes('relatedTimer = setTimeout'), 'Related movies must load only near the lower information-page sections and never on the player page'],
   [hero.includes('hidden sm:block') && hero.includes('loading="eager"') && hero.includes('fetchPriority="high"') && !hero.includes('backdropFallback'), 'Desktop LCP backdrop must load eagerly while remaining hidden on mobile'],
