@@ -73,7 +73,11 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
     'http://127.0.0.1:4173',
     'http://127.0.0.1:5173',
   ];
-  const safeOrigin = origin && allowed.includes(origin) ? origin : allowed[0];
+  const normalizedOrigin = String(origin || '').trim().toLowerCase();
+  const safeOrigin = allowed.includes(normalizedOrigin)
+    || /^https:\/\/[a-z0-9-]+\.movie-site-eds\.pages\.dev$/.test(normalizedOrigin)
+    ? normalizedOrigin
+    : allowed[0];
   return {
     'Access-Control-Allow-Origin': safeOrigin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
