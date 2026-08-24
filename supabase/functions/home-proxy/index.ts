@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { hasValidPublishableApiKey } from '../_shared/public-api-key.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -1512,11 +1513,12 @@ serve(async (req) => {
 
   const bearer = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
   const suppliedProxySecret = req.headers.get('x-khophim-proxy-secret') ?? '';
-  const isTrustedCaller = Boolean(
+  const isPrivilegedCaller = Boolean(
     (EDGE_PROXY_SECRET && suppliedProxySecret === EDGE_PROXY_SECRET)
     || (SUPABASE_SERVICE_ROLE_KEY && bearer === SUPABASE_SERVICE_ROLE_KEY)
   );
-  if (!isTrustedCaller) {
+  const isPublicReadRequest = req.method === 'GET' && hasValidPublishableApiKey(req);
+  if (!isPrivilegedCaller && !isPublicReadRequest) {
     return jsonResponse({ status: false, source: 'gateway-required', sections: {} }, 401, {
       'Cache-Control': 'no-store',
     });
@@ -1525,7 +1527,9 @@ serve(async (req) => {
   const url = new URL(req.url);
   const sectionsParam = url.searchParams.get('sections') ?? 'trending,phim-le,phim-bo,hoat-hinh,han-quoc,au-my';
   const requestedSections = sectionsParam.split(',').map((s) => s.trim()).filter(Boolean);
-  const forceRefresh = url.searchParams.get('refresh') === '1' && req.headers.get(INTERNAL_REFRESH_HEADER) === '1';
+  const forceRefresh = isPrivilegedCaller
+    && url.searchParams.get('refresh') === '1'
+    && req.headers.get(INTERNAL_REFRESH_HEADER) === '1';
   const CACHE_KEY = 'homepage_v3';
   const CACHE_TTL_MIN = 30;
 

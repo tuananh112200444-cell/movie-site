@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { hasValidPublishableApiKey } from '../_shared/public-api-key.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -263,11 +264,12 @@ serve(async (req) => {
 
   const bearer = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
   const suppliedProxySecret = req.headers.get('x-khophim-proxy-secret') ?? '';
-  const isTrustedCaller = Boolean(
+  const isPrivilegedCaller = Boolean(
     (EDGE_PROXY_SECRET && suppliedProxySecret === EDGE_PROXY_SECRET)
     || (SUPABASE_SERVICE_ROLE_KEY && bearer === SUPABASE_SERVICE_ROLE_KEY)
   );
-  if (!isTrustedCaller) {
+  const isPublicReadRequest = req.method === 'GET' && hasValidPublishableApiKey(req);
+  if (!isPrivilegedCaller && !isPublicReadRequest) {
     return jsonResponse({ status: false, source: 'gateway-required', items: [] }, 401, {
       'Cache-Control': 'no-store',
     });
@@ -277,7 +279,7 @@ serve(async (req) => {
   const searchQuery = String(url.searchParams.get('q') || '').trim();
   const requestedSearchLimit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 24) || 24, 60));
   const limit = searchQuery ? requestedSearchLimit : clampLimit(url.searchParams.get('limit'));
-  const forceRefresh = url.searchParams.get('refresh') === '1';
+  const forceRefresh = isPrivilegedCaller && url.searchParams.get('refresh') === '1';
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return jsonResponse(
       {

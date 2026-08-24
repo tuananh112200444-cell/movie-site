@@ -1481,8 +1481,14 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
     ? [
         // Production has one same-origin path. The Cloudflare gateway owns
         // cache, circuit breaking and provider fallback; retrying the private
-        // Supabase Function directly doubled work and produced CORS preflights.
+        // Supabase Function before it fails doubled work. The second endpoint
+        // is a sequential read-only fallback for Pages quota/fail-open windows.
         { url: new URL('/api/movie-detail', window.location.origin), timeoutMs: 7_500, headers: undefined },
+        {
+          url: new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`),
+          timeoutMs: 9_000,
+          headers: { apikey: SUPABASE_ANON_KEY },
+        },
       ]
     : [{ url: new URL('https://khophim.org/api/movie-detail'), timeoutMs: 9_000, headers: undefined }];
 
@@ -2136,15 +2142,23 @@ export async function searchMoviesInSupabase(
     // coalesces identical terms at the POP and opens a short circuit when the
     // database is unhealthy, without a browser CORS preflight.
     if (typeof window !== 'undefined') {
-      const edgeUrl = new URL('/api/search', window.location.origin);
-      edgeUrl.searchParams.set('q', kw);
-      edgeUrl.searchParams.set('limit', String(limit));
-      const edgeResponse = await fetch(edgeUrl.toString(), {
-        signal: controller.signal,
-        cache: 'force-cache',
-        headers: { Accept: 'application/json' },
-      });
-      if (edgeResponse.ok) {
+      const searchEndpoints = [
+        { url: new URL('/api/search', window.location.origin), headers: { Accept: 'application/json' } },
+        {
+          url: new URL(`${SUPABASE_URL}/functions/v1/search-index-proxy`),
+          headers: { Accept: 'application/json', apikey: SUPABASE_ANON_KEY },
+        },
+      ];
+      for (const endpoint of searchEndpoints) {
+        endpoint.url.searchParams.set('q', kw);
+        endpoint.url.searchParams.set('limit', String(limit));
+        const edgeResponse = await fetch(endpoint.url.toString(), {
+          signal: controller.signal,
+          cache: 'force-cache',
+          headers: endpoint.headers,
+        });
+        const contentType = edgeResponse.headers.get('content-type') || '';
+        if (!edgeResponse.ok || !contentType.toLowerCase().includes('application/json')) continue;
         const edgePayload = await edgeResponse.json() as { items?: Record<string, unknown>[] };
         const edgeMovies = sortMoviesForSearch(
           mergeMoviesUnique(((edgePayload.items ?? []) as Record<string, unknown>[])
@@ -2158,8 +2172,8 @@ export async function searchMoviesInSupabase(
         // work and bypasses request coalescing.
         return hasStrongSearchHit(edgeMovies) ? edgeMovies : [];
       }
-      // The gateway already owns the independent provider/static fallback.
-      // Never bypass its open circuit with a direct browser PostgREST retry.
+      // Both edge read paths failed. The caller can use the bundled static
+      // search shards without opening direct PostgREST queries per keystroke.
       return [];
     }
 
@@ -5813,10 +5827,16 @@ async function fetchHomePageDataUncached(
   sections: string[],
   options: { signal?: AbortSignal } = {},
 ): Promise<HomePageDataResult> {
-  const url = typeof window !== 'undefined'
-    ? new URL('/api/home', window.location.origin)
-    : new URL('https://khophim.org/api/home');
-  url.searchParams.set('sections', sections.join(','));
+  const urls = typeof window !== 'undefined'
+    ? [
+        { url: new URL('/api/home', window.location.origin), headers: { Accept: 'application/json' } },
+        {
+          url: new URL(`${SUPABASE_URL}/functions/v1/home-proxy`),
+          headers: { Accept: 'application/json', apikey: SUPABASE_ANON_KEY },
+        },
+      ]
+    : [{ url: new URL('https://khophim.org/api/home'), headers: { Accept: 'application/json' } }];
+  urls.forEach(({ url }) => url.searchParams.set('sections', sections.join(',')));
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort(options.signal?.reason);
   if (options.signal?.aborted) controller.abort(options.signal.reason);
@@ -5824,15 +5844,21 @@ async function fetchHomePageDataUncached(
   const timer = setTimeout(() => controller.abort(), 8_000);
 
   try {
-    const res = await fetch(url.toString(), {
-      signal: controller.signal,
-      cache: 'default',
-      headers: { Accept: 'application/json' },
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      throw new Error(`home-proxy returned ${res.status}`);
+    let res: Response | null = null;
+    for (const endpoint of urls) {
+      const candidate = await fetch(endpoint.url.toString(), {
+        signal: controller.signal,
+        cache: 'default',
+        headers: endpoint.headers,
+      });
+      const contentType = candidate.headers.get('content-type') || '';
+      if (candidate.ok && contentType.toLowerCase().includes('application/json')) {
+        res = candidate;
+        break;
+      }
     }
+    clearTimeout(timer);
+    if (!res) throw new Error('home-proxy returned no JSON response');
     const data = (await res.json()) as {
       status: boolean;
       source: 'cache' | 'stale' | 'fresh';

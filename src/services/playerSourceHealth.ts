@@ -82,12 +82,29 @@ async function fetchPlayerSourceHealth(): Promise<void> {
     // A provider can recover quickly. One hour still contains enough
     // independent viewer evidence to detect an active outage, while avoiding
     // a six-hour-old incident steering new viewers away from a recovered CDN.
-    const response = await fetch('/api/player-source-health?hours=1&limit=2000', {
-      method: 'GET',
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-    });
-    if (!response.ok) return;
+    const supabaseUrl = String(import.meta.env.VITE_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
+    const publishableKey = String(import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '');
+    const endpoints = [
+      { url: '/api/player-source-health?hours=1&limit=2000', headers: { Accept: 'application/json' } },
+      ...(supabaseUrl && publishableKey ? [{
+        url: `${supabaseUrl}/functions/v1/player-source-health?hours=1&limit=2000`,
+        headers: { Accept: 'application/json', apikey: publishableKey },
+      }] : []),
+    ];
+    let response: Response | null = null;
+    for (const endpoint of endpoints) {
+      const candidate = await fetch(endpoint.url, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: endpoint.headers,
+      });
+      const contentType = candidate.headers.get('content-type') || '';
+      if (candidate.ok && contentType.toLowerCase().includes('application/json')) {
+        response = candidate;
+        break;
+      }
+    }
+    if (!response) return;
 
     const payload = await response.json() as SourceHealthResponse;
     if (!payload.ok || !Array.isArray(payload.bad_hosts)) return;

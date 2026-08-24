@@ -1,24 +1,30 @@
 {
   "version": 1,
   "include": [
-    "/*"
+    "/api/*",
+    "/internal/*",
+    "/sitemap*",
+    "/feed.xml",
+    "/kho-phim*",
+    "/phim/*",
+    "/phim-*",
+    "/xem-phim-online*",
+    "/xem-phim-mien-phi*",
+    "/xem-phim-hd*",
+    "/xem-phim-vietsub*",
+    "/web-xem-phim*",
+    "/hoat-hinh*",
+    "/anime*",
+    "/my-nam*",
+    "/phim-ma*",
+    "/vu-tru-dam-my*",
+    "/tv-shows*",
+    "/the-loai/*",
+    "/filter*",
+    "/dien-vien*",
+    "/about*",
+    "/policy*",
+    "/blog*"
   ],
-  "exclude": [
-    "/assets/*",
-    "/images/*",
-    "/banners/*",
-    "/favicon.svg",
-    "/favicon.png",
-    "/logo.svg",
-    "/logo.png",
-    "/brand/*",
-    "/site.webmanifest",
-    "/robots.txt",
-    "/llms.txt",
-    "/home-fallback.json",
-    "/release.json",
-    "/queer-fallback.json",
-    "/service-worker.js",
-    "/press/*"
-  ]
+  "exclude": []
 }
