@@ -4047,9 +4047,13 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
         supabaseFallbackPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)),
         immediateExternalPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)),
       ];
-      const canonicalQuickPlayable = await withNullTimeout(proxyPlayablePromise, 900);
+      // The public union is the only response that contains every stored
+      // provider and audio variant. Give it most of the existing five-second
+      // quick-path budget; otherwise a 100ms single-provider API can hide the
+      // complete Vietsub/Thuyet Minh backup list that arrives around 1-3s.
+      const canonicalQuickPlayable = await withNullTimeout(proxyPlayablePromise, 4_100);
       const quickPlayable = canonicalQuickPlayable
-        ?? await raceFirstValidWithTimeout(playablePromises, 4_100);
+        ?? await raceFirstValidWithTimeout(playablePromises, 900);
       if (quickPlayable) {
         if (isQueerMovieDetail(quickPlayable.movie)) {
           if (isBlvietsubMovie(quickPlayable.movie)) {

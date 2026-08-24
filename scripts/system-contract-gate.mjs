@@ -108,7 +108,7 @@ if (!/\?rev=canonical-v\d+(?:-[a-z0-9-]+)?/i.test(cloudflareWorker)) {
 }
 if (
   detailProxy.includes('const verifiedAuxiliary = await fetchVerifiedAuxiliaryExternalDetail') ||
-  !detailProxy.includes('edgeWaitUntil(\n        fetchVerifiedAuxiliaryExternalDetail')
+  !/edgeWaitUntil\(\r?\n\s*fetchVerifiedAuxiliaryExternalDetail/.test(detailProxy)
 ) {
   failures.push('BLVietsub auxiliary discovery can still block a viewer-facing detail response');
 }
