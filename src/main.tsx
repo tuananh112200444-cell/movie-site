@@ -8,6 +8,7 @@ import App from './App.tsx'
 import { pruneSmartClientCaches } from './utils/smartCache'
 
 const CLIENT_RELEASE_MARKER = __KP_RELEASE_ID__;
+const ASSET_RECOVERY_REVISION = '20260824-v2';
 const rootElement = document.getElementById('root');
 
 declare global {
@@ -30,6 +31,7 @@ if (!rootElement) {
   try {
     rootElement.dataset.kpMounted = '1';
     rootElement.dataset.kpRelease = CLIENT_RELEASE_MARKER;
+    rootElement.dataset.kpAssetRevision = ASSET_RECOVERY_REVISION;
     if (!window.__KP_REACT_ROOT__ && rootElement.querySelectorAll('.page-root').length > 0) {
       rootElement.innerHTML = '';
     }
