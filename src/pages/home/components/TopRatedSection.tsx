@@ -73,6 +73,15 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false }:
       return;
     }
 
+    // The production homepage must not rebuild this decorative rail with two
+    // independent filtered COUNT/list queries. The canonical home package and
+    // its static stale copy are the only production data paths.
+    if (!import.meta.env.DEV) {
+      setMovies([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     Promise.allSettled([
       fetchMoviesByCategory({ category: 'hanh-dong', page: 1 }),

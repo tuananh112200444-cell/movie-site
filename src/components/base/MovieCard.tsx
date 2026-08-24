@@ -51,6 +51,23 @@ function getDisplayOrigin(movie: MovieItem): string {
   return movie.title_en?.trim() || movie.origin_name;
 }
 
+function movieCardDetailUrl(movie: MovieItem) {
+  const source = String(movie.source_site || '').trim().toLowerCase();
+  const quality = String(movie.quality || '').trim().toLowerCase();
+  const isVsmovFourK = source === 'vsmov' && /(?:^|\b)(?:4k|2160p|uhd)(?:\b|$)/i.test(quality);
+  const preferredSource = source === 'phimapi'
+    ? 'kkphim'
+    : ['kkphim', 'vsmov', 'ophim', 'nguonc'].includes(source)
+      ? source
+      : undefined;
+  return movieDetailUrl(
+    movie.slug,
+    preferredSource || isVsmovFourK
+      ? { source: preferredSource || 'vsmov', quality: isVsmovFourK ? '4k' : undefined }
+      : undefined,
+  );
+}
+
 function getDisplayTime(movie: MovieItem): string | null {
   const value = String(movie.time ?? '').trim();
   if (!value) return null;
@@ -116,7 +133,7 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
     if (movie.slug) cancelPrefetchMovieDetail(movie.slug);
   }, [movie.slug]);
 
-  const detailUrl = movieDetailUrl(movie.slug);
+  const detailUrl = movieCardDetailUrl(movie);
 
   return (
     <Link
@@ -283,7 +300,7 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
     if (movie.slug) cancelPrefetchMovieDetail(movie.slug);
   }, [movie.slug]);
 
-  const detailUrl = movieDetailUrl(movie.slug);
+  const detailUrl = movieCardDetailUrl(movie);
 
   return (
     <Link
@@ -391,7 +408,7 @@ function RankCard({ movie, rank, priority }: MovieCardProps) {
   const altText = buildAlt(movie);
 
   return (
-    <Link to={movieDetailUrl(movie.slug)} className="movie-card-contain group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
+    <Link to={movieCardDetailUrl(movie)} className="movie-card-contain group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
       <div>
         {/* Poster */}
         <div
@@ -475,7 +492,7 @@ function WideCard({ movie, priority }: MovieCardProps) {
   const altText = buildAlt(movie);
 
   return (
-    <Link to={movieDetailUrl(movie.slug)} className="movie-card-contain group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
+    <Link to={movieCardDetailUrl(movie)} className="movie-card-contain group cursor-pointer block active:scale-[0.97] transition-transform duration-150">
       <div className="relative">
         {/* Poster */}
         <div

@@ -55,17 +55,10 @@ test('player: URL xem phim tải được nguồn phát', async ({ page }) => {
   await expect.poll(async () => page.locator('iframe, video').count(), { timeout: 20_000 }).toBeGreaterThan(0);
 });
 
-test('banner top remains visible after scrolling', async ({ page }) => {
+test('banner top is temporarily disabled', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   const banner = page.getByTestId('sticky-top-banner');
-  await expect(banner).toBeVisible();
-  await page.evaluate(() => window.scrollTo(0, Math.min(1200, document.documentElement.scrollHeight - window.innerHeight)));
-  await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 }).toBeGreaterThan(20);
-  await expect(banner).toBeVisible();
-  const box = await banner.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.y).toBeGreaterThanOrEqual(0);
-  expect(box!.y).toBeLessThan(page.viewportSize()!.height);
+  await expect(banner).toHaveCount(0);
 });
 
 test('trang chủ mobile: icon nội bộ và section thức dậy sau khi quay lại tab', async ({ page }, testInfo) => {
@@ -162,6 +155,52 @@ async function mockMovieDetail(page: Page, payload: ReturnType<typeof e2eMovie>)
     status: 200, contentType: 'application/json', body: JSON.stringify(payload),
   }));
 }
+
+async function mockSourceHealth(page: Page, badHosts: string[]) {
+  await page.route('**/functions/v1/player-source-health**', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      ok: true,
+      bad_hosts: badHosts.map(host => ({ host, critical: 3, score: 10, failure_rate: 1 })),
+      cluster_outages: [],
+    }),
+  }));
+}
+
+test('player brain bypasses a known-bad host before mounting the first source', async ({ page }) => {
+  await mockSourceHealth(page, ['bad-source.example']);
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'Primary', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://bad-source.example/embed/player' }] },
+    { server_name: 'Backup', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://healthy-source.example/embed/player' }] },
+  ]));
+
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+  const iframe = page.locator('iframe[title="Phim kiểm thử trình phát"]');
+  await expect(iframe).toHaveAttribute('src', /healthy-source\.example/, { timeout: 20_000 });
+});
+
+test('late source-health refresh never replaces an iframe already committed to the viewer', async ({ page }) => {
+  await mockSourceHealth(page, []);
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'Primary', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://stable-viewer.example/embed/player' }] },
+    { server_name: 'Backup', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://backup-viewer.example/embed/player' }] },
+  ]));
+
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+  const iframe = page.locator('iframe[title="Phim kiểm thử trình phát"]');
+  await expect(iframe).toHaveAttribute('src', /stable-viewer\.example/, { timeout: 20_000 });
+  await iframe.evaluate((element) => { (element as HTMLIFrameElement & { __kpIdentity?: string }).__kpIdentity = 'preserved'; });
+  await page.waitForTimeout(8_200);
+  await page.evaluate(() => {
+    localStorage.setItem('khophim.bad-source-hosts.v2', JSON.stringify({ 'stable-viewer.example': Date.now() }));
+    window.dispatchEvent(new CustomEvent('kp:source-health-updated'));
+  });
+  await page.waitForTimeout(1_200);
+
+  await expect(iframe).toHaveAttribute('src', /stable-viewer\.example/);
+  expect(await iframe.evaluate((element) => (element as HTMLIFrameElement & { __kpIdentity?: string }).__kpIdentity)).toBe('preserved');
+});
 
 test('release coordinator never interrupts an iframe player automatically', async ({ page }) => {
   await page.route('**/release.json*', route => route.fulfill({

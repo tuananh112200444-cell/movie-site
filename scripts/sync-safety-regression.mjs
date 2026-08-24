@@ -25,6 +25,11 @@ for (const file of connectorFiles) {
     && source.includes('quarantineVerifiedForeignEpisodes')
     && source.includes('candidates.size === 0')
     && source.includes("from('episodes').delete().in('id', idBatch)");
+  const verifiedDuplicatePlaybackQuarantine =
+    source.includes('Verified duplicate playback quarantine contract')
+    && source.includes(".eq('movie_id', movie.id)")
+    && source.includes(".eq('episode_slug', episodeSlug)")
+    && source.includes(".eq('embed_url', embedUrl)");
   const unpublishMovie =
     /from\(['"]movies['"]\)[\s\S]{0,240}(?:update|upsert)\(\{[\s\S]{0,160}is_published\s*:\s*false/s.test(source);
   const automaticStreamDeactivation =
@@ -34,7 +39,7 @@ for (const file of connectorFiles) {
 
   if (destructiveEpisodeDelete && !verifiedLocalizedReplacement && !verifiedForeignIdentityQuarantine) failures.push(`${file}: source sync can delete last-known-good episodes`);
   if (unpublishMovie) failures.push(`${file}: source sync can unpublish an existing movie`);
-  if (automaticStreamDeactivation) failures.push(`${file}: source sync can deactivate streams from one incomplete feed response`);
+  if (automaticStreamDeactivation && !verifiedDuplicatePlaybackQuarantine) failures.push(`${file}: source sync can deactivate streams from one incomplete feed response`);
   if (destructiveDetailCacheDelete) failures.push(`${file}: source sync deletes last-known-good movie detail cache`);
 }
 
@@ -47,6 +52,7 @@ const gapPlaybackProviders = fs.readFileSync('supabase/functions/sync-gap-playba
 const ophimPriorityRestore = fs.readFileSync('supabase/migrations/20260812140000_restore_ophim_priority_sync.sql', 'utf8');
 const episodeRepairPriority = fs.readFileSync('supabase/migrations/20260805170000_prioritize_public_episode_repairs.sql', 'utf8');
 const unifiedPlaybackHealth = fs.readFileSync('supabase/migrations/20260805205000_unify_public_playback_health.sql', 'utf8');
+const systemBrainMigration = fs.readFileSync('supabase/migrations/20260822070340_consolidate_system_brains.sql', 'utf8');
 if (!ophim.includes('isTrailerEpisode(episode)') || !ophim.includes('if (isTrailerEpisode(ep)) continue')) {
   failures.push('OPhim sync must not treat a trailer episode as playable movie coverage');
 }
@@ -93,21 +99,23 @@ if (
 ) {
   failures.push('OPhim sync must preserve playable special episodes without corrupting numbered episode identity');
 }
-if (!ophim.includes('safeProviderImage') || !ophim.includes("posterUrl = safeProviderImage(movie.poster_url) || thumbUrl")) {
+if (!ophim.includes('safeProviderImage') || !ophim.includes('const posterUrl = normalizeProviderImage(provider, movie.poster_url) || thumbUrl')) {
   failures.push('OPhim sync must reject inline/unsafe poster payloads and fall back to the provider thumbnail');
 }
 if (
-  !ophim.includes("bases: ['https://ophim1.com']")
+  !ophim.includes("retired: requestedProvider === 'ophim'")
+  || !ophim.includes("provider must be one of: kkphim, vsmov, nguonc")
   || /ophim\.tv|ophim9\.cc|ophim8\.cc/.test(ophim)
 ) {
-  failures.push('OPhim sync must fail over to independent providers instead of waiting on retired OPhim mirrors');
+  failures.push('OPhim sync must reject the retired provider and route recovery through independent providers');
 }
 if (
-  !ophimPriorityRestore.includes("jobname = 'sync-ophim-priority-every-15-minutes'")
-  || !ophimPriorityRestore.includes('active := true')
-  || !ophimPriorityRestore.includes('pages=1&limit=8&episodes=1')
+  !systemBrainMigration.includes("'catalog:ophim-recent'")
+  || !systemBrainMigration.includes("'catalog:kkphim-recent'")
+  || !systemBrainMigration.includes("'catalog-brain-every-2-minutes'")
+  || !systemBrainMigration.includes("'sync-ophim-priority-every-15-minutes'")
 ) {
-  failures.push('The bounded OPhim priority feed must be restored and explicitly active');
+  failures.push('Bounded OPhim/KKPhim recent ingestion must be owned by the active Catalog Brain queue');
 }
 if (
   ophim.includes('Targeted provider identity refresh; independent probe pending')
@@ -116,7 +124,7 @@ if (
   failures.push('Targeted OPhim repair must not erase viewer failure evidence or reactivate an unchanged dead URL');
 }
 if (
-  !ophim.includes('if (detail && isSafeTargetDetail(detail)) return detail;')
+  !ophim.includes('if (detail && isSafeTargetDetail(provider, target, detail)) return detail;')
   || !ophim.includes('targetYear > 0 && detailYear > 0 && targetYear === detailYear')
   || !ophim.includes('labelAsBackup')
 ) {

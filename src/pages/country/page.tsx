@@ -407,7 +407,7 @@ export default function CountryPage({ countrySlug }: Props) {
     let cancelled = false;
     setLoading(true);
 
-    const sortField = sortBy === 'new' ? 'modified.time' : 'year';
+    const sortField = 'year';
     const sourcePage = page * 2 - 1;
     Promise.all([
       fetchMoviesByCategory({
@@ -429,7 +429,11 @@ export default function CountryPage({ countrySlug }: Props) {
       const items = dedupeMovies(responses.flatMap((res) => res.items ?? []));
       const stableItems = sortBy === 'hot'
         ? [...items].sort((a, b) => getHotScore(b) - getHotScore(a))
-        : items;
+        : [...items].sort((a, b) => {
+            const yearDelta = (b.year ?? 0) - (a.year ?? 0);
+            if (yearDelta !== 0) return yearDelta;
+            return new Date(b.modified?.time ?? 0).getTime() - new Date(a.modified?.time ?? 0).getTime();
+          });
       const firstPagination = responses[0]?.pagination;
       const sourceTotalPages = Math.max(...responses.map((res) => res.pagination?.totalPages ?? 1));
       const sourcePageSize = firstPagination?.totalItemsPerPage || 24;

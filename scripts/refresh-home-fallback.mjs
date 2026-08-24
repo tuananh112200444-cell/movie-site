@@ -2,13 +2,26 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const OUTPUT_URL = new URL('../public/home-fallback.json', import.meta.url);
 const HOME_PROXY_URL = new URL(
-  'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/home-proxy',
+  'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/home-proxy',
 );
 const REQUIRED_SECTIONS = [
+  'vsmov-4k',
   'trending',
   'top10-single',
   'top10-series',
   'onlyflix-moi',
+  'phim-chieu-rap',
+  'phim-le',
+  'phim-bo',
+  'hoat-hinh',
+  'han-quoc',
+  'au-my',
+  'trung-quoc',
+  'thai-lan',
+];
+const PLAYBACK_REQUIRED_SECTIONS = [
+  'vsmov-4k',
+  'trending',
   'phim-chieu-rap',
   'phim-le',
   'phim-bo',
@@ -48,7 +61,7 @@ function sanitizeMovie(item) {
 
 function validateSections(sections) {
   if (!sections || typeof sections !== 'object') return false;
-  return REQUIRED_SECTIONS.every((key) => (
+  return PLAYBACK_REQUIRED_SECTIONS.every((key) => (
     Array.isArray(sections[key])
     && sections[key].filter(isValidMovie).length >= 6
   ));
@@ -70,15 +83,23 @@ async function keepExistingFallback(reason) {
 
 try {
   HOME_PROXY_URL.searchParams.set('sections', REQUIRED_SECTIONS.join(','));
+  HOME_PROXY_URL.searchParams.set('refresh', '1');
   const response = await fetch(HOME_PROXY_URL, {
-    headers: { accept: 'application/json' },
-    signal: AbortSignal.timeout(25_000),
+    headers: { accept: 'application/json', 'x-home-proxy-refresh': '1' },
+    signal: AbortSignal.timeout(50_000),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const payload = await response.json();
   if (!payload?.status || !validateSections(payload.sections)) {
     throw new Error('response failed the homepage section contract');
+  }
+
+  if ((payload.sections['top10-single']?.length ?? 0) < 6) {
+    payload.sections['top10-single'] = (payload.sections['phim-le'] ?? []).slice(0, 10);
+  }
+  if ((payload.sections['top10-series']?.length ?? 0) < 6) {
+    payload.sections['top10-series'] = (payload.sections['phim-bo'] ?? []).slice(0, 10);
   }
 
   const snapshot = {

@@ -22,6 +22,14 @@ export function encodeSlug(slug: string): string {
  * NOTE: React Router v6 tự động encode URL khi điều hướng,
  * nên KHÔNG dùng encodeSlug ở đây để tránh double encoding.
  */
-export function movieDetailUrl(slug: string): string {
-  return `/phim/${slug}`;
+export function movieDetailUrl(
+  slug: string,
+  preference?: { source?: string; quality?: string },
+): string {
+  const path = `/phim/${slug}`;
+  const params = new URLSearchParams();
+  if (preference?.source) params.set('source', preference.source);
+  if (preference?.quality) params.set('quality', preference.quality);
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
 }

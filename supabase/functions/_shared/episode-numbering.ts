@@ -1,7 +1,7 @@
 export interface ProviderEpisodeLike {
   name?: string;
   slug?: string;
-  [key: string]: unknown;
+  episode_number?: number | string;
 }
 
 export interface ProviderEpisodeServerLike {
@@ -29,7 +29,23 @@ function normalizedText(value: unknown): string {
     .trim();
 }
 
-function episodeNumber(value: ProviderEpisodeLike): number {
+/**
+ * Fractional OVAs such as `26.5 Part 1` are often serialized by providers as
+ * the slug `265-1`. They are specials, not episode 265 and not episodes 1/2.
+ */
+export function isFractionalProviderEpisode(value: ProviderEpisodeLike): boolean {
+  const name = String(value.name || '').toLowerCase();
+  const slug = String(value.slug || '').toLowerCase();
+  return (/(?:^|\D)\d{1,3}\.\d{1,2}(?:\D|$)/.test(name) && /\bpart\s*\d+\b/.test(name))
+    || (/^\d{2,3}5-\d+$/.test(slug) && /\bpart\s*\d+\b/.test(name));
+}
+
+export function getProviderEpisodeNumber(value: ProviderEpisodeLike): number {
+  if (isFractionalProviderEpisode(value)) return 0;
+  const explicit = Number(value.episode_number || 0);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const decimalName = String(value.name || '').trim().match(/^(\d{1,3})\.\d{1,2}$/);
+  if (decimalName) return Number(decimalName[1] || 0) || 0;
   const text = `${String(value.name || '')} ${String(value.slug || '')}`.toLowerCase();
   if (/\bfull\b/.test(text)) return 1;
   const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
@@ -91,7 +107,7 @@ export function normalizeVerifiedSeasonNumbering(
   if (!season) return { movie, episodes: servers, normalization: null };
 
   const numbers = Array.from(new Set(
-    servers.flatMap((server) => (server.server_data || []).map(episodeNumber)).filter((number) => number > 0),
+    servers.flatMap((server) => (server.server_data || []).map(getProviderEpisodeNumber)).filter((number) => number > 0),
   )).sort((a, b) => a - b);
   if (numbers.length < 2) return { movie, episodes: servers, normalization: null };
 
@@ -112,7 +128,7 @@ export function normalizeVerifiedSeasonNumbering(
   const episodes = servers.map((server) => ({
     ...server,
     server_data: (server.server_data || []).map((episode) => {
-      const rawNumber = episodeNumber(episode);
+      const rawNumber = getProviderEpisodeNumber(episode);
       if (rawNumber < rawStart || rawNumber > rawEnd) return episode;
       const canonicalNumber = rawNumber - offset;
       const label = canonicalEpisodeLabel(canonicalNumber);

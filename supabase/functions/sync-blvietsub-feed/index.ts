@@ -2,6 +2,8 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractImageFromHtml } from '../../../scripts/image-source-utils.mjs';
 import { countPlayableEpisodes, maxPlayableEpisodeNumber as getMaxPlayableEpisodeNumber, shouldPublishMovieFromSync, shouldIncludeMovieForBlvietsubSync } from '../../../scripts/blvietsub-sync-utils.mjs';
+import { resolveLocalizedMovieTitles } from '../_shared/tmdb-title-localization.ts';
+import { findCanonicalMovieByIdentity, retireSourceMovieDuplicate } from '../_shared/movie-identity.ts';
 
 const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://blvietsub.com/sitemap_index.xml';
 const BLVIETSUB_PROXY_URL = Deno.env.get('BLVIETSUB_PROXY_URL') || 'https://khophim.org/internal/blvietsub-proxy';
@@ -30,6 +32,7 @@ const PRIORITY_SITEMAP_LIMIT = 40;
 const SOURCE_SITE = 'blvietsub';
 const SOURCE_NAME = 'BLVietsub';
 const TAP_LABEL = 'T\u1eadp';
+const TMDB_READ_ACCESS_TOKEN = Deno.env.get('TMDB_READ_ACCESS_TOKEN') || '';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -77,6 +80,7 @@ interface MovieRow {
   title_vi?: string | null;
   title_en?: string | null;
   title_original?: string | null;
+  tmdb_id?: number | null;
   normalized_name?: string | null;
   source_site?: string | null;
   source_name?: string | null;
@@ -105,6 +109,9 @@ interface ParsedEntry {
   postId: string;
   title: string;
   originName: string;
+  titleEn?: string;
+  titleOriginal?: string;
+  tmdbId?: number;
   aliasNames?: string[];
   content: string;
   image: string;
@@ -116,6 +123,25 @@ interface ParsedEntry {
   sourceUrl: string;
   updatedAt: string;
   episodes: ParsedEpisode[];
+}
+
+async function enrichEntryTitles(entry: ParsedEntry): Promise<void> {
+  const localized = await resolveLocalizedMovieTitles({
+    titleVi: entry.title,
+    sourceOriginal: entry.originName,
+    year: entry.year,
+    tmdbToken: TMDB_READ_ACCESS_TOKEN,
+  });
+  entry.titleEn = localized.titleEn;
+  entry.titleOriginal = localized.titleOriginal || entry.originName;
+  entry.tmdbId = localized.tmdbId;
+  entry.aliasNames = uniqueTextValues([
+    ...(entry.aliasNames || []),
+    entry.title,
+    entry.originName,
+    entry.titleEn,
+    entry.titleOriginal,
+  ]);
 }
 
 interface WordPressMovieUrl {
@@ -759,6 +785,22 @@ async function findGlobalMovieForEntry(
   const titles = uniqueTextValues([entry.title, entry.originName, ...(entry.aliasNames || [])])
     .filter((title) => title.trim().length >= 3);
 
+  const sharedMatch = await findCanonicalMovieByIdentity(supabase, {
+    names: titles,
+    normalizedNames: titles.map(slugify),
+    year: entry.year,
+    provider: 'blvietsub',
+    providerSlug: `${entry.postId}-${slugify(entry.title)}`,
+    providerId: entry.postId,
+    tmdbId: entry.tmdbId,
+    originalTitle: entry.titleOriginal || entry.originName,
+    localizedTitle: entry.title,
+    movieType: entry.type,
+    createSlug: `blvietsub-${entry.postId}-${slugify(entry.title)}`,
+    sourceName: 'BLVietsub',
+  });
+  if (sharedMatch?.id) return sharedMatch as MovieRow;
+
   for (const title of titles) {
     for (const column of ['name', 'origin_name', 'title_vi', 'title_en']) {
       let query = supabase
@@ -806,13 +848,27 @@ async function findBestMovieForEntry(
   return selectPreferredMovie([localMatch, globalMatch].filter((movie): movie is MovieRow => Boolean(movie?.id)));
 }
 
+function findBlvietsubSourceDuplicate(entry: ParsedEntry, rows: MovieRow[], targetId: string): MovieRow | null {
+  const sourceUrl = String(entry.sourceUrl || '').replace(/\/+$/, '');
+  const generatedSlug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
+  return rows.find((candidate) =>
+    candidate.id !== targetId
+    && `${candidate.source_site || ''} ${candidate.source_name || ''}`.toLowerCase().includes('blvietsub')
+    && (
+      String(candidate.source_url || '').replace(/\/+$/, '') === sourceUrl
+      || String(candidate.showtimes || '').replace(/\/+$/, '') === sourceUrl
+      || candidate.slug === generatedSlug
+    )
+  ) || null;
+}
+
 async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<MovieRow[]> {
   const rows: MovieRow[] = [];
   const pageSize = 1000;
   for (let from = 0; from < 10000; from += pageSize) {
     const { data, error } = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year')
+      .select('id, slug, name, origin_name, title_vi, title_en, title_original, tmdb_id, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year')
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
       .range(from, from + pageSize - 1);
 
@@ -1036,6 +1092,7 @@ function addParsedEpisode(
   rawLink: string,
   type = 'embed',
   rawLabel = '',
+  serverNameOverride = '',
 ): void {
   if (!episodeNumber) return;
   const link = decodeHtml(rawLink.replace(/&amp;/g, '&')).trim();
@@ -1050,7 +1107,7 @@ function addParsedEpisode(
     const existingLink = (existing.link_embed || existing.link_m3u8 || '').replace(/\/+$/, '');
     if (existing.episode_number === episodeNumber && existingLink === normalizedLink) return;
   }
-  const serverName = `SV ${serverNumber || 1}`;
+  const serverName = serverNameOverride || `SV ${serverNumber || 1}`;
   const key = `${serverName}|${episodeNumber}`;
   if (episodes.has(key)) return;
   const isHls = type.toLowerCase() === 'm3u8' || /\.m3u8(?:[?#].*)?$/i.test(link);
@@ -1106,6 +1163,23 @@ function parseStreamingServerEpisodes(html: string): Map<string, ParsedEpisode> 
     perEpisodeCount.set(episodeNumber, serverNumber);
     addParsedEpisode(episodes, episodeNumber, serverNumber, link, type, episodeId);
   }
+  // Current WordPress player (August 2026): one button per episode. The
+  // trailing number in data-server-label/button text is the episode number;
+  // the label prefix identifies the server group (SS/HX/etc.).
+  for (const match of html.matchAll(/<button\b[^>]*class=["'][^"']*\bblv-server-button\b[^"']*["'][^>]*>[\s\S]*?<\/button>/gi)) {
+    const tag = match[0];
+    const link = extractAttr(tag, 'data-server-url');
+    const dataLabel = extractAttr(tag, 'data-server-label');
+    const buttonLabel = stripTags(tag);
+    const info = parseEpisodeInfo(buttonLabel || dataLabel);
+    if (!info.number || !link) continue;
+    const groupLabel = (dataLabel || 'BLVietsub')
+      .replace(/\s+0*\d+(?:\s+(?:end|raw|full))?\s*$/i, '')
+      .replace(/^server\s*/i, '')
+      .trim();
+    const serverName = `BLVietsub ${groupLabel || 'Server'}`;
+    addParsedEpisode(episodes, info.number, 1, link, 'embed', buttonLabel || dataLabel, serverName);
+  }
   const legacyPerEpisodeCount = new Map<number, number>();
   for (const match of html.matchAll(/<button\b[^>]*class=["'][^"']*\bblv-episode-btn\b[^"']*["'][^>]*>[\s\S]*?<\/button>/gi)) {
     const tag = match[0];
@@ -1151,6 +1225,21 @@ function firstWordPressWatchUrl(html: string, movieSlug: string): string {
   return getWordPressWatchUrls(html, movieSlug)[0]?.url || '';
 }
 
+function getWordPressReleaseYear(html: string, updatedAt = ''): number {
+  const explicitPatterns = [
+    /"keywords"\s*:\s*\[[^\]]*?"((?:19|20)\d{2})"/i,
+    /<meta[^>]+property=["']article:tag["'][^>]+content=["']((?:19|20)\d{2})["']/i,
+    /(?:Năm|Year)\s*[:：]\s*<[^>]*>\s*((?:19|20)\d{2})/i,
+    /href=["'][^"']*\/(?:tag|year|nam)\/((?:19|20)\d{2})(?:\/|["'])/i,
+  ];
+  for (const pattern of explicitPatterns) {
+    const year = Number(html.match(pattern)?.[1] || 0);
+    if (year >= 1888 && year <= 2200) return year;
+  }
+  const fallbackYear = new Date(updatedAt || Date.now()).getFullYear();
+  return fallbackYear >= 1888 && fallbackYear <= 2200 ? fallbackYear : 0;
+}
+
 function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: string, playerHtml = ''): ParsedEntry | null {
   const movieSlug = getWordPressMovieSlug(movieUrl);
   if (!movieSlug) return null;
@@ -1163,7 +1252,7 @@ function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: stri
   const postId = firstMatch(html, /https?:\/\/blvietsub\.com\/\?p=(\d+)/i) || movieSlug;
   const episodes = parseWordPressEpisodes(`${html}\n${playerHtml}`, movieSlug);
   if (!title || episodes.length === 0) return null;
-  const year = Number(html.match(/\b((?:19|20)\d{2})\b/)?.[1] || 0) || new Date(updatedAt || Date.now()).getFullYear();
+  const year = getWordPressReleaseYear(html, updatedAt);
   const maxEpisode = Math.max(...episodes.map((episode) => episode.episode_number));
   const taxonomy = {
     category: [
@@ -1360,14 +1449,15 @@ async function createMovieFromEntry(
 ): Promise<MovieRow> {
   const maxEpisode = Math.max(1, maxPlayableEpisodeNumber(entry.episodes) || playableEpisodeCount(entry.episodes));
   const slug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
-  const normalizedName = slugify([entry.title, entry.originName].filter(Boolean).join(' '));
+  const normalizedName = slugify([entry.title, entry.originName, entry.titleEn, entry.titleOriginal].filter(Boolean).join(' '));
   const payload = {
     slug,
     name: entry.title,
     origin_name: entry.originName,
     title_vi: entry.title,
-    title_en: '',
-    title_original: entry.originName,
+    title_en: entry.titleEn || (entry.originName !== entry.title ? entry.originName : ''),
+    title_original: entry.titleOriginal || entry.originName,
+    tmdb_id: entry.tmdbId || null,
     normalized_name: normalizedName,
     content: entry.content,
     type: entry.type,
@@ -1563,24 +1653,34 @@ async function updateMovieMetadata(
     if (comparableNext !== comparableCurrent) update[key] = nextValue;
   };
   const canonicalSourceUrl = entry.sourceUrl || `https://www.blvietsub.top/?p=${entry.postId}`;
-  assignChanged('showtimes', canonicalSourceUrl, movie.showtimes);
-  assignChanged('source_url', canonicalSourceUrl, movie.source_url);
-  if (movie.slug.startsWith('blvietsub-')) {
+  const movieOwnsBlvietsubIdentity = movie.slug.startsWith('blvietsub-')
+    || `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase().includes('blvietsub');
+  if (movieOwnsBlvietsubIdentity || (!String(movie.showtimes || '').trim() && !String(movie.source_url || '').trim())) {
+    assignChanged('showtimes', canonicalSourceUrl, movie.showtimes);
+    assignChanged('source_url', canonicalSourceUrl, movie.source_url);
+  }
+  if (movieOwnsBlvietsubIdentity) {
     assignChanged('source_site', SOURCE_SITE, movie.source_site);
     assignChanged('source_name', SOURCE_NAME, movie.source_name);
   }
 
   const originName = String(entry.originName || '').trim();
+  const titleEn = String(entry.titleEn || (originName !== entry.title ? originName : '')).trim();
+  const titleOriginal = String(entry.titleOriginal || originName).trim();
   if (originName) {
     if (!String(movie.origin_name || '').trim()) update.origin_name = originName;
-    if (!String(movie.title_en || '').trim() && originName !== entry.title) update.title_en = originName;
-    assignChanged('title_original', originName, movie.title_original);
   }
+  const currentTitleEn = String(movie.title_en || '').trim();
+  if (titleEn && (!currentTitleEn || normalizeText(currentTitleEn) === normalizeText(entry.title))) update.title_en = titleEn;
+  if (titleOriginal) assignChanged('title_original', titleOriginal, movie.title_original);
+  if (entry.tmdbId && !movie.tmdb_id) update.tmdb_id = entry.tmdbId;
 
   const normalizedName = slugify(uniqueTextValues([
     movie.name,
     entry.title,
     originName,
+    titleEn,
+    titleOriginal,
     ...(entry.aliasNames || []),
   ]).join(' '));
   if (normalizedName) assignChanged('normalized_name', normalizedName, movie.normalized_name);
@@ -1705,6 +1805,7 @@ async function syncEntryToMovie(
   movie: MovieRow,
   entry: ParsedEntry,
 ): Promise<{ inserted: number; updated: boolean; source_max_episode: number; db_before_episode: number; backward_guarded: boolean }> {
+  await enrichEntryTitles(entry);
   const dbBeforeEpisode = getMovieCurrentEpisode(movie);
   const sourceMaxEpisode = Math.max(1, maxPlayableEpisodeNumber(entry.episodes) || playableEpisodeCount(entry.episodes));
   // A same-title page can be a one-video compilation or a different remake.
@@ -2265,7 +2366,16 @@ serve(async (req) => {
         movie = await createMovieFromEntry(supabase, entry);
         created = true;
       }
+      const sourceDuplicate = findBlvietsubSourceDuplicate(entry, movieRows, movie.id);
       const syncResult = await syncEntryToMovie(supabase, movie, entry);
+      if (sourceDuplicate) {
+        await retireSourceMovieDuplicate(supabase, {
+          source: sourceDuplicate as unknown as Record<string, unknown>,
+          target: movie as unknown as Record<string, unknown>,
+          provider: 'blvietsub',
+        });
+        sourceDuplicate.source_site = 'merged';
+      }
       const changedSlugs = created || syncResult.inserted > 0 || syncResult.updated ? [movie.slug] : [];
       const seoAutomation = shouldRunSeoAutomation
         ? await runSeoAutomation(supabase, supabaseUrl, serviceKey, cronSecret || syncSecret, changedSlugs)
@@ -2348,7 +2458,16 @@ serve(async (req) => {
           matched += 1;
         }
 
+        const sourceDuplicate = findBlvietsubSourceDuplicate(entry, movieRows, movie.id);
         const syncResult = await syncEntryToMovie(supabase, movie, entry);
+        if (sourceDuplicate) {
+          await retireSourceMovieDuplicate(supabase, {
+            source: sourceDuplicate as unknown as Record<string, unknown>,
+            target: movie as unknown as Record<string, unknown>,
+            provider: 'blvietsub',
+          });
+          sourceDuplicate.source_site = 'merged';
+        }
         inserted += syncResult.inserted;
         if (syncResult.updated) updated += 1;
         if (createdThisMovie || syncResult.inserted > 0 || syncResult.updated) {

@@ -116,18 +116,10 @@ function isBlvietsubMovie(movie: MovieRow): boolean {
   return source.includes('blvietsub') || source.includes('admin-queer') || Boolean(getBlvietsubMovieUrl(movie));
 }
 
-function isOphimLikeMovie(movie: MovieRow): boolean {
+function isUnifiedProviderMovie(movie: MovieRow): boolean {
   const source = `${movie.source_site || ''} ${movie.source_name || ''} ${movie.source_url || ''} ${movie.showtimes || ''}`.toLowerCase();
-  return Boolean(movie.ophim_id || movie.ophim_slug || source.includes('ophim') || source.includes('kkphim') || source.includes('phimapi'));
-}
-
-function getOphimProvider(movie: MovieRow): 'kkphim' | 'ophim' {
-  const source = `${movie.source_site || ''} ${movie.source_name || ''} ${movie.source_url || ''} ${movie.showtimes || ''}`.toLowerCase();
-  return source.includes('kkphim') || source.includes('phimapi') ? 'kkphim' : 'ophim';
-}
-
-function getOphimRepairSlug(movie: MovieRow): string {
-  return String(movie.ophim_slug || movie.slug || movie.ophim_id || '').trim();
+  return Boolean(movie.ophim_id || movie.ophim_slug || source.includes('ophim') || source.includes('kkphim') ||
+    source.includes('phimapi') || source.includes('vsmov') || source.includes('nguonc') || source.includes('nguồn c'));
 }
 
 function urlHost(value: unknown): string {
@@ -443,7 +435,7 @@ serve(async (req) => {
       repairs.push({
         candidate,
         movie: { slug: movie.slug, source_site: movie.source_site, source_name: movie.source_name },
-        action: isBlvietsubMovie(movie) ? 'repair_blvietsub' : isOphimLikeMovie(movie) ? 'repair_ophim_like' : 'refresh_cache_only',
+        action: isBlvietsubMovie(movie) ? 'repair_blvietsub' : isUnifiedProviderMovie(movie) ? 'repair_unified_provider_pool' : 'refresh_cache_only',
         blvietsub_url: getBlvietsubMovieUrl(movie) || undefined,
       });
       continue;
@@ -472,34 +464,13 @@ serve(async (req) => {
           refresh_search: '1',
         }));
       }
-    } else if (isOphimLikeMovie(movie)) {
-      const primaryProvider = getOphimProvider(movie);
-      const primaryProviderIncident = providerIncidents.has(primaryProvider);
-      if (!primaryProviderIncident) {
-        calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'sync-ophim-movies', {
-          provider: primaryProvider,
-          slug: getOphimRepairSlug(movie),
-          episodes: '1',
-          limit: 1,
-        }));
-      }
-      // The primary provider can keep publishing the same expired URL. Resolve
-      // the same movie through the other configured provider by guarded
-      // title/year identity instead of assuming both catalogs share a slug.
-      if (candidate.critical >= 3) {
-        calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'sync-ophim-movies', {
-          provider: primaryProvider === 'ophim' ? 'kkphim' : 'ophim',
-          movie_id: movie.id,
-          episodes: '1',
-          limit: 1,
-          strict_missing_detail: '1',
-        }));
-        calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'sync-motchill-feed', {
-          query: String(movie.name || movie.origin_name || candidate.title || movie.slug),
-          limit: 3,
-          refresh_search: '1',
-        }));
-      }
+    } else if (isUnifiedProviderMovie(movie)) {
+      calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'unified-provider-brain', {
+        slug: movie.slug,
+        limit: 1,
+        provider_budget: candidate.critical >= 3 ? 4 : 2,
+        reason: 'player_telemetry',
+      }));
     }
 
     // Mark the exact current rows after provider sync. Doing this before sync
@@ -554,7 +525,7 @@ serve(async (req) => {
 
     repairs.push({
       candidate,
-      action: isBlvietsubMovie(movie) ? 'repair_blvietsub' : 'repair_ophim_like',
+      action: isBlvietsubMovie(movie) ? 'repair_blvietsub' : 'repair_unified_provider_pool',
       penalized_streams: penalizedStreams,
       calls: calls.map(compactCall),
     });

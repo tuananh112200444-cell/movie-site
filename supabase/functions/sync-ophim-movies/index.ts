@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
+  getProviderEpisodeNumber,
   normalizeVerifiedSeasonNumbering,
   type SeasonNumberingNormalization,
 } from '../_shared/episode-numbering.ts';
@@ -12,18 +13,6 @@ const CORS_HEADERS = {
 };
 
 const PROVIDERS = {
-  ophim: {
-    sourceSite: 'ophim',
-    sourceName: 'OPhim',
-    // The retired .tv/.cc mirrors refuse connections or redirect to a dead
-    // host. Failing fast lets the independent-provider repair path take over.
-    bases: ['https://ophim1.com'],
-    listPath: (page: number) => `/v1/api/danh-sach/phim-moi-cap-nhat?page=${page}&sort_field=modified.time&sort_type=desc`,
-    searchPath: (query: string) => `/v1/api/tim-kiem?keyword=${encodeURIComponent(query)}&limit=10`,
-    detailPath: (slug: string) => `/v1/api/phim/${encodeURIComponent(slug)}`,
-    trackOphimIdentity: true,
-    adapter: 'ophim',
-  },
   kkphim: {
     sourceSite: 'phimapi',
     sourceName: 'KKPhim',
@@ -59,11 +48,11 @@ const PROVIDERS = {
 type ProviderKey = keyof typeof PROVIDERS;
 type ProviderConfig = (typeof PROVIDERS)[ProviderKey];
 
-function providerFromParam(value: string | null): ProviderConfig {
+function providerFromParam(value: string | null): ProviderConfig | null {
   if (value === 'kkphim') return PROVIDERS.kkphim;
   if (value === 'vsmov') return PROVIDERS.vsmov;
   if (value === 'nguonc') return PROVIDERS.nguonc;
-  return PROVIDERS.ophim;
+  return null;
 }
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -258,7 +247,7 @@ function sameMovieByStableProviderIdentity(existing: Record<string, unknown>, in
 function normalizedMovieType(value: unknown): 'single' | 'series' | '' {
   const type = normalizeText(String(value || ''));
   if (['single', 'movie', 'phim le', 'phim chieu rap'].includes(type)) return 'single';
-  if (['series', 'tv', 'phim bo', 'hoathinh'].includes(type)) return 'series';
+  if (['series', 'tv', 'tvshows', 'tv show', 'tv shows', 'phim bo', 'hoathinh'].includes(type)) return 'series';
   return '';
 }
 
@@ -350,14 +339,7 @@ function recordSyncError(stats: SyncStats, message: string): void {
 }
 
 function episodeNumber(ep: OPhimEpisode): number {
-  const text = `${ep.name || ''} ${ep.slug || ''}`.toLowerCase();
-  if (text.includes('full')) return 1;
-  const slash = text.match(/(\d{1,4})\s*\/\s*(\d{1,4})/);
-  if (slash) return Number(slash[1] || 0) || 0;
-  const range = text.match(/(?:tap|ep|episode|tập)?\s*0*(\d{1,4})\s*[-–—]\s*0*(\d{1,4})/i);
-  if (range) return Number(range[2] || 0) || Number(range[1] || 0) || 0;
-  const matches = [...text.matchAll(/(\d{1,4})/g)].map((match) => Number(match[1])).filter(Number.isFinite);
-  return matches.length ? Math.max(...matches) : 0;
+  return getProviderEpisodeNumber(ep);
 }
 
 function hasPlayableEpisodeLink(ep: OPhimEpisode): boolean {
@@ -418,6 +400,24 @@ function safeProviderImage(value: unknown): string {
   return image;
 }
 
+function normalizeProviderImage(provider: ProviderConfig, value: unknown): string {
+  const image = safeProviderImage(value);
+  if (!image) return '';
+  const repairKnownOphimPath = (url: string) => {
+    const match = url.match(/^(https:\/\/(?:img\.ophimimg\.com|img\.ophim\.live))\/([^/?#]+)([?#].*)?$/i);
+    if (!match) return url;
+    return `${match[1]}/uploads/movies/${match[2]}${match[3] || ''}`;
+  };
+  if (/^https?:\/\//i.test(image)) return repairKnownOphimPath(image);
+  if (/^\/\//.test(image)) {
+    const absolute = `https:${image}`;
+    const repaired = repairKnownOphimPath(absolute);
+    return repaired === absolute ? image : repaired;
+  }
+  if (provider.sourceSite !== 'ophim') return image;
+  return repairKnownOphimPath(`https://img.ophim.live/${image.replace(/^\/+/, '')}`);
+}
+
 function hasUsableMovieImage(...records: Array<Record<string, unknown> | null | undefined>): boolean {
   return records.some((record) => Boolean(
     safeProviderImage(record?.thumb_url) || safeProviderImage(record?.poster_url),
@@ -447,7 +447,7 @@ function safeProviderEpisodeUrl(provider: ProviderConfig, value: unknown, kind: 
         : '';
     }
     if (provider.sourceSite === 'nguonc' && kind === 'embed') {
-      return /^embed\d+\.streamc\.xyz$/i.test(url.hostname) && url.pathname === '/embed.php'
+      return /^embed\d*\.streamc\.xyz$/i.test(url.hostname) && url.pathname === '/embed.php'
         ? url.toString()
         : '';
     }
@@ -664,7 +664,7 @@ function adaptNguoncDetail(payload: DetailPayload, fallbackSlug: string): Detail
     : {};
   const format = nguoncCategoryValues(rawMovie, 'Định dạng')
     .map((item) => normalizeText(String(item.name || '')));
-  const type = format.some((name) => name.includes('phim bo')) ? 'series' : 'single';
+  const type = format.some((name) => name.includes('phim bo') || name.includes('tv show')) ? 'series' : 'single';
   const year = Number(rawMovie.year || nguoncCategoryValues(rawMovie, 'Năm')[0]?.name || 0) || 0;
   const categories = nguoncCategoryValues(rawMovie, 'Thể loại');
   const countries = nguoncCategoryValues(rawMovie, 'Quốc gia');
@@ -681,7 +681,7 @@ function adaptNguoncDetail(payload: DetailPayload, fallbackSlug: string): Detail
           const parsed = new URL(rawEmbed);
           if (
             parsed.protocol === 'https:' &&
-            /^embed\d+\.streamc\.xyz$/i.test(parsed.hostname) &&
+            /^embed\d*\.streamc\.xyz$/i.test(parsed.hostname) &&
             parsed.pathname === '/embed.php'
           ) linkEmbed = parsed.toString();
         } catch {
@@ -818,11 +818,11 @@ function sourceCandidateScore(item: OPhimMovie, target: TargetMovieIdentity): nu
   return score;
 }
 
-async function fetchDetailForTarget(
+function isSafeTargetDetail(
   provider: ProviderConfig,
   target: TargetMovieIdentity,
-): Promise<ParsedDetail | null> {
-  const isSafeTargetDetail = (detail: ParsedDetail): boolean => {
+  detail: ParsedDetail,
+): boolean {
     const movie = detail.movie as Record<string, unknown>;
     const targetTmdb = String(target.tmdb_id || '').trim();
     const detailTmdbObject = movie.tmdb && typeof movie.tmdb === 'object'
@@ -835,6 +835,28 @@ async function fetchDetailForTarget(
     const detailType = normalizedMovieType(movie.type);
     if (targetType && detailType && targetType !== detailType) return false;
 
+    const targetTitles = [target.name, target.origin_name, target.title_vi, target.title_en, target.title_original]
+      .map((value) => slugify(String(value || '')))
+      .filter(Boolean);
+    const detailTitles = [movie.name, movie.origin_name, movie.title_vi, movie.title_en, movie.title_original]
+      .map((value) => slugify(String(value || '')))
+      .filter(Boolean);
+    const exactTitle = detailTitles.some((title) => targetTitles.includes(title));
+    const exactSourceSlug = slugify(movie.slug) === slugify(target.slug);
+    // NguonC and OPhim occasionally assign a premiere to adjacent calendar
+    // years. An exact slug + exact title + exact type is a safe, narrow bridge;
+    // unrelated titles and larger year drift remain rejected.
+    if (
+      provider.sourceSite === 'nguonc'
+      && exactSourceSlug
+      && exactTitle
+      && targetType
+      && detailType === targetType
+      && targetYear > 0
+      && detailYear > 0
+      && Math.abs(targetYear - detailYear) <= 1
+    ) return true;
+
     // A matching TMDB id is authoritative, except that a different release
     // year must not cross-wire separate seasons sharing one series-level id.
     if (targetTmdb && detailTmdb && targetTmdb === detailTmdb) {
@@ -845,19 +867,18 @@ async function fetchDetailForTarget(
     // and matching year. A similar name or a shared slug alone is never
     // sufficient to attach another provider's episodes to this movie.
     if (!(targetYear > 0 && detailYear > 0 && targetYear === detailYear)) return false;
-    const targetTitles = [target.name, target.origin_name, target.title_vi, target.title_en, target.title_original]
-      .map((value) => slugify(String(value || '')))
-      .filter(Boolean);
-    const detailTitles = [movie.name, movie.origin_name, movie.title_vi, movie.title_en, movie.title_original]
-      .map((value) => slugify(String(value || '')))
-      .filter(Boolean);
-    return detailTitles.some((title) => targetTitles.includes(title));
-  };
+    return exactTitle;
+}
+
+async function fetchDetailForTarget(
+  provider: ProviderConfig,
+  target: TargetMovieIdentity,
+): Promise<ParsedDetail | null> {
 
   const directSlugs = [...new Set([target.ophim_slug, target.slug].map((value) => String(value || '').trim()).filter(Boolean))];
   for (const slug of directSlugs) {
     const detail = await fetchDetail(provider, slug);
-    if (detail && isSafeTargetDetail(detail)) return detail;
+    if (detail && isSafeTargetDetail(provider, target, detail)) return detail;
   }
 
   const queries = [...new Set([
@@ -887,7 +908,7 @@ async function fetchDetailForTarget(
   const candidates = [...ranked.values()].sort((a, b) => b.score - a.score).slice(0, 3);
   for (const candidate of candidates) {
     const detail = await fetchDetail(provider, String(candidate.item.slug || ''));
-    if (detail && isSafeTargetDetail(detail)) return detail;
+    if (detail && isSafeTargetDetail(provider, target, detail)) return detail;
   }
   return null;
 }
@@ -907,8 +928,8 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
   const totalEpisode = Math.max(currentEpisode, sourceAdvertisedTotal);
   const rawCurrent = firstEpisodeNumber(movie.episode_current || '');
   const sourceCurrentLooksClean = rawCurrent > 0 && rawCurrent === currentEpisode;
-  const thumbUrl = safeProviderImage(movie.thumb_url);
-  const posterUrl = safeProviderImage(movie.poster_url) || thumbUrl;
+  const thumbUrl = normalizeProviderImage(provider, movie.thumb_url);
+  const posterUrl = normalizeProviderImage(provider, movie.poster_url) || thumbUrl;
 
   return {
     slug,
@@ -953,7 +974,39 @@ function providerSlugPrefix(sourceSite: unknown): string {
   return normalized || 'provider';
 }
 
-async function findExistingMovie(supabase: SupabaseClient, payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+async function findExistingMovie(
+  supabase: SupabaseClient,
+  provider: ProviderConfig,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const providerSlug = String(payload.ophim_slug || payload.slug || '').trim();
+  if (providerSlug) {
+    const { data: resolved, error: resolveError } = await supabase.rpc('resolve_canonical_movie', {
+      p_provider: provider.sourceSite,
+      p_provider_slug: providerSlug,
+      p_provider_id: String(payload.ophim_id || providerSlug),
+      p_tmdb_id: Number(payload.tmdb_id || 0) || null,
+      p_imdb_id: String(payload.imdb_id || ''),
+      p_original_title: String(payload.title_original || payload.origin_name || ''),
+      p_localized_title: String(payload.title_vi || payload.name || ''),
+      p_year: Number(payload.year || 0) || null,
+      p_movie_type: String(payload.type || ''),
+      p_season: null,
+      p_create_slug: String(payload.slug || providerSlug),
+      p_source_name: provider.sourceName,
+    });
+    if (resolveError) throw new Error(`canonical resolver ${provider.sourceSite}:${providerSlug}: ${resolveError.message}`);
+    const resolvedId = String(Array.isArray(resolved) ? resolved[0]?.movie_id || '' : '');
+    if (resolvedId) {
+      const { data: canonical, error: canonicalError } = await supabase
+        .from('movies')
+        .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+        .eq('id', resolvedId)
+        .maybeSingle();
+      if (canonicalError) throw new Error(`canonical movie lookup ${resolvedId}: ${canonicalError.message}`);
+      if (canonical?.id) return canonical as Record<string, unknown>;
+    }
+  }
   const checks = [
     ['slug', payload.slug],
     ['ophim_slug', payload.ophim_slug],
@@ -1117,16 +1170,34 @@ function updatePayloadForExisting(existing: Record<string, unknown>, incoming: R
     existingTotal > 0 &&
     incomingTotal > 0 &&
     current > Math.max(existingTotal, incomingTotal);
-  const mergedCurrent = (existingLooksAheadOfSource ? incomingCurrent : Math.max(current, incomingCurrent)) || null;
-  const mergedTotal = Math.max(existingTotal, incomingTotal, Number(mergedCurrent || 0)) || null;
+  const exactProviderIdentity = Boolean(
+    (existing.ophim_id && incoming.ophim_id && String(existing.ophim_id) === String(incoming.ophim_id))
+    || (existing.ophim_slug && incoming.ophim_slug && String(existing.ophim_slug) === String(incoming.ophim_slug))
+    || (existing.slug && incoming.slug && String(existing.slug) === String(incoming.slug))
+  );
+  const authoritativeCompletedSingle =
+    !managed &&
+    exactProviderIdentity &&
+    ['single', 'phim-le'].includes(String(incoming.type || '').toLowerCase()) &&
+    incomingCurrent === 1 &&
+    incomingTotal === 1 &&
+    /\bfull\b|hoan\s*(?:tat|thanh)|completed/i.test(String(incoming.episode_current || ''));
+  const mergedCurrent = (authoritativeCompletedSingle
+    ? 1
+    : existingLooksAheadOfSource
+      ? incomingCurrent
+      : Math.max(current, incomingCurrent)) || null;
+  const mergedTotal = authoritativeCompletedSingle
+    ? 1
+    : Math.max(existingTotal, incomingTotal, Number(mergedCurrent || 0)) || null;
 
   if (!managed) {
     const update = {
       ...incoming,
       current_episode: mergedCurrent,
       total_episodes: mergedTotal,
-      episode_current: incomingCurrent > current ? incoming.episode_current : existing.episode_current || incoming.episode_current,
-      episode_total: incomingTotal >= existingTotal ? incoming.episode_total : existing.episode_total || incoming.episode_total,
+      episode_current: authoritativeCompletedSingle || incomingCurrent > current ? incoming.episode_current : existing.episode_current || incoming.episode_current,
+      episode_total: authoritativeCompletedSingle || incomingTotal >= existingTotal ? incoming.episode_total : existing.episode_total || incoming.episode_total,
     };
     // A previous run may have created the movie but timed out before writing
     // its episodes. Metadata refreshes must not publish that incomplete row.
@@ -1195,7 +1266,7 @@ async function upsertMovie(
   detail: ParsedDetail,
 ): Promise<{ id: string; created: boolean; updated: boolean; hasImage: boolean; retired?: boolean }> {
   const payload = moviePayload(provider, detail);
-  const existing = await findExistingMovie(supabase, payload);
+  const existing = await findExistingMovie(supabase, provider, payload);
 
   if (existing?.id) {
     const existingSource = `${existing.source_site || ''} ${existing.source_name || ''}`.toLowerCase();
@@ -1248,7 +1319,7 @@ async function upsertMovie(
   if (error) {
     if (isDuplicateError(error)) {
       const duplicate = await findMovieByProviderUniqueIdentity(supabase, payload)
-        || await findExistingMovie(supabase, payload);
+        || await findExistingMovie(supabase, provider, payload);
       if (duplicate?.id) {
         const update = protectExistingSlug(duplicate, updatePayloadForExisting(duplicate, payload));
         const { error: updateError } = await runDatabaseMutationWithRetry(
@@ -1939,6 +2010,15 @@ async function runSeoAutomation(
   };
 }
 
+function isVietnamViewingPeak(now = new Date()): boolean {
+  const hour = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).format(now));
+  return (hour >= 11 && hour <= 14) || (hour >= 19 && hour <= 23);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
@@ -1962,7 +2042,17 @@ serve(async (req) => {
   const setBasedBulk = url.searchParams.get('set_based_bulk') === '1';
   const requestedBulkFastPath = url.searchParams.get('bulk_fast_path') === '1';
   const strictMissingDetail = url.searchParams.get('strict_missing_detail') === '1';
-  const provider = providerFromParam(url.searchParams.get('provider'));
+  const requestedProvider = String(url.searchParams.get('provider') || '').trim().toLowerCase();
+  const provider = providerFromParam(requestedProvider);
+  if (!provider) {
+    return json({
+      success: false,
+      retired: requestedProvider === 'ophim',
+      error: requestedProvider === 'ophim'
+        ? 'OPhim provider is retired and cannot be synchronized'
+        : 'provider must be one of: kkphim, vsmov, nguonc',
+    }, requestedProvider === 'ophim' ? 410 : 400);
+  }
   let submittedDetails = new Map<string, ParsedDetail>();
   let submittedPage = 0;
   if (req.method === 'POST') {
@@ -2002,6 +2092,20 @@ serve(async (req) => {
       progress: progress || null,
       storage: Array.isArray(storageRows) ? storageRows[0] : storageRows,
     });
+  }
+  const hasTarget = Boolean(url.searchParams.get('slug') || url.searchParams.get('movie_id'));
+  if (!dryRun && !hasTarget) {
+    const { data: capacity } = await supabase.from('runtime_capacity_state')
+      .select('mode,last_reason').eq('singleton', true).maybeSingle();
+    if (capacity?.mode === 'protect' || isVietnamViewingPeak()) {
+      return json({
+        success: true,
+        skipped: true,
+        reason: capacity?.mode === 'protect' ? 'runtime_capacity_protect' : 'vietnam_viewing_peak',
+        provider: provider.sourceSite,
+        next_page_unchanged: true,
+      }, 202);
+    }
   }
   const stats: SyncStats = { scanned: 0, created: 0, updated: 0, episodesInserted: 0, skipped: 0, errors: [], transientErrors: [] };
   const changedSlugs: string[] = [];
@@ -2044,6 +2148,44 @@ serve(async (req) => {
       if (error) throw new Error(`target movie lookup ${targetMovieId || targetSlug}: ${error.message}`);
       targetMovie = data as TargetMovieIdentity | null;
       if (targetMovieId && !targetMovie) throw new Error(`target movie ${targetMovieId} not found`);
+    }
+    if (url.searchParams.get('debug_target') === '1' && targetMovie) {
+      const debugSlug = targetSlug || String(targetMovie.slug || '');
+      const rawPayload = await fetchJsonFromMirrors(provider, provider.detailPath(debugSlug));
+      const directDetail = parseDetail(provider, rawPayload as DetailPayload | null, debugSlug);
+      const rawMovie = rawPayload?.movie && typeof rawPayload.movie === 'object'
+        ? rawPayload.movie as Record<string, unknown>
+        : null;
+      return json({
+        success: true,
+        provider: provider.sourceSite,
+        target: {
+          slug: targetMovie.slug,
+          name: targetMovie.name,
+          origin_name: targetMovie.origin_name,
+          year: targetMovie.year,
+          type: targetMovie.type,
+        },
+        detail_found: Boolean(directDetail),
+        detail_safe: Boolean(directDetail && isSafeTargetDetail(provider, targetMovie, directDetail)),
+        raw: {
+          found: Boolean(rawPayload),
+          keys: rawPayload ? Object.keys(rawPayload).slice(0, 20) : [],
+          status: rawPayload?.status || null,
+          provider_error_payload: Boolean(rawPayload && isProviderErrorPayload(rawPayload)),
+          movie_keys: rawMovie ? Object.keys(rawMovie).slice(0, 30) : [],
+          raw_episode_servers: Array.isArray(rawMovie?.episodes) ? rawMovie.episodes.length : 0,
+        },
+        detail: directDetail ? {
+          slug: directDetail.movie.slug,
+          name: directDetail.movie.name,
+          origin_name: directDetail.movie.origin_name,
+          year: directDetail.movie.year,
+          type: directDetail.movie.type,
+          servers: directDetail.episodes.length,
+          playable_rows: directDetail.episodes.reduce((count, server) => count + (server.server_data || []).filter((episode) => Boolean(episode.link_m3u8 || episode.link_embed)).length, 0),
+        } : null,
+      });
     }
     const startPage = useCursor ? await readCursorPage(supabase, cursorKey, requestedStartPage) : requestedStartPage;
     const candidates = new Map<string, OPhimMovie>();

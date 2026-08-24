@@ -1,5 +1,6 @@
 ﻿import { Link } from 'react-router-dom';
 import { memo } from 'react';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const STATS = [
   { value: 'Đa dạng', label: 'Thư Viện Phim' },
@@ -75,8 +76,50 @@ const SOCIAL_LINKS = [
   { href: 'https://t.me/davisjohn_1', icon: 'ri-telegram-fill', label: 'Telegram', color: 'hover:bg-[#29A8E8]/15 hover:text-[#29A8E8] hover:border-[#29A8E8]/30' },
 ];
 
+const MOBILE_FOOTER_LINKS = [
+  { label: 'Phim mới', to: '/phim-moi-cap-nhat' },
+  { label: 'Phim lẻ', to: '/phim-le' },
+  { label: 'Phim bộ', to: '/phim-bo' },
+  { label: 'Anime', to: '/anime' },
+  { label: 'Đam mỹ / BL / GL', to: '/vu-tru-dam-my' },
+  { label: 'Tìm kiếm', to: '/search' },
+  { label: 'Giới thiệu', to: '/about' },
+  { label: 'Chính sách', to: '/policy' },
+];
+
 
 function Footer() {
+  const compactMobile = useMediaQuery('(max-width: 639px)');
+
+  if (compactMobile) {
+    return (
+      <footer className="mt-12 border-t border-white/[0.06] bg-[#08090e] px-4 py-7">
+        <div className="mx-auto max-w-lg">
+          <div className="flex items-center gap-2.5">
+            <img src="/brand/khophim-favicon-v2-96.png" alt="KhoPhim" width="36" height="36" className="h-9 w-9 object-contain" loading="lazy" />
+            <div>
+              <p className="text-base font-black text-white">Kho<span className="text-red-500">Phim</span></p>
+              <p className="text-[11px] text-white/50">Tìm và xem phim tiếng Việt trên mọi thiết bị.</p>
+            </div>
+          </div>
+
+          <nav aria-label="Liên kết cuối trang" className="mt-5 grid grid-cols-2 gap-x-3 gap-y-1">
+            {MOBILE_FOOTER_LINKS.map((item) => (
+              <Link key={item.to} to={item.to} className="flex min-h-11 items-center text-xs text-white/62 hover:text-red-300">
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="mt-4 border-t border-white/[0.05] pt-4 text-[11px] leading-5 text-white/45">
+            <p>Nội dung tổng hợp từ nguồn công khai; KhoPhim không lưu trữ tệp video.</p>
+            <p className="mt-2">© 2026 KhoPhim · Hệ thống hoạt động bình thường</p>
+          </div>
+        </div>
+      </footer>
+    );
+  }
+
   return (
     <footer className="mt-20 relative overflow-hidden bg-[#08090e]">
       {/* Top gradient border — cinematic */}

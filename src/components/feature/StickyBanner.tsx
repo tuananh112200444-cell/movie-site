@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { TOP_CAMPAIGN_BANNER_ENABLED } from '../../lib/advertising';
 
 const BANNER_URL = 'https://winaz.it.com/?utm_source=Khophim&utm_medium=facebook&utm_campaign=booking';
 // Keep the advertiser's animated GIF intact. Re-encoding it as WebP through
@@ -55,6 +56,11 @@ function trackBannerClick(pagePath: string) {
 }
 
 export default function StickyBanner() {
+  if (!TOP_CAMPAIGN_BANNER_ENABLED) return null;
+  return <ActiveStickyBanner />;
+}
+
+function ActiveStickyBanner() {
   const location = useLocation();
   const [bannerReady, setBannerReady] = useState(false);
   const [visible, setVisible] = useState(true);

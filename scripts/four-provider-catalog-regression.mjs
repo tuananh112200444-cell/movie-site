@@ -8,10 +8,12 @@ const brainMigration = await readFile(new URL('../supabase/migrations/2026081217
 const batchTriggerMigration = await readFile(new URL('../supabase/migrations/20260813213000_batch_catalog_refresh_triggers.sql', import.meta.url), 'utf8');
 const setBasedMigration = await readFile(new URL('../supabase/migrations/20260813224500_add_set_based_provider_catalog_ingest.sql', import.meta.url), 'utf8');
 
-for (const provider of ['ophim', 'kkphim', 'vsmov', 'nguonc']) {
+for (const provider of ['kkphim', 'vsmov', 'nguonc']) {
   assert.match(importer, new RegExp(`\\b${provider}: \\{`), `missing ${provider} importer`);
   assert.match(runner, new RegExp(`\\b${provider}: \\{`), `missing ${provider} runner`);
 }
+assert.doesNotMatch(importer, /\bophim: \{/, 'retired OPhim must not remain an active catalogue importer');
+assert.match(importer, /OPhim provider is retired and cannot be synchronized/);
 assert.match(importer, /existingType && incomingType && existingType !== incomingType/);
 assert.match(importer, /sameMovieByStableProviderIdentity/);
 assert.match(importer, /payload\.year = existing\.year/);
@@ -38,7 +40,7 @@ assert.match(runner, /submitted chunk incomplete:/);
 assert.match(runner, /unresolvedSlugs\.length/);
 assert.match(runner, /next_page: page \+ 1/);
 assert.match(runner, /workerHeartbeatAt/);
-assert.match(importer, /\^embed\\d\+\\\.streamc\\\.xyz\$/);
+assert.match(importer, /\^embed\\d\*\\\.streamc\\\.xyz\$/);
 assert.match(importer, /provider_catalog_storage_status/);
 assert.match(importer, /record_provider_catalog_backfill_batch/);
 assert.match(runner, /tmp_four_provider_backfill_state\.json/);
@@ -70,4 +72,4 @@ assert.match(setBasedMigration, /insert into public\.streams/);
 assert.match(setBasedMigration, /streams\.stream_url is distinct from excluded\.stream_url/);
 assert.match(setBasedMigration, /movie_episodes\.link_m3u8 is distinct from excluded\.link_m3u8/);
 
-console.log('four-provider catalog regression passed (27 contracts)');
+console.log('provider-neutral catalog regression passed (KKPhim, VSMov, NguonC active; OPhim retired)');

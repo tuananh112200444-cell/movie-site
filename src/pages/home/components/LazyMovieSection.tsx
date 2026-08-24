@@ -8,7 +8,7 @@ import { Film } from 'lucide-react';
 
 const carouselItemClass = HOME_POSTER_ITEM_CLASS;
 const HOME_FALLBACK_URL = '/home-fallback.json';
-const MAX_STATIC_HOME_FALLBACK_AGE_MS = 6 * 60 * 60 * 1000;
+const MAX_STATIC_HOME_FALLBACK_AGE_MS = 48 * 60 * 60 * 1000;
 let staticHomeFallbackPromise: Promise<Record<string, Movie[]>> | null = null;
 
 function isMobileViewport() {
@@ -24,6 +24,9 @@ function shouldTriggerImmediately(sectionIndex: number, hasData: boolean) {
   // The discovery, quick-picks and trending blocks already fill the initial
   // mobile viewport. Rendering category shelves immediately made dozens of
   // offscreen posters compete with the hero LCP.
+  // Only the first desktop shelf renders eagerly. Mobile and later shelves use
+  // the progressive observer so offscreen posters never compete with the hero,
+  // detail or player route for bandwidth.
   return !isMobileViewport() && hasData && sectionIndex === 0;
 }
 
@@ -173,6 +176,11 @@ export default function LazyMovieSection({
           return null;
         }
 
+        // Production home data is one canonical package from /api/home, with
+        // the deployed snapshot as its stale fallback. Do not turn a sparse
+        // rail into a new direct database query from every visitor.
+        if (!import.meta.env.DEV) return null;
+
         const fetchPromise = fetchType === 'country'
           ? fetchMoviesByCategory({
               country: fetchKey,
@@ -219,7 +227,10 @@ export default function LazyMovieSection({
   }, [fallbackMovies.length, hasData, triggered]);
 
   const prioritizeFirstRow = sectionIndex === 0 && !isMobileViewport();
-  const sectionMovies = hasData ? (propMovies ?? []) : fallbackMovies;
+  const rawSectionMovies = hasData ? (propMovies ?? []) : fallbackMovies;
+  const sectionMovies = fetchKey === 'vsmov-4k'
+    ? rawSectionMovies.map((movie) => ({ ...movie, source_site: 'vsmov', quality: '4K' }))
+    : rawSectionMovies;
   // Keep the full skeleton height until the parent request settles. Rendering
   // the compact empty state before parent data arrives shifts every shelf below.
   const sectionLoading = Boolean(propLoading) || fallbackLoading;
@@ -233,6 +244,7 @@ export default function LazyMovieSection({
           loading={sectionLoading}
           prioritizeFirstRow={prioritizeFirstRow}
           theme={theme}
+          rows={rows}
         />
       ) : (
         <SectionPlaceholder title={sectionProps.title} cols={sectionProps.cols ?? 6} rows={rows} theme={theme} />

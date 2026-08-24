@@ -71,32 +71,14 @@ const SEO = memo(function SEO({
   })();
 
   const finalOgImage = ogImage ?? `${SITE_URL}/og-image.jpg`;
-  const schemas = useMemo(() => (schema ? (Array.isArray(schema) ? schema : [schema]) : []), [schema]);
-  const siteSchemas = useMemo(() => [
-    {
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      '@id': `${SITE_URL}/#website`,
-      name: SITE_NAME_SHORT,
-      alternateName: ['Kho Phim', 'khophim.org'],
-      url: SITE_URL,
-      inLanguage: 'vi-VN',
-      potentialAction: {
-        '@type': 'SearchAction',
-        target: `${SITE_URL}/search?q={search_term_string}`,
-        'query-input': 'required name=search_term_string',
-      },
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'Organization',
-      '@id': `${SITE_URL}/#organization`,
-      name: SITE_NAME_SHORT,
-      url: SITE_URL,
-      logo: `${SITE_URL}/brand/khophim-logo-v2.png`,
-      sameAs: ['https://www.tiktok.com/@khophim.org'],
-    },
-  ], []);
+  // index.html owns the single WebSite and Organization entities. Route
+  // components only manage page-specific schema so navigation never creates
+  // duplicate site entities. A stable JSON string also prevents an effect
+  // rerun when a parent recreates an equivalent schema array during render.
+  const schemaJson = useMemo(() => {
+    const items = schema ? (Array.isArray(schema) ? schema : [schema]) : [];
+    return items.length ? JSON.stringify(items) : '';
+  }, [schema]);
 
   const today = new Date().toISOString().split('T')[0];
   const updatedDate = (updatedAt ?? today).split('T')[0];
@@ -119,7 +101,7 @@ const SEO = memo(function SEO({
         tag.setAttribute(attr, key);
         document.head.appendChild(tag);
       }
-      tag.setAttribute('content', content);
+      if (tag.getAttribute('content') !== content) tag.setAttribute('content', content);
     };
 
     const ensureLink = (rel: string, href?: string) => {
@@ -133,11 +115,27 @@ const SEO = memo(function SEO({
         tag.setAttribute('rel', rel);
         document.head.appendChild(tag);
       }
-      tag.setAttribute('href', href);
+      if (tag.getAttribute('href') !== href) tag.setAttribute('href', href);
     };
 
-    document.title = fullTitle;
-    document.head.querySelectorAll('[data-kp-seo-managed="true"]').forEach((node) => node.remove());
+    const ensureAlternate = (hrefLang: string, href?: string) => {
+      const selector = `link[data-kp-seo-managed="true"][rel="alternate"][hreflang="${hrefLang}"]`;
+      let link = document.head.querySelector<HTMLLinkElement>(selector);
+      if (!href) {
+        link?.remove();
+        return;
+      }
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'alternate';
+        link.hreflang = hrefLang;
+        link.dataset.kpSeoManaged = 'true';
+        document.head.appendChild(link);
+      }
+      if (link.href !== href) link.href = href;
+    };
+
+    if (document.title !== fullTitle) document.title = fullTitle;
 
     ensureMeta('name', 'description', truncatedDescription);
     // Google does not use the keywords meta tag. Keeping it would encourage
@@ -158,16 +156,7 @@ const SEO = memo(function SEO({
     ensureLink('prev', prev);
     ensureLink('next', next);
 
-    if (canonicalUrl) {
-      for (const hrefLang of ['vi', 'vi-VN', 'x-default']) {
-        const link = document.createElement('link');
-        link.setAttribute('rel', 'alternate');
-        link.setAttribute('hrefLang', hrefLang);
-        link.setAttribute('href', canonicalUrl);
-        link.dataset.kpSeoManaged = 'true';
-        document.head.appendChild(link);
-      }
-    }
+    for (const hrefLang of ['vi', 'vi-VN', 'x-default']) ensureAlternate(hrefLang, canonicalUrl);
 
     ensureMeta('property', 'article:published_time', publishedYear ? `${publishedYear}-01-01T00:00:00+07:00` : undefined);
     ensureMeta('property', 'article:modified_time', `${updatedDate}T00:00:00+07:00`);
@@ -193,12 +182,18 @@ const SEO = memo(function SEO({
     ensureMeta('name', 'twitter:image', finalOgImage);
     ensureMeta('name', 'twitter:url', canonicalUrl);
 
-    for (const item of [...siteSchemas, ...schemas]) {
-      const script = document.createElement('script');
-      script.type = 'application/ld+json';
-      script.text = JSON.stringify(item);
-      script.dataset.kpSeoManaged = 'true';
-      document.head.appendChild(script);
+    let schemaScript = document.head.querySelector<HTMLScriptElement>('script[data-kp-seo-managed="true"][data-kp-route-schema="true"]');
+    if (!schemaJson) {
+      schemaScript?.remove();
+    } else {
+      if (!schemaScript) {
+        schemaScript = document.createElement('script');
+        schemaScript.type = 'application/ld+json';
+        schemaScript.dataset.kpSeoManaged = 'true';
+        schemaScript.dataset.kpRouteSchema = 'true';
+        document.head.appendChild(schemaScript);
+      }
+      if (schemaScript.text !== schemaJson) schemaScript.text = schemaJson;
     }
   }, [
     canonicalUrl,
@@ -211,8 +206,7 @@ const SEO = memo(function SEO({
     prev,
     publishedYear,
     robotsContent,
-    schemas,
-    siteSchemas,
+    schemaJson,
     truncatedDescription,
     updatedDate,
   ]);

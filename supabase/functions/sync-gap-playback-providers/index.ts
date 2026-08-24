@@ -183,7 +183,7 @@ function isVsmovEmbed(value: string): boolean {
 function isNguoncEmbed(value: string): boolean {
   try {
     const url = new URL(value);
-    return /^embed\d+\.streamc\.xyz$/i.test(url.hostname) && url.pathname === '/embed.php';
+    return /^embed\d*\.streamc\.xyz$/i.test(url.hostname) && url.pathname === '/embed.php';
   } catch {
     return false;
   }
@@ -475,6 +475,21 @@ async function persistMatch(
   const existing = new Map(existingStreams
     .filter((row) => row.source === match.provider)
     .map((row) => [streamKey(row), row]));
+  // Reaching this function means title + year + type matched and the provider
+  // URL passed a live probe. Persist that durable identity even when every
+  // episode URL is unchanged, so the playback API can safely expose this
+  // auxiliary provider on protected BL/GL catalogue records.
+  const { error: identityError } = await supabase.from('provider_movie_identities').upsert({
+    provider: match.provider,
+    provider_slug: match.sourceSlug,
+    provider_id: match.sourceId || match.sourceSlug,
+    movie_id: movie.id,
+    normalized_name: normalizeTitle(match.title || match.originalTitle),
+    release_year: match.year,
+    movie_type: match.type,
+    last_seen_at: new Date().toISOString(),
+  }, { onConflict: 'provider,provider_slug' });
+  if (identityError) throw new Error(`provider identity: ${identityError.message}`);
   const changedEpisodes = match.episodes.filter((episode) => {
     const key = streamKey({ source: match.provider, server_name: episode.serverName, episode_slug: episode.slug });
     const stored = existing.get(key);
@@ -506,6 +521,7 @@ async function persistMatch(
     duration: '',
     source: match.provider,
     is_backup: true,
+    audio_type: 'vietsub',
     updated_at: now,
   }));
   const episodeRows = changedEpisodes.map((episode) => ({
@@ -535,6 +551,7 @@ async function persistMatch(
     failure_count: 0,
     last_error: `Provider verification pending: ${match.provider}`,
     last_checked_at: null,
+    audio_type: 'vietsub',
     updated_at: now,
   }));
 

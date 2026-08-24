@@ -1,6 +1,6 @@
 import type { Context } from 'https://edge.netlify.com';
 
-const PRERENDER_URL = 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/seo-prerender';
+const PRERENDER_URL = `${Deno.env.get('SUPABASE_URL') ?? 'https://ceoxbhsdodllziyxmbqr.supabase.co'}/functions/v1/seo-prerender`;
 
 // Security headers — inject vào MỌI response (kể cả non-bot)
 const SECURITY_HEADERS: Record<string, string> = {

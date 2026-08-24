@@ -113,5 +113,6 @@ export function injectPreloadLink(url: string): void {
   link.rel = 'preload';
   link.as = 'image';
   link.href = url;
+  link.setAttribute('fetchpriority', 'high');
   document.head.appendChild(link);
 }

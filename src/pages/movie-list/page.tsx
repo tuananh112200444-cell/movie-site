@@ -32,9 +32,9 @@ const COUNTRY_META: Record<string, { title: string; keywords: string; path: stri
 const TYPE_META: Record<string, { keywords: string; desc: string }> = {
   'phim-le':        { keywords: 'phim lẻ, phim le, phim lẻ vietsub, phim le vietsub, phim điện ảnh, phim lẻ hay, phim le hay, phim lẻ 2026', desc: 'Danh sách phim lẻ Vietsub HD gồm hành động, tình cảm, kinh dị, hài hước, viễn tưởng và phim điện ảnh mới cập nhật trên KhoPhim.' },
   'phim-bo':        { keywords: 'phim bộ, phim bo, phim bộ vietsub, phim bo vietsub, phim series, phim bộ hay, phim bo hay, phim bộ 2026', desc: 'Danh sách phim bộ Vietsub HD và series Hàn Quốc, Trung Quốc, Âu Mỹ, Thái Lan đang cập nhật tập mới trên KhoPhim.' },
-  'phim-sap-chieu': { keywords: 'phim sắp chiếu, phim sap chieu, phim sắp ra mắt, trailer phim, phim hot 2026', desc: 'Danh sách phim sắp chiếu 2026 hot nhất tại KhoPhim. Trailer chính thức, lịch ra mắt, dàn diễn viên bom tấn. Cập nhật sớm nhất – theo dõi để không bỏ lỡ!' },
-  'tv-shows':       { keywords: 'TV shows, TV shows vietsub, series truyền hình, reality show, Netflix HBO', desc: 'Xem 5.000+ TV shows vietsub HD miễn phí tại KhoPhim 2026. Series Netflix, HBO, Disney+, reality show. Cập nhật mỗi ngày, không quảng cáo, xem ngay!' },
-  'hoat-hinh':      { keywords: 'hoạt hình, hoat hinh, anime, anime vietsub, cartoon, hoat hinh hay, anime mùa mới 2026', desc: 'Xem 8.000+ hoạt hình & anime vietsub HD miễn phí tại KhoPhim 2026. Anime mùa mới, cartoon Disney Pixar. Cập nhật hàng tuần, không quảng cáo, xem ngay!' },
+  'phim-sap-chieu': { keywords: 'phim sắp chiếu, phim sap chieu, phim sắp ra mắt, trailer phim, phim hot 2026', desc: 'Danh sách phim sắp chiếu có trailer, lịch ra mắt và thông tin diễn viên theo dữ liệu hiện có trên KhoPhim.' },
+  'tv-shows':       { keywords: 'TV shows, TV shows vietsub, series truyền hình, reality show, Netflix HBO', desc: 'Khám phá TV shows và series truyền hình; trạng thái tập, chất lượng và ngôn ngữ được hiển thị theo từng nguồn hiện có.' },
+  'hoat-hinh':      { keywords: 'hoạt hình, hoat hinh, anime, anime vietsub, cartoon, hoat hinh hay, anime mùa mới 2026', desc: 'Khám phá hoạt hình và anime; năm phát hành, trạng thái tập và nhãn Vietsub được hiển thị theo dữ liệu từng phim.' },
   'phim-chieu-rap': { keywords: 'phim chiếu rạp, phim chieu rap, phim chiếu rạp 2026, phim chieu rap 2026, phim rạp, blockbuster, phim rạp hay', desc: 'Danh sách phim chiếu rạp Vietsub HD gồm bom tấn Hollywood, phim rạp Hàn Quốc, Trung Quốc, Việt Nam và hoạt hình mới cập nhật.' },
 };
 
@@ -115,14 +115,14 @@ const CATEGORY_META_UI: Record<string, {
   description: string;
   stats: { label: string; value: string }[];
 }> = {
-  'phim-le':        { icon: 'ri-film-line',         gradient: 'from-red-600/25 via-rose-500/10 to-transparent',    accentColor: 'text-red-400',    description: 'Phim điện ảnh từ khắp nơi trên thế giới — vietsub HD miễn phí',          stats: [{ label: 'Phim lẻ', value: '10K+' }, { label: 'Cập nhật', value: 'Hàng ngày' }, { label: 'Chất lượng', value: 'Full HD' }] },
-  'phim-bo':        { icon: 'ri-tv-2-line',          gradient: 'from-orange-600/25 via-amber-500/10 to-transparent', accentColor: 'text-orange-400', description: 'Series & drama từ Hàn, Trung, Âu Mỹ — cập nhật tập mới nhanh nhất',       stats: [{ label: 'Phim bộ', value: '15K+' }, { label: 'Tập phim', value: '500K+' }, { label: 'Quốc gia', value: '20+' }] },
-  'phim-chieu-rap': { icon: 'ri-movie-2-line',       gradient: 'from-yellow-600/25 via-amber-500/10 to-transparent', accentColor: 'text-yellow-400', description: 'Blockbuster Hollywood, Hàn, Việt — cập nhật nhanh sau khi ra rạp',         stats: [{ label: 'Phim rạp', value: '3K+' }, { label: 'Bom tấn', value: 'Marvel/DC' }, { label: 'Cập nhật', value: 'Sau ra rạp' }] },
+  'phim-le':        { icon: 'ri-film-line',         gradient: 'from-red-600/25 via-rose-500/10 to-transparent',    accentColor: 'text-red-400',    description: 'Phim điện ảnh được phân loại theo năm, thể loại, ngôn ngữ và trạng thái nguồn', stats: [{ label: 'Phim lẻ', value: '10K+' }, { label: 'Cập nhật', value: 'Hàng ngày' }, { label: 'Chất lượng', value: 'Full HD' }] },
+  'phim-bo':        { icon: 'ri-tv-2-line',          gradient: 'from-orange-600/25 via-amber-500/10 to-transparent', accentColor: 'text-orange-400', description: 'Series và drama có trạng thái tập cùng thời điểm cập nhật hiển thị rõ ràng', stats: [{ label: 'Phim bộ', value: '15K+' }, { label: 'Tập phim', value: '500K+' }, { label: 'Quốc gia', value: '20+' }] },
+  'phim-chieu-rap': { icon: 'ri-movie-2-line',       gradient: 'from-yellow-600/25 via-amber-500/10 to-transparent', accentColor: 'text-yellow-400', description: 'Phim điện ảnh và phim từng phát hành tại rạp theo dữ liệu hiện có', stats: [{ label: 'Phim rạp', value: '3K+' }, { label: 'Bom tấn', value: 'Marvel/DC' }, { label: 'Cập nhật', value: 'Sau ra rạp' }] },
   'hoat-hinh':      { icon: 'ri-gamepad-line',       gradient: 'from-emerald-600/25 via-teal-500/10 to-transparent', accentColor: 'text-emerald-400',description: 'Anime Nhật Bản & cartoon thế giới — mùa mới cập nhật hàng tuần',          stats: [{ label: 'Anime/Cartoon', value: '8K+' }, { label: 'Mùa mới', value: '2026' }, { label: 'Thể loại', value: '30+' }] },
-  'tv-shows':       { icon: 'ri-live-line',           gradient: 'from-cyan-600/25 via-sky-500/10 to-transparent',    accentColor: 'text-cyan-400',   description: 'Series Netflix, HBO, Disney+ — vietsub HD không quảng cáo',               stats: [{ label: 'TV Shows', value: '5K+' }, { label: 'Nền tảng', value: 'Netflix/HBO' }, { label: 'Cập nhật', value: 'Hàng ngày' }] },
+  'tv-shows':       { icon: 'ri-live-line',           gradient: 'from-cyan-600/25 via-sky-500/10 to-transparent',    accentColor: 'text-cyan-400',   description: 'TV shows và series truyền hình; chất lượng và ngôn ngữ theo từng nguồn', stats: [{ label: 'TV Shows', value: '5K+' }, { label: 'Nền tảng', value: 'Netflix/HBO' }, { label: 'Cập nhật', value: 'Hàng ngày' }] },
   'phim-sap-chieu': { icon: 'ri-time-line',           gradient: 'from-violet-600/25 via-purple-500/10 to-transparent',accentColor: 'text-violet-400', description: 'Trailer & thông tin phim sắp ra mắt — không bỏ lỡ bom tấn nào',          stats: [{ label: 'Sắp chiếu', value: '200+' }, { label: 'Trailer HD', value: 'Đầy đủ' }, { label: 'Cập nhật', value: 'Sớm nhất' }] },
   'han-quoc':       { icon: 'ri-heart-line',          gradient: 'from-pink-600/25 via-rose-500/10 to-transparent',   accentColor: 'text-pink-400',   description: 'Drama Hàn Quốc vietsub — romance, thriller, cổ trang mới nhất',          stats: [{ label: 'Drama Hàn', value: '12K+' }, { label: 'Đài TV', value: 'tvN/SBS/MBC' }, { label: 'Cập nhật', value: 'Sau phát sóng' }] },
-  'trung-quoc':     { icon: 'ri-ancient-gate-line',   gradient: 'from-red-700/25 via-orange-500/10 to-transparent',  accentColor: 'text-red-400',    description: 'Phim Trung Quốc cổ trang, tiên hiệp, hiện đại — vietsub đầy đủ',        stats: [{ label: 'Phim Trung', value: '20K+' }, { label: 'Cổ trang', value: 'Tiên hiệp' }, { label: 'Nguồn', value: 'iQIYI/Youku' }] },
+  'trung-quoc':     { icon: 'ri-ancient-gate-line',   gradient: 'from-red-700/25 via-orange-500/10 to-transparent',  accentColor: 'text-red-400',    description: 'Phim Trung Quốc cổ trang, tiên hiệp và hiện đại với trạng thái nguồn rõ ràng', stats: [{ label: 'Phim Trung', value: '20K+' }, { label: 'Cổ trang', value: 'Tiên hiệp' }, { label: 'Nguồn', value: 'iQIYI/Youku' }] },
   'au-my':          { icon: 'ri-earth-line',           gradient: 'from-sky-600/25 via-blue-500/10 to-transparent',   accentColor: 'text-sky-400',    description: 'Bom tấn Hollywood, Marvel, DC — vietsub HD Full HD',                     stats: [{ label: 'Phim Âu Mỹ', value: '8K+' }, { label: 'Marvel/DC', value: 'Đầy đủ' }, { label: 'Chất lượng', value: '4K/HDR' }] },
   'nhat-ban':       { icon: 'ri-sword-line',           gradient: 'from-rose-600/25 via-pink-500/10 to-transparent',  accentColor: 'text-rose-400',   description: 'Anime & J-Drama Nhật Bản — mùa mới cập nhật hàng tuần',                  stats: [{ label: 'Anime', value: '6K+' }, { label: 'Mùa mới', value: '2026' }, { label: 'Studio', value: 'Ufotable/MAPPA' }] },
   'thai-lan':       { icon: 'ri-flower-line',          gradient: 'from-teal-600/25 via-emerald-500/10 to-transparent',accentColor: 'text-teal-400',   description: 'Lakorn & BL Thái Lan — tình cảm, hành động, kinh dị vietsub',            stats: [{ label: 'Phim Thái', value: '3K+' }, { label: 'BL Drama', value: 'GMMTV' }, { label: 'Cập nhật', value: 'Hàng ngày' }] },
@@ -133,7 +133,7 @@ const DEFAULT_UI = {
   icon: 'ri-film-line',
   gradient: 'from-red-600/25 via-rose-500/10 to-transparent',
   accentColor: 'text-red-400',
-  description: 'Kho phim online miễn phí HD — vietsub không quảng cáo',
+  description: 'Danh sách phim được phân loại theo dữ liệu và trạng thái nguồn hiện có',
   stats: [{ label: 'Phim', value: '50K+' }, { label: 'Cập nhật', value: 'Hàng ngày' }, { label: 'Chất lượng', value: 'Full HD' }],
 };
 
@@ -251,6 +251,11 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
   const seoKey = countryFilter ?? type;
   const uiMeta = CATEGORY_META_UI[seoKey] ?? DEFAULT_UI;
   const displayTitle = countryMeta?.title ?? title;
+  const displayStats = [
+    { label: 'Trang', value: String(page) },
+    { label: 'Đang hiển thị', value: loading ? '—' : String(movies.length) },
+    { label: 'Trạng thái', value: 'Theo nguồn' },
+  ];
   const { sectionRef: seoRef, visible: seoVisible } = useLazySection('300px');
   const showFeatured = page === 1 && sortBy === 'new' && movies.length >= 5;
   const featuredMovies = showFeatured ? movies.slice(0, 5) : [];
@@ -286,12 +291,12 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
               <i className={`${uiMeta.icon} text-xl`} />
             </div>
             <h1 className="text-2xl font-black leading-tight tracking-tight text-white sm:text-3xl lg:text-4xl">
-              {displayTitle} 2026{page > 1 ? ` – Trang ${page}` : ''}
+              {displayTitle}{page > 1 ? ` – Trang ${page}` : ''}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55 sm:text-base">{uiMeta.description}</p>
           </div>
           <div className="grid grid-cols-3 gap-2 sm:min-w-[360px]">
-            {uiMeta.stats.map((stat) => (
+            {displayStats.map((stat) => (
               <div key={stat.label} className="cinema-chip rounded-2xl px-3 py-3 text-center">
                 <div className="text-sm font-black text-white sm:text-base">{stat.value}</div>
                 <div className="mt-0.5 text-[10px] font-semibold uppercase text-white/35 sm:text-[11px]">{stat.label}</div>

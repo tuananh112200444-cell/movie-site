@@ -42,7 +42,6 @@ Deno.serve(async (req) => {
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${sitemapFiles.map((file) => `  <sitemap>
     <loc>${SITE_URL}/${file}</loc>
-    <lastmod>${now}</lastmod>
   </sitemap>`).join('\n')}
 </sitemapindex>`;
 

@@ -329,7 +329,7 @@ begin
     '9,39 0-3,8-11,17-23 * * *',
     $cmd$
       select net.http_get(
-        url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/sync-gap-playback-providers?limit=2&scan_limit=12&cooldown_hours=24&providers=vsmov,nguonc',
+        url := 'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/sync-gap-playback-providers?limit=2&scan_limit=12&cooldown_hours=24&providers=vsmov,nguonc',
         headers := jsonb_build_object(
           'x-cron-secret',
           (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET' order by created_at desc limit 1)

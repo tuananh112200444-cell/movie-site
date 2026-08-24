@@ -15,12 +15,31 @@ function entitySearchLink(name: string, role: 'actor' | 'director'): string {
   return `/search?${params.toString()}`;
 }
 
+function dataSourceLabel(movie: MovieDetail): string {
+  const source = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
+  if (source.includes('phimapi') || source.includes('kkphim')) return 'KKPhim';
+  if (source.includes('ophim')) return 'OPhim';
+  if (source.includes('blvietsub')) return 'BLVietsub';
+  if (source.includes('glvietsub')) return 'GLVietsub';
+  if (source.includes('tmdb')) return 'TMDB';
+  if (source.includes('merged')) return 'các nguồn đã đối chiếu';
+  return movie.source_name || movie.source_site || 'nguồn dữ liệu hiện có';
+}
+
+function formatVerifiedDate(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('vi-VN');
+}
+
 export default function MovieDetailSEOBlock({ movie }: Props) {
   const genres = movie.category?.filter((item) => item.name && item.slug) ?? [];
   const countries = movie.country?.filter((item) => item.name && item.slug) ?? [];
   const actors = movie.actor?.filter(Boolean).slice(0, 10) ?? [];
   const directors = movie.director?.filter(Boolean).slice(0, 6) ?? [];
   const cleanContent = stripHtml(movie.content || '');
+  const sourceLabel = dataSourceLabel(movie);
+  const verifiedDate = formatVerifiedDate(movie.modified?.time);
 
   return (
     <article className="mt-6 rounded-2xl border border-white/[0.06] bg-[#0d0f18] p-5 md:p-7" aria-label={`Thông tin chi tiết phim ${movie.name}`}>
@@ -56,6 +75,11 @@ export default function MovieDetailSEOBlock({ movie }: Props) {
           <p className="text-sm leading-7 text-white/60">{cleanContent}</p>
         </section>
       )}
+
+      <aside className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 text-xs leading-5 text-white/40" aria-label="Nguồn và phương pháp cập nhật dữ liệu">
+        Thông tin cơ bản được tổng hợp từ {sourceLabel}. KhoPhim đồng bộ trạng thái tập và kiểm tra các nguồn xem hiện có
+        {verifiedDate ? `; dữ liệu trang được cập nhật gần nhất ngày ${verifiedDate}` : ''}. Chất lượng, ngôn ngữ và số tập có thể thay đổi theo nguồn cung cấp.
+      </aside>
 
       <nav className="mt-5 space-y-4 border-t border-white/[0.06] pt-5" aria-label="Khám phá phim liên quan">
         {genres.length > 0 && (

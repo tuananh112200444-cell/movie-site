@@ -48,36 +48,6 @@ function timeAgo(dateStr: string): string {
   return date.toLocaleDateString('vi-VN');
 }
 
-const SEED_COMMENTS: Omit<Comment, 'liked'>[] = [
-  {
-    id: 'seed-1',
-    name: 'Minh Tuấn',
-    avatar: '',
-    rating: 5,
-    text: 'Phim hay quá! Cốt truyện hấp dẫn, diễn xuất tuyệt vời. Xem một mạch không dừng được. Cảm ơn KhoPhim đã cập nhật nhanh!',
-    createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
-    likes: 24,
-  },
-  {
-    id: 'seed-2',
-    name: 'Lan Anh',
-    avatar: '',
-    rating: 4,
-    text: 'Phim khá hay, hình ảnh đẹp, âm nhạc cũng ổn. Chỉ tiếc là tập cuối hơi vội. Nhưng nhìn chung rất đáng xem!',
-    createdAt: new Date(Date.now() - 5 * 3600000).toISOString(),
-    likes: 18,
-  },
-  {
-    id: 'seed-3',
-    name: 'Hoàng Nam',
-    avatar: '',
-    rating: 5,
-    text: 'Đỉnh của chóp! Mình đã xem đi xem lại 3 lần rồi mà vẫn không chán. Diễn viên chính diễn xuất quá đỉnh.',
-    createdAt: new Date(Date.now() - 24 * 3600000).toISOString(),
-    likes: 41,
-  },
-];
-
 export default function UserComments({ slug, movieName }: UserCommentsProps) {
   const [comments, setComments]     = useState<Comment[]>([]);
   const [name, setName]             = useState('');
@@ -95,20 +65,15 @@ export default function UserComments({ slug, movieName }: UserCommentsProps) {
     try {
       const raw = localStorage.getItem(STORAGE_KEY(slug));
       const saved: Comment[] = raw ? JSON.parse(raw) : [];
-      // Merge seed + saved, seed ở cuối
-      const seedWithLiked = SEED_COMMENTS.map((c) => ({ ...c, liked: false }));
-      const merged = [...saved, ...seedWithLiked.filter((s) => !saved.find((sv) => sv.id === s.id))];
-      setComments(merged);
+      setComments(Array.isArray(saved) ? saved : []);
     } catch {
-      setComments(SEED_COMMENTS.map((c) => ({ ...c, liked: false })));
+      setComments([]);
     }
   }, [slug]);
 
   const saveToStorage = useCallback((list: Comment[]) => {
     try {
-      // Chỉ lưu comment của user (không lưu seed)
-      const userComments = list.filter((c) => !c.id.startsWith('seed-'));
-      localStorage.setItem(STORAGE_KEY(slug), JSON.stringify(userComments));
+      localStorage.setItem(STORAGE_KEY(slug), JSON.stringify(list));
     } catch { /* ignore */ }
   }, [slug]);
 
@@ -226,7 +191,7 @@ export default function UserComments({ slug, movieName }: UserCommentsProps) {
             <i className="ri-checkbox-circle-fill text-emerald-400 text-lg" />
             <div>
               <p className="text-emerald-300 text-sm font-semibold">Đã gửi bình luận!</p>
-              <p className="text-emerald-400/60 text-xs mt-0.5">Cảm ơn bạn đã chia sẻ cảm nhận.</p>
+              <p className="text-emerald-400/60 text-xs mt-0.5">Bình luận được lưu riêng trên thiết bị này.</p>
             </div>
           </div>
         ) : (
@@ -292,6 +257,9 @@ export default function UserComments({ slug, movieName }: UserCommentsProps) {
                 )}
               </button>
             </div>
+            <p className="text-[11px] leading-relaxed text-white/25">
+              Bình luận hiện chỉ được lưu trên trình duyệt của bạn và không được tính là đánh giá công khai của phim.
+            </p>
           </form>
         )}
       </div>

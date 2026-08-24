@@ -53,9 +53,10 @@ const DEFAULT_TZ = 'Asia/Ho_Chi_Minh';
 const DAY_MS = 86_400_000;
 const WEEK_MS = 7 * DAY_MS;
 
-export function extractEpisodeNumber(value?: string): number {
-  if (!value) return 0;
-  const match = value.match(/(\d+)/);
+export function extractEpisodeNumber(value?: unknown): number {
+  const text = String(value ?? '').trim();
+  if (!text) return 0;
+  const match = text.match(/(\d+)/);
   return match ? Number(match[1]) : 0;
 }
 
@@ -170,7 +171,7 @@ function getRecurringCountdown(
   currentEpisode: number,
   totalEpisodes: number,
 ): MovieCountdownInfo | null {
-  const timeZone = movie.schedule_timezone || DEFAULT_TZ;
+  const timeZone = String(movie.schedule_timezone || DEFAULT_TZ);
   const releaseTime = parseReleaseTime(movie.release_time);
   if (!releaseTime) return null;
 
@@ -193,7 +194,7 @@ function getRecurringCountdown(
     kind: 'countdown',
     targetAt: new Date(targetAt).toISOString(),
     label: `Tập ${targetEpisode} sẽ phát sóng sau`,
-    note: movie.schedule_note?.trim() || undefined,
+    note: String(movie.schedule_note || '').trim() || undefined,
     currentEpisodeNumber: effectiveCurrent,
     targetEpisodeNumber: targetEpisode,
   };
@@ -219,16 +220,16 @@ function getCustomCountdown(
     kind: 'countdown',
     targetAt: movie.next_episode_at,
     label: `Tập ${scheduledEpisode} sẽ phát sóng sau`,
-    note: movie.schedule_note?.trim() || undefined,
+    note: String(movie.schedule_note || '').trim() || undefined,
     currentEpisodeNumber: currentEpisode,
     targetEpisodeNumber: scheduledEpisode,
   };
 }
 
 export function isMovieCompleted(movie: ScheduledMovie): boolean {
-  const current = (movie.episode_current ?? '').toLowerCase().trim();
-  const total = (movie.episode_total ?? '').toLowerCase().trim();
-  const status = (movie.status ?? '').toLowerCase().trim();
+  const current = String(movie.episode_current ?? '').toLowerCase().trim();
+  const total = String(movie.episode_total ?? '').toLowerCase().trim();
+  const status = String(movie.status ?? '').toLowerCase().trim();
   const hasSchedule = Boolean(movie.schedule_type || movie.next_episode_at || movie.release_at || movie.release_time);
   if (status === 'completed' && !hasSchedule) return true;
   if (current === 'full' || current === 'full hd' || current.includes('hoàn tất') || current.includes('hoan tat')) return true;
@@ -254,12 +255,12 @@ export function getMovieCountdownInfo(movie: ScheduledMovie, now = Date.now()): 
     return getCustomCountdown(movie, now, currentEpisode, totalEpisodes);
   }
 
-  const nextEpisodeAt = movie.next_episode_at?.trim();
+  const nextEpisodeAt = String(movie.next_episode_at || '').trim();
   if (nextEpisodeAt) {
     return getCustomCountdown({ ...movie, schedule_type: 'custom' }, now, currentEpisode, totalEpisodes);
   }
 
-  const releaseAt = movie.release_at?.trim();
+  const releaseAt = String(movie.release_at || '').trim();
   if (releaseAt) {
     const targetTime = new Date(releaseAt).getTime();
     if (Number.isFinite(targetTime) && targetTime > now) {
@@ -267,7 +268,7 @@ export function getMovieCountdownInfo(movie: ScheduledMovie, now = Date.now()): 
         kind: 'countdown',
         targetAt: releaseAt,
         label: 'Phim sẽ phát hành sau',
-        note: movie.schedule_note?.trim() || undefined,
+        note: String(movie.schedule_note || '').trim() || undefined,
         currentEpisodeNumber: currentEpisode,
       };
     }

@@ -49,6 +49,7 @@ interface ProbeResult {
   responseMs: number;
   error: string;
   directStreamFailed?: boolean;
+  playbackProof?: 'hls-segment' | 'direct-media' | 'embed-html';
 }
 
 interface MovieQueueRow {
@@ -260,10 +261,12 @@ async function probe(url: string): Promise<ProbeResult> {
         status: segmentResponse.status,
         responseMs: Date.now() - started,
         error: segmentOk ? '' : `HLS segment HTTP ${segmentResponse.status}`,
+        playbackProof: segmentOk ? 'hls-segment' : undefined,
       };
     }
 
-    if (/text\/html/i.test(contentType)) {
+    const htmlEmbed = /text\/html/i.test(contentType);
+    if (htmlEmbed) {
       const text = (await response.text()).slice(0, 120_000);
       if (/\b404\s+not\s+found\b|video\s+(?:was\s+)?(?:not\s+found|deleted|removed)|file\s+(?:was\s+)?(?:not\s+found|deleted|removed)/i.test(text)) {
         return { ok: false, status: 404, responseMs, error: 'Embed returned an HTML 404/deleted-video page' };
@@ -279,6 +282,9 @@ async function probe(url: string): Promise<ProbeResult> {
       status: response.status,
       responseMs,
       error: embeddable ? '' : `Unexpected content-type ${contentType}`,
+      playbackProof: embeddable
+        ? (htmlEmbed ? 'embed-html' : 'direct-media')
+        : undefined,
     };
   } catch (error) {
     return {
@@ -338,20 +344,26 @@ async function logHealth(
   result: ProbeResult,
 ) {
   const browserManagedProbeBlocked = isBrowserManagedPhimApiProbeBlocked(row, result);
+  const embedPlaybackUnverified = result.ok && result.playbackProof === 'embed-html';
   await supabase.from('stream_health_logs').insert({
     stream_id: row.id,
     movie_id: row.movie_id,
-    status: browserManagedProbeBlocked ? 'unchecked' : result.ok ? 'ok' : 'failed',
+    status: browserManagedProbeBlocked || embedPlaybackUnverified ? 'unchecked' : result.ok ? 'ok' : 'failed',
     http_code: result.status,
     response_time_ms: result.responseMs,
     error_message: browserManagedProbeBlocked
       ? 'Server probe blocked; browser validation required'
-      : result.error,
-    is_reachable: browserManagedProbeBlocked ? null : result.ok,
+      : embedPlaybackUnverified
+        ? 'Embed HTML reachable; playback remains unverified'
+        : result.error,
+    is_reachable: browserManagedProbeBlocked || embedPlaybackUnverified ? null : result.ok,
   });
 }
 
 function healthStatusFor(result: ProbeResult, failureCount: number) {
+  if (result.ok && result.playbackProof === 'embed-html') {
+    return result.directStreamFailed ? 'degraded' : 'unchecked';
+  }
   if (result.ok) return result.directStreamFailed ? 'degraded' : 'ok';
   if (result.error.startsWith('Viewer telemetry confirmed')) return 'dead';
   if (result.status === 401 || result.status === 403) return 'blocked';
@@ -418,20 +430,35 @@ async function updateStream(
     }).eq('id', row.id);
     return;
   }
-  const nextFailureCount = result.ok ? 0 : Number(row.failure_count || 0) + 1;
+  const embedPlaybackUnverified = result.ok && result.playbackProof === 'embed-html';
+  const nextFailureCount = result.ok && !embedPlaybackUnverified
+    ? 0
+    : embedPlaybackUnverified
+      ? Number(row.failure_count || 0)
+      : Number(row.failure_count || 0) + 1;
   const update: Record<string, unknown> = {
     health_status: healthStatusFor(result, nextFailureCount),
     last_checked_at: now,
     response_time_ms: result.responseMs,
     failure_count: nextFailureCount,
-    last_error: result.error || '',
+    last_error: embedPlaybackUnverified
+      ? result.directStreamFailed
+        ? `${result.error}; embed playback unverified`
+        : 'Embed HTML reachable; playback unverified'
+      : result.error || '',
     updated_at: now,
   };
-  if (result.ok) {
+  if (result.ok && !embedPlaybackUnverified) {
     update.last_success_at = now;
     update.priority = result.directStreamFailed
       ? Math.min(Number(row.priority || 100), 40)
       : scoreStream(row, result.responseMs);
+    update.is_active = true;
+  } else if (embedPlaybackUnverified) {
+    // A cached HTML shell or provider error page can return 200 quickly. Keep
+    // the iframe as a last resort, but never teach the playback brain that it
+    // is healthy until a viewer or direct media probe proves playback.
+    update.priority = Math.min(Number(row.priority || 100), 20);
     update.is_active = true;
   } else {
     update.last_failure_at = now;

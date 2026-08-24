@@ -1,7 +1,11 @@
 ﻿import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import SEO, { SITE_URL } from '@/components/base/SEO';
+import MovieCard from '@/components/base/MovieCard';
+import { fetchHomePageData } from '@/services/movieApi';
+import type { Movie } from '@/types/movie';
 
 type LandingConfig = {
   title: string;
@@ -476,8 +480,8 @@ const LANDINGS: Record<string, LandingConfig> = {
     h1: 'Phim 4K và phim chất lượng cao',
     description: 'Tìm phim 4K, phim Full HD, phim HD chất lượng cao, phim chiếu rạp và phim lẻ nét trên KhoPhim.',
     keywords: 'phim 4K, phim 4k, xem phim 4K, phim chất lượng cao, phim chat luong cao, phim Full HD, KhoPhim',
-    primaryHref: '/phim-full-hd',
-    primaryLabel: 'Xem phim Full HD',
+    primaryHref: '/phim-4k#danh-sach-phim-4k',
+    primaryLabel: 'Xem danh sách phim 4K',
     sections: [
       { title: 'Tập trung vào chất lượng xem', body: 'Trang này phục vụ người dùng quan tâm đến độ nét, poster đẹp, thông tin rõ ràng và trải nghiệm xem phim ổn định.' },
       { title: 'Liên kết tới phim HD và phim rạp', body: 'Các phim có nhu cầu chất lượng cao thường nằm trong phim chiếu rạp, phim lẻ và phim mới cập nhật.' },
@@ -559,6 +563,9 @@ function isSearchEngineCopy(value: string): boolean {
 
 export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
   const data = LANDINGS[landingKey] ?? LANDINGS['xem-phim-online'];
+  const isFourKLanding = landingKey === 'phim-4k';
+  const [fourKMovies, setFourKMovies] = useState<Movie[]>([]);
+  const [fourKLoading, setFourKLoading] = useState(isFourKLanding);
   const path = `/${landingKey}`;
   const canonical = `${SITE_URL}${path}`;
   const readerSections = data.sections.filter((section) => !isSearchEngineCopy(`${section.title} ${section.body}`));
@@ -597,6 +604,30 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
     },
   ];
 
+  useEffect(() => {
+    if (!isFourKLanding) {
+      setFourKMovies([]);
+      setFourKLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setFourKLoading(true);
+    fetchHomePageData(['vsmov-4k'], { signal: controller.signal })
+      .then((response) => setFourKMovies(
+        (response.sections['vsmov-4k'] ?? []).map((movie) => ({
+          ...movie,
+          source_site: 'vsmov',
+          quality: '4K',
+        })),
+      ))
+      .catch(() => setFourKMovies([]))
+      .finally(() => {
+        if (!controller.signal.aborted) setFourKLoading(false);
+      });
+    return () => controller.abort();
+  }, [isFourKLanding]);
+
   return (
     <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
       <SEO
@@ -633,6 +664,40 @@ export default function SeoLandingPage({ landingKey }: SeoLandingPageProps) {
             </Link>
           </div>
         </section>
+
+        {isFourKLanding && (
+          <section id="danh-sach-phim-4k" className="scroll-mt-24 py-8">
+            <div className="mb-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">Ultra HD</p>
+              <h2 className="mt-1 text-2xl font-black text-white md:text-3xl">Danh sách phim 4K</h2>
+              <p className="mt-2 text-sm text-white/55">
+                {fourKLoading ? 'Đang tải danh sách...' : `${fourKMovies.length} phim đang có nguồn xem`}
+              </p>
+            </div>
+
+            {fourKLoading && fourKMovies.length === 0 ? (
+              <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {Array.from({ length: 10 }, (_, index) => (
+                  <div key={index} className="aspect-[2/3] animate-pulse rounded-lg bg-white/[0.06]" />
+                ))}
+              </div>
+            ) : fourKMovies.length > 0 ? (
+              <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {fourKMovies.map((movie, index) => (
+                  <MovieCard
+                    key={`${movie._id || movie.slug}-4k-${index}`}
+                    movie={movie}
+                    priority={index < 4}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-5 py-10 text-center text-sm text-white/55">
+                Danh sách phim 4K đang được cập nhật.
+              </div>
+            )}
+          </section>
+        )}
 
         <section className="grid gap-4 py-8 md:grid-cols-3">
           {usefulSections.map((section) => (

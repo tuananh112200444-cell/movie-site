@@ -31,6 +31,7 @@ const reviewService = read('src/services/reviewService.ts');
 const homeProxy = read('supabase/functions/home-proxy/index.ts');
 const searchProxy = read('supabase/functions/search-index-proxy/index.ts');
 const cloudflareWorker = read('functions/[[path]].js');
+const systemBrain = read('supabase/migrations/20260822070340_consolidate_system_brains.sql');
 const connectors = [
   'supabase/functions/sync-glvietsub-feed/index.ts',
   'supabase/functions/sync-onlyflix-feed/index.ts',
@@ -102,7 +103,7 @@ if (ophimSync.includes("delete().neq('slug', '__never__')") || ophimSync.include
 if (!homeProxy.includes('stale-if-error=86400') || !searchProxy.includes('stale-if-error=86400') || !detailProxy.includes('stale-if-error=86400')) {
   failures.push('critical read APIs do not preserve last-known-good data during upstream failure');
 }
-if (!cloudflareWorker.includes('?rev=canonical-v5')) {
+if (!/\?rev=canonical-v\d+(?:-[a-z0-9-]+)?/i.test(cloudflareWorker)) {
   failures.push('Cloudflare detail cache was not versioned after the canonical alias contract changed');
 }
 if (
@@ -168,8 +169,12 @@ if (
 if (!streamHealth.includes('streamc\\.xyz') || !streamHealth.includes("Referer = 'https://khophim.org/'")) {
   failures.push('StreamC health probes do not use the production playback referer');
 }
-if (!detailProxy.includes("provider === 'phimapi'") || !detailProxy.includes('providerRank')) {
-  failures.push('external repair does not preserve and prefer an independent PhimAPI backup on equal coverage');
+if (
+  detailProxy.includes('providerRank')
+  || !detailProxy.includes('Provider identity never appears in the score')
+  || !detailProxy.includes('elapsed_ms')
+) {
+  failures.push('external detail recovery is not provider-neutral on equal coverage');
 }
 if (!streamHealth.includes('probeStreamRow') || !streamHealth.includes('HTML 404/deleted-video page')) {
   failures.push('stream health does not validate both stored playback URLs and HTML error pages');
@@ -261,8 +266,10 @@ if (
   !episodeSequenceRepair.includes("'?movie_id=' || item.movie_id") ||
   !ophimSync.includes('fetchDetailForTarget') ||
   !ophimSync.includes('provider.searchPath(query)') ||
-  !autoRepair.includes('movie_id: movie.id') ||
-  autoRepair.indexOf('const penalizedStreams = await penalizeTelemetryFailedStreams') < autoRepair.indexOf("'sync-ophim-movies'") ||
+  !autoRepair.includes("'unified-provider-brain'") ||
+  !autoRepair.includes('slug: movie.slug') ||
+  autoRepair.indexOf('const penalizedStreams = await penalizeTelemetryFailedStreams') < autoRepair.indexOf("'unified-provider-brain'") ||
+  !systemBrain.includes("'catalog:provider-repair'") ||
   ophimSync.includes('Targeted provider identity refresh; independent probe pending')
 ) {
   failures.push('episode sequence gaps or telemetry-only source recovery are not repaired through stable cross-provider movie identity');

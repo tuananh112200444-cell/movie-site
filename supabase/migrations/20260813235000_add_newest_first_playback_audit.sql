@@ -231,7 +231,7 @@ begin
   perform cron.schedule(
     'playback-audit-newest-a', '* * * * *',
     $cmd$select net.http_get(
-      url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/stream-health-check?queue=newest&limit=80&movie_limit=20&concurrency=10&deactivate_after=3',
+      url := 'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/stream-health-check?queue=newest&limit=80&movie_limit=20&concurrency=10&deactivate_after=3',
       headers := jsonb_build_object('x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name='CRON_SECRET' order by created_at desc limit 1)),
       timeout_milliseconds := 90000
     );$cmd$
@@ -239,7 +239,7 @@ begin
   perform cron.schedule(
     'playback-audit-newest-b', '* * * * *',
     $cmd$select net.http_get(
-      url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/stream-health-check?queue=newest&limit=80&movie_limit=20&concurrency=10&deactivate_after=3',
+      url := 'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/stream-health-check?queue=newest&limit=80&movie_limit=20&concurrency=10&deactivate_after=3',
       headers := jsonb_build_object('x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name='CRON_SECRET' order by created_at desc limit 1)),
       timeout_milliseconds := 90000
     );$cmd$
@@ -247,7 +247,7 @@ begin
   perform cron.schedule(
     'playback-audit-newest-c', '* * * * *',
     $cmd$select net.http_get(
-      url := 'https://dzpddbthdeqbkrcjlzap.supabase.co/functions/v1/stream-health-check?queue=newest&limit=80&movie_limit=20&concurrency=10&deactivate_after=3',
+      url := 'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/stream-health-check?queue=newest&limit=80&movie_limit=20&concurrency=10&deactivate_after=3',
       headers := jsonb_build_object('x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name='CRON_SECRET' order by created_at desc limit 1)),
       timeout_milliseconds := 90000
     );$cmd$

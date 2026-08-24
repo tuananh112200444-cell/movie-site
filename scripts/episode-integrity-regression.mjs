@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { normalizeVerifiedSeasonNumbering } from '../supabase/functions/_shared/episode-numbering.ts';
+import { getProviderEpisodeNumber, isFractionalProviderEpisode, normalizeVerifiedSeasonNumbering } from '../supabase/functions/_shared/episode-numbering.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migration = fs.readFileSync(
@@ -24,6 +24,22 @@ const durableCoverageGapMigration = fs.readFileSync(
   path.join(root, 'supabase/migrations/20260812103000_detect_episode_gaps_beyond_downgraded_metadata.sql'),
   'utf8',
 );
+const strictStreamSlugMigration = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20260821185738_tighten_stream_episode_slug_truth.sql'),
+  'utf8',
+);
+const conclusiveFailureMigration = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20260821192233_suppress_conclusive_stream_failure_immediately.sql'),
+  'utf8',
+);
+const republishUsableMigration = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20260822012934_republish_usable_hidden_movies.sql'),
+  'utf8',
+);
+const alternativeRepairMigration = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20260822013246_restore_hidden_movie_alternative_repair.sql'),
+  'utf8',
+);
 const syncSource = fs.readFileSync(path.join(root, 'supabase/functions/sync-ophim-movies/index.ts'), 'utf8');
 const proxySource = fs.readFileSync(path.join(root, 'supabase/functions/movie-detail-proxy/index.ts'), 'utf8');
 const healthCheckSource = fs.readFileSync(path.join(root, 'supabase/functions/stream-health-check/index.ts'), 'utf8');
@@ -40,6 +56,16 @@ const server = (start, end) => ({
     return { name: String(number), slug: String(number), link_m3u8: `https://media.test/${number}.m3u8` };
   }),
 });
+
+const fractionalPart1 = { name: '26.5 Part 1', slug: '265-1', episode_number: 1 };
+const fractionalPart2 = { name: '26.5 Part 2', slug: '265-2', episode_number: 2 };
+expect(isFractionalProviderEpisode(fractionalPart1), 'fractional OVA part 1 was not recognized as a special');
+expect(isFractionalProviderEpisode(fractionalPart2), 'fractional OVA part 2 was not recognized as a special');
+expect(getProviderEpisodeNumber(fractionalPart1) === 0, '26.5 Part 1 must not overwrite episode 1 or inflate the movie to episode 265');
+expect(getProviderEpisodeNumber(fractionalPart2) === 0, '26.5 Part 2 must not overwrite episode 2 or inflate the movie to episode 265');
+expect(getProviderEpisodeNumber({ name: '1.1', slug: 'tap-11' }) === 1, 'split episode 1.1 must contribute to episode 1 coverage');
+expect(getProviderEpisodeNumber({ name: '5.2', slug: 'tap-52' }) === 5, 'split episode 5.2 must contribute to episode 5 coverage');
+expect(getProviderEpisodeNumber({ name: '36', slug: '36' }) === 36, 'ordinary numbered episodes must remain unchanged');
 
 const cumulative = normalizeVerifiedSeasonNumbering(
   {
@@ -92,8 +118,45 @@ expect(migration.includes('normalize_verified_cumulative_season_numbering'), 've
 expect(migration.includes('delete from public.movie_api_cache'), 'stream/number changes do not invalidate detail cache');
 expect(healthAwareMigration.includes('get_movie_playable_episode_numbers'), 'playable episode truth is not health-aware');
 expect(healthAwareMigration.includes('stream_row_is_publicly_usable'), 'gap scanner does not share the public stream health contract');
+expect(
+  republishUsableMigration.includes("when current_seo_status in ('hidden', 'draft', 'superseded') then is_published")
+    && republishUsableMigration.includes('else true'),
+  'usable playback cannot republish a contradictory published+false row',
+);
+expect(
+  alternativeRepairMigration.includes("item.issue_type = 'published_without_playback' then 'kkphim'")
+    && alternativeRepairMigration.includes("active := true")
+    && alternativeRepairMigration.includes('dispatch-catalog-source-repairs-peak-guard'),
+  'hidden OPhim trailers do not try KKPhim first or the repair dispatcher remains inactive',
+);
+expect(
+  conclusiveFailureMigration.includes('(404|410)')
+    && conclusiveFailureMigration.includes('connection refused')
+    && conclusiveFailureMigration.includes("player[.]phimapi[.]com/player/"),
+  'database publication truth does not suppress conclusive failures with the same narrow browser-managed exception',
+);
+expect(
+  strictStreamSlugMigration.includes("~* '^[0-9]{1,4}$'")
+    && strictStreamSlugMigration.includes("~* '^(tap|episode|ep)[-_ ]*0*[0-9]{1,4}$'")
+    && !strictStreamSlugMigration.includes("$|[-_ ]"),
+  'source filenames can still be interpreted as numbered episode slugs',
+);
 expect(healthAwareMigration.includes("'health_aware_movie_identity_v3'"), 'gap repair contract is not health-aware');
 expect(syncSource.includes("rpc(\n      'normalize_verified_cumulative_season_numbering'"), 'sync does not reconcile persisted cumulative rows');
+expect(syncSource.includes('return getProviderEpisodeNumber(ep);'), 'provider sync does not share fractional-special episode numbering');
+expect((syncSource.match(/\^embed\\d\*\\\.streamc\\\.xyz\$/g) || []).length >= 2, 'NguonC primary embed.streamc.xyz host is rejected by parsing or the provider allowlist');
+expect(
+  syncSource.includes("provider.sourceSite === 'nguonc'")
+    && syncSource.includes('exactSourceSlug')
+    && syncSource.includes('Math.abs(targetYear - detailYear) <= 1'),
+  'exact NguonC identities cannot bridge a one-year provider metadata drift safely',
+);
+expect(
+  syncSource.includes('const authoritativeCompletedSingle =')
+    && syncSource.includes("['single', 'phim-le']")
+    && syncSource.includes('exactProviderIdentity'),
+  'an exact completed single movie cannot correct stale multi-episode metadata',
+);
 expect(
   syncSource.includes('const alreadyNormalized =')
     && syncSource.includes('storedNumbers.every((number) => number <= canonicalTotal)')
@@ -187,7 +250,8 @@ const telemetryRecoveryBlock = healthCheckSource.slice(
 expect(!problemRecoveryBlock.includes(".eq('is_active', true)"), 'problem recovery excludes deactivated streams');
 expect(!telemetryRecoveryBlock.includes(".eq('is_active', true)"), 'viewer-failure recovery excludes deactivated streams');
 expect(
-  moviePageSource.includes('isRecentlyBadExactSourceHost(getPlayableSourceUrl(episode))'),
+  moviePageSource.includes('!isRecentlyBadSourceHost(getPlayableSourceUrl(candidate))')
+    && moviePageSource.includes('healthyAlternativeServers'),
   'watch page still attempts a host with a confirmed live outage',
 );
 expect(

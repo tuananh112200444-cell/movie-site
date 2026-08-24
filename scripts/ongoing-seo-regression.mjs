@@ -80,7 +80,8 @@ requireText(sitemap, 'movie.seo_eligible_for_index === true || qualityByMovieId.
 
 requireText(prerenderData, 'seo_latest_episode_number', 'prerender does not expose latest episode state');
 requireText(prerenderData, 'seo_last_episode_change_at', 'prerender does not expose episode freshness');
-requireText(worker, "qualityTier === 'playable' || qualityTier === 'ongoing'", 'Cloudflare blocks approved ongoing pages');
+requireText(worker, "['playable', 'ongoing', 'upcoming'].includes(tier)", 'Cloudflare blocks approved ongoing pages');
+requireText(worker, 'const isIndexable = isHighValueIndexCandidate(movie)', 'ongoing pages bypass the public cohort gate');
 requireText(worker, 'Phim đang chiếu và cập nhật tập mới', 'ongoing prerender lacks visible status context');
 requireText(worker, "'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'", 'ongoing prerender cache can hide new episode metadata for too long');
 requireText(worker, "'@type': 'Episode'", 'ongoing structured data lacks Episode information');

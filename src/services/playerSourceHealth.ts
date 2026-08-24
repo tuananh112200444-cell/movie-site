@@ -75,9 +75,6 @@ function shouldFetchSourceHealth(): boolean {
 
 async function fetchPlayerSourceHealth(): Promise<void> {
   if (!shouldFetchSourceHealth()) return;
-  const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined;
-  if (!supabaseUrl) return;
-
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), SOURCE_HEALTH_TIMEOUT_MS);
 
@@ -85,7 +82,7 @@ async function fetchPlayerSourceHealth(): Promise<void> {
     // A provider can recover quickly. One hour still contains enough
     // independent viewer evidence to detect an active outage, while avoiding
     // a six-hour-old incident steering new viewers away from a recovered CDN.
-    const response = await fetch(`${supabaseUrl}/functions/v1/player-source-health?hours=1&limit=2000`, {
+    const response = await fetch('/api/player-source-health?hours=1&limit=2000', {
       method: 'GET',
       signal: controller.signal,
       headers: { Accept: 'application/json' },

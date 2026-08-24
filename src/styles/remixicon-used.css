@@ -1,0 +1,302 @@
+/*
+* Remix Icon v4.5.0
+* https://remixicon.com
+* https://github.com/Remix-Design/RemixIcon
+*
+* Copyright RemixIcon.com
+* Released under the Apache License Version 2.0
+*
+* Date: 2024-10-28
+*/
+@font-face {
+  font-family: "remixicon";
+  src: url('/fonts/remixicon-4.5.0.woff2?v=20260722') format('woff2');
+  font-display: block;
+  font-style: normal;
+  font-weight: normal;
+}
+
+[class^="ri-"], [class*=" ri-"] {
+  font-family: 'remixicon' !important;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ri-lg { font-size: 1.3333em; line-height: 0.75em; vertical-align: -.0667em; }
+.ri-xl { font-size: 1.5em; line-height: 0.6666em; vertical-align: -.075em; }
+.ri-xxs { font-size: .5em; }
+.ri-xs { font-size: .75em; }
+.ri-sm { font-size: .875em }
+.ri-1x { font-size: 1em; }
+.ri-2x { font-size: 2em; }
+.ri-3x { font-size: 3em; }
+.ri-4x { font-size: 4em; }
+.ri-5x { font-size: 5em; }
+.ri-6x { font-size: 6em; }
+.ri-7x { font-size: 7em; }
+.ri-8x { font-size: 8em; }
+.ri-9x { font-size: 9em; }
+.ri-10x { font-size: 10em; }
+.ri-fw { text-align: center; width: 1.25em; }
+
+/* Generated from 259 icons referenced by the application. */
+.ri-4k-line:before { content: "\ea04"; }
+.ri-add-line:before { content: "\ea13"; }
+.ri-advertisement-line:before { content: "\ea17"; }
+.ri-alarm-warning-line:before { content: "\ea1d"; }
+.ri-alert-line:before { content: "\ea21"; }
+.ri-anchor-line:before { content: "\ea30"; }
+.ri-ancient-gate-line:before { content: "\ea32"; }
+.ri-ancient-pavilion-fill:before { content: "\ea33"; }
+.ri-ancient-pavilion-line:before { content: "\ea34"; }
+.ri-android-line:before { content: "\ea36"; }
+.ri-apple-line:before { content: "\ea40"; }
+.ri-apps-2-line:before { content: "\ea42"; }
+.ri-apps-line:before { content: "\ea44"; }
+.ri-arrow-down-s-line:before { content: "\ea4e"; }
+.ri-arrow-left-line:before { content: "\ea60"; }
+.ri-arrow-left-s-line:before { content: "\ea64"; }
+.ri-arrow-right-line:before { content: "\ea6c"; }
+.ri-arrow-right-s-line:before { content: "\ea6e"; }
+.ri-arrow-right-up-line:before { content: "\ea70"; }
+.ri-arrow-up-line:before { content: "\ea76"; }
+.ri-arrow-up-s-line:before { content: "\ea78"; }
+.ri-article-line:before { content: "\ea7e"; }
+.ri-award-fill:before { content: "\ea89"; }
+.ri-award-line:before { content: "\ea8a"; }
+.ri-bar-chart-box-line:before { content: "\ea98"; }
+.ri-bar-chart-grouped-line:before { content: "\ea9b"; }
+.ri-bar-chart-line:before { content: "\ea9e"; }
+.ri-basketball-line:before { content: "\eaa8"; }
+.ri-book-open-line:before { content: "\eadb"; }
+.ri-boxing-line:before { content: "\eae7"; }
+.ri-broadcast-line:before { content: "\eaf9"; }
+.ri-bug-line:before { content: "\eb07"; }
+.ri-building-2-line:before { content: "\eb09"; }
+.ri-building-3-line:before { content: "\eb0b"; }
+.ri-building-4-line:before { content: "\eb0d"; }
+.ri-building-line:before { content: "\eb0f"; }
+.ri-cake-line:before { content: "\eb1d"; }
+.ri-calendar-2-line:before { content: "\eb21"; }
+.ri-calendar-check-line:before { content: "\eb23"; }
+.ri-calendar-event-line:before { content: "\eb25"; }
+.ri-calendar-line:before { content: "\eb27"; }
+.ri-camera-lens-line:before { content: "\eb30"; }
+.ri-chat-3-fill:before { content: "\eb50"; }
+.ri-chat-3-line:before { content: "\eb51"; }
+.ri-chat-voice-line:before { content: "\eb77"; }
+.ri-check-double-line:before { content: "\eb79"; }
+.ri-check-line:before { content: "\eb7b"; }
+.ri-checkbox-blank-circle-line:before { content: "\eb7d"; }
+.ri-checkbox-circle-fill:before { content: "\eb80"; }
+.ri-checkbox-circle-line:before { content: "\eb81"; }
+.ri-clipboard-line:before { content: "\eb91"; }
+.ri-close-line:before { content: "\eb99"; }
+.ri-closed-captioning-line:before { content: "\eb9b"; }
+.ri-cloud-line:before { content: "\eb9d"; }
+.ri-code-box-line:before { content: "\eba7"; }
+.ri-compass-3-fill:before { content: "\ebbd"; }
+.ri-compass-3-line:before { content: "\ebbe"; }
+.ri-compass-line:before { content: "\ebc4"; }
+.ri-copyright-line:before { content: "\ebe2"; }
+.ri-cup-line:before { content: "\ec06"; }
+.ri-cursor-line:before { content: "\ec0a"; }
+.ri-customer-service-2-line:before { content: "\ec0c"; }
+.ri-dashboard-3-line:before { content: "\ec12"; }
+.ri-dashboard-line:before { content: "\ec14"; }
+.ri-database-2-line:before { content: "\ec16"; }
+.ri-delete-bin-line:before { content: "\ec2a"; }
+.ri-device-line:before { content: "\ec2e"; }
+.ri-download-2-line:before { content: "\ec54"; }
+.ri-earth-line:before { content: "\ec7a"; }
+.ri-edit-line:before { content: "\ec86"; }
+.ri-emotion-laugh-fill:before { content: "\ec8e"; }
+.ri-emotion-laugh-line:before { content: "\ec8f"; }
+.ri-emotion-sad-line:before { content: "\ec94"; }
+.ri-error-warning-fill:before { content: "\eca0"; }
+.ri-error-warning-line:before { content: "\eca1"; }
+.ri-external-link-line:before { content: "\ecaf"; }
+.ri-eye-2-line:before { content: "\ecb1"; }
+.ri-eye-line:before { content: "\ecb5"; }
+.ri-eye-off-line:before { content: "\ecb7"; }
+.ri-facebook-circle-fill:before { content: "\ecba"; }
+.ri-facebook-circle-line:before { content: "\ecbb"; }
+.ri-facebook-fill:before { content: "\ecbc"; }
+.ri-file-list-3-line:before { content: "\ecef"; }
+.ri-file-text-line:before { content: "\ed0f"; }
+.ri-film-fill:before { content: "\ed20"; }
+.ri-film-line:before { content: "\ed21"; }
+.ri-filter-line:before { content: "\ed27"; }
+.ri-filter-off-line:before { content: "\ed29"; }
+.ri-fire-fill:before { content: "\ed32"; }
+.ri-fire-line:before { content: "\ed33"; }
+.ri-flag-fill:before { content: "\ed3a"; }
+.ri-flag-line:before { content: "\ed3b"; }
+.ri-flashlight-line:before { content: "\ed3d"; }
+.ri-flask-line:before { content: "\ed3f"; }
+.ri-focus-3-line:before { content: "\ed4c"; }
+.ri-folders-line:before { content: "\ed8a"; }
+.ri-football-line:before { content: "\ed8f"; }
+.ri-fullscreen-exit-line:before { content: "\ed9a"; }
+.ri-fullscreen-line:before { content: "\ed9c"; }
+.ri-gamepad-fill:before { content: "\edaa"; }
+.ri-gamepad-line:before { content: "\edab"; }
+.ri-ghost-2-fill:before { content: "\edb2"; }
+.ri-ghost-2-line:before { content: "\edb3"; }
+.ri-ghost-line:before { content: "\edb5"; }
+.ri-gift-line:before { content: "\edbb"; }
+.ri-git-merge-line:before { content: "\edc1"; }
+.ri-global-line:before { content: "\edcf"; }
+.ri-google-line:before { content: "\edd5"; }
+.ri-grid-fill:before { content: "\edde"; }
+.ri-grid-line:before { content: "\eddf"; }
+.ri-group-line:before { content: "\ede3"; }
+.ri-hd-line:before { content: "\ee02"; }
+.ri-heart-2-line:before { content: "\ee09"; }
+.ri-heart-3-fill:before { content: "\ee0a"; }
+.ri-heart-3-line:before { content: "\ee0b"; }
+.ri-heart-fill:before { content: "\ee0e"; }
+.ri-heart-line:before { content: "\ee0f"; }
+.ri-heart-pulse-line:before { content: "\ee11"; }
+.ri-hearts-line:before { content: "\ee13"; }
+.ri-history-line:before { content: "\ee17"; }
+.ri-home-4-line:before { content: "\ee1d"; }
+.ri-home-heart-fill:before { content: "\ee29"; }
+.ri-home-heart-line:before { content: "\ee2a"; }
+.ri-image-line:before { content: "\ee4b"; }
+.ri-inbox-line:before { content: "\ee4f"; }
+.ri-information-line:before { content: "\ee59"; }
+.ri-instagram-line:before { content: "\ee66"; }
+.ri-key-2-fill:before { content: "\ee6e"; }
+.ri-key-2-line:before { content: "\ee6f"; }
+.ri-knife-line:before { content: "\ee7b"; }
+.ri-leaf-line:before { content: "\eea3"; }
+.ri-lightbulb-line:before { content: "\eea9"; }
+.ri-line-chart-line:before { content: "\eeab"; }
+.ri-link:before { content: "\eeb2"; }
+.ri-links-line:before { content: "\eeb8"; }
+.ri-list-check:before { content: "\eeba"; }
+.ri-list-ordered:before { content: "\eebb"; }
+.ri-live-line:before { content: "\eec0"; }
+.ri-loader-2-line:before { content: "\eec2"; }
+.ri-loader-4-line:before { content: "\eec6"; }
+.ri-lock-line:before { content: "\eece"; }
+.ri-login-box-line:before { content: "\eed4"; }
+.ri-logout-box-r-line:before { content: "\eeda"; }
+.ri-magic-line:before { content: "\eeea"; }
+.ri-mail-send-line:before { content: "\eefc"; }
+.ri-map-2-line:before { content: "\ef06"; }
+.ri-map-pin-line:before { content: "\ef14"; }
+.ri-men-line:before { content: "\ef2e"; }
+.ri-mental-health-line:before { content: "\ef30"; }
+.ri-menu-3-line:before { content: "\ef34"; }
+.ri-messenger-fill:before { content: "\ef49"; }
+.ri-mic-2-line:before { content: "\ef4e"; }
+.ri-mind-map:before { content: "\ef59"; }
+.ri-movie-2-fill:before { content: "\ef7e"; }
+.ri-movie-2-line:before { content: "\ef7f"; }
+.ri-movie-line:before { content: "\ef81"; }
+.ri-music-2-line:before { content: "\ef83"; }
+.ri-music-line:before { content: "\ef85"; }
+.ri-numbers-line:before { content: "\efaa"; }
+.ri-pages-line:before { content: "\efbf"; }
+.ri-pause-fill:before { content: "\efd7"; }
+.ri-pencil-line:before { content: "\efe0"; }
+.ri-picture-in-picture-line:before { content: "\eff4"; }
+.ri-pie-chart-line:before { content: "\effa"; }
+.ri-play-circle-line:before { content: "\f009"; }
+.ri-play-fill:before { content: "\f00a"; }
+.ri-police-car-line:before { content: "\f01f"; }
+.ri-price-tag-3-line:before { content: "\f023"; }
+.ri-pulse-line:before { content: "\f035"; }
+.ri-question-answer-line:before { content: "\f043"; }
+.ri-question-line:before { content: "\f045"; }
+.ri-question-mark:before { content: "\f046"; }
+.ri-quill-pen-line:before { content: "\f04a"; }
+.ri-radar-line:before { content: "\f04c"; }
+.ri-refresh-line:before { content: "\f064"; }
+.ri-restart-line:before { content: "\f080"; }
+.ri-robot-line:before { content: "\f092"; }
+.ri-rocket-2-fill:before { content: "\f093"; }
+.ri-rocket-2-line:before { content: "\f094"; }
+.ri-ruler-line:before { content: "\f0a3"; }
+.ri-save-line:before { content: "\f0b3"; }
+.ri-search-2-line:before { content: "\f0cd"; }
+.ri-search-eye-fill:before { content: "\f0ce"; }
+.ri-search-eye-line:before { content: "\f0cf"; }
+.ri-search-line:before { content: "\f0d1"; }
+.ri-send-plane-fill:before { content: "\f0d9"; }
+.ri-send-plane-line:before { content: "\f0da"; }
+.ri-server-line:before { content: "\f0e0"; }
+.ri-shield-check-line:before { content: "\f100"; }
+.ri-shield-cross-line:before { content: "\f102"; }
+.ri-shield-keyhole-fill:before { content: "\f106"; }
+.ri-shield-keyhole-line:before { content: "\f107"; }
+.ri-shield-star-fill:before { content: "\f109"; }
+.ri-shield-star-line:before { content: "\f10a"; }
+.ri-shield-user-line:before { content: "\f10c"; }
+.ri-skip-back-line:before { content: "\f140"; }
+.ri-skip-forward-line:before { content: "\f144"; }
+.ri-skull-2-line:before { content: "\f148"; }
+.ri-skull-line:before { content: "\f14a"; }
+.ri-smartphone-line:before { content: "\f15a"; }
+.ri-sort-asc:before { content: "\f15f"; }
+.ri-sort-desc:before { content: "\f160"; }
+.ri-speed-line:before { content: "\f177"; }
+.ri-spy-line:before { content: "\f17f"; }
+.ri-stack-line:before { content: "\f181"; }
+.ri-star-fill:before { content: "\f186"; }
+.ri-star-line:before { content: "\f18b"; }
+.ri-stop-fill:before { content: "\f1a0"; }
+.ri-subtract-line:before { content: "\f1af"; }
+.ri-sun-foggy-line:before { content: "\f1be"; }
+.ri-sun-line:before { content: "\f1bf"; }
+.ri-sword-fill:before { content: "\f1ce"; }
+.ri-sword-line:before { content: "\f1cf"; }
+.ri-telegram-fill:before { content: "\f1ef"; }
+.ri-thumb-up-line:before { content: "\f207"; }
+.ri-time-line:before { content: "\f20f"; }
+.ri-timer-flash-line:before { content: "\f214"; }
+.ri-tools-line:before { content: "\f21b"; }
+.ri-translate-2:before { content: "\f226"; }
+.ri-trophy-fill:before { content: "\f22e"; }
+.ri-trophy-line:before { content: "\f22f"; }
+.ri-tv-2-line:before { content: "\f235"; }
+.ri-user-line:before { content: "\f264"; }
+.ri-user-search-line:before { content: "\f26c"; }
+.ri-user-star-line:before { content: "\f276"; }
+.ri-user-unfollow-line:before { content: "\f278"; }
+.ri-vip-crown-fill:before { content: "\f28d"; }
+.ri-volume-down-line:before { content: "\f29c"; }
+.ri-volume-mute-line:before { content: "\f29e"; }
+.ri-volume-up-line:before { content: "\f2a2"; }
+.ri-wifi-line:before { content: "\f2c0"; }
+.ri-wifi-off-line:before { content: "\f2c2"; }
+.ri-windows-line:before { content: "\f2c8"; }
+.ri-youtube-line:before { content: "\f2d5"; }
+.ri-brain-line:before { content: "\f2f7"; }
+.ri-forward-10-line:before { content: "\f32b"; }
+.ri-graduation-cap-line:before { content: "\f333"; }
+.ri-loop-left-line:before { content: "\f33d"; }
+.ri-openai-line:before { content: "\f34b"; }
+.ri-replay-10-line:before { content: "\f352"; }
+.ri-school-line:before { content: "\f35a"; }
+.ri-skip-left-line:before { content: "\f363"; }
+.ri-skip-right-line:before { content: "\f365"; }
+.ri-sparkling-2-line:before { content: "\f36b"; }
+.ri-sparkling-line:before { content: "\f36d"; }
+.ri-tiktok-fill:before { content: "\f372"; }
+.ri-tiktok-line:before { content: "\f373"; }
+.ri-calendar-close-line:before { content: "\f38e"; }
+.ri-list-check-3:before { content: "\f398"; }
+.ri-planet-line:before { content: "\f39f"; }
+.ri-seo-line:before { content: "\f3a4"; }
+.ri-robot-2-line:before { content: "\f3d9"; }
+.ri-twitter-x-fill:before { content: "\f3e6"; }
+.ri-twitter-x-line:before { content: "\f3e7"; }
+.ri-equalizer-2-fill:before { content: "\f404"; }
+.ri-equalizer-2-line:before { content: "\f405"; }
+.ri-flower-line:before { content: "\f40b"; }
+.ri-snowflake-line:before { content: "\f513"; }
+.ri-gemini-line:before { content: "\f540"; }

@@ -417,14 +417,6 @@ export default function GenrePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   
-  // Sync page state with URL param
-  useEffect(() => {
-    const p = parseInt(searchParams.get('page') ?? '1', 10);
-    if (!isNaN(p) && p >= 1 && p !== page) {
-      setPage(p);
-    }
-  }, [searchParams, page]);
-
   const [movies, setMovies] = useState<MovieItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('modified.time_desc');
@@ -437,7 +429,7 @@ export default function GenrePage() {
     return { sortField: 'modified.time', sortType: 'desc' as const };
   };
 
-  const fetchMovies = useCallback(async (pg: number, reset = false, sort = sortBy) => {
+  const fetchMovies = useCallback(async (pg: number, reset = false, sort = 'modified.time_desc') => {
     if (!slug) return;
     if (reset) {
       setMovies([]);
@@ -490,23 +482,20 @@ export default function GenrePage() {
 
   useEffect(() => {
     setMovies([]);
-    setPage(1);
-    setSearchParams({});
-    fetchMovies(1, true);
+    setPage(urlPage);
+    fetchMovies(urlPage, true, sortBy);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [slug, fetchMovies, setSearchParams]);
+  }, [slug, urlPage, sortBy, fetchMovies]);
 
   const handleSortChange = (newSort: string) => {
     setSortBy(newSort);
     setPage(1);
     setSearchParams({});
-    fetchMovies(1, true, newSort);
   };
 
   const handlePageChange = useCallback((next: number) => {
     setPage(next);
-    fetchMovies(next, true, sortBy);
-  }, [fetchMovies, sortBy]);
+  }, []);
 
   if (!meta) {
     return (

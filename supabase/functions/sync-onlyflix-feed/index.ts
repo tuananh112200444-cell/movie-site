@@ -200,6 +200,17 @@ async function findMovie(db: ReturnType<typeof createClient>, entry: Record<stri
     names: [entry.name, entry.originName],
     normalizedNames: [slugify(String(entry.name || '')), slugify(String(entry.originName || ''))],
     year: entry.year,
+    provider: SOURCE,
+    providerSlug: entry.sourceSlug,
+    providerId: entry.imdbId || entry.tmdbId || entry.sourceSlug,
+    tmdbId: entry.season ? null : entry.tmdbId,
+    imdbId: entry.season ? '' : entry.imdbId,
+    originalTitle: entry.originName,
+    localizedTitle: entry.name,
+    movieType: entry.type,
+    season: entry.season,
+    createSlug: `onlyflix-${entry.sourceSlug}`,
+    sourceName: 'OnlyFlix',
   });
 }
 

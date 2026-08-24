@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getPosterUrl, getImageUrl, fetchMoviesByType } from '../../../services/movieApi';
+import { getPortraitImagePaths, getImageUrl, fetchMoviesByType } from '../../../services/movieApi';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import type { MovieItem } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
 import { useImageFallback } from '../../../hooks/useImageFallback';
+import { movieDetailUrl } from '../../../utils/slugEncoder';
 
 /* ── Helpers ── */
 function getViewerCount(rank: number): string {
@@ -209,12 +210,13 @@ interface CinemaCardProps {
 }
 
 function CinemaCard({ movie, rank }: CinemaCardProps) {
+  const { primary: portraitPath, fallback: portraitFallback } = getPortraitImagePaths(movie);
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.poster_url || movie.thumb_url,
-    movie.thumb_url || movie.poster_url,
-    isImagePreloaded(getImageUrl(movie.poster_url || movie.thumb_url)),
-    320,
-    84,
+    portraitPath,
+    portraitFallback,
+    isImagePreloaded(getImageUrl(portraitPath || '')),
+    480,
+    86,
     { preferredAspect: 'portrait' },
   );
   const ep = getEpInfo(movie.episode_current);
@@ -255,7 +257,14 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
 
   return (
     <div data-ccard className={`${HOME_POSTER_ITEM_CLASS} contain-layout`}>
-      <Link to={`/phim/${encodeURIComponent(movie.slug || '')}`} className="block cursor-pointer group">
+      <Link
+        to={movieDetailUrl(movie.slug || '', {
+          source: String(movie.source_site || '').toLowerCase() === 'phimapi'
+            ? 'kkphim'
+            : String(movie.source_site || '').toLowerCase() || undefined,
+        })}
+        className="block cursor-pointer group"
+      >
         {/* Poster frame */}
         <div
           className={`

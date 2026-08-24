@@ -10,9 +10,10 @@ type SafariDocument = Document & {
   webkitFullscreenElement?: Element | null;
 };
 
-const RELEASE_CHECK_INTERVAL_MS = 10 * 60 * 1000;
-const RELEASE_CHECK_COOLDOWN_MS = 60 * 1000;
+const RELEASE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
+const RELEASE_CHECK_COOLDOWN_MS = 30 * 1000;
 const RELEASE_FETCH_TIMEOUT_MS = 5000;
+const RELEASE_PREPARE_TIMEOUT_MS = 8000;
 const AUTO_RELOAD_DELAY_MS = 1200;
 const RELOAD_GUARD_KEY = 'kp_release_reload_target_v1';
 
@@ -51,6 +52,7 @@ function isUpdateUnsafe(pathname: string): boolean {
   // a fallback source. Those short states used to look "safe" and allowed a
   // release check to reload the document in the middle of a movie.
   if (/^\/xem-phim(?:\/|$)/.test(pathname)) return true;
+  if (/^\/admin(?:\/|$)/.test(pathname)) return true;
 
   const safariDocument = document as SafariDocument;
   if (document.hidden) return true;
@@ -59,6 +61,45 @@ function isUpdateUnsafe(pathname: string): boolean {
   if (document.querySelector('[aria-label="Thoát chế độ Cinema"][aria-pressed="true"]')) return true;
 
   return false;
+}
+
+async function prepareReleaseAssets(releaseId: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), RELEASE_PREPARE_TIMEOUT_MS);
+  try {
+    const base = __BASE_PATH__.endsWith('/') ? __BASE_PATH__ : `${__BASE_PATH__}/`;
+    const shellUrl = `${base}index.html?kp_release=${encodeURIComponent(releaseId)}&kp_prepare=${Date.now()}`;
+    const shellResponse = await fetch(shellUrl, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: { Accept: 'text/html' },
+      signal: controller.signal,
+    });
+    if (!shellResponse.ok) return false;
+    const html = await shellResponse.text();
+    const releaseMatch = html.match(/<meta\s+name=["']khophim-release["']\s+content=["']([^"']+)["']/i);
+    if (String(releaseMatch?.[1] || '') !== releaseId) return false;
+
+    const entryMatch = html.match(/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']([^"']+)["']/i)
+      || html.match(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*\btype=["']module["']/i);
+    if (!entryMatch?.[1]) return false;
+    const entryUrl = new URL(entryMatch[1], window.location.origin);
+    entryUrl.searchParams.set('kp_release', releaseId);
+    const entryResponse = await fetch(entryUrl.toString(), {
+      cache: 'reload',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/javascript' },
+      signal: controller.signal,
+    });
+    const contentType = entryResponse.headers.get('content-type') || '';
+    if (!entryResponse.ok || !/javascript|wasm/i.test(contentType)) return false;
+    await entryResponse.arrayBuffer();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 function reportReleaseEvent(eventType: 'release_update_deferred' | 'release_update_applied', message: string): void {
@@ -80,6 +121,7 @@ export default function UpdateCoordinator() {
   const checkingRef = useRef(false);
   const lastCheckedAtRef = useRef(0);
   const reloadTimerRef = useRef<number | null>(null);
+  const preparingReleaseRef = useRef('');
   const reportedDeferredReleaseRef = useRef('');
 
   const cancelScheduledReload = useCallback(() => {
@@ -88,9 +130,16 @@ export default function UpdateCoordinator() {
     reloadTimerRef.current = null;
   }, []);
 
-  const applyUpdate = useCallback((releaseId: string) => {
-    if (!releaseId || safeSessionGet(RELOAD_GUARD_KEY) === releaseId) return;
+  const applyUpdate = useCallback(async (releaseId: string) => {
+    if (!releaseId || safeSessionGet(RELOAD_GUARD_KEY) === releaseId || preparingReleaseRef.current === releaseId) return;
     cancelScheduledReload();
+    preparingReleaseRef.current = releaseId;
+    const ready = await prepareReleaseAssets(releaseId);
+    preparingReleaseRef.current = '';
+    if (!ready || isUpdateUnsafe(window.location.pathname)) {
+      setBlocked(isUpdateUnsafe(window.location.pathname));
+      return;
+    }
     safeSessionSet(RELOAD_GUARD_KEY, releaseId);
     reportReleaseEvent(
       'release_update_applied',
@@ -112,7 +161,7 @@ export default function UpdateCoordinator() {
         setBlocked(true);
         return;
       }
-      applyUpdate(releaseId);
+      void applyUpdate(releaseId);
     }, delay);
   }, [applyUpdate, cancelScheduledReload]);
 
@@ -169,7 +218,9 @@ export default function UpdateCoordinator() {
   }, [scheduleSafeUpdate]);
 
   useEffect(() => {
-    const initialTimer = window.setTimeout(() => void checkForUpdate(true), 8000);
+    // Check as soon as the app mounts. This is especially important when a
+    // saved home-screen app or a restored browser tab resumes an older bundle.
+    void checkForUpdate(true);
     const intervalId = window.setInterval(() => void checkForUpdate(true), RELEASE_CHECK_INTERVAL_MS);
     const onResume = () => void checkForUpdate(true);
     const onVisibility = () => {
@@ -180,7 +231,6 @@ export default function UpdateCoordinator() {
     window.addEventListener('online', onResume);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      window.clearTimeout(initialTimer);
       window.clearInterval(intervalId);
       window.removeEventListener('pageshow', onResume);
       window.removeEventListener('kp:page-resumed', onResume);
@@ -209,11 +259,15 @@ export default function UpdateCoordinator() {
         scheduleSafeUpdate(targetRelease, 1800);
       }
     };
+    const safetyInterval = window.setInterval(reevaluate, 2500);
+    document.addEventListener('focusout', reevaluate, true);
     document.addEventListener('pause', reevaluate, true);
     document.addEventListener('ended', reevaluate, true);
     document.addEventListener('fullscreenchange', reevaluate);
     document.addEventListener('webkitfullscreenchange', reevaluate);
     return () => {
+      window.clearInterval(safetyInterval);
+      document.removeEventListener('focusout', reevaluate, true);
       document.removeEventListener('pause', reevaluate, true);
       document.removeEventListener('ended', reevaluate, true);
       document.removeEventListener('fullscreenchange', reevaluate);
@@ -257,7 +311,7 @@ export default function UpdateCoordinator() {
           )}
           <button
             type="button"
-            onClick={() => applyUpdate(targetRelease)}
+              onClick={() => void applyUpdate(targetRelease)}
             className="min-h-11 rounded-xl bg-red-500 px-3 text-xs font-black text-white shadow-lg shadow-red-950/30"
           >
             Cập nhật

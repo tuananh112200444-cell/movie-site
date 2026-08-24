@@ -32,7 +32,7 @@ interface RepairCandidate {
   id: string;
   slug: string;
   name: string;
-  provider: 'ophim' | 'kkphim';
+  provider: 'kkphim';
   repair_slug: string;
   displayed_episode: number;
   playable_episode: number;
@@ -118,9 +118,8 @@ function playableEpisodeNumber(row: Record<string, unknown>): number {
   );
 }
 
-function getProvider(movie: MovieCandidate): 'ophim' | 'kkphim' {
-  const source = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
-  return source.includes('kkphim') || source.includes('phimapi') ? 'kkphim' : 'ophim';
+function getProvider(_movie: MovieCandidate): 'kkphim' {
+  return 'kkphim';
 }
 
 async function readCursorPage(supabase: SupabaseClient, key: string): Promise<number> {
@@ -179,7 +178,7 @@ async function findEpisodeMismatchCandidates(
     .from('movies')
     .select('id, slug, name, source_site, source_name, ophim_slug, episode_current, current_episode')
     .eq('is_published', true)
-    .or('source_site.ilike.%ophim%,source_name.ilike.%ophim%,source_site.ilike.%phimapi%,source_name.ilike.%kkphim%,ophim_slug.not.is.null')
+    .or('source_site.ilike.%phimapi%,source_name.ilike.%kkphim%')
     .order('updated_at', { ascending: true, nullsFirst: true })
     .range(from, to);
   if (error) throw new Error(`movies mismatch scan: ${error.message}`);
@@ -215,7 +214,7 @@ async function findEpisodeMismatchCandidates(
         slug: movie.slug,
         name: String(movie.name || movie.slug),
         provider: getProvider(movie),
-        repair_slug: String(movie.ophim_slug || movie.slug).trim(),
+        repair_slug: String(movie.slug).trim(),
         displayed_episode: movie.displayed,
         playable_episode: playable,
       } as RepairCandidate;
@@ -248,7 +247,7 @@ async function findMetadataAnomalies(
     .from('movies')
     .select('id, slug, name, source_site, source_name, ophim_slug, episode_current, current_episode')
     .eq('is_published', true)
-    .or('source_site.ilike.%ophim%,source_name.ilike.%ophim%,source_site.ilike.%phimapi%,source_name.ilike.%kkphim%,ophim_slug.not.is.null')
+    .or('source_site.ilike.%phimapi%,source_name.ilike.%kkphim%')
     .gte('current_episode', options.displayedThreshold)
     .order('updated_at', { ascending: false, nullsFirst: false })
     .limit(Math.max(options.limit * 8, 40));
@@ -401,7 +400,6 @@ serve(async (req) => {
   const anomalyMaxPlayable = clampNumber(url.searchParams.get('metadata_anomaly_max_playable'), 200, 1, 1000);
   const anomalyMinGap = clampNumber(url.searchParams.get('metadata_anomaly_min_gap'), 300, 50, 5000);
   const skipBlvietsub = url.searchParams.get('skip_blvietsub') === '1';
-  const skipDirectOphim = url.searchParams.get('skip_direct_ophim') === '1';
   const childTimeoutMs = clampNumber(url.searchParams.get('child_timeout_ms'), 25000, 5000, 120000);
   const refreshCaches = url.searchParams.get('refresh_caches') !== '0';
   const dryRun = url.searchParams.get('dry_run') === '1';
@@ -414,7 +412,7 @@ serve(async (req) => {
     | { anomalies: MetadataAnomaly[]; scanned: number; error?: string }
     | null = null;
 
-  if (!mismatchOnly) for (const provider of ['ophim', 'kkphim']) {
+  if (!mismatchOnly) for (const provider of ['kkphim']) {
     calls.push(await callFunction(supabaseUrl, serviceKey, internalSecret, 'sync-ophim-movies', {
       provider,
       episodes: '1',
@@ -431,12 +429,6 @@ serve(async (req) => {
       limit: backfillLimit,
       cursor_key: `episode-backfill-guard:${provider}`,
       dry_run: dryRun ? '1' : null,
-    }, {}, childTimeoutMs));
-  }
-
-  if (!dryRun && !mismatchOnly && !skipDirectOphim) {
-    calls.push(await callFunction(supabaseUrl, serviceKey, internalSecret, 'auto-sync-ophim-episodes', {
-      limit: clampNumber(url.searchParams.get('direct_ophim_limit'), 80, 1, 200),
     }, {}, childTimeoutMs));
   }
 

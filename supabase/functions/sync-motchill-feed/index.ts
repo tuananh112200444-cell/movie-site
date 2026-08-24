@@ -234,6 +234,15 @@ async function findMovie(db: ReturnType<typeof createClient>, entry: Record<stri
     names: [entry.name, entry.originName],
     normalizedNames: [slugify(String(entry.name)), slugify(String(entry.originName))],
     year: entry.year,
+    provider: SOURCE,
+    providerSlug: entry.sourceSlug,
+    providerId: entry.sourceSlug,
+    originalTitle: entry.originName,
+    localizedTitle: entry.name,
+    movieType: 'series',
+    season: entry.season,
+    createSlug: `motchill-${entry.sourceSlug}`,
+    sourceName: 'Motchill',
   });
 }
 
@@ -284,22 +293,36 @@ async function storeMovie(db: ReturnType<typeof createClient>, entry: Record<str
       subtitle_url: '', thumbnail_url: entry.thumb || '', source: SOURCE,
       is_backup: movie.source_site !== SOURCE, audio_type: episode.audio_type,
     };
-    const { data: old } = await db.from('movie_episodes').select('id').eq('movie_id', movie.id)
+    const { data: old } = await db.from('movie_episodes')
+      .select('id,episode_number,episode_name,slug,server_name,link_embed,link_m3u8,subtitle_url,thumbnail_url,source,is_backup,audio_type')
+      .eq('movie_id', movie.id)
       .eq('episode_number', episode.episode_number).eq('server_name', episode.server_name).limit(1).maybeSingle();
-    if (old?.id) await db.from('movie_episodes').update(episodePayload).eq('id', old.id);
-    else { const { error } = await db.from('movie_episodes').insert(episodePayload); if (error) throw error; }
+    if (old?.id) {
+      const episodeChanged = Object.entries(episodePayload).some(([key, value]) =>
+        String((old as Record<string, unknown>)[key] ?? '') !== String(value ?? '')
+      );
+      if (episodeChanged) await db.from('movie_episodes').update(episodePayload).eq('id', old.id);
+    } else { const { error } = await db.from('movie_episodes').insert(episodePayload); if (error) throw error; }
     const streamPayload = {
       movie_id: movie.id, server_name: episode.server_name, episode_slug: episode.slug,
       stream_url: String(episode.link_m3u8 || ''), embed_url: episode.link_embed, source: SOURCE, quality: 'HD', priority: 28,
       is_active: true, health_status: 'unchecked', failure_count: 0, last_error: '', audio_type: episode.audio_type,
     };
-    const { data: stream } = await db.from('streams').select('id,embed_url,stream_url').eq('movie_id', movie.id).eq('source', SOURCE)
+    const { data: stream } = await db.from('streams')
+      .select('id,movie_id,server_name,episode_slug,stream_url,embed_url,source,quality,priority,is_active,audio_type')
+      .eq('movie_id', movie.id).eq('source', SOURCE)
       .eq('server_name', episode.server_name).eq('episode_slug', episode.slug).limit(1).maybeSingle();
     if (stream?.id) {
-      const changed = String(stream.embed_url || '') !== String(streamPayload.embed_url || '') ||
+      const urlChanged = String(stream.embed_url || '') !== String(streamPayload.embed_url || '') ||
         String(stream.stream_url || '') !== String(streamPayload.stream_url || '');
-      const update = changed ? streamPayload : Object.fromEntries(Object.entries(streamPayload).filter(([key]) => !['health_status', 'failure_count', 'last_error'].includes(key)));
-      await db.from('streams').update(update).eq('id', stream.id);
+      const durablePayload = Object.fromEntries(Object.entries(streamPayload)
+        .filter(([key]) => !['health_status', 'failure_count', 'last_error'].includes(key)));
+      const durableChanged = Object.entries(durablePayload).some(([key, value]) =>
+        String((stream as Record<string, unknown>)[key] ?? '') !== String(value ?? '')
+      );
+      if (urlChanged || durableChanged) {
+        await db.from('streams').update(urlChanged ? streamPayload : durablePayload).eq('id', stream.id);
+      }
     } else { const { error } = await db.from('streams').insert(streamPayload); if (error) throw error; }
     rows += 1;
   }
@@ -376,6 +399,21 @@ serve(async (req) => {
   if (!dbUrl || !serviceKey) return reply({ success: false, error: 'Missing Supabase env' }, 500);
   const db = createClient(dbUrl, serviceKey, { auth: { persistSession: false } });
   const dryRun = url.searchParams.get('dry_run') === '1';
+  if (!dryRun) {
+    const { data: capacity } = await db.from('runtime_capacity_state')
+      .select('mode,last_reason,updated_at')
+      .eq('singleton', true)
+      .maybeSingle();
+    if (String(capacity?.mode || '') === 'protect') {
+      return reply({
+        success: true,
+        skipped: true,
+        reason: 'runtime_capacity_protect',
+        capacity_updated_at: capacity?.updated_at || null,
+        elapsed_ms: Date.now() - started,
+      }, 200);
+    }
+  }
   const query = String(url.searchParams.get('query') || '').trim().slice(0, 120);
   const repairOngoing = url.searchParams.get('repair_ongoing') === '1';
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 8), 16));

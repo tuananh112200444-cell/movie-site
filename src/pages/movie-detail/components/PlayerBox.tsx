@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { EpisodeData, EpisodeServer } from '@/types/movie';
-import { detectServerType, getEpisodeFailureCluster, getSourceFailureClusterFromUrl, pickBestEpisodeByPriority } from '@/services/movieApi';
+import { detectServerType, getEpisodeFailureCluster, getSourceFailureClusterFromUrl, pickBestEpisodeByScore } from '@/services/movieApi';
 import { getSourceHost, reportPlayerIssue, type PlayerIssuePayload } from '@/services/playerDiagnostics';
 import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
@@ -173,7 +173,11 @@ function isOnlyflixEmbed(url: string): boolean {
 }
 
 function getEmbedReferrerPolicy(url: string): React.IframeHTMLAttributes<HTMLIFrameElement>['referrerPolicy'] {
-  return requiresUnsandboxedEmbed(url) || isOnlyflixEmbed(url) || isDailymotion(url)
+  // YouTube error 153 means the player request lacks an HTTP Referer (or an
+  // equivalent client identifier). Never override the site's strict-origin
+  // policy with `no-referrer` for YouTube embeds.
+  const isYouTube = /(?:youtube(?:-nocookie)?\.com|youtu\.be)/i.test(url);
+  return requiresUnsandboxedEmbed(url) || isOnlyflixEmbed(url) || isDailymotion(url) || isYouTube
     ? 'strict-origin-when-cross-origin'
     : 'no-referrer';
 }
@@ -243,6 +247,10 @@ function isSingleVariantProviderHls(url: string): boolean {
 function shouldPreferEmbedOverDirectHls(ep: EpisodeData): boolean {
   if (!ep.link_m3u8 || !ep.link_embed || !isIframeSource(ep.link_embed)) return false;
   if (!isHlsUrl(ep.link_m3u8)) return false;
+  // The PhimAPI iframe runs another HLS runtime, trackers and an independent
+  // loading lifecycle. Its manifests are CORS-capable, so keep playback in the
+  // first-party player and reserve the iframe as a same-provider fallback.
+  if (isBrowserManagedPhimApiEmbed(ep.link_embed)) return false;
   // OPhim/opstream embeds can successfully load an HTML 404 page. Prefer HLS
   // first so the media engine can emit a real fatal error and move to an
   // independent server instead of treating iframe onLoad as playback success.
@@ -329,14 +337,21 @@ interface PlayerBoxProps {
 }
 
 const DIRECT_VIDEO_SPEEDS = [1, 1.25, 1.5, 2];
-const EMBED_FALLBACK_TIMEOUT_MS = 3800;
-const EMBED_LAST_SOURCE_TIMEOUT_MS = 8000;
-const DIRECT_VIDEO_STALL_TIMEOUT_MS = 7000;
-const DIRECT_VIDEO_STALL_CHECK_MS = 2500;
+const EMBED_FALLBACK_TIMEOUT_MS = 10_000;
+const EMBED_LAST_SOURCE_TIMEOUT_MS = 18_000;
+const EMBED_SOFT_REVEAL_MS = 2_500;
+const DIRECT_VIDEO_STALL_TIMEOUT_MS = 12_000;
+const DIRECT_VIDEO_STALL_CHECK_MS = 3_000;
 const DIRECT_VIDEO_MIN_PROGRESS_SECONDS = 0.25;
 const DIRECT_VIDEO_MAX_RECOVERY_ATTEMPTS = 1;
+const DIRECT_VIDEO_HEARTBEAT_SECONDS = 300;
 const PLAYER_LOGO_URL = '/brand/khophim-favicon-v2-96.png';
 const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
+
+function finitePlaybackTime(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
 
 function getUrlOrigin(url: string): string | null {
   if (!url) return null;
@@ -496,7 +511,9 @@ export default function PlayerBox({
   const serverNow = useServerNow(Boolean(episode?.is_scheduled));
   const [playerMode, setPlayerMode] = useState(() => getPlayerMode(episode));
   const [iframeKey, setIframeKey] = useState(0);
+  const [manualReloadTime, setManualReloadTime] = useState<number | null>(null);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [iframeRevealed, setIframeRevealed] = useState(false);
   const [iframeBlocked, setIframeBlocked] = useState(false);
   const [ssplayVariant, setSsplayVariant] = useState<SsplayVariant>(() => getPreferredSsplayVariant(episode?.link_embed ?? ''));
   const [autoNextActive, setAutoNextActive] = useState(false);
@@ -505,22 +522,27 @@ export default function PlayerBox({
   const fallbackEpisodeKeyRef = useRef<string | null>(null);
   const failedSourceKeysRef = useRef<Set<string>>(new Set());
   const iframeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastPlaybackTimeRef = useRef(Math.max(0, Number(initialTime || 0)));
+  const iframeRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPlaybackTimeRef = useRef(finitePlaybackTime(initialTime));
   const directVideoStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const directVideoStallMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const directVideoLastTimeRef = useRef(0);
   const directVideoRecoveryAttemptsRef = useRef(0);
+  const directVideoWasOfflineRef = useRef(false);
   const playbackSuccessIdentityRef = useRef<string | null>(null);
   const sourcePageRecoveryKeyRef = useRef<string | null>(null);
+  const terminalRepairKeyRef = useRef<string | null>(null);
+  const terminalRepairTimerRef = useRef<number | null>(null);
+  const sourceMountedAtRef = useRef(Date.now());
   const playerModeWasManuallySelectedRef = useRef(false);
   const [sourceHealthRevision, setSourceHealthRevision] = useState(0);
   const embedContainerRef = useRef<HTMLDivElement>(null);
   const directVideoRef = useRef<HTMLVideoElement>(null);
   const logicalEpisodeKey = `${movieSlug}:${episode?.slug || episode?.name || ''}`;
-  const effectiveInitialTime =
-    fallbackEpisodeKeyRef.current === logicalEpisodeKey
-      ? Math.max(Math.max(0, Number(initialTime || 0)), lastPlaybackTimeRef.current)
-      : Math.max(0, Number(initialTime || 0));
+  // `initialTime` is an explicit seek request from the page. Never derive it
+  // from the live playback ref during ordinary renders: doing so used to make
+  // a one-second schedule tick rebuild HLS at every playback second.
+  const effectiveInitialTime = finitePlaybackTime(initialTime);
 
   const [isEmbedFullscreen, setIsEmbedFullscreen] = useState(false);
   const [isEmbedPseudoFullscreen, setIsEmbedPseudoFullscreen] = useState(false);
@@ -820,17 +842,27 @@ export default function PlayerBox({
       episode?.link_embed || '',
     ].join('|');
 
+    // A parent change to initialTime is an explicit resume/restart request and
+    // must supersede a position captured by an earlier manual reload.
+    setManualReloadTime(null);
+
     if (logicalEpisodeKey !== fallbackEpisodeKeyRef.current) {
       fallbackEpisodeKeyRef.current = logicalEpisodeKey;
-      lastPlaybackTimeRef.current = Math.max(0, Number(initialTime || 0));
+      lastPlaybackTimeRef.current = finitePlaybackTime(initialTime);
       failedSourceKeysRef.current.clear();
+      terminalRepairKeyRef.current = null;
+      if (terminalRepairTimerRef.current) {
+        window.clearTimeout(terminalRepairTimerRef.current);
+        terminalRepairTimerRef.current = null;
+      }
     }
 
     if (sourceIdentity !== prevSourceIdentityRef.current) {
       prevSourceIdentityRef.current = sourceIdentity;
+      sourceMountedAtRef.current = Date.now();
       setIframeLoaded(false);
+      setIframeRevealed(false);
       setIframeBlocked(false);
-      setIframeKey((k) => k + 1);
       setSsplayVariant(getPreferredSsplayVariant(episode?.link_embed ?? ''));
       setAutoNextActive(false);
       setAutoNextCountdown(5);
@@ -869,22 +901,32 @@ export default function PlayerBox({
       || !episode?.link_m3u8
       || !shouldPreferEmbedOverDirectHls(episode)
       || !shouldAvoidEmbedForCurrentOutage(episode)
+      || iframeLoaded
+      || Date.now() - sourceMountedAtRef.current >= 8_000
       || lastPlaybackTimeRef.current >= 8
     ) return;
     setPlayerMode('hls');
-  }, [episode, playerMode, sourceHealthRevision]);
+  }, [episode, iframeLoaded, playerMode, sourceHealthRevision]);
 
   /* Iframe load timeout fallback */
   useEffect(() => {
     if (effectivePlayerMode !== 'embed' || !embedSrc) return;
     setIframeLoaded(false);
+    setIframeRevealed(false);
     setIframeBlocked(false);
     if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
+    if (iframeRevealTimerRef.current) clearTimeout(iframeRevealTimerRef.current);
     const fallbackServers = allServers.filter((_, index) => index !== activeServer);
     const hasFallbackServer = Boolean(
-      pickBestEpisodeByPriority(fallbackServers, episode?.slug || episode?.name),
+      pickBestEpisodeByScore(fallbackServers, episode?.slug || episode?.name),
     );
     const slowThirdPartyEmbed = requiresUnsandboxedEmbed(embedSrc) || isOnlyflixEmbed(embedSrc);
+    iframeRevealTimerRef.current = setTimeout(() => {
+      // Cross-origin iframe load waits for provider analytics and other
+      // non-playback resources. Reveal the provider loading UI promptly rather
+      // than covering an already usable player for 8-18 seconds.
+      setIframeRevealed(true);
+    }, EMBED_SOFT_REVEAL_MS);
     iframeTimerRef.current = setTimeout(() => {
       if (slowThirdPartyEmbed) {
         setIframeLoaded(true);
@@ -894,6 +936,7 @@ export default function PlayerBox({
     }, slowThirdPartyEmbed ? EMBED_LAST_SOURCE_TIMEOUT_MS : (hasFallbackServer ? EMBED_FALLBACK_TIMEOUT_MS : EMBED_LAST_SOURCE_TIMEOUT_MS));
     return () => {
       if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
+      if (iframeRevealTimerRef.current) clearTimeout(iframeRevealTimerRef.current);
     };
   }, [activeServer, allServers, effectivePlayerMode, embedSrc, episode?.name, episode?.slug, iframeKey]);
 
@@ -931,6 +974,24 @@ export default function PlayerBox({
     if (activeSourceKey) failedSourceKeysRef.current.add(activeSourceKey);
   }, [activeSourceHost, episode?.link_embed, episode?.link_m3u8]);
 
+  const requestTerminalSourceRepair = useCallback(() => {
+    if (!onRefetchMovie) return;
+    const repairKey = `${logicalEpisodeKey}|${episode?.link_m3u8 || episode?.link_embed || activeServer}`;
+    if (terminalRepairKeyRef.current === repairKey) return;
+    terminalRepairKeyRef.current = repairKey;
+    // Let fatal telemetry reach the database first. The fresh detail request
+    // can then see the quarantined URL and activate the existing on-demand
+    // independent-provider repair without making the viewer press reload.
+    terminalRepairTimerRef.current = window.setTimeout(() => {
+      terminalRepairTimerRef.current = null;
+      onRefetchMovie();
+    }, 4_000);
+  }, [activeServer, episode?.link_embed, episode?.link_m3u8, logicalEpisodeKey, onRefetchMovie]);
+
+  useEffect(() => () => {
+    if (terminalRepairTimerRef.current) window.clearTimeout(terminalRepairTimerRef.current);
+  }, []);
+
   const switchToFallbackServer = useCallback(() => {
     rememberActiveSourceFailure();
 
@@ -960,14 +1021,20 @@ export default function PlayerBox({
       : remainingPairs.filter(({ server }) => getServerAudioType(server) === activeAudioType);
     const remainingServerIndices = audioCompatiblePairs.map(({ originalIndex }) => originalIndex);
     const remainingServers = audioCompatiblePairs.map(({ server }) => server);
-    const fallback = pickBestEpisodeByPriority(remainingServers, episode?.slug);
+    const fallback = pickBestEpisodeByScore(remainingServers, episode?.slug);
     if (fallback) {
+      const target = fallback.episode;
+      reportIssue({
+        event_type: 'source_failover',
+        playback_time: finitePlaybackTime(lastPlaybackTimeRef.current),
+        error_message: `automatic server failover to ${getSourceHost(target.link_m3u8 || target.link_embed || '') || 'unknown host'}`,
+      });
       onSwitchServer(remainingServerIndices[fallback.serverIndex]);
-      onSelectEp(fallback.episode, lastPlaybackTimeRef.current);
+      onSelectEp(target, finitePlaybackTime(lastPlaybackTimeRef.current));
       return true;
     }
     return false;
-  }, [activeServer, activeSourceHost, allServers, episode, onSelectEp, onSwitchServer, rememberActiveSourceFailure]);
+  }, [activeServer, activeSourceHost, allServers, episode, onSelectEp, onSwitchServer, rememberActiveSourceFailure, reportIssue]);
 
   useEffect(() => {
     if (!embedIsSourcePage || effectivePlayerMode !== 'embed') return;
@@ -999,7 +1066,6 @@ export default function PlayerBox({
       event_type: 'hls_fatal',
       error_message: 'HLS fatal callback reached PlayerBox',
     });
-    rememberActiveSourceFailure();
     const embedUrl = episode?.link_embed;
     const hlsCluster = getSourceFailureClusterFromUrl(episode?.link_m3u8 || '');
     const embedCluster = getSourceFailureClusterFromUrl(embedUrl || '');
@@ -1015,17 +1081,26 @@ export default function PlayerBox({
       !shouldAvoidEmbedForCurrentOutage(episode) &&
       (hlsCluster !== embedCluster || isBrowserManagedSameProviderFallback)
     );
+    // Prefer a genuinely independent server first. It preserves the exact
+    // playback position, while an opaque cross-origin iframe normally starts
+    // again from zero and cannot prove that video actually began.
+    if (switchToFallbackServer()) return;
     if (canUseEmbedFallback) {
+      reportIssue({
+        event_type: 'source_failover',
+        playback_time: finitePlaybackTime(lastPlaybackTimeRef.current),
+        error_message: `automatic transport failover from ${effectivePlayerMode} to embed`,
+      });
       setPlayerMode(isIframeSource(embedUrl) ? 'embed' : 'video');
       return;
     }
-    if (switchToFallbackServer()) return;
+    requestTerminalSourceRepair();
     // Do not turn a fatal media URL into an infinite loader by opening an
     // iframe from the same provider cluster. Cross-origin 404/504 pages still
     // fire iframe onLoad, so the parent cannot treat that as playback proof.
     // LightweightHlsPlayer now keeps its terminal error + retry UI when no
     // genuinely independent path exists.
-  }, [effectivePlayerMode, episode?.link_embed, rememberActiveSourceFailure, reportIssue, switchToFallbackServer]);
+  }, [effectivePlayerMode, episode?.link_embed, reportIssue, requestTerminalSourceRepair, switchToFallbackServer]);
 
   const handleDirectVideoError = useCallback(() => {
     if (navigator.onLine === false) return;
@@ -1036,10 +1111,10 @@ export default function PlayerBox({
       duration: video?.duration ?? 0,
       error_message: 'direct video element error',
     });
-    rememberActiveSourceFailure();
     const embedUrl = episode?.link_embed ?? '';
     const directCluster = getSourceFailureClusterFromUrl(episode?.link_m3u8 || '');
     const embedCluster = getSourceFailureClusterFromUrl(embedUrl);
+    if (switchToFallbackServer()) return;
     if (
       embedUrl &&
       !isBlvietsubWatchPageUrl(embedUrl) &&
@@ -1047,11 +1122,16 @@ export default function PlayerBox({
       effectivePlayerMode !== 'embed' &&
       directCluster !== embedCluster
     ) {
+      reportIssue({
+        event_type: 'source_failover',
+        playback_time: finitePlaybackTime(video?.currentTime),
+        error_message: `automatic transport failover from ${effectivePlayerMode} to embed`,
+      });
       setPlayerMode('embed');
       return;
     }
-    switchToFallbackServer();
-  }, [effectivePlayerMode, episode?.link_embed, rememberActiveSourceFailure, reportIssue, switchToFallbackServer]);
+    requestTerminalSourceRepair();
+  }, [effectivePlayerMode, episode?.link_embed, reportIssue, requestTerminalSourceRepair, switchToFallbackServer]);
 
   const handleDirectVideoStallFatal = useCallback((reason: string) => {
     if (navigator.onLine === false) return;
@@ -1063,8 +1143,8 @@ export default function PlayerBox({
       buffered_ahead: getVideoBufferedAhead(video),
       error_message: reason,
     });
-    switchToFallbackServer();
-  }, [reportIssue, switchToFallbackServer]);
+    if (!switchToFallbackServer()) requestTerminalSourceRepair();
+  }, [reportIssue, requestTerminalSourceRepair, switchToFallbackServer]);
 
   useEffect(() => {
     if (effectivePlayerMode !== 'video' || !directVideoSrc) return;
@@ -1186,7 +1266,7 @@ export default function PlayerBox({
         stableReported = true;
         emitQuality('playback_stable');
       }
-      const nextHeartbeatBucket = Math.floor(watchedSeconds / 60);
+      const nextHeartbeatBucket = Math.floor(watchedSeconds / DIRECT_VIDEO_HEARTBEAT_SECONDS);
       if (nextHeartbeatBucket > heartbeatBucket) {
         heartbeatBucket = nextHeartbeatBucket;
         emitQuality('playback_heartbeat');
@@ -1200,9 +1280,13 @@ export default function PlayerBox({
       clearStallTimer();
       stopMonitor();
     };
+    const onOffline = () => {
+      directVideoWasOfflineRef.current = true;
+    };
     const onOnline = () => {
-      if (effectivePlayerMode !== 'video') return;
-      const resumeAt = video.currentTime;
+      if (effectivePlayerMode !== 'video' || !directVideoWasOfflineRef.current) return;
+      directVideoWasOfflineRef.current = false;
+      const resumeAt = finitePlaybackTime(video.currentTime);
       const shouldPlay = !video.paused && !video.ended;
       reloadDirectVideoAt(resumeAt, shouldPlay);
     };
@@ -1214,6 +1298,7 @@ export default function PlayerBox({
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('pause', onPause);
     video.addEventListener('ended', onEnded);
+    window.addEventListener('offline', onOffline);
     window.addEventListener('online', onOnline);
 
     if (!video.paused && !video.ended) startMonitor();
@@ -1226,6 +1311,7 @@ export default function PlayerBox({
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('ended', onEnded);
+      window.removeEventListener('offline', onOffline);
       window.removeEventListener('online', onOnline);
       clearStallTimer();
       stopMonitor();
@@ -1238,6 +1324,7 @@ export default function PlayerBox({
       const retryWhenOnline = () => {
         setIframeBlocked(false);
         setIframeLoaded(false);
+        setIframeRevealed(false);
         setIframeKey((key) => key + 1);
       };
       window.addEventListener('online', retryWhenOnline, { once: true });
@@ -1252,12 +1339,17 @@ export default function PlayerBox({
     // paths. If the iframe is blocked by CSP/cookies, try the direct stream of
     // the same episode before abandoning it for another server.
     if (episode?.link_m3u8 && !isRecentlyBadExactSourceHost(episode.link_m3u8)) {
+      reportIssue({
+        event_type: 'source_failover',
+        playback_time: finitePlaybackTime(lastPlaybackTimeRef.current),
+        error_message: 'iframe failed; switching to direct media path',
+      });
       setIframeBlocked(false);
       setPlayerMode(isHlsUrl(episode.link_m3u8) ? 'hls' : 'video');
       return;
     }
-    switchToFallbackServer();
-  }, [effectivePlayerMode, episode?.link_m3u8, iframeBlocked, rememberActiveSourceFailure, reportIssue, switchToFallbackServer]);
+    if (!switchToFallbackServer()) requestTerminalSourceRepair();
+  }, [effectivePlayerMode, episode?.link_m3u8, iframeBlocked, rememberActiveSourceFailure, reportIssue, requestTerminalSourceRepair, switchToFallbackServer]);
 
   return (
     <div className="movie-player-box mb-2 relative">
@@ -1295,7 +1387,7 @@ export default function PlayerBox({
             className={`${isEmbedLandscapeFallback ? 'kp-landscape-fullscreen z-[9999]' : isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'relative aspect-video w-full'} group bg-black`}
             style={isEmbedLandscapeFallback ? { left: '50%', top: '50%', width: '100dvh', height: '100dvw', transform: 'translate(-50%, -50%) rotate(90deg)' } : undefined}
           >
-            {!iframeLoaded && (
+            {!iframeRevealed && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0c14]">
                 <div className="w-10 h-10 rounded-full border-2 border-red-500/20 border-t-red-500 animate-spin mb-3" />
                 <p className="text-white/30 text-sm">Đang tải phim...</p>
@@ -1315,13 +1407,17 @@ export default function PlayerBox({
               loading="eager"
               onLoad={() => {
                 setIframeLoaded(true);
+                setIframeRevealed(true);
                 setIframeBlocked(false);
                 if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
+                if (iframeRevealTimerRef.current) clearTimeout(iframeRevealTimerRef.current);
               }}
               onError={() => {
                 if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
+                if (iframeRevealTimerRef.current) clearTimeout(iframeRevealTimerRef.current);
                 if (embedNeedsLooseSandbox) {
                   setIframeLoaded(true);
+                  setIframeRevealed(true);
                   return;
                 }
                 setIframeBlocked(true);
@@ -1339,6 +1435,7 @@ export default function PlayerBox({
                     onClick={() => {
                       setSsplayVariant(variant);
                       setIframeLoaded(false);
+                      setIframeRevealed(false);
                       setIframeBlocked(false);
                       setIframeKey((k) => k + 1);
                     }}
@@ -1444,7 +1541,7 @@ export default function PlayerBox({
               key={`${hlsSrc}-${iframeKey}`}
               src={hlsSrc}
               title={movieTitle}
-              initialTime={effectiveInitialTime}
+              initialTime={manualReloadTime ?? effectiveInitialTime}
               onTimeUpdate={(time, duration) => {
                 if (Number.isFinite(time)) lastPlaybackTimeRef.current = Math.max(0, time);
                 onTimeUpdate?.(time, duration);
@@ -1470,7 +1567,7 @@ export default function PlayerBox({
               key={`${directVideoSrc}-${iframeKey}`}
               ref={directVideoRef}
               src={directVideoSrc}
-              data-resume-at={effectiveInitialTime}
+              data-resume-at={manualReloadTime ?? effectiveInitialTime}
               title={movieTitle}
               className="w-full h-full object-contain"
               controls
@@ -1480,8 +1577,9 @@ export default function PlayerBox({
               onError={handleDirectVideoError}
               onLoadedMetadata={(event) => {
                 const video = event.currentTarget;
-                if (effectiveInitialTime > 0 && Number.isFinite(video.duration) && effectiveInitialTime < video.duration - 2) {
-                  video.currentTime = effectiveInitialTime;
+                const resumeAt = manualReloadTime ?? effectiveInitialTime;
+                if (resumeAt > 0 && Number.isFinite(video.duration) && resumeAt < video.duration - 2) {
+                  video.currentTime = resumeAt;
                 }
               }}
               onTimeUpdate={(event) => {
@@ -1554,7 +1652,18 @@ export default function PlayerBox({
             className="w-11 h-11 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/15 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed">
             <i className="ri-skip-forward-line text-base" />
           </button>
-          <button aria-label="Tải lại player" onClick={() => { setIframeLoaded(false); setIframeKey((k) => k + 1); }} title="Tải lại player"
+          <button aria-label="Tải lại player" onClick={() => {
+            const resumeAt = finitePlaybackTime(lastPlaybackTimeRef.current);
+            reportIssue({
+              event_type: 'player_manual_reload',
+              playback_time: resumeAt,
+              error_message: 'viewer requested player reload',
+            });
+            setManualReloadTime(resumeAt);
+            setIframeLoaded(false);
+            setIframeRevealed(false);
+            setIframeKey((k) => k + 1);
+          }} title="Tải lại player"
             className="w-11 h-11 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/15 transition-all cursor-pointer">
             <i className="ri-refresh-line text-base" />
           </button>

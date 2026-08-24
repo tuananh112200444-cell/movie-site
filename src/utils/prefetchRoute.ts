@@ -48,7 +48,7 @@ export function prefetchRoute(path: string): void {
  * Gọi 1 lần duy nhất sau khi hero render xong (~3s).
  */
 export function prefetchCriticalRoutes(): void {
-  const criticalRoutes = ['/search', '/filter', '/phim-le', '/phim-bo', '/phim-han-quoc'];
+  const criticalRoutes = ['/phim', '/search', '/filter', '/phim-le', '/phim-bo', '/phim-han-quoc'];
   const connection = (navigator as Navigator & {
     connection?: { saveData?: boolean; effectiveType?: string };
   }).connection;
@@ -75,21 +75,21 @@ const prefetchedSlugs = new Set<string>();
 const hoverTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const activeDetailPrefetches = new Set<string>();
 const MAX_ACTIVE_DETAIL_PREFETCHES = 2;
+// Route chunks remain warm, but speculative detail API reads are paused while
+// the catalogue database is under sustained IO pressure.
+const PREFETCH_MOVIE_DETAIL_DATA_ENABLED = false;
 
 function prefetchMovieDetailApi(slug: string): void {
-  const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined;
-  if (!supabaseUrl || activeDetailPrefetches.size >= MAX_ACTIVE_DETAIL_PREFETCHES) return;
+  if (activeDetailPrefetches.size >= MAX_ACTIVE_DETAIL_PREFETCHES) return;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 2500);
   activeDetailPrefetches.add(slug);
-  fetch(`/api/movie-detail?slug=${encodeURIComponent(slug)}`, {
-    signal: controller.signal,
-    cache: 'force-cache',
-  })
+  // Use the same data function as the click path so the six-hour in-memory
+  // detail cache is actually warm. The old /api prefetch could receive the SPA
+  // HTML fallback and never helped fetchMovieDetail's separate Supabase URL.
+  void import('../services/movieApi')
+    .then(({ fetchMovieDetail }) => fetchMovieDetail(slug, false))
     .catch(() => {})
     .finally(() => {
-      clearTimeout(timer);
       activeDetailPrefetches.delete(slug);
     });
 }
@@ -97,15 +97,15 @@ function prefetchMovieDetailApi(slug: string): void {
 export function prefetchMovieDetail(slug: string): void {
   if (!slug || prefetchedSlugs.has(slug)) return;
 
-  // Delay 600ms — chỉ prefetch khi user thực sự dừng chuột lâu,
-  // tránh lag khi lướt nhanh qua nhiều card
+  // MovieCard already waits 120ms before calling this helper. Keep only a very
+  // small extra debounce so deliberate hover warms the exact click path.
   const timer = setTimeout(() => {
     prefetchedSlugs.add(slug);
     hoverTimers.delete(slug);
-    // Chỉ prefetch JS chunk — KHÔNG gọi API để tránh network lag khi hover
+    // Keep the lazy route warm without turning card hovers into database work.
     prefetchRoute('/phim/slug');
-    prefetchMovieDetailApi(slug);
-  }, 350);
+    if (PREFETCH_MOVIE_DETAIL_DATA_ENABLED) prefetchMovieDetailApi(slug);
+  }, 80);
 
   hoverTimers.set(slug, timer);
 }

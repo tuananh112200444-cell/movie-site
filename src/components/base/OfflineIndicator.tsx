@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type OfflineStatus = 'online' | 'offline';
 
@@ -12,6 +12,7 @@ export default function OfflineIndicator() {
   const [status, setStatus] = useState<OfflineStatus>('online');
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const statusRef = useRef<OfflineStatus>('online');
 
   useEffect(() => {
     let disposed = false;
@@ -19,15 +20,17 @@ export default function OfflineIndicator() {
     let hideTimer: number | null = null;
 
     const showRecovered = () => {
-      setStatus((previous) => {
-        if (previous === 'offline') {
-          reportClientIssue('online_recovered', 'browser recovered online');
-          setVisible(true);
-          if (hideTimer) clearTimeout(hideTimer);
-          hideTimer = window.setTimeout(() => setVisible(false), 3000);
-        }
-        return 'online';
-      });
+      // React may replay updater functions. Reporting inside a state updater
+      // produced hundreds of fake online_recovered events and polluted the
+      // source-health brain. Only a confirmed offline -> online transition is
+      // observable, and report it exactly once.
+      if (statusRef.current !== 'offline') return;
+      statusRef.current = 'online';
+      setStatus('online');
+      reportClientIssue('online_recovered', 'browser recovered online');
+      setVisible(true);
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(() => setVisible(false), 3000);
     };
 
     const verifyAndRecover = () => {
@@ -40,6 +43,8 @@ export default function OfflineIndicator() {
         if (offlineTimer) clearTimeout(offlineTimer);
         offlineTimer = window.setTimeout(() => {
           if (disposed || navigator.onLine) return;
+          if (statusRef.current === 'offline') return;
+          statusRef.current = 'offline';
           reportClientIssue('offline', 'browser reported offline');
           setStatus('offline');
           setVisible(true);
