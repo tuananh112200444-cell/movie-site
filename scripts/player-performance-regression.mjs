@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const vite = fs.readFileSync('vite.config.ts', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
+const headers = fs.readFileSync('public/_headers', 'utf8');
 const app = fs.readFileSync('src/App.tsx', 'utf8');
 const page = fs.readFileSync('src/pages/movie-detail/page.tsx', 'utf8');
 const hero = fs.readFileSync('src/pages/movie-detail/components/MovieDetailHero.tsx', 'utf8');
@@ -60,6 +61,7 @@ const checks = [
   [lightweightPlayer.includes('const baseline = current >= 0 ? current : hls.levels.length - 1') && lightweightPlayer.includes('if (baseline <= 0)') && lightweightPlayer.includes('const next = baseline - 1'), 'Stall recovery at the lowest rendition must never increase video bitrate'],
   [movieApi.includes("healthStatus === 'blocked' && !browserManagedException") && detailProxy.includes("healthStatus === 'blocked' && !browserManagedException"), 'Blocked direct sources must not enter playback while browser-managed probe exceptions remain narrow'],
   [!vite.includes('appendAssetVersion') && !vite.includes('renderBuiltUrl') && !vite.includes('$1?v=') && html.includes('src="/src/main.tsx"'), 'Hashed Vite assets must have one URL identity without query-string duplication'],
+  [/\/assets\/\*\r?\n\s+Cache-Control: public, max-age=0, must-revalidate/.test(headers), 'A transient Pages asset miss must never poison a browser cache with SPA HTML for a year'],
   [html.includes("w.setTimeout(function(){if('requestIdleCallback'in w)w.requestIdleCallback(loadGtm,{timeout:5000});else loadGtm();},10000)"), 'GTM must have a real minimum delay after the critical viewing path'],
   [!html.includes('fonts.googleapis.com/css2') && html.includes("font-family:system-ui"), 'External web fonts must not block the first movie render'],
   [html.includes('<link rel="preconnect" href="https://ceoxbhsdodllziyxmbqr.supabase.co" crossorigin="anonymous">'), 'The primary Singapore catalogue connection must start before the application requests movie detail'],
