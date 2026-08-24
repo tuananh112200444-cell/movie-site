@@ -28,6 +28,7 @@ const lightweightPlayer = fs.readFileSync('src/pages/movie-detail/components/Lig
 const diagnostics = fs.readFileSync('src/services/playerDiagnostics.ts', 'utf8');
 const sourceHealthBrain = fs.readFileSync('supabase/functions/player-source-health/index.ts', 'utf8');
 const asyncViewerBrainMigration = fs.readFileSync('supabase/migrations/20260821170304_stabilize_viewer_brain_and_source_sync_capacity.sql', 'utf8');
+const appErrorBoundary = fs.readFileSync('src/components/base/AppErrorBoundary.tsx', 'utf8');
 
 const checks = [
   [imageFallback.includes('useLayoutEffect(() => {') && imageFallback.includes('memory-cache `load` event'), 'Cached movie artwork must reset before load events so SPA logo navigation cannot leave decoded images at opacity zero'],
@@ -64,6 +65,7 @@ const checks = [
   [!vite.includes('appendAssetVersion') && !vite.includes('renderBuiltUrl') && !vite.includes('$1?v=') && html.includes('src="/src/main.tsx"'), 'Hashed Vite assets must have one URL identity without query-string duplication'],
   [/\/assets\/\*\r?\n\s+Cache-Control: public, max-age=0, must-revalidate/.test(headers), 'A transient Pages asset miss must never poison a browser cache with SPA HTML for a year'],
   [asset404.includes('<title>Asset unavailable</title>') && headers.includes('/assets/404.html'), 'Missing bundle URLs must resolve to the nearest asset 404 instead of the SPA document'],
+  [html.includes('MAX_AUTO_RECOVERY_ATTEMPTS = 3') && html.includes('1500 * (attempts + 1)') && html.includes('}, 8000);') && appErrorBoundary.includes('MAX_AUTO_RECOVERY_ATTEMPTS = 3') && appErrorBoundary.includes('1500 * nextAttempt'), 'Transient deployment misses must retry automatically with bounded backoff before asking the viewer to reload'],
   [html.includes("w.setTimeout(function(){if('requestIdleCallback'in w)w.requestIdleCallback(loadGtm,{timeout:5000});else loadGtm();},10000)"), 'GTM must have a real minimum delay after the critical viewing path'],
   [!html.includes('fonts.googleapis.com/css2') && html.includes("font-family:system-ui"), 'External web fonts must not block the first movie render'],
   [html.includes('<link rel="preconnect" href="https://ceoxbhsdodllziyxmbqr.supabase.co" crossorigin="anonymous">'), 'The primary Singapore catalogue connection must start before the application requests movie detail'],

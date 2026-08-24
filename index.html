@@ -199,14 +199,24 @@
     </noscript>
     <script>
       (function () {
-        var RECOVERY_KEY = 'kp_shell_recovery_20260703_blank_page_v1';
-        function readFlag() {
-          try { return sessionStorage.getItem(RECOVERY_KEY) === '1'; }
-          catch (e) { return window.name.indexOf(RECOVERY_KEY) !== -1; }
+        var RECOVERY_KEY = 'kp_shell_recovery_20260824_v2';
+        var MAX_AUTO_RECOVERY_ATTEMPTS = 3;
+        function readAttempts() {
+          try { return Math.max(0, Number(sessionStorage.getItem(RECOVERY_KEY) || 0) || 0); }
+          catch (e) {
+            var match = window.name.match(new RegExp(RECOVERY_KEY + '=(\\d+)'));
+            return match ? Math.max(0, Number(match[1]) || 0) : 0;
+          }
         }
-        function writeFlag() {
-          try { sessionStorage.setItem(RECOVERY_KEY, '1'); }
-          catch (e) { window.name = (window.name || '') + ' ' + RECOVERY_KEY; }
+        function writeAttempts(value) {
+          try { sessionStorage.setItem(RECOVERY_KEY, String(value)); }
+          catch (e) {
+            var pattern = new RegExp(RECOVERY_KEY + '=\\d+');
+            var token = RECOVERY_KEY + '=' + value;
+            window.name = pattern.test(window.name || '')
+              ? (window.name || '').replace(pattern, token)
+              : ((window.name || '') + ' ' + token);
+          }
         }
         function clearLocalState() {
           try {
@@ -279,16 +289,19 @@
           }
         }
         function recover(reason) {
-          if (readFlag()) {
+          var attempts = readAttempts();
+          if (attempts >= MAX_AUTO_RECOVERY_ATTEMPTS) {
             showRecovery(reason);
             return;
           }
-          writeFlag();
+          writeAttempts(attempts + 1);
           clearLocalState();
           clearCachesAndWorkers().then(function () {
-            var url = new URL(location.href);
-            url.searchParams.set('__kp_recover', String(Date.now()));
-            location.replace(url.toString());
+            setTimeout(function () {
+              var url = new URL(location.href);
+              url.searchParams.set('__kp_recover', String(Date.now()));
+              location.replace(url.toString());
+            }, 1500 * (attempts + 1));
           });
         }
         var assetScriptFailed = false;
@@ -305,7 +318,7 @@
           if (!mounted && (assetScriptFailed || empty)) {
             recover(assetScriptFailed ? 'script_load_error' : 'app_not_mounted');
           }
-        }, 25000);
+        }, 8000);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

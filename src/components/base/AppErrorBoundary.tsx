@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
-const RECOVERY_KEY = 'kp_app_recovery_20260705_v1';
+const RECOVERY_KEY = 'kp_app_recovery_20260824_v2';
+const MAX_AUTO_RECOVERY_ATTEMPTS = 3;
 
 function safeSessionGet(key: string): string | null {
   try {
@@ -83,6 +84,18 @@ interface State {
 
 export default class AppErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
+  private recoveryResetTimer: number | null = null;
+
+  componentDidMount() {
+    this.recoveryResetTimer = window.setTimeout(() => {
+      if (!this.state.error) safeSessionRemove(RECOVERY_KEY);
+      this.recoveryResetTimer = null;
+    }, 20_000);
+  }
+
+  componentWillUnmount() {
+    if (this.recoveryResetTimer !== null) window.clearTimeout(this.recoveryResetTimer);
+  }
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
@@ -103,12 +116,14 @@ export default class AppErrorBoundary extends Component<Props, State> {
       return;
     }
 
-    const lastRecoveryAt = Number(safeSessionGet(RECOVERY_KEY) ?? '0');
-    const canRecoverChunk = !Number.isFinite(lastRecoveryAt) || Date.now() - lastRecoveryAt > 15_000;
-    if (isChunkLoadError(error) && canRecoverChunk) {
-      safeSessionSet(RECOVERY_KEY, String(Date.now()));
-      Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()])
-        .finally(() => recoverWithFreshUrl());
+    const recoveryAttempts = Math.max(0, Number(safeSessionGet(RECOVERY_KEY) ?? '0') || 0);
+    if (isChunkLoadError(error) && recoveryAttempts < MAX_AUTO_RECOVERY_ATTEMPTS) {
+      const nextAttempt = recoveryAttempts + 1;
+      safeSessionSet(RECOVERY_KEY, String(nextAttempt));
+      window.setTimeout(() => {
+        Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()])
+          .finally(() => recoverWithFreshUrl());
+      }, 1500 * nextAttempt);
     }
   }
 
