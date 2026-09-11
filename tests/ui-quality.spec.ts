@@ -393,3 +393,166 @@ test('player mobile: fullscreen gọi API và khóa xoay ngang', async ({ page }
   await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __kpFullscreenRequested?: boolean }).__kpFullscreenRequested))).toBe(true);
   await expect.poll(() => page.evaluate(() => (window as Window & { __kpOrientationLock?: string }).__kpOrientationLock)).toBe('landscape');
 });
+
+test('player desktop: thoát fullscreen ngay không tự mở lại chế độ phóng to giả', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chrome', 'Chỉ áp dụng cho desktop');
+  await page.addInitScript(() => {
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: async function () {
+        Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: this });
+        document.dispatchEvent(new Event('fullscreenchange'));
+      },
+    });
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: async () => {
+        Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null });
+        document.dispatchEvent(new Event('fullscreenchange'));
+      },
+    });
+  });
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'Embed', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://player.example.test/embed/e2e' }] },
+  ]));
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+
+  const fullscreen = page.locator('[data-kp-fullscreen="true"]').first();
+  await expect(fullscreen).toBeVisible({ timeout: 20_000 });
+  await fullscreen.click();
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+  await expect(page.locator('html')).not.toHaveClass(/kp-player-pseudo-fullscreen/);
+
+  await fullscreen.click();
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+  await expect(page.locator('html')).not.toHaveClass(/kp-player-pseudo-fullscreen/);
+  await expect(fullscreen).toHaveAttribute('aria-label', 'Toàn màn hình');
+});
+
+test('player desktop: fullscreen WebKit có thể vào và thoát bằng cùng một nút', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chrome', 'Chỉ áp dụng cho desktop');
+  await page.addInitScript(() => {
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: false });
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value: undefined });
+    Object.defineProperty(document, 'webkitFullscreenEnabled', { configurable: true, value: true });
+    Object.defineProperty(HTMLElement.prototype, 'webkitRequestFullscreen', {
+      configurable: true,
+      value: async function () {
+        Object.defineProperty(document, 'webkitFullscreenElement', { configurable: true, value: this });
+        document.dispatchEvent(new Event('webkitfullscreenchange'));
+      },
+    });
+    Object.defineProperty(document, 'webkitExitFullscreen', {
+      configurable: true,
+      value: async () => {
+        Object.defineProperty(document, 'webkitFullscreenElement', { configurable: true, value: null });
+        document.dispatchEvent(new Event('webkitfullscreenchange'));
+      },
+    });
+  });
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'Embed', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://player.example.test/embed/e2e' }] },
+  ]));
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+
+  const fullscreen = page.locator('[data-kp-fullscreen="true"]').first();
+  await expect(fullscreen).toBeVisible({ timeout: 20_000 });
+  await fullscreen.click();
+  await expect.poll(() => page.evaluate(() => Boolean((document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement))).toBe(true);
+  await expect(fullscreen).toHaveAttribute('aria-label', 'Thoát toàn màn hình');
+
+  await fullscreen.click();
+  await expect.poll(() => page.evaluate(() => Boolean((document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement))).toBe(false);
+  await expect(page.locator('html')).not.toHaveClass(/kp-player-pseudo-fullscreen/);
+});
+
+test('player mobile: fullscreen dự phòng phủ kín điện thoại nhỏ, điện thoại phổ biến, tablet và màn hình ngang', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chrome', 'Chạy ma trận viewport một lần');
+  await page.addInitScript(() => {
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: false });
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value: undefined });
+    Object.defineProperty(HTMLElement.prototype, 'webkitRequestFullscreen', { configurable: true, value: undefined });
+  });
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'Embed', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://player.example.test/embed/e2e' }] },
+  ]));
+
+  const viewports = [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 844, height: 390 },
+  ];
+
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+    const fullscreen = page.locator('[data-kp-fullscreen="true"]').first();
+    await expect(fullscreen).toBeVisible({ timeout: 20_000 });
+    await fullscreen.click();
+    await expect(page.locator('html')).toHaveClass(/kp-player-pseudo-fullscreen/);
+
+    const coverage = await page.locator('[data-kp-player]').first().evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const button = element.querySelector('[data-kp-fullscreen="true"]')?.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        buttonWidth: button?.width || 0,
+        buttonHeight: button?.height || 0,
+      };
+    });
+    expect(Math.abs(coverage.left)).toBeLessThanOrEqual(2);
+    expect(Math.abs(coverage.top)).toBeLessThanOrEqual(2);
+    expect(Math.abs(coverage.width - viewport.width)).toBeLessThanOrEqual(2);
+    expect(Math.abs(coverage.height - viewport.height)).toBeLessThanOrEqual(2);
+    expect(coverage.buttonWidth).toBeGreaterThanOrEqual(48);
+    expect(coverage.buttonHeight).toBeGreaterThanOrEqual(48);
+
+    await fullscreen.click();
+    await expect(page.locator('html')).not.toHaveClass(/kp-player-pseudo-fullscreen/);
+  }
+});
+
+test('player mobile: iPhone dùng fullscreen video gốc khi fullscreen khung không được hỗ trợ', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chrome', 'Chỉ áp dụng cho mobile');
+  await page.addInitScript(() => {
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: false });
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value: undefined });
+    Object.defineProperty(HTMLElement.prototype, 'webkitRequestFullscreen', { configurable: true, value: undefined });
+    Object.defineProperty(HTMLVideoElement.prototype, 'webkitEnterFullscreen', {
+      configurable: true,
+      value: function () {
+        Object.defineProperty(this, 'webkitDisplayingFullscreen', { configurable: true, value: true });
+        (window as Window & { __kpIOSVideoFullscreen?: boolean }).__kpIOSVideoFullscreen = true;
+        this.dispatchEvent(new Event('webkitbeginfullscreen'));
+      },
+    });
+    Object.defineProperty(HTMLVideoElement.prototype, 'webkitExitFullscreen', {
+      configurable: true,
+      value: function () {
+        Object.defineProperty(this, 'webkitDisplayingFullscreen', { configurable: true, value: false });
+        (window as Window & { __kpIOSVideoFullscreen?: boolean }).__kpIOSVideoFullscreen = false;
+        this.dispatchEvent(new Event('webkitendfullscreen'));
+      },
+    });
+  });
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'HLS', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_m3u8: 'https://media.example.test/iphone.m3u8' }] },
+  ]));
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+
+  const fullscreen = page.locator('[data-kp-player="hls"] [data-kp-fullscreen="true"]').first();
+  await expect(fullscreen).toBeVisible({ timeout: 20_000 });
+  await fullscreen.click();
+  await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __kpIOSVideoFullscreen?: boolean }).__kpIOSVideoFullscreen))).toBe(true);
+  await expect(fullscreen).toHaveAttribute('aria-label', 'Thoát toàn màn hình');
+
+  await fullscreen.click();
+  await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __kpIOSVideoFullscreen?: boolean }).__kpIOSVideoFullscreen))).toBe(false);
+  await expect(fullscreen).toHaveAttribute('aria-label', 'Toàn màn hình');
+  await expect(page.locator('html')).not.toHaveClass(/kp-player-pseudo-fullscreen/);
+});

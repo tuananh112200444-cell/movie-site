@@ -18,7 +18,6 @@ export interface CountryConfig {
   name: string;
   nameEn: string;
   flag: string;
-  type: 'phim-le' | 'phim-bo';
   path: string;
   bgImage: string;
   accentColor: string;
@@ -43,7 +42,6 @@ export const COUNTRY_CONFIGS: Record<string, CountryConfig> = {
     name: 'Phim Hàn Quốc',
     nameEn: 'Korean Drama',
     flag: '🇰🇷',
-    type: 'phim-bo',
     path: '/phim-han-quoc',
     bgImage: 'https://readdy.ai/api/search-image?query=Seoul%20South%20Korea%20cityscape%20night%20panoramic%20view%20Han%20River%20bridge%20lights%20modern%20skyscrapers%20dramatic%20cinematic%20atmosphere%20dark%20moody&width=1400&height=500&seq=country-kr-hero-1&orientation=landscape',
     accentColor: 'text-pink-400',
@@ -90,7 +88,6 @@ export const COUNTRY_CONFIGS: Record<string, CountryConfig> = {
     name: 'Phim Trung Quốc',
     nameEn: 'Chinese Drama',
     flag: '🇨🇳',
-    type: 'phim-bo',
     path: '/phim-trung-quoc',
     bgImage: 'https://readdy.ai/api/search-image?query=ancient%20Chinese%20palace%20imperial%20architecture%20forbidden%20city%20dramatic%20sunset%20golden%20light%20cinematic%20epic%20fantasy%20wuxia%20atmosphere%20dark%20moody&width=1400&height=500&seq=country-cn-hero-1&orientation=landscape',
     accentColor: 'text-red-400',
@@ -137,7 +134,6 @@ export const COUNTRY_CONFIGS: Record<string, CountryConfig> = {
     name: 'Phim Âu Mỹ',
     nameEn: 'Western Movies',
     flag: '🇺🇸',
-    type: 'phim-le',
     path: '/phim-au-my',
     bgImage: 'https://readdy.ai/api/search-image?query=Hollywood%20sign%20Los%20Angeles%20California%20night%20cityscape%20dramatic%20cinematic%20aerial%20view%20dark%20moody%20atmosphere%20epic%20blockbuster%20movie%20production&width=1400&height=500&seq=country-us-hero-1&orientation=landscape',
     accentColor: 'text-sky-400',
@@ -184,7 +180,6 @@ export const COUNTRY_CONFIGS: Record<string, CountryConfig> = {
     name: 'Phim Nhật Bản',
     nameEn: 'Japanese Drama & Anime',
     flag: '🇯🇵',
-    type: 'phim-bo',
     path: '/phim-nhat-ban',
     bgImage: 'https://readdy.ai/api/search-image?query=Tokyo%20Japan%20night%20cityscape%20cherry%20blossom%20sakura%20anime%20style%20cinematic%20dramatic%20neon%20lights%20futuristic%20dark%20moody%20atmosphere&width=1400&height=500&seq=country-jp-hero-1&orientation=landscape',
     accentColor: 'text-rose-400',
@@ -231,7 +226,6 @@ export const COUNTRY_CONFIGS: Record<string, CountryConfig> = {
     name: 'Phim Thái Lan',
     nameEn: 'Thai Drama',
     flag: '🇹🇭',
-    type: 'phim-bo',
     path: '/phim-thai-lan',
     bgImage: 'https://readdy.ai/api/search-image?query=Bangkok%20Thailand%20temple%20golden%20pagoda%20dramatic%20sunset%20tropical%20cinematic%20atmosphere%20dark%20moody%20exotic%20beautiful%20landscape&width=1400&height=500&seq=country-th-hero-1&orientation=landscape',
     accentColor: 'text-teal-400',
@@ -278,7 +272,6 @@ export const COUNTRY_CONFIGS: Record<string, CountryConfig> = {
     name: 'Phim Việt Nam',
     nameEn: 'Vietnamese Movies',
     flag: '🇻🇳',
-    type: 'phim-le',
     path: '/phim-viet-nam',
     bgImage: 'https://readdy.ai/api/search-image?query=Vietnam%20Hanoi%20Hoi%20An%20ancient%20town%20lanterns%20night%20dramatic%20cinematic%20atmosphere%20beautiful%20landscape%20dark%20moody%20golden%20light&width=1400&height=500&seq=country-vn-hero-1&orientation=landscape',
     accentColor: 'text-yellow-400',
@@ -408,25 +401,14 @@ export default function CountryPage({ countrySlug }: Props) {
     setLoading(true);
 
     const sortField = 'year';
-    const sourcePage = page * 2 - 1;
-    Promise.all([
-      fetchMoviesByCategory({
-        type: config.type,
+    fetchMoviesByCategory({
         country: countrySlug,
-        page: sourcePage,
+        page,
         sortField,
         sortType: 'desc',
-      }),
-      fetchMoviesByCategory({
-        type: config.type,
-        country: countrySlug,
-        page: sourcePage + 1,
-        sortField,
-        sortType: 'desc',
-      }),
-    ]).then((responses) => {
+      }).then((response) => {
       if (cancelled) return;
-      const items = dedupeMovies(responses.flatMap((res) => res.items ?? []));
+      const items = dedupeMovies(response.items ?? []);
       const stableItems = sortBy === 'hot'
         ? [...items].sort((a, b) => getHotScore(b) - getHotScore(a))
         : [...items].sort((a, b) => {
@@ -434,11 +416,13 @@ export default function CountryPage({ countrySlug }: Props) {
             if (yearDelta !== 0) return yearDelta;
             return new Date(b.modified?.time ?? 0).getTime() - new Date(a.modified?.time ?? 0).getTime();
           });
-      const firstPagination = responses[0]?.pagination;
-      const sourceTotalPages = Math.max(...responses.map((res) => res.pagination?.totalPages ?? 1));
-      const sourcePageSize = firstPagination?.totalItemsPerPage || 24;
-      const totalItems = firstPagination?.totalItems ?? sourceTotalPages * sourcePageSize;
-      const nextTotalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+      const pagination = response.pagination;
+      const sourceTotalPages = pagination?.totalPages ?? 1;
+      const sourcePageSize = pagination?.totalItemsPerPage || PAGE_SIZE;
+      const totalItems = pagination?.totalItems ?? sourceTotalPages * sourcePageSize;
+      const nextTotalPages = sourcePageSize === PAGE_SIZE
+        ? Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
+        : sourceTotalPages;
       setSortedMovies(stableItems.slice(0, PAGE_SIZE));
       setTotalPages(nextTotalPages);
       setHasNextPage(page < nextTotalPages || items.length >= PAGE_SIZE);
@@ -452,7 +436,7 @@ export default function CountryPage({ countrySlug }: Props) {
     });
 
     return () => { cancelled = true; };
-  }, [config, config?.type, countrySlug, page, sortBy]);
+  }, [config, countrySlug, page, sortBy]);
   const prevPage = page > 1 
     ? (page > 2 ? `${SITE_URL}${config?.path ?? pathname}?page=${page - 1}` : `${SITE_URL}${config?.path ?? pathname}`)
     : undefined;
@@ -580,7 +564,7 @@ export default function CountryPage({ countrySlug }: Props) {
         ) : (
           <div className="grid movie-grid-desktop">
             {sortedMovies.map((m, idx) => (
-              <MovieCard key={m._id} movie={m} priority={idx < 2} />
+              <MovieCard key={m._id} movie={m} priority={idx < 2} contextLabel={config.name} />
             ))}
           </div>
         )}

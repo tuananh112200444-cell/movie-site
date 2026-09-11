@@ -1,0 +1,68 @@
+[
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 13 Extra",
+    "episode_number": -2013,
+    "link_embed": "https://d0000d.com/e/tz9yyosvz0toifqytkdjai45zcxzqy3o",
+    "link_m3u8": "",
+    "server_name": "BLVietsub DS 13 Extra",
+    "slug": "tap-extra-13",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 14 Extra",
+    "episode_number": -2014,
+    "link_embed": "https://d0000d.com/e/0zycsw8bg02xinz026rjj10i28tnnahn",
+    "link_m3u8": "",
+    "server_name": "BLVietsub DS 14 Extra",
+    "slug": "tap-extra-14",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 13 Extra",
+    "episode_number": -2013,
+    "link_embed": "https://ok.ru/videoembed/8277019855377?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "BLVietsub OK 13 Extra",
+    "slug": "tap-extra-13",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 14 Extra",
+    "episode_number": -2014,
+    "link_embed": "https://ok.ru/videoembed/8277019134481?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "BLVietsub OK 14 Extra",
+    "slug": "tap-extra-14",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 13 Extra",
+    "episode_number": -2013,
+    "link_embed": "https://vk.com/video_ext.php?oid=458745691&id=456240154&autoplay=1",
+    "link_m3u8": "",
+    "server_name": "BLVietsub VK 13 Extra",
+    "slug": "tap-extra-13",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 14 Extra",
+    "episode_number": -2014,
+    "link_embed": "https://vk.com/video_ext.php?oid=458745691&id=456240155&autoplay=1",
+    "link_m3u8": "",
+    "server_name": "BLVietsub VK 14 Extra",
+    "slug": "tap-extra-14",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  }
+]

@@ -1,6 +1,6 @@
 const BAD_SOURCE_HOSTS_KEY = 'khophim.bad-source-hosts.v2';
 const SOURCE_HEALTH_LAST_FETCH_KEY = 'khophim.source-health.last-fetch.v2';
-const SOURCE_HEALTH_FETCH_TTL_MS = 5 * 60 * 1000;
+const SOURCE_HEALTH_FETCH_TTL_MS = 30 * 60 * 1000;
 // This refresh runs in the background; the watch page only waits 250ms before
 // selecting its first source. Allow the Singapore rollup enough time to return
 // during peak load without delaying player startup.
@@ -88,11 +88,11 @@ async function fetchPlayerSourceHealth(): Promise<void> {
     const supabaseUrl = String(import.meta.env.VITE_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
     const publishableKey = String(import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY || '');
     const endpoints = [
-      { url: '/api/player-source-health?hours=1&limit=2000', headers: { Accept: 'application/json' } },
       ...(supabaseUrl && publishableKey ? [{
         url: `${supabaseUrl}/functions/v1/player-source-health?hours=1&limit=2000`,
         headers: { Accept: 'application/json', apikey: publishableKey },
       }] : []),
+      { url: '/api/player-source-health?hours=1&limit=2000', headers: { Accept: 'application/json' } },
     ];
     let response: Response | null = null;
     for (const endpoint of endpoints) {
@@ -213,7 +213,10 @@ export function markSourcePlaybackFailed(urlOrHost?: string): void {
   const map = readJsonMap(BAD_SOURCE_HOSTS_KEY);
   map[host] = Date.now();
   writeJsonMap(BAD_SOURCE_HOSTS_KEY, map);
-  window.dispatchEvent(new CustomEvent(SOURCE_HEALTH_UPDATED_EVENT));
+  // This is a local player failure, not a new cross-viewer health snapshot.
+  // PlayerBox already performs the immediate failover. Broadcasting here made
+  // the watch page run a second, competing source handoff in the same render
+  // cycle and could bounce BLVietsub/GLVietsub mirrors back and forth.
 }
 
 export function markSourcePlaybackHealthy(urlOrHost?: string): void {

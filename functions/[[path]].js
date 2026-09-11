@@ -8,7 +8,8 @@ const SUPABASE_PUBLIC_KEY = 'sb_publishable_Juh45t-R83dfgJI0O4_PQw_iYYoU-yh';
 // Single production kill switch. Keep APIs/internal provider bridges online so
 // the overnight source rebuild can continue while public pages return 503.
 const MAINTENANCE_MODE = false;
-const SEO_PRERENDER_VERSION = '20260820-cohort-parity-v24';
+const SEO_PRERENDER_VERSION = '20260903-editorial-cohort-v1';
+const HOME_DOCUMENT_CACHE_VERSION = '20260828-fast-home-v1';
 const CONSOLIDATED_SEO_PATHS = new Map([
   ['/xem-phim', '/xem-phim-online'],
   ['/xem-phim-mien-phi', '/xem-phim-online'],
@@ -27,6 +28,17 @@ const CONSOLIDATED_SEO_PATHS = new Map([
   ['/xem-anime-vietsub', '/anime'],
   ['/the-loai/hoat-hinh', '/hoat-hinh'],
   ['/the-loai/phim-viet-nam', '/phim-viet-nam'],
+]);
+
+// Search Console still knows these retired slugs. Redirect only when the
+// replacement identity is unambiguous; removed titles are handled as 410.
+const LEGACY_MOVIE_REDIRECTS = new Map([
+  ['/phim/tham-tu-lung-danh-conan-25-nang-dau-halloween', '/phim/tham-tu-lung-danh-conan-nang-dau-halloween'],
+  ['/phim/kisskh-goblin', '/phim/nu-hon-cua-yeu-tinh'],
+  ['/phim/nguoi-nhen-khoi-dau-moi', '/phim/spider-man-brand-new-day-2026'],
+]);
+const REMOVED_MOVIE_PATHS = new Set([
+  '/phim/toi-yeu-los-angeles',
 ]);
 
 const SECURITY_HEADERS = {
@@ -619,10 +631,34 @@ function movieDataSourceLabel(movie) {
 
 async function spaRouteMeta(context, pathname) {
   const cleanPath = getCanonicalPath(pathname);
+  if (cleanPath === '/search') {
+    return {
+      title: 'Tìm Kiếm Phim Theo Tên | KhoPhim',
+      description: 'Tìm phim theo tên tiếng Việt, tên gốc, diễn viên và từ khóa trên KhoPhim.',
+      canonical: `${SITE_URL}/search`,
+      robots: 'noindex, follow',
+      image: `${SITE_URL}/og-image.jpg`,
+      schema: [],
+      staticMovieSlug: '',
+    };
+  }
   const watchMatch = /^\/xem-phim\/([^/?#]+)/i.exec(cleanPath);
   const movieMatch = /^\/phim\/([^/?#]+)/i.exec(cleanPath);
-  if (watchMatch || movieMatch) {
-    const slug = decodeURIComponent((watchMatch || movieMatch)[1]);
+  if (watchMatch) {
+    const slug = decodeURIComponent(watchMatch[1]);
+    const name = titleCaseFromSlug(slug);
+    return {
+      title: `Xem ${name} | KhoPhim`,
+      description: `Mở lại ${name} trên KhoPhim và tiếp tục đúng tập đang xem.`,
+      canonical: `${SITE_URL}/phim/${encodeURIComponent(slug)}`,
+      robots: 'noindex, follow',
+      image: '',
+      schema: [],
+      staticMovieSlug: '',
+    };
+  }
+  if (movieMatch) {
+    const slug = decodeURIComponent(movieMatch[1]);
     const lookup = await fetchSupabaseMovie(slug, context).catch(() => ({ movie: null }));
     const movie = lookup?.movie || null;
     const name = String(movie?.name || titleCaseFromSlug(slug)).trim();
@@ -631,24 +667,23 @@ async function spaRouteMeta(context, pathname) {
     const image = movie ? getImageUrl(movie.poster_url || movie.thumb_url || '') : '';
     const synopsis = stripHtml(movie?.content || '');
     const detailCanonical = `${SITE_URL}/phim/${encodeURIComponent(String(movie?.slug || slug))}`;
-    const title = watchMatch
-      ? `Xem ${name}${year ? ` (${year})` : ''} | KhoPhim`
-      : `${name}${year ? ` (${year})` : ''} - Thông Tin Phim | KhoPhim`;
+    const title = `${name}${year ? ` (${year})` : ''} - Thông Tin Phim | KhoPhim`;
     const description = compactMeta([
-      watchMatch ? `Trang xem ${name}${origin ? ` (${origin})` : ''}.` : `Thông tin phim ${name}${origin ? ` (${origin})` : ''}.`,
+      `Thông tin phim ${name}${origin ? ` (${origin})` : ''}.`,
       synopsis,
       movie?.episode_current ? `Trạng thái: ${movie.episode_current}.` : '',
     ].filter(Boolean).join(' '), 155);
-    const indexable = !watchMatch && isHighValueIndexCandidate(movie);
+    const indexable = isHighValueIndexCandidate(movie);
     return {
       title,
       description,
-      canonical: watchMatch ? detailCanonical : detailCanonical,
+      canonical: detailCanonical,
       robots: indexable
         ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
         : 'noindex, follow',
       image,
-      schema: watchMatch ? [] : movieRouteSchema(movie, detailCanonical, title, description, image),
+      schema: movieRouteSchema(movie, detailCanonical, title, description, image),
+      staticMovieSlug: indexable ? String(movie?.slug || slug) : '',
     };
   }
 
@@ -661,6 +696,7 @@ async function spaRouteMeta(context, pathname) {
     canonical,
     robots: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
     image: `${SITE_URL}/og-image.jpg`,
+    staticMovieSlug: '',
     schema: [{
       '@context': 'https://schema.org',
       '@type': staticMeta.pageType || 'WebPage',
@@ -696,6 +732,19 @@ function rewriteSpaDocument(response, pathname, meta) {
     .on('meta[name="twitter:title"]', setContent('content', meta.title))
     .on('meta[name="twitter:description"]', setContent('content', meta.description))
     .on('meta[name="twitter:image"]', setContent('content', meta.image));
+
+  rewritten = rewritten.on('head', { element(element) {
+    const alternates = ['vi', 'vi-VN', 'x-default']
+      .map((hrefLang) => `<link rel="alternate" hreflang="${hrefLang}" href="${escapeHtml(meta.canonical)}" data-kp-seo-managed="true">`)
+      .join('');
+    const movieMarker = meta.staticMovieSlug
+      ? `<meta name="kp-static-movie" content="${escapeHtml(meta.staticMovieSlug)}" data-kp-seo-edge="true">`
+      : '';
+    element.append(
+      `<link rel="canonical" href="${escapeHtml(meta.canonical)}" data-kp-seo-edge="true">${alternates}${movieMarker}`,
+      { html: true },
+    );
+  } });
 
   if (meta.image && pathname.startsWith('/phim/')) {
     rewritten = rewritten
@@ -788,7 +837,8 @@ function withHeaders(response, pathname) {
     headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
   }
   if (isNoIndexPath(pathname)) {
-    headers.set('X-Robots-Tag', /^\/xem-phim\/[^/]+/i.test(pathname) ? 'noindex, follow' : 'noindex, nofollow');
+    const privatePath = /^\/(?:admin|login|dang-ky|register|forgot-password|reset-password)(?:\/|$)/i.test(pathname);
+    headers.set('X-Robots-Tag', privatePath ? 'noindex, nofollow' : 'noindex, follow');
   }
   return new Response(response.body, {
     status: response.status,
@@ -826,6 +876,10 @@ function taxonomyItems(value) {
   if (!Array.isArray(value)) return [];
   return value
     .map((item) => {
+      if (typeof item === 'string') {
+        const name = item.trim();
+        return name ? { name, slug: '' } : null;
+      }
       if (!item || typeof item !== 'object') return null;
       const name = String(item.name || '').trim();
       const slug = String(item.slug || '').trim();
@@ -839,11 +893,20 @@ function personNames(value, limit = 12) {
   return keywordVariants(value.map((item) => String(item || '').trim())).slice(0, limit);
 }
 
+function usefulPersonNames(value, limit = 12) {
+  return personNames(value, limit).filter((name) => {
+    const normalized = normalizeSearchText(name);
+    return normalized.length >= 2
+      && !/^(?:dang cap nhat|updating|unknown|n a|null)$/.test(normalized);
+  });
+}
+
 function isHighValueIndexCandidate(movie) {
   if (!movie || movie.seo_eligible_for_index !== true) return false;
   const tier = String(movie.seo_index_tier || '');
-  if (!['playable', 'ongoing', 'upcoming'].includes(tier)) return false;
-  if (Number(movie.seo_quality_score || 0) < 85) return false;
+  const upcoming = tier === 'upcoming';
+  if (!upcoming && !['playable', 'ongoing'].includes(tier)) return false;
+  if (Number(movie.seo_quality_score || 0) < (upcoming ? 88 : 85)) return false;
 
   const name = String(movie.name || '').trim();
   const originName = String(movie.origin_name || movie.title_original || '').trim();
@@ -852,15 +915,21 @@ function isHighValueIndexCandidate(movie) {
   const year = Number(movie.year || 0);
   const tmdbId = Number(movie.tmdb_id || 0);
   const currentYear = new Date().getUTCFullYear();
-  const actors = personNames(movie.actor, 1);
+  const actors = usefulPersonNames(movie.actor, 1);
+  const directors = usefulPersonNames(movie.director, 1);
   const genres = taxonomyItems(movie.category);
   const countries = taxonomyItems(movie.country);
   const hasBrokenText = /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(`${name} ${originName} ${content}`);
 
-  if (name.length < 2 || originName.length < 2 || content.length < 160 || !image) return false;
+  if (name.length < 2 || originName.length < 2 || content.length < (upcoming ? 350 : 500) || !image) return false;
   if (year < 1888 || year > currentYear + 2 || tmdbId <= 0 || hasBrokenText) return false;
-  if (!actors.length || !genres.length || !countries.length) return false;
-  if (tier === 'upcoming') return Boolean(getTrailerEmbedUrl(movie.trailer_url));
+  if (!actors.length || !directors.length || !genres.length || !countries.length) return false;
+  if (upcoming) {
+    const trailerEmbed = getTrailerEmbedUrl(movie.trailer_url);
+    return year >= currentYear
+      && /^https:\/\/www\.youtube\.com\/embed\//i.test(trailerEmbed)
+      && !hasPlayableMovieEvidence(movie);
+  }
   return hasPlayableMovieEvidence(movie);
 }
 
@@ -913,7 +982,11 @@ function isUpcomingMovie(movie) {
   const ep = normalizeSearchText(movie.episode_current);
   const status = normalizeSearchText(movie.seo_catalog_status || movie.status);
   const releaseAt = movie.release_at ? new Date(movie.release_at).getTime() : 0;
-  return status === 'upcoming' || ep.includes('sap chieu') || ep.includes('sắp chiếu') || releaseAt > Date.now();
+  return String(movie.seo_index_tier || '') === 'upcoming'
+    || status === 'upcoming'
+    || ep.includes('sap chieu')
+    || ep.includes('sắp chiếu')
+    || releaseAt > Date.now();
 }
 
 function getTrailerEmbedUrl(value) {
@@ -927,7 +1000,9 @@ function getTrailerEmbedUrl(value) {
     }
     if (/(^|\.)youtube\.com$/i.test(url.hostname)) {
       const id = url.searchParams.get('v') || (/^\/(?:embed|shorts)\/([^/?#]+)/.exec(url.pathname)?.[1] ?? '');
-      return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}` : '';
+      return id && !/^(?:undefined|null)$/i.test(id)
+        ? `https://www.youtube.com/embed/${encodeURIComponent(id)}`
+        : '';
     }
     return raw;
   } catch {
@@ -1975,6 +2050,10 @@ async function renderStaticPrerender(request, context) {
 async function fetchSupabaseMovie(slug, context) {
   const seoUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-seo-prerender-data`);
   seoUrl.searchParams.set('slug', slug);
+  // Keep the upstream eligibility snapshot in lockstep with the edge cohort.
+  // Without a release key, an older cached noindex response could outlive a
+  // newly generated sitemap decision for the same movie.
+  seoUrl.searchParams.set('v', SEO_PRERENDER_VERSION);
   const detailUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
   detailUrl.searchParams.set('slug', slug);
 
@@ -2020,6 +2099,64 @@ async function fetchSupabaseMovie(slug, context) {
   return fetchMovie({ url: detailUrl, timeoutMs: 8500 });
 }
 
+async function fetchPublishedMovieSeoProfile(slug) {
+  const cleanSlug = String(slug || '').trim();
+  if (!cleanSlug) return { profile: null, unavailable: false };
+  const profileUrl = new URL(`${SUPABASE_REST_BASE}/movie_seo_profiles`);
+  profileUrl.searchParams.set('select', 'movie_id,slug,status,focus_keyword,secondary_keywords,seo_title,meta_description,canonical_path,og_image_url,index_mode,intro_content,review_content,faq,topic_links,validation_score,published_at,updated_at,version,live_audit,last_audited_at');
+  profileUrl.searchParams.set('slug', `eq.${cleanSlug}`);
+  profileUrl.searchParams.set('status', 'eq.published');
+  profileUrl.searchParams.set('limit', '1');
+  const incomingUrl = new URL(`${SUPABASE_REST_BASE}/movie_seo_topic_links`);
+  incomingUrl.searchParams.set('select', 'source_slug,title,anchor,description,target_path,updated_at');
+  incomingUrl.searchParams.set('target_path', `eq./phim/${cleanSlug}`);
+  incomingUrl.searchParams.set('order', 'updated_at.desc');
+  incomingUrl.searchParams.set('limit', '12');
+  const headers = {
+    apikey: SUPABASE_PUBLIC_KEY,
+    Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
+    Accept: 'application/json',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+  };
+  try {
+    const profileResponse = await fetch(profileUrl.toString(), {
+      headers,
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!profileResponse.ok) return { profile: null, unavailable: profileResponse.status >= 500 };
+    const rows = await profileResponse.json();
+    const profile = Array.isArray(rows) && rows[0] && typeof rows[0] === 'object' ? rows[0] : null;
+    if (!profile) return { profile: null, unavailable: false };
+    let incomingLinks = [];
+    try {
+      const incomingResponse = await fetch(incomingUrl.toString(), {
+        headers,
+        signal: AbortSignal.timeout(3500),
+      });
+      if (incomingResponse.ok) {
+        const incomingRows = await incomingResponse.json();
+        if (Array.isArray(incomingRows)) incomingLinks = incomingRows;
+      }
+    } catch {
+      // Incoming cluster links enrich discovery but never make the movie page unavailable.
+    }
+    return { profile: { ...profile, incoming_links: incomingLinks }, unavailable: false };
+  } catch {
+    return { profile: null, unavailable: true };
+  }
+}
+
+function movieWithPublishedSeoProfile(movie, profile) {
+  if (!movie || !profile || profile.status !== 'published') return movie;
+  return {
+    ...movie,
+    content: String(profile.intro_content || movie.content || ''),
+    seo_profile: profile,
+    seo_profile_version: String(profile.version || profile.updated_at || ''),
+  };
+}
+
 function renderEmergencyRss() {
   const now = new Date().toUTCString();
   const items = [
@@ -2049,32 +2186,38 @@ function renderEmergencyRss() {
 }
 
 function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
-  const name = String(movie.name || slug);
-  const origin = String(movie.origin_name || '');
+  const seoProfile = movie.seo_profile && typeof movie.seo_profile === 'object' && movie.seo_profile.status === 'published'
+    ? movie.seo_profile
+    : null;
+  const name = repairMojibakeText(movie.name || slug);
+  const origin = repairMojibakeText(movie.origin_name || '');
   const titleVariants = keywordVariants([
     name,
     origin,
-    movie.title_vi,
-    movie.title_en,
-    movie.title_zh,
-    movie.title_original,
+    repairMojibakeText(movie.title_vi),
+    repairMojibakeText(movie.title_en),
+    repairMojibakeText(movie.title_zh),
+    repairMojibakeText(movie.title_original),
   ]).filter((item) => item && item.toLowerCase() !== name.toLowerCase()).slice(0, 5);
-  const content = stripHtml(movie.content || '');
+  const content = stripHtml(repairMojibakeText(seoProfile?.intro_content || movie.content || ''));
   const year = Number(movie.year || 0);
-  const lang = String(movie.lang || 'Vietsub');
-  const poster = getImageUrl(movie.poster_url || movie.thumb_url || '');
+  const lang = repairMojibakeText(movie.lang || 'Vietsub');
+  const poster = getImageUrl(seoProfile?.og_image_url || movie.poster_url || movie.thumb_url || '');
   const requestedSlug = String(slug || '').trim();
   const pathSlug = /^\/phim\/([^/?#]+)/.exec(pathname)?.[1];
   const canonicalSlug = decodeURIComponent(pathSlug || requestedSlug || String(movie.slug || '')).trim() || String(movie.slug || slug).trim() || slug;
-  const canonicalPath = `/phim/${canonicalSlug}`;
+  const expectedCanonicalPath = `/phim/${canonicalSlug}`;
+  const canonicalPath = seoProfile?.canonical_path === expectedCanonicalPath
+    ? seoProfile.canonical_path
+    : expectedCanonicalPath;
   const canonical = `${SITE_URL}${encodeCanonicalPath(canonicalPath)}`;
   const watchUrl = `${SITE_URL}/xem-phim/${encodeURIComponent(canonicalSlug)}`;
-  const genreItems = taxonomyItems(movie.category);
-  const countryItems = taxonomyItems(movie.country);
+  const genreItems = taxonomyItems(movie.category).map((item) => ({ ...item, name: repairMojibakeText(item.name) }));
+  const countryItems = taxonomyItems(movie.country).map((item) => ({ ...item, name: repairMojibakeText(item.name) }));
   const genres = genreItems.map((item) => item.name);
   const countries = countryItems.map((item) => item.name);
-  const actors = personNames(movie.actor, 12);
-  const directors = personNames(movie.director, 8);
+  const actors = personNames(Array.isArray(movie.actor) ? movie.actor.map(repairMojibakeText) : [], 12);
+  const directors = personNames(Array.isArray(movie.director) ? movie.director.map(repairMojibakeText) : [], 8);
   const sourceLabel = movieDataSourceLabel(movie);
   const isTrailerOnly = isTrailerOnlyMovie(movie);
   const isUpcoming = isUpcomingMovie(movie);
@@ -2085,7 +2228,15 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
   // Google is currently declining most discovered movie URLs. Keep the public
   // index cohort deliberately small and trustworthy instead of treating every
   // technically playable record as search-worthy.
-  const isIndexable = isHighValueIndexCandidate(movie);
+  const automaticIndexable = isHighValueIndexCandidate(movie);
+  const profileAuditPassed = seoProfile?.live_audit?.passed === true;
+  const isIndexable = seoProfile
+    ? profileAuditPassed && (
+      seoProfile.index_mode === 'index'
+        ? Number(seoProfile.validation_score || 0) >= 85
+        : seoProfile.index_mode === 'auto' && automaticIndexable
+    )
+    : automaticIndexable;
   const releaseDateText = formatVietnamDate(movie.release_at);
   const releaseDateValue = String(movie.release_at || '').trim();
   const releaseDateIso = /^\d{4}-\d{2}-\d{2}/.test(releaseDateValue)
@@ -2096,7 +2247,7 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
   const modifiedIso = modifiedAt ? new Date(modifiedAt).toISOString() : undefined;
   const modifiedText = modifiedAt ? formatVietnamDateTime(modifiedAt) : '';
   const isFreshUpdate = isFreshMovieUpdate(movie);
-  const episodeText = String(movie.episode_current || '').trim();
+  const episodeText = repairMojibakeText(movie.episode_current || '').trim();
   const latestEpisodeNumber = Number(movie.seo_latest_episode_number || movie.current_episode || 0);
   const totalEpisodeCount = Number(movie.seo_declared_total_episodes || parseEpisodeCount(movie.episode_total) || 0);
   const episodeProgress = Number(movie.seo_episode_progress_percent || 0);
@@ -2104,14 +2255,14 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
   const updateIntentText = (isOngoing || isFreshUpdate) && episodeText && !isUpcoming && !isTrailerOnly
     ? `Tập mới cập nhật: ${episodeText}.`
     : '';
-  const title = isUpcoming
+  const generatedTitle = isUpcoming
     ? `${name} - Lịch Chiếu Và Thông Tin Phim | KhoPhim`
     : isTrailerOnly
       ? `${name} - Trailer Và Thông Tin Phim | KhoPhim`
       : isOngoing
         ? `${name} - ${episodeText || `Tập ${latestEpisodeNumber}`} Đang Chiếu ${lang} | KhoPhim`
       : `${name}${year ? ` (${year})` : ''} - Thông Tin Và Tập Phim | KhoPhim`;
-  const description = compactMeta([
+  const generatedDescription = compactMeta([
     isUpcoming
       ? `${name}${origin ? ` (${origin})` : ''} là phim sắp chiếu, được cập nhật trailer, lịch chiếu, nội dung và thông tin diễn viên trên KhoPhim.`
       : isTrailerOnly
@@ -2128,6 +2279,18 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
     genres.length ? `Thể loại: ${genres.join(', ')}.` : '',
     year ? `Năm phát hành: ${year}.` : '',
   ].filter(Boolean).join(' '), 155);
+  const title = stripHtml(repairMojibakeText(seoProfile?.seo_title || generatedTitle)).slice(0, 180) || generatedTitle;
+  const description = stripHtml(repairMojibakeText(seoProfile?.meta_description || generatedDescription)).slice(0, 320) || generatedDescription;
+  const faqItems = Array.isArray(seoProfile?.faq)
+    ? seoProfile.faq.filter((item) => item && typeof item === 'object' && item.question && item.answer).slice(0, 12)
+    : [];
+  const topicLinks = Array.isArray(seoProfile?.topic_links)
+    ? seoProfile.topic_links.filter((item) => item && typeof item === 'object' && item.url && item.title).slice(0, 20)
+    : [];
+  const incomingTopicLinks = Array.isArray(seoProfile?.incoming_links)
+    ? seoProfile.incoming_links.filter((item) => item && typeof item === 'object' && item.source_slug).slice(0, 12)
+    : [];
+  const reviewContent = stripHtml(repairMojibakeText(seoProfile?.review_content || ''));
   const schema = [
     {
       '@context': 'https://schema.org',
@@ -2209,6 +2372,19 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
         url: `${SITE_URL}/phim/${encodeURIComponent(relatedMovie.slug)}`,
       })),
     }] : []),
+    ...(faqItems.length ? [{
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      '@id': `${canonical}#faq`,
+      mainEntity: faqItems.map((item) => ({
+        '@type': 'Question',
+        name: stripHtml(repairMojibakeText(item.question)),
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: stripHtml(repairMojibakeText(item.answer)),
+        },
+      })),
+    }] : []),
   ];
   const genreLinks = genreItems.slice(0, 4)
     .map((genre) => genre.slug
@@ -2231,7 +2407,22 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
   const directorLinks = directors.slice(0, 6)
     .map((director) => `<a href="${SITE_URL}/search?q=${encodeURIComponent(director)}&amp;role=director">${escapeHtml(director)}</a>`)
     .join(', ');
+  const topicLinksHtml = topicLinks.map((item) => {
+    const url = String(item.url || '').trim();
+    if (!url.startsWith('/') || url.startsWith('//')) return '';
+    const label = stripHtml(repairMojibakeText(item.anchor || item.title || 'Xem nội dung liên quan'));
+    const note = stripHtml(repairMojibakeText(item.description || ''));
+    return `<li><a href="${SITE_URL}${escapeHtml(url)}">${escapeHtml(label)}</a>${note ? ` <span>${escapeHtml(note)}</span>` : ''}</li>`;
+  }).filter(Boolean).join('');
+  const incomingLinksHtml = incomingTopicLinks.map((item) => {
+    const sourceSlug = String(item.source_slug || '').trim();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(sourceSlug) || sourceSlug === canonicalSlug) return '';
+    const label = stripHtml(repairMojibakeText(item.anchor || item.title || sourceSlug));
+    const note = stripHtml(repairMojibakeText(item.description || ''));
+    return `<li><a href="${SITE_URL}/phim/${encodeURIComponent(sourceSlug)}">${escapeHtml(label)}</a>${note ? ` <span>${escapeHtml(note)}</span>` : ''}</li>`;
+  }).filter(Boolean).join('');
   const body = `${origin ? `<p>${escapeHtml(origin)}</p>` : ''}
+    ${seoProfile ? `<span data-kp-seo-profile-version="${escapeHtml(String(seoProfile.version || seoProfile.updated_at || 'published'))}" hidden></span>` : ''}
     ${titleVariants.length ? `<p>Tên khác: ${titleVariants.map(escapeHtml).join(', ')}</p>` : ''}
     <img src="${escapeHtml(poster)}" alt="${escapeHtml(name)}">
     <p>${escapeHtml(isUpcoming ? 'Phim sắp chiếu' : isTrailerOnly ? 'Trailer và thông tin phim' : isOngoing ? 'Phim đang chiếu và cập nhật tập mới' : isFreshUpdate ? 'Phim mới cập nhật tập mới' : 'Xem phim online')}</p>
@@ -2272,6 +2463,19 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
           return `<li><a href="${SITE_URL}/phim/${encodeURIComponent(relatedMovie.slug)}">${escapeHtml(relatedMovie.name)}</a>${details ? ` <span>${escapeHtml(details)}</span>` : ''}</li>`;
         }).join('')}
       </ul>
+    </section>` : ''}
+    ${topicLinksHtml || incomingLinksHtml ? `<section aria-labelledby="seo-topic-links-heading">
+      <h2 id="seo-topic-links-heading">Khám phá thêm về ${escapeHtml(name)}</h2>
+      ${topicLinksHtml ? `<h3>Nội dung liên quan</h3><ul>${topicLinksHtml}</ul>` : ''}
+      ${incomingLinksHtml ? `<h3>Các phim liên kết trong cùng chủ đề</h3><ul>${incomingLinksHtml}</ul>` : ''}
+    </section>` : ''}
+    ${reviewContent ? `<section aria-labelledby="movie-review-heading">
+      <h2 id="movie-review-heading">Đánh giá ${escapeHtml(name)}</h2>
+      <p>${escapeHtml(reviewContent)}</p>
+    </section>` : ''}
+    ${faqItems.length ? `<section aria-labelledby="movie-faq-heading">
+      <h2 id="movie-faq-heading">Câu hỏi thường gặp về ${escapeHtml(name)}</h2>
+      ${faqItems.map((item) => `<h3>${escapeHtml(stripHtml(repairMojibakeText(item.question)))}</h3><p>${escapeHtml(stripHtml(repairMojibakeText(item.answer)))}</p>`).join('')}
     </section>` : ''}
     <section>
       <h2>Thông tin phim ${escapeHtml(name)}</h2>
@@ -2347,6 +2551,101 @@ function renderMovieNotFound(pathname, slug) {
   });
 }
 
+async function serveHomeDocument(context, request, pathname) {
+  const canUseEdgeCache = request.method === 'GET' && typeof caches !== 'undefined';
+  const cacheUrl = new URL(request.url);
+  cacheUrl.pathname = `/__kp-home-document/${HOME_DOCUMENT_CACHE_VERSION}`;
+  cacheUrl.search = '';
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+
+  if (canUseEdgeCache) {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set('X-KhoPhim-Document-Cache', 'HIT');
+      return new Response(cached.body, {
+        status: cached.status,
+        statusText: cached.statusText,
+        headers,
+      });
+    }
+  }
+
+  const secured = withHeaders(await context.next(), pathname);
+  const headers = new Headers(secured.headers);
+  // The document only references content-hashed assets. A short edge TTL
+  // removes Pages Function/origin latency without trapping a deployment on an
+  // old HTML shell; browsers still revalidate on every navigation.
+  headers.set('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+  headers.set('X-KhoPhim-Document-Cache', 'MISS');
+  const response = new Response(secured.body, {
+    status: secured.status,
+    statusText: secured.statusText,
+    headers,
+  });
+  if (canUseEdgeCache && response.status === 200) {
+    contextWaitUntil(context, caches.default.put(cacheKey, response.clone()));
+  }
+  return response;
+}
+
+async function getStaticMovieDocument(context, request, slug) {
+  if (!context?.env?.ASSETS || typeof context.env.ASSETS.fetch !== 'function') return null;
+  const assetUrl = new URL(request.url);
+  assetUrl.pathname = `/phim/${encodeURIComponent(slug)}`;
+  assetUrl.search = '';
+  try {
+    // Always read the small bounded HTML asset as GET so HEAD responses can
+    // inherit the exact index/noindex policy embedded by the static generator.
+    const response = await context.env.ASSETS.fetch(new Request(assetUrl.toString(), {
+      method: 'GET',
+      headers: request.headers,
+    }));
+    if (response.status !== 200 || !/text\/html/i.test(response.headers.get('content-type') || '')) return null;
+    const html = await response.text();
+    if (!html.includes(`name="kp-static-movie" content="${escapeHtml(slug)}"`)) return null;
+    const noIndex = /<meta\s+name=["']robots["']\s+content=["'][^"']*noindex/i.test(html);
+    const robots = noIndex
+      ? 'noindex, follow'
+      : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+    const headers = new Headers(response.headers);
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    headers.set('Cache-Control', noIndex
+      ? 'public, max-age=300, s-maxage=900, stale-while-revalidate=3600'
+      : 'public, max-age=900, s-maxage=3600, stale-while-revalidate=86400');
+    headers.set('X-Prerendered', 'cloudflare-static-movie');
+    headers.set('X-KhoPhim-Static-Bootstrap', 'v1');
+    headers.set('X-Robots-Tag', robots);
+    return new Response(request.method === 'HEAD' ? null : html, { status: 200, headers });
+  } catch {
+    return null;
+  }
+}
+
+function renderMovieGone(pathname) {
+  const cleanPath = pathname.replace(/\/+$/, '');
+  const canonical = `${SITE_URL}${cleanPath}`;
+  return new Response(renderHtml({
+    title: 'Phim không còn được cung cấp | KhoPhim',
+    description: 'Nội dung tại URL này đã được gỡ khỏi danh mục KhoPhim.',
+    canonical,
+    h1: 'Phim không còn được cung cấp',
+    body: `<p>Nội dung tại URL này đã được gỡ khỏi danh mục.</p>
+      <nav><a href="${SITE_URL}/phim-moi-cap-nhat">Xem phim mới cập nhật</a>
+      <a href="${SITE_URL}/search">Tìm phim khác</a></nav>`,
+    robots: 'noindex, follow',
+  }), {
+    status: 410,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+      'X-Prerendered': 'cloudflare-movie-gone',
+      'X-Robots-Tag': 'noindex, follow',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
 function renderMovieTemporarilyUnavailable(pathname, slug) {
   const cleanPath = pathname.replace(/\/+$/, '') || `/phim/${slug}`;
   const canonical = `${SITE_URL}${cleanPath}`;
@@ -2369,25 +2668,26 @@ function renderMovieTemporarilyUnavailable(pathname, slug) {
 }
 
 const EDGE_SITEMAP_CHUNK_SIZE = 1000;
-const EDGE_FALLBACK_MOVIE_CHUNKS = 18;
+const EDGE_FALLBACK_MOVIE_CHUNKS = 1;
+
+function repairMojibakeText(value = '') {
+  const looksBroken = (text) => /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(text);
+  let repaired = String(value || '');
+  for (let attempt = 0; attempt < 2 && looksBroken(repaired); attempt += 1) {
+    try {
+      const bytes = Uint8Array.from(Array.from(repaired), (character) => character.charCodeAt(0) & 255);
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      if (!decoded || decoded === repaired) break;
+      repaired = decoded;
+    } catch {
+      break;
+    }
+  }
+  return repaired;
+}
 
 function repairSitemapMojibake(value = '') {
-  const looksBroken = (text) => /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(text);
-  const repairText = (text) => {
-    let repaired = text;
-    for (let attempt = 0; attempt < 2 && looksBroken(repaired); attempt += 1) {
-      try {
-        const bytes = Uint8Array.from(Array.from(repaired), (character) => character.charCodeAt(0) & 255);
-        const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-        if (!decoded || decoded === repaired) break;
-        repaired = decoded;
-      } catch {
-        break;
-      }
-    }
-    return repaired;
-  };
-  return String(value || '').replace(/>([^<>]+)</g, (match, text) => `>${repairText(text)}<`);
+  return String(value || '').replace(/>([^<>]+)</g, (match, text) => `>${repairMojibakeText(text)}<`);
 }
 
 function renderSitemapIndexXml() {
@@ -2397,8 +2697,8 @@ function renderSitemapIndexXml() {
     'sitemap-seo-landing.xml',
     'sitemap-movies-recent.xml',
     'sitemap-movies-upcoming.xml',
-    'sitemap-movies-ongoing.xml',
-    'feed.xml',
+    'sitemap-seo-studio.xml',
+    ...Array.from({ length: EDGE_FALLBACK_MOVIE_CHUNKS }, (_, index) => `sitemap-movies-${index + 1}.xml`),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!-- khophim.org Sitemap Index - Last updated: ${today} -->
@@ -2409,10 +2709,19 @@ ${files.map((file) => `  <sitemap>
 </sitemapindex>`;
 }
 
+function renderEmptySitemapXml() {
+  return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>';
+}
+
 function renderMovieSitemapIndexXml({ archive = false } = {}) {
   const files = archive
     ? Array.from({ length: EDGE_FALLBACK_MOVIE_CHUNKS }, (_, index) => `sitemap-movies-${index + 1}.xml`)
-    : ['sitemap-movies-recent.xml', 'sitemap-movies-upcoming.xml', 'sitemap-movies-ongoing.xml'];
+    : [
+      'sitemap-movies-recent.xml',
+      'sitemap-movies-upcoming.xml',
+      'sitemap-seo-studio.xml',
+      ...Array.from({ length: EDGE_FALLBACK_MOVIE_CHUNKS }, (_, index) => `sitemap-movies-${index + 1}.xml`),
+    ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!-- khophim.org ${archive ? 'archive' : 'priority'} movie sitemap index -->
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -2450,7 +2759,7 @@ async function proxySitemap(pathname, request, context) {
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  const sitemapVersion = '20260810-dynamic-chunks-v5';
+  const sitemapVersion = '20260903-editorial-cohort-v1';
   let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies-dynamic') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=5000&v=${sitemapVersion}`;
@@ -2460,6 +2769,8 @@ async function proxySitemap(pathname, request, context) {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?upcoming=1&page_size=5000&v=${sitemapVersion}`;
   } else if (pathname === '/sitemap-movies-ongoing.xml') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?ongoing=1&page_size=5000&v=${sitemapVersion}`;
+  } else if (pathname === '/sitemap-seo-studio.xml') {
+    target = `${SUPABASE_FUNCTION_BASE}/sitemap-seo-studio?v=${sitemapVersion}`;
   } else if (pathname === '/feed.xml') {
     target = `${SUPABASE_FUNCTION_BASE}/movie-rss-feed?v=${sitemapVersion}`;
   } else if (movieChunkMatch) {
@@ -2596,6 +2907,18 @@ async function proxySitemap(pathname, request, context) {
         status: fallback.status,
         statusText: fallback.statusText,
         headers,
+      });
+    }
+    if (pathname === '/sitemap-movies-upcoming.xml' || pathname === '/sitemap-movies-ongoing.xml') {
+      return new Response(request.method === 'HEAD' ? null : renderEmptySitemapXml(), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=120, s-maxage=300, stale-while-revalidate=3600',
+          'X-Sitemap-Proxy': 'cloudflare-pages-empty-quality-fallback',
+          'X-Upstream-Degraded': '1',
+          ...SECURITY_HEADERS,
+        },
       });
     }
     const message = escapeHtml(error instanceof Error ? error.message : 'Sitemap upstream failed');
@@ -2927,6 +3250,28 @@ function hasPlayableProviderDetail(payload, requestedSlug) {
   return true;
 }
 
+async function isExactCatalogQuarantined(slug) {
+  const lookupUrl = new URL(`${SUPABASE_REST_BASE}/movies`);
+  lookupUrl.searchParams.set('select', 'is_published');
+  lookupUrl.searchParams.set('slug', `eq.${slug}`);
+  lookupUrl.searchParams.set('limit', '1');
+  try {
+    const response = await fetch(lookupUrl.toString(), {
+      headers: {
+        apikey: SUPABASE_PUBLIC_KEY,
+        Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(1800),
+    });
+    if (!response.ok) return false;
+    const rows = await response.json();
+    return Array.isArray(rows) && rows.length > 0 && rows[0]?.is_published !== true;
+  } catch {
+    return false;
+  }
+}
+
 function isRetiredOphimPlaybackEpisode(episode, serverName = '') {
   const identity = `${episode?.source_provider || ''} ${serverName}`.toLowerCase();
   if (/(?:^|[^a-z0-9])ophim(?:[^a-z0-9]|$)|opstream/i.test(identity)) return true;
@@ -3042,18 +3387,21 @@ function scoreProviderDetail(payload, elapsedMs) {
     + Math.max(0, 3000 - elapsedMs) / 100;
 }
 
-async function fetchProviderDetailFallback(slug, _preferredSource = '') {
+async function fetchProviderDetailFallback(slug, preferredSource = '') {
   // The public catalogue can originate from several providers. A fallback
   // restricted to OPhim made every KKPhim-only cinema card fail whenever the
   // database was slow. Keep the provider URLs fixed (no SSRF surface), require
   // an exact slug and playable episode. Every provider starts together and
   // the winner is selected only by completeness, transport readiness and
   // response time; provider identity contributes no score.
-  const providers = [
+  const allProviders = [
     { code: 'KKPHIM', url: `https://phimapi.com/phim/${encodeURIComponent(slug)}` },
     { code: 'VSMOV', url: `https://vsmov.com/api/phim/${encodeURIComponent(slug)}` },
     { code: 'NGUONC', url: `https://phim.nguonc.com/api/film/${encodeURIComponent(slug)}` },
   ];
+  const providers = preferredSource === 'vsmov'
+    ? allProviders.filter((provider) => provider.code === 'VSMOV')
+    : allProviders;
   const controllers = [];
   const attempts = providers.map(({ code, url }) => {
     const startedAt = Date.now();
@@ -3244,8 +3592,14 @@ async function proxyMovieDetail(request, context) {
   const upstreamUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
   upstreamUrl.searchParams.set('slug', slug);
   if (refresh) upstreamUrl.searchParams.set('refresh', '1');
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}?rev=canonical-v8-provider-neutral`, { method: 'GET' });
-  const failureKey = new Request(`${SITE_URL}/__circuit/movie-detail/${encodeURIComponent(slug)}`, { method: 'GET' });
+  const detailCacheRevision = preferredSource === 'vsmov'
+    ? 'vsmov-4k-v1'
+    : 'canonical-v12-hot-movie-radar';
+  const detailCacheRevisionQuery = preferredSource === 'vsmov'
+    ? `?rev=${detailCacheRevision}`
+    : '?rev=canonical-v12-hot-movie-radar';
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}${detailCacheRevisionQuery}`, { method: 'GET' });
+  const failureKey = new Request(`${SITE_URL}/__circuit/movie-detail/${encodeURIComponent(slug)}?source=${encodeURIComponent(preferredSource || 'auto')}`, { method: 'GET' });
   let fallbackPromise;
 
   try {
@@ -3268,6 +3622,27 @@ async function proxyMovieDetail(request, context) {
         headers.set('X-KhoPhim-Circuit', 'OPEN');
         return new Response(openCircuit.body, { status: 503, headers });
       }
+    }
+
+    if (preferredSource === 'vsmov') {
+      if (await isExactCatalogQuarantined(slug)) {
+        return new Response(JSON.stringify({ status: false, message: 'Phim này đang được kiểm tra lại nguồn phát' }), {
+          status: 410,
+          headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Catalog-Quarantine': '1', ...SECURITY_HEADERS },
+        });
+      }
+      const vsmovDetail = await fetchProviderDetailFallback(slug, preferredSource);
+      if (vsmovDetail) {
+        if (!refresh && request.method === 'GET' && typeof caches !== 'undefined') {
+          contextWaitUntil(context, caches.default.put(cacheKey, vsmovDetail.clone()));
+          contextWaitUntil(context, caches.default.delete(failureKey));
+        }
+        return vsmovDetail;
+      }
+      return new Response(JSON.stringify({ status: false, message: 'Nguồn VSMov 4K hiện không khả dụng' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+      });
     }
 
     fallbackPromise = fetchProviderDetailFallback(slug, preferredSource);
@@ -3392,7 +3767,74 @@ async function secretsMatch(provided, expected) {
     crypto.subtle.digest('SHA-256', encoder.encode(provided)),
     crypto.subtle.digest('SHA-256', encoder.encode(expected)),
   ]);
-  return crypto.subtle.timingSafeEqual(providedHash, expectedHash);
+  if (typeof crypto.subtle.timingSafeEqual === 'function') {
+    return crypto.subtle.timingSafeEqual(providedHash, expectedHash);
+  }
+  // Node's Web Crypto does not expose Cloudflare's timingSafeEqual extension.
+  // Both inputs are fixed-size SHA-256 digests, so a full XOR pass is a safe,
+  // portable fallback for integration tests and compatible runtimes.
+  const providedBytes = new Uint8Array(providedHash);
+  const expectedBytes = new Uint8Array(expectedHash);
+  let mismatch = 0;
+  for (let index = 0; index < providedBytes.length; index += 1) {
+    mismatch |= providedBytes[index] ^ expectedBytes[index];
+  }
+  return mismatch === 0;
+}
+
+async function renderSeoStudioInspection(request, context) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+  const expectedSecret = String(context?.env?.MOVIE_DETAIL_PROXY_SECRET || '');
+  const providedSecret = String(request.headers.get('x-khophim-seo-inspect-secret') || '');
+  if (!await secretsMatch(providedSecret, expectedSecret)) {
+    return new Response('Unauthorized', {
+      status: 401,
+      headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', ...SECURITY_HEADERS },
+    });
+  }
+
+  const url = new URL(request.url);
+  const slug = String(url.searchParams.get('slug') || '').trim().toLowerCase();
+  if (!slug || slug.length > 180 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    return new Response('Invalid slug', {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', ...SECURITY_HEADERS },
+    });
+  }
+
+  const profileLookup = await fetchPublishedMovieSeoProfile(slug)
+    .catch(() => ({ profile: null, unavailable: true }));
+  if (!profileLookup.profile && profileLookup.unavailable) {
+    return new Response('SEO profile service unavailable', {
+      status: 503,
+      headers: { 'Cache-Control': 'no-store', 'Retry-After': '15', 'X-Robots-Tag': 'noindex, nofollow', ...SECURITY_HEADERS },
+    });
+  }
+  const movieLookup = await fetchSupabaseMovie(slug, context)
+    .catch(() => ({ movie: null, unavailable: true, notFound: false }));
+  if (!movieLookup.movie) {
+    return new Response(movieLookup.unavailable ? 'Movie service unavailable' : 'Movie not found', {
+      status: movieLookup.unavailable ? 503 : 404,
+      headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', ...SECURITY_HEADERS },
+    });
+  }
+
+  const movie = movieWithPublishedSeoProfile(movieLookup.movie, profileLookup.profile);
+  const relatedMovies = await fetchContextualMovieLinks(context, movie, slug);
+  const rendered = renderMoviePrerender(`/phim/${slug}`, movie, slug, relatedMovies);
+  const responseHeaders = new Headers(rendered.headers);
+  responseHeaders.set('Cache-Control', 'private, no-store');
+  responseHeaders.set('X-SEO-Studio-Inspection', 'cloudflare-edge-render');
+  return new Response(request.method === 'HEAD' ? null : rendered.body, {
+    status: rendered.status,
+    statusText: rendered.statusText,
+    headers: responseHeaders,
+  });
 }
 
 async function proxyNguoncDetail(request, context) {
@@ -3582,10 +4024,83 @@ function parseProviderSearchRows(payload) {
   });
 }
 
+const SEARCH_INTENT_NOISE_WORDS = new Set([
+  'phim', 'xem', 'online', 'vietsub', 'thuyet', 'minh', 'long', 'tieng',
+  'hd', 'fhd', 'full',
+]);
+
+function searchIntentOneEditAway(left, right) {
+  if (left === right) return true;
+  if (Math.abs(left.length - right.length) > 1) return false;
+  if (left.length === right.length) {
+    const mismatches = [];
+    for (let index = 0; index < left.length; index += 1) {
+      if (left[index] !== right[index]) mismatches.push(index);
+      if (mismatches.length > 2) return false;
+    }
+    if (mismatches.length <= 1) return true;
+    const [first, second] = mismatches;
+    return second === first + 1
+      && left[first] === right[second]
+      && left[second] === right[first];
+  }
+  const shorter = left.length < right.length ? left : right;
+  const longer = left.length < right.length ? right : left;
+  let shortIndex = 0;
+  let longIndex = 0;
+  let skipped = false;
+  while (shortIndex < shorter.length && longIndex < longer.length) {
+    if (shorter[shortIndex] === longer[longIndex]) {
+      shortIndex += 1;
+      longIndex += 1;
+      continue;
+    }
+    if (skipped) return false;
+    skipped = true;
+    longIndex += 1;
+  }
+  return true;
+}
+
+function searchIntentSubsequence(needle, haystack) {
+  let index = 0;
+  for (const char of haystack) {
+    if (char === needle[index]) index += 1;
+    if (index === needle.length) return true;
+  }
+  return false;
+}
+
+function searchIntentTokenMatchQuality(token, word, queryTokenCount) {
+  if (token === word) return 3;
+  if (token.length >= 3 && word.startsWith(token)) return 2;
+  if (token.length >= 4 && word.length >= 4 && searchIntentOneEditAway(token, word)) return 1;
+  return queryTokenCount >= 2
+    && token.length >= 2
+    && word.length >= token.length
+    && word.length - token.length <= 1
+    && searchIntentSubsequence(token, word)
+    ? 1
+    : 0;
+}
+
+function buildRelaxedSearchQuery(value) {
+  const tokens = normalizeSearchFallbackText(value).split(/\s+/).filter(Boolean);
+  if (tokens.length < 3) return '';
+  const removable = tokens
+    .map((token, index) => ({ token, index }))
+    .filter(({ token }) => token.length <= 3)
+    .sort((left, right) => left.token.length - right.token.length || right.index - left.index)[0];
+  if (!removable) return '';
+  return tokens.filter((_, index) => index !== removable.index).join(' ');
+}
+
 function rankSearchFallbackRows(rows, query, limit) {
   const normalizedQuery = normalizeSearchFallbackText(query);
   const compactQuery = normalizedQuery.replace(/\s+/g, '');
-  const tokens = normalizedQuery.split(' ').filter((token) => token.length >= 2 || /^\d+$/.test(token));
+  const tokens = normalizedQuery
+    .split(' ')
+    .filter((token) => (token.length >= 2 || /^\d+$/.test(token)) && !SEARCH_INTENT_NOISE_WORDS.has(token));
   const unique = new Map();
 
   for (const row of rows) {
@@ -3600,11 +4115,20 @@ function rankSearchFallbackRows(rows, query, limit) {
       row.title_zh,
       row.title_original,
       slug.replace(/-/g, ' '),
+      row.normalized_name,
+      row.year,
+      row.type,
+      Array.isArray(row.category) ? row.category.map((item) => `${item?.name || ''} ${item?.slug || ''}`).join(' ') : '',
+      Array.isArray(row.country) ? row.country.map((item) => `${item?.name || ''} ${item?.slug || ''}`).join(' ') : '',
     ].filter(Boolean).join(' '));
     const compactHaystack = haystack.replace(/\s+/g, '');
     const exact = haystack.includes(normalizedQuery);
     const compact = compactQuery.length >= 6 && compactHaystack.includes(compactQuery);
-    const tokenMatch = tokens.length >= 2 && tokens.every((token) => haystack.includes(token));
+    const words = Array.from(new Set(haystack.split(' ').filter(Boolean)));
+    const qualities = tokens.map((token) => Math.max(...words.map((word) => searchIntentTokenMatchQuality(token, word, tokens.length))));
+    const tokenMatch = tokens.length > 0
+      && qualities.every((quality) => quality > 0)
+      && qualities.filter((quality) => quality === 1).length <= 1;
     if (!exact && !compact && !tokenMatch) continue;
     const normalizedName = normalizeSearchFallbackText(name);
     const score = normalizedName === normalizedQuery
@@ -3761,7 +4285,9 @@ async function proxySearch(request, context) {
   }
 
   const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v17-live-row-first/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
+  // Version the edge key whenever canonical merge semantics change so a
+  // retired provider slug cannot remain pinned in search for 15 minutes.
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v20-canonical-dedupe/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
   const rpcCircuitKey = new Request(`${SITE_URL}/__circuit/search-rpc/v1`, { method: 'GET' });
   let rpcCircuitOpen = false;
   if (request.method === 'GET' && typeof caches !== 'undefined') {
@@ -3780,7 +4306,7 @@ async function proxySearch(request, context) {
     }
   }
 
-  const fetchSearchRpc = (timeoutMs) => fetch(`${SUPABASE_REST_BASE}/rpc/search_movies_fast`, {
+  const fetchSearchRpc = (timeoutMs, rpcQuery = query, rpcName = 'search_movies_smart') => fetch(`${SUPABASE_REST_BASE}/rpc/${rpcName}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -3788,10 +4314,16 @@ async function proxySearch(request, context) {
       apikey: SUPABASE_PUBLIC_KEY,
       Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
     },
-    body: JSON.stringify({ search_query: query, result_limit: limit }),
+    // A stable minimum batch avoids PostgreSQL's slow small-LIMIT plan; the
+    // canonical merger below still slices the visitor response to `limit`.
+    body: JSON.stringify({ search_query: rpcQuery, result_limit: Math.max(limit, 36) }),
     signal: AbortSignal.timeout(timeoutMs),
   });
   const fallbackItemsPromise = fetchSearchFallbackItems(request, context, query, limit).catch(() => []);
+  const relaxedQuery = buildRelaxedSearchQuery(query);
+  const relaxedFallbackItemsPromise = relaxedQuery
+    ? fetchSearchFallbackItems(request, context, relaxedQuery, limit).catch(() => [])
+    : Promise.resolve([]);
 
   try {
     // Call PostgREST directly to avoid a second serverless cold start. The
@@ -3808,7 +4340,26 @@ async function proxySearch(request, context) {
     }
     const databaseItems = Array.isArray(upstreamPayload) ? upstreamPayload : [];
     const providerItems = await fallbackItemsPromise;
-    const items = mergeProviderNeutralSearchRows(databaseItems, providerItems, query, limit);
+    let items = mergeProviderNeutralSearchRows(databaseItems, providerItems, query, limit);
+    if (items.length === 0) {
+      if (relaxedQuery) {
+        const [relaxedUpstream, relaxedProviderItems] = await Promise.all([
+          fetchSearchRpc(1200, relaxedQuery, 'search_movies_fast'),
+          relaxedFallbackItemsPromise,
+        ]);
+        if (relaxedUpstream.ok) {
+          const relaxedPayload = await relaxedUpstream.json().catch(() => null);
+          items = mergeProviderNeutralSearchRows(
+            [...databaseItems, ...(Array.isArray(relaxedPayload) ? relaxedPayload : [])],
+            [...providerItems, ...relaxedProviderItems],
+            query,
+            limit,
+          );
+        } else {
+          items = mergeProviderNeutralSearchRows(databaseItems, [...providerItems, ...relaxedProviderItems], query, limit);
+        }
+      }
+    }
     const headers = new Headers(upstream.headers);
     headers.delete('Set-Cookie');
     headers.set('Content-Type', 'application/json; charset=utf-8');
@@ -3862,18 +4413,165 @@ async function proxySearch(request, context) {
 }
 
 const HOME_SECTION_KEYS = new Set([
-  'vsmov-4k', 'trending', 'top10-series', 'top10-single', 'onlyflix-moi',
+  'top-rated', 'vsmov-4k', 'trending', 'top10-series', 'top10-single', 'onlyflix-moi',
   'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc',
   'au-my', 'thai-lan', 'trung-quoc', 'queer',
 ]);
+
+function minimumEdgeHomeItems(key) {
+  if (key === 'vsmov-4k') return 2;
+  if (key === 'top-rated') return 5;
+  if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan', 'queer', 'onlyflix-moi'].includes(key)) return 5;
+  return 6;
+}
+
+function isQueerHomeItem(item) {
+  const normalize = (value) => String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const source = normalize(`${item.source_site || ''} ${item.source_name || ''}`);
+  if (/(?:admin queer|blvietsub|glvietsub|vu tru dam my)/.test(source)) return true;
+  const taxonomy = Array.isArray(item.category)
+    ? item.category.map((term) => `${term?.slug || ''} ${term?.name || ''}`).join(' ')
+    : '';
+  return /(?:^|\s)(?:bl|gl)(?:\s|$)|dam my|bach hop|boys? love|girls? love|yuri|lesbian/.test(normalize(taxonomy));
+}
+
+function isFreshEdgeHomeItem(item) {
+  const year = Number(item?.year || 0);
+  const currentYear = new Date().getFullYear();
+  if (year >= currentYear - 1 && year <= currentYear + 1) return true;
+  if (year < currentYear - 2 || year > currentYear + 1) return false;
+  const episodeLabel = String(item?.episode_current || '').toLowerCase();
+  const currentEpisode = Number(item?.current_episode || episodeLabel.match(/\d+/)?.[0] || 0);
+  const totalEpisodes = Number(item?.total_episodes || String(item?.episode_total || '').match(/\d+/)?.[0] || 0);
+  const ongoing = currentEpisode > 0 && (!totalEpisodes || currentEpisode < totalEpisodes)
+    && !/(hoàn tất|hoan tat|full|end)/i.test(episodeLabel);
+  const changedAt = Date.parse(String(item?.last_episode_change_at || ''));
+  return ongoing && Number.isFinite(changedAt) && Date.now() - changedAt <= 14 * 86400000;
+}
+
+function filterEdgeHomeSection(key, items) {
+  const seen = new Set();
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    if (!item || typeof item !== 'object') return false;
+    const slug = String(item.slug || '').trim();
+    const name = String(item.name || item.title_vi || item.origin_name || '').trim();
+    if (!slug || !name || !(item.poster_url || item.thumb_url) || seen.has(slug)) return false;
+    if (String(item.episode_current || '').trim().toLowerCase() === 'trailer') return false;
+    // Do not infer theatrical release from type=single. Only the canonical
+    // cinema flag is authoritative for this shelf.
+    if (key === 'phim-chieu-rap' && item.chieurap !== true) return false;
+    if (key === 'vsmov-4k' && (
+      !/vsmov/i.test(`${item.source_site || ''} ${item.source_name || ''}`)
+      || !/(?:4k|2160p|uhd)/i.test(String(item.quality || ''))
+    )) return false;
+    if (key === 'top-rated') {
+      const sourceIdentity = `${item.source_site || ''} ${item.source_name || ''}`;
+      if (/ophim|opstream|tmdb.?catalog/i.test(sourceIdentity)) return false;
+      if (Number(item.tmdb_vote_average || 0) <= 0 || Number(item.tmdb_vote_count || 0) < 10) return false;
+    }
+    if (key === 'queer' && !isQueerHomeItem(item)) return false;
+    if (key === 'trending' && !isFreshEdgeHomeItem(item)) return false;
+    seen.add(slug);
+    return true;
+  });
+}
+
+async function loadStaticHomeSnapshot(request, context, sections) {
+  const assetRequest = new Request(new URL('/home-fallback.json', request.url), { method: 'GET' });
+  const assetResponse = context?.env?.ASSETS?.fetch
+    ? await context.env.ASSETS.fetch(assetRequest)
+    : await fetch(assetRequest);
+  if (!assetResponse.ok) return null;
+  const snapshot = await assetResponse.json();
+  if (!snapshot?.sections || typeof snapshot.sections !== 'object') return null;
+  const normalizedSections = Object.fromEntries(sections.map((key) => [
+    key,
+    filterEdgeHomeSection(key, snapshot.sections[key]),
+  ]));
+  if (sections.includes('top-rated') && normalizedSections['top-rated'].length < 5) {
+    try {
+      const topRatedRequest = new Request(new URL('/top-rated-fallback.json', request.url), { method: 'GET' });
+      const topRatedResponse = context?.env?.ASSETS?.fetch
+        ? await context.env.ASSETS.fetch(topRatedRequest)
+        : await fetch(topRatedRequest);
+      if (topRatedResponse.ok) {
+        const topRatedSnapshot = await topRatedResponse.json();
+        normalizedSections['top-rated'] = filterEdgeHomeSection('top-rated', topRatedSnapshot?.movies);
+      }
+    } catch {
+      // Keep the regular snapshot result; the caller will avoid caching a sparse rail.
+    }
+  }
+  return {
+    generated_at: snapshot.generated_at || null,
+    sections: normalizedSections,
+  };
+}
+
+async function repairHomePayload(request, context, sections, payload) {
+  if (!payload || typeof payload !== 'object') return { payload, repaired: [] };
+  const liveSections = payload.sections && typeof payload.sections === 'object' ? payload.sections : {};
+  const normalized = Object.fromEntries(sections.map((key) => [key, filterEdgeHomeSection(key, liveSections[key])]));
+  const sparseKeys = sections.filter((key) => normalized[key].length < minimumEdgeHomeItems(key));
+  if (sparseKeys.length === 0) return { payload: { ...payload, sections: normalized }, repaired: [] };
+
+  const snapshot = await loadStaticHomeSnapshot(request, context, sparseKeys).catch(() => null);
+  const repaired = [];
+  for (const key of sparseKeys) {
+    const fallbackItems = snapshot?.sections?.[key] ?? [];
+    if (fallbackItems.length < minimumEdgeHomeItems(key)) continue;
+    normalized[key] = fallbackItems;
+    repaired.push(key);
+  }
+  return {
+    payload: {
+      ...payload,
+      source: repaired.length > 0 ? `${payload.source || 'fresh'}+edge-repair` : payload.source,
+      generated_at: payload.generated_at || snapshot?.generated_at || null,
+      sections: normalized,
+    },
+    repaired,
+  };
+}
 
 const MOVIE_LIST_SELECT = [
   'id', 'slug', 'name', 'origin_name', 'title_vi', 'title_en', 'thumb_url', 'poster_url',
   'type', 'year', 'quality', 'lang', 'episode_current', 'episode_total', 'current_episode',
   'total_episodes', 'schedule_type', 'release_time', 'release_day', 'schedule_timezone',
-  'category', 'country', 'updated_at', 'source_site', 'source_name', 'release_at',
+  'category', 'country', 'chieurap', 'updated_at', 'source_site', 'source_name', 'release_at',
   'next_episode_at', 'next_episode_name', 'schedule_note',
 ].join(',');
+
+async function staticHomeSnapshotResponse(request, context, sections) {
+  try {
+    const snapshot = await loadStaticHomeSnapshot(request, context, sections);
+    const snapshotSections = snapshot?.sections ?? null;
+    if (!snapshotSections || !Object.values(snapshotSections).some((items) => items.length > 0)) return null;
+
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({
+      status: true,
+      source: 'static-fallback',
+      generated_at: snapshot?.generated_at || null,
+      sections: snapshotSections,
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400',
+        'X-KhoPhim-Home-Cache': 'STATIC-FALLBACK',
+        ...SECURITY_HEADERS,
+      },
+    });
+  } catch {
+    return null;
+  }
+}
 
 function safeListToken(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -3883,10 +4581,48 @@ function safeListToken(value) {
 function movieListTypeValues(type) {
   if (!type || type === 'phim-moi-cap-nhat') return [];
   if (type === 'phim-le') return ['single', 'phim-le'];
+  if (type === 'phim-chieu-rap') return ['single'];
   if (type === 'phim-bo') return ['series', 'phim-bo'];
   if (type === 'hoat-hinh') return ['hoathinh'];
   if (type === 'tv-shows') return ['tvshows', 'tv-shows'];
   return [type];
+}
+
+async function verifiedCinemaMovieListResponse(request, context, page, pageSize) {
+  try {
+    const snapshot = await loadStaticHomeSnapshot(request, context, ['phim-chieu-rap']);
+    const allItems = filterEdgeHomeSection(
+      'phim-chieu-rap',
+      snapshot?.sections?.['phim-chieu-rap'],
+    );
+    if (allItems.length < minimumEdgeHomeItems('phim-chieu-rap')) return null;
+
+    const offset = (page - 1) * pageSize;
+    const items = allItems.slice(offset, offset + pageSize);
+    const body = JSON.stringify({
+      status: true,
+      source: 'verified-cinema-snapshot',
+      generated_at: snapshot?.generated_at || null,
+      items,
+      pagination: {
+        currentPage: page,
+        totalItems: allItems.length,
+        totalItemsPerPage: pageSize,
+        totalPages: Math.max(1, Math.ceil(allItems.length / pageSize)),
+      },
+    });
+    return new Response(request.method === 'HEAD' ? null : body, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400',
+        'X-KhoPhim-Movie-List-Cache': 'VERIFIED-SNAPSHOT',
+        ...SECURITY_HEADERS,
+      },
+    });
+  } catch {
+    return null;
+  }
 }
 
 async function proxyMovieList(request, context) {
@@ -3911,8 +4647,8 @@ async function proxyMovieList(request, context) {
   const canonical = new URLSearchParams({
     type, category, country, year: year ? String(year) : '', page: String(page), sortField, sortType,
   }).toString();
-  const liveKey = new Request(`${SITE_URL}/__api-cache/movies/v2-no-ophim?${canonical}`, { method: 'GET' });
-  const staleKey = new Request(`${SITE_URL}/__api-cache/movies-stale/v2-no-ophim?${canonical}`, { method: 'GET' });
+  const liveKey = new Request(`${SITE_URL}/__api-cache/movies/v3-verified-cinema?${canonical}`, { method: 'GET' });
+  const staleKey = new Request(`${SITE_URL}/__api-cache/movies-stale/v3-verified-cinema?${canonical}`, { method: 'GET' });
 
   if (typeof caches !== 'undefined') {
     const cached = await caches.default.match(liveKey);
@@ -3921,6 +4657,13 @@ async function proxyMovieList(request, context) {
       headers.set('X-KhoPhim-Movie-List-Cache', 'HIT');
       return new Response(request.method === 'HEAD' ? null : cached.body, { status: cached.status, headers });
     }
+  }
+
+  // Keep the dedicated cinema page consistent with the verified homepage
+  // shelf and avoid the slow broad single-movie query.
+  if (type === 'phim-chieu-rap') {
+    const verified = await verifiedCinemaMovieListResponse(request, context, page, pageSize);
+    if (verified) return verified;
   }
 
   const params = new URLSearchParams({
@@ -3935,6 +4678,7 @@ async function proxyMovieList(request, context) {
   if (category) params.set('category', `cs.${JSON.stringify([{ slug: category }])}`);
   if (country) params.set('country', `cs.${JSON.stringify([{ slug: country }])}`);
   if (year) params.set('year', `eq.${year}`);
+  if (type === 'phim-chieu-rap') params.set('chieurap', 'eq.true');
   params.set('order', sortField === 'year'
     ? `year.${sortType}.nullslast,updated_at.desc.nullslast`
     : `updated_at.${sortType}.nullslast`);
@@ -3998,6 +4742,246 @@ async function proxyMovieList(request, context) {
   }
 }
 
+const KKPHIM_CINEMA_HOT_URL = 'https://phimapi.com/v1/api/danh-sach/phim-chieu-rap?page=1&sort_field=modified.time&sort_type=desc&limit=24';
+const KKPHIM_VIETNAM_LATEST_URL = 'https://phimapi.com/v1/api/quoc-gia/viet-nam?page=1&sort_field=modified.time&sort_type=desc&limit=24';
+
+function absoluteKkphimImageUrl(cdnBase, value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `${String(cdnBase || 'https://phimimg.com').replace(/\/$/, '')}/${raw.replace(/^\//, '')}`;
+}
+
+function normalizeKkphimCinemaItems(payload) {
+  const data = payload?.data && typeof payload.data === 'object' ? payload.data : {};
+  const cdnBase = String(data.APP_DOMAIN_CDN_IMAGE || 'https://phimimg.com');
+  const seen = new Set();
+  return (Array.isArray(data.items) ? data.items : [])
+    .filter((item) => item && typeof item === 'object' && item.chieurap === true)
+    .filter((item) => String(item.episode_current || '').trim().toLowerCase() !== 'trailer')
+    .map((item) => ({
+      ...item,
+      _id: String(item._id || item.slug || ''),
+      slug: String(item.slug || '').trim(),
+      name: String(item.name || '').trim(),
+      origin_name: String(item.origin_name || '').trim(),
+      poster_url: absoluteKkphimImageUrl(cdnBase, item.poster_url),
+      thumb_url: absoluteKkphimImageUrl(cdnBase, item.thumb_url),
+      chieurap: true,
+      source_site: 'phimapi',
+      source_name: 'KKPhim',
+    }))
+    .filter((item) => {
+      if (!item._id || !item.slug || !item.name || !(item.poster_url || item.thumb_url) || seen.has(item.slug)) return false;
+      seen.add(item.slug);
+      return true;
+    })
+    .slice(0, 24);
+}
+
+async function proxyKkphimCinemaHot(request, context) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+
+  const liveKey = new Request(`${SITE_URL}/__api-cache/kkphim-cinema-hot/v1`);
+  const staleKey = new Request(`${SITE_URL}/__api-cache/kkphim-cinema-hot-stale/v1`);
+  if (typeof caches !== 'undefined') {
+    const cached = await caches.default.match(liveKey);
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set('X-KhoPhim-KKPhim-Cache', 'HIT');
+      return new Response(request.method === 'HEAD' ? null : cached.body, { status: cached.status, headers });
+    }
+  }
+
+  try {
+    const upstream = await fetch(KKPHIM_CINEMA_HOT_URL, {
+      headers: { Accept: 'application/json', 'User-Agent': 'KhoPhim/1.0 cinema-feed' },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!upstream.ok) throw new Error(`KKPhim cinema returned ${upstream.status}`);
+    const payload = await upstream.json();
+    const items = normalizeKkphimCinemaItems(payload);
+    if (items.length < 6) throw new Error('KKPhim cinema feed is sparse');
+
+    const body = JSON.stringify({
+      status: true,
+      source: 'kkphim-live',
+      generated_at: new Date().toISOString(),
+      items,
+      pagination: payload?.data?.params?.pagination ?? null,
+    });
+    const headers = new Headers({
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=60, s-maxage=180, stale-while-revalidate=900, stale-if-error=86400',
+      'X-KhoPhim-KKPhim-Cache': 'MISS',
+      ...SECURITY_HEADERS,
+    });
+    const response = new Response(request.method === 'HEAD' ? null : body, { status: 200, headers });
+    if (typeof caches !== 'undefined') {
+      const staleHeaders = new Headers(headers);
+      staleHeaders.set('Cache-Control', 'public, max-age=86400');
+      contextWaitUntil(context, Promise.all([
+        caches.default.put(liveKey, new Response(body, { status: 200, headers })),
+        caches.default.put(staleKey, new Response(body, { status: 200, headers: staleHeaders })),
+      ]));
+    }
+    return response;
+  } catch {
+    if (typeof caches !== 'undefined') {
+      const stale = await caches.default.match(staleKey);
+      if (stale) {
+        const headers = new Headers(stale.headers);
+        headers.set('X-KhoPhim-KKPhim-Cache', 'STALE');
+        return new Response(request.method === 'HEAD' ? null : stale.body, { status: stale.status, headers });
+      }
+    }
+
+    const fallback = await verifiedCinemaMovieListResponse(request, context, 1, 24);
+    if (fallback) {
+      const fallbackPayload = request.method === 'HEAD' ? null : await fallback.json();
+      const body = request.method === 'HEAD' ? null : JSON.stringify({
+        ...fallbackPayload,
+        source: 'kkphim-verified-fallback',
+      });
+      const headers = new Headers(fallback.headers);
+      headers.set('X-KhoPhim-KKPhim-Cache', 'FALLBACK');
+      return new Response(body, { status: 200, headers });
+    }
+
+    return new Response(JSON.stringify({ status: false, source: 'unavailable', items: [] }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+}
+
+function normalizeKkphimVietnamItems(payload) {
+  const data = payload?.data && typeof payload.data === 'object' ? payload.data : {};
+  const cdnBase = String(data.APP_DOMAIN_CDN_IMAGE || 'https://phimimg.com');
+  const seen = new Set();
+  return (Array.isArray(data.items) ? data.items : [])
+    .filter((item) => item && typeof item === 'object')
+    .filter((item) => String(item.episode_current || '').trim().toLowerCase() !== 'trailer')
+    .filter((item) => Array.isArray(item.country) && item.country.some((country) => country?.slug === 'viet-nam'))
+    .map((item) => ({
+      ...item,
+      _id: String(item._id || item.slug || ''),
+      slug: String(item.slug || '').trim(),
+      name: String(item.name || '').trim(),
+      origin_name: String(item.origin_name || '').trim(),
+      poster_url: absoluteKkphimImageUrl(cdnBase, item.poster_url),
+      thumb_url: absoluteKkphimImageUrl(cdnBase, item.thumb_url),
+      source_site: 'phimapi',
+      source_name: 'KKPhim',
+    }))
+    .filter((item) => {
+      if (!item._id || !item.slug || !item.name || !(item.poster_url || item.thumb_url) || seen.has(item.slug)) return false;
+      seen.add(item.slug);
+      return true;
+    })
+    .slice(0, 24);
+}
+
+async function proxyKkphimVietnamLatest(request, context) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+
+  const liveKey = new Request(`${SITE_URL}/__api-cache/kkphim-vietnam-latest/v1`);
+  const staleKey = new Request(`${SITE_URL}/__api-cache/kkphim-vietnam-latest-stale/v1`);
+  if (typeof caches !== 'undefined') {
+    const cached = await caches.default.match(liveKey);
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set('X-KhoPhim-KKPhim-Cache', 'HIT');
+      return new Response(request.method === 'HEAD' ? null : cached.body, { status: cached.status, headers });
+    }
+  }
+
+  try {
+    const upstream = await fetch(KKPHIM_VIETNAM_LATEST_URL, {
+      headers: { Accept: 'application/json', 'User-Agent': 'KhoPhim/1.0 vietnam-feed' },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!upstream.ok) throw new Error(`KKPhim Vietnam returned ${upstream.status}`);
+    const payload = await upstream.json();
+    const items = normalizeKkphimVietnamItems(payload);
+    if (items.length < 6) throw new Error('KKPhim Vietnam feed is sparse');
+
+    const body = JSON.stringify({
+      status: true,
+      source: 'kkphim-live-vietnam',
+      generated_at: new Date().toISOString(),
+      items,
+      pagination: payload?.data?.params?.pagination ?? null,
+    });
+    const headers = new Headers({
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=60, s-maxage=180, stale-while-revalidate=900, stale-if-error=86400',
+      'X-KhoPhim-KKPhim-Cache': 'MISS',
+      ...SECURITY_HEADERS,
+    });
+    const response = new Response(request.method === 'HEAD' ? null : body, { status: 200, headers });
+    if (typeof caches !== 'undefined') {
+      const staleHeaders = new Headers(headers);
+      staleHeaders.set('Cache-Control', 'public, max-age=86400');
+      contextWaitUntil(context, Promise.all([
+        caches.default.put(liveKey, new Response(body, { status: 200, headers })),
+        caches.default.put(staleKey, new Response(body, { status: 200, headers: staleHeaders })),
+      ]));
+    }
+    return response;
+  } catch {
+    if (typeof caches !== 'undefined') {
+      const stale = await caches.default.match(staleKey);
+      if (stale) {
+        const headers = new Headers(stale.headers);
+        headers.set('X-KhoPhim-KKPhim-Cache', 'STALE');
+        return new Response(request.method === 'HEAD' ? null : stale.body, { status: stale.status, headers });
+      }
+    }
+
+    try {
+      const assetRequest = new Request(new URL('/api/kkphim-vietnam-latest', request.url), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      const fallback = await context.env?.ASSETS?.fetch(assetRequest);
+      if (fallback?.ok) {
+        const payload = await fallback.json();
+        const items = normalizeKkphimVietnamItems({
+          data: { items: payload?.items, APP_DOMAIN_CDN_IMAGE: 'https://phimimg.com' },
+        });
+        if (items.length >= 6) {
+          const headers = new Headers({
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=60, s-maxage=180, stale-while-revalidate=900, stale-if-error=86400',
+            'X-KhoPhim-KKPhim-Cache': 'FALLBACK',
+            ...SECURITY_HEADERS,
+          });
+          const body = JSON.stringify({ ...payload, status: true, source: 'kkphim-static-vietnam-fallback', items });
+          return new Response(request.method === 'HEAD' ? null : body, { status: 200, headers });
+        }
+      }
+    } catch {
+      // The static snapshot is best-effort; a clean 503 below keeps callers deterministic.
+    }
+
+    return new Response(JSON.stringify({ status: false, source: 'unavailable', items: [] }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+}
+
 async function proxyHome(request, context) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method Not Allowed', {
@@ -4017,8 +5001,8 @@ async function proxyHome(request, context) {
     ? requestedSections
     : ['au-my', 'han-quoc', 'hoat-hinh', 'phim-bo', 'phim-le', 'trending'];
   const sectionKey = sections.join(',');
-  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v4-no-ophim?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
-  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v4-no-ophim?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v9-vsmov-only-4k?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v9-vsmov-only-4k?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
 
   if (typeof caches !== 'undefined') {
     const cached = await caches.default.match(liveKey);
@@ -4032,66 +5016,96 @@ async function proxyHome(request, context) {
   const upstreamUrl = new URL(`${SUPABASE_FUNCTION_BASE}/home-proxy`);
   upstreamUrl.searchParams.set('sections', sectionKey);
 
-  try {
-    const upstream = await fetch(upstreamUrl.toString(), {
-      headers: {
-        Accept: 'application/json',
-        apikey: SUPABASE_PUBLIC_KEY,
-        Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
-        ...(context?.env?.MOVIE_DETAIL_PROXY_SECRET
-          ? { 'X-KhoPhim-Proxy-Secret': context.env.MOVIE_DETAIL_PROXY_SECRET }
-          : {}),
-      },
-      cf: {
-        cacheEverything: true,
-        cacheTtl: 900,
-        cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v4-no-ophim`,
-      },
-      signal: AbortSignal.timeout(6500),
-    });
-    if (!upstream.ok) throw new Error(`home-proxy returned ${upstream.status}`);
+  const upstreamTask = (async () => {
+    try {
+      const upstream = await fetch(upstreamUrl.toString(), {
+        headers: {
+          Accept: 'application/json',
+          apikey: SUPABASE_PUBLIC_KEY,
+          Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
+          ...(context?.env?.MOVIE_DETAIL_PROXY_SECRET
+            ? { 'X-KhoPhim-Proxy-Secret': context.env.MOVIE_DETAIL_PROXY_SECRET }
+            : {}),
+        },
+        cf: {
+          cacheEverything: true,
+          cacheTtl: 900,
+          cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v9-vsmov-only-4k`,
+        },
+        signal: AbortSignal.timeout(6500),
+      });
+      if (!upstream.ok) return null;
 
-    const upstreamPayload = sanitizeHomePayload(await upstream.json());
-    const responseBody = JSON.stringify(upstreamPayload);
-    const headers = new Headers(upstream.headers);
-    headers.delete('Set-Cookie');
-    headers.set('Content-Type', 'application/json; charset=utf-8');
-    headers.set('Cache-Control', 'public, max-age=120, s-maxage=900, stale-while-revalidate=3600, stale-if-error=86400');
-    headers.set('X-KhoPhim-Home-Cache', 'MISS');
-    for (const [key, value] of Object.entries(SECURITY_HEADERS)) headers.set(key, value);
-    const response = new Response(responseBody, { status: upstream.status, headers });
+      const sanitizedPayload = sanitizeHomePayload(await upstream.json());
+      const { payload: upstreamPayload, repaired } = await repairHomePayload(
+        request,
+        context,
+        sections,
+        sanitizedPayload,
+      );
+      const responseBody = JSON.stringify(upstreamPayload);
+      const headers = new Headers(upstream.headers);
+      headers.delete('Set-Cookie');
+      headers.set('Content-Type', 'application/json; charset=utf-8');
+      headers.set('Cache-Control', 'public, max-age=120, s-maxage=900, stale-while-revalidate=3600, stale-if-error=86400');
+      headers.set('X-KhoPhim-Home-Cache', 'MISS');
+      if (repaired.length > 0) headers.set('X-KhoPhim-Home-Repair', repaired.join(','));
+      for (const [key, value] of Object.entries(SECURITY_HEADERS)) headers.set(key, value);
+      const response = new Response(responseBody, { status: upstream.status, headers });
 
-    if (typeof caches !== 'undefined') {
-      const liveResponse = response.clone();
-      const staleResponse = response.clone();
-      const staleHeaders = new Headers(staleResponse.headers);
-      staleHeaders.set('Cache-Control', 'public, max-age=86400');
-      contextWaitUntil(context, Promise.all([
-        caches.default.put(liveKey, liveResponse),
-        caches.default.put(staleKey, new Response(staleResponse.body, { status: staleResponse.status, headers: staleHeaders })),
-      ]));
-    }
-    return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, headers: response.headers });
-  } catch {
-    if (typeof caches !== 'undefined') {
-      const stale = await caches.default.match(staleKey);
-      if (stale) {
-        const headers = new Headers(stale.headers);
-        headers.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400');
-        headers.set('X-KhoPhim-Home-Cache', 'STALE');
-        return new Response(request.method === 'HEAD' ? null : stale.body, { status: stale.status, headers });
+      if (typeof caches !== 'undefined') {
+        const liveResponse = response.clone();
+        const staleResponse = response.clone();
+        const staleHeaders = new Headers(staleResponse.headers);
+        staleHeaders.set('Cache-Control', 'public, max-age=86400');
+        contextWaitUntil(context, Promise.all([
+          caches.default.put(liveKey, liveResponse),
+          caches.default.put(staleKey, new Response(staleResponse.body, { status: staleResponse.status, headers: staleHeaders })),
+        ]));
       }
+      return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, headers: response.headers });
+    } catch {
+      return null;
     }
-    return new Response(JSON.stringify({ status: false, source: 'unavailable', sections: {} }), {
-      status: 503,
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'public, max-age=0, s-maxage=15, stale-if-error=300',
-        'Retry-After': '15',
-        ...SECURITY_HEADERS,
-      },
-    });
+  })();
+
+  // Give a healthy warm upstream a short opportunity to win. If it is slow,
+  // first paint uses the local snapshot while the same request keeps warming
+  // the edge in the background for subsequent visitors.
+  const fastUpstream = await Promise.race([
+    upstreamTask,
+    new Promise((resolve) => setTimeout(() => resolve(null), 850)),
+  ]);
+  if (fastUpstream) return fastUpstream;
+
+  const staticFallback = await staticHomeSnapshotResponse(request, context, sections);
+  if (staticFallback) {
+    contextWaitUntil(context, upstreamTask.then(() => undefined));
+    return staticFallback;
   }
+
+  const slowUpstream = await upstreamTask;
+  if (slowUpstream) return slowUpstream;
+
+  if (typeof caches !== 'undefined') {
+    const stale = await caches.default.match(staleKey);
+    if (stale) {
+      const headers = new Headers(stale.headers);
+      headers.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400');
+      headers.set('X-KhoPhim-Home-Cache', 'STALE');
+      return new Response(request.method === 'HEAD' ? null : stale.body, { status: stale.status, headers });
+    }
+  }
+
+  return new Response(JSON.stringify({ status: false, source: 'unavailable', sections: {} }), {
+    status: 503,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=0, s-maxage=15, stale-if-error=300',
+      'Retry-After': '15',
+      ...SECURITY_HEADERS,
+    },
+  });
 }
 
 async function proxyPlayerSourceHealth(request, context) {
@@ -4384,6 +5398,23 @@ export async function onRequest(context) {
     return maintenanceResponse(request);
   }
 
+  const cleanRequestPath = pathname.replace(/\/+$/, '') || '/';
+  const shouldCanonicalizeTrailingSlash = pathname !== cleanRequestPath && (
+    Boolean(CLEAN_STATIC_META[cleanRequestPath])
+    || /^\/(?:phim|xem-phim|the-loai|dien-vien|blog|kho-phim)\//.test(cleanRequestPath)
+  );
+  if (shouldCanonicalizeTrailingSlash) {
+    return canonicalRedirect(url, cleanRequestPath);
+  }
+  const legacyMovieTarget = LEGACY_MOVIE_REDIRECTS.get(cleanRequestPath);
+  if (legacyMovieTarget) {
+    url.search = '';
+    return canonicalRedirect(url, legacyMovieTarget);
+  }
+  if (REMOVED_MOVIE_PATHS.has(cleanRequestPath)) {
+    return renderMovieGone(cleanRequestPath);
+  }
+
   // Historical cards emitted ?source=ophim even though the canonical detail
   // pipeline now selects healthy sources itself. Redirect those variants so
   // Google and browser caches converge on one movie-detail URL.
@@ -4460,6 +5491,7 @@ export async function onRequest(context) {
     pathname === '/sitemap-movies-recent.xml' ||
     pathname === '/sitemap-movies-upcoming.xml' ||
     pathname === '/sitemap-movies-ongoing.xml' ||
+    pathname === '/sitemap-seo-studio.xml' ||
     pathname === '/feed.xml' ||
     /^\/sitemap-movies-\d+\.xml$/.test(pathname)
   ) {
@@ -4493,6 +5525,10 @@ export async function onRequest(context) {
     });
   }
 
+  if (pathname === '/internal/seo-studio-inspect') {
+    return renderSeoStudioInspection(request, context);
+  }
+
   if (pathname === '/internal/nguonc-detail') {
     return proxyNguoncDetail(request, context);
   }
@@ -4511,6 +5547,14 @@ export async function onRequest(context) {
 
   if (pathname === '/api/movies') {
     return proxyMovieList(request, context);
+  }
+
+  if (pathname === '/api/kkphim-cinema-hot') {
+    return proxyKkphimCinemaHot(request, context);
+  }
+
+  if (pathname === '/api/kkphim-vietnam-latest') {
+    return proxyKkphimVietnamLatest(request, context);
   }
 
   if (pathname === '/api/home') {
@@ -4563,10 +5607,50 @@ export async function onRequest(context) {
   }
 
   const userAgent = request.headers.get('user-agent') || '';
+  const publicMovieMatch = /^\/phim\/([^/?#]+)\/?$/.exec(pathname);
+  if (publicMovieMatch && !isBot(userAgent)) {
+    const slug = decodeURIComponent(publicMovieMatch[1]);
+    // Users receive the same static-first document as crawlers. React reads
+    // its embedded bootstrap and refreshes episodes in the background, so a
+    // slow catalogue API can no longer replace useful movie information with
+    // a multi-second skeleton or a false 404.
+    const staticMovieDocument = await getStaticMovieDocument(context, request, slug);
+    if (staticMovieDocument) return staticMovieDocument;
+  }
   if (isBot(userAgent) && shouldPrerender(pathname)) {
     const movieMatch = /^\/phim\/([^/?#]+)/.exec(pathname);
     if (movieMatch) {
       const slug = decodeURIComponent(movieMatch[1]);
+      // Published SEO Studio profiles are checked before immutable build
+      // assets. The profile version becomes part of the cache key, so a new
+      // publish is visible to Googlebot on its very next request without a
+      // Cloudflare rebuild or a global cache purge.
+      const profileLookup = await fetchPublishedMovieSeoProfile(slug);
+      if (profileLookup.profile) {
+        const profileVersion = String(
+          profileLookup.profile.version || profileLookup.profile.updated_at || Date.now(),
+        ).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 100);
+        const profileCacheKey = new Request(`${SITE_URL}/__seo-studio-prerender/${profileVersion}/phim/${encodeURIComponent(slug)}`, { method: 'GET' });
+        const profileStaleKey = new Request(`${SITE_URL}/__seo-studio-prerender-stale/${profileVersion}/phim/${encodeURIComponent(slug)}`, { method: 'GET' });
+        const cachedProfileResponse = await getCachedPrerender(profileCacheKey, request);
+        if (cachedProfileResponse) return cachedProfileResponse;
+        const supabaseLookup = await fetchSupabaseMovie(slug, context)
+          .catch(() => ({ movie: null, unavailable: true, notFound: false }));
+        const movie = movieWithPublishedSeoProfile(supabaseLookup.movie, profileLookup.profile);
+        if (movie) {
+          const relatedMovies = await fetchContextualMovieLinks(context, movie, slug);
+          const profileResponse = renderMoviePrerender(pathname, movie, slug, relatedMovies);
+          putCachedPrerender(context, profileCacheKey, profileStaleKey, profileResponse, request);
+          return profileResponse;
+        }
+        if (supabaseLookup.unavailable) {
+          const staleProfileResponse = await getCachedPrerender(profileStaleKey, request);
+          if (staleProfileResponse) return staleProfileResponse;
+          return renderMovieTemporarilyUnavailable(pathname, slug);
+        }
+      }
+      const staticMovieDocument = await getStaticMovieDocument(context, request, slug);
+      if (staticMovieDocument) return staticMovieDocument;
       const cacheKey = new Request(`${SITE_URL}/__seo-prerender/${SEO_PRERENDER_VERSION}/phim/${encodeURIComponent(slug)}`, { method: 'GET' });
       const staleCacheKey = new Request(`${SITE_URL}/__seo-prerender-stale/${SEO_PRERENDER_VERSION}/phim/${encodeURIComponent(slug)}`, { method: 'GET' });
       const cachedMovieResponse = await getCachedPrerender(cacheKey, request);
@@ -4616,8 +5700,7 @@ export async function onRequest(context) {
   }
 
   if (pathname === '/') {
-    const response = await context.next();
-    return withHeaders(response, pathname);
+    return serveHomeDocument(context, request, pathname);
   }
 
   return serveSpaIndex(context, request, pathname);

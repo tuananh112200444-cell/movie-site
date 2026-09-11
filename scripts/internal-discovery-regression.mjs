@@ -4,6 +4,9 @@ import { pathToFileURL } from 'node:url';
 
 const workerSource = fs.readFileSync('functions/[[path]].js', 'utf8');
 const sitemapGenerator = fs.readFileSync('scripts/generate-static-sitemap.mjs', 'utf8');
+const routesConfig = fs.readFileSync('public/_routes.json', 'utf8');
+const redirects = fs.readFileSync('public/_redirects', 'utf8');
+const notFoundPage = fs.readFileSync('public/404.html', 'utf8');
 const internalLinkSources = [
   'src/components/base/MovieCard.tsx',
   'src/components/feature/SearchSuggestions.tsx',
@@ -24,6 +27,19 @@ for (const [needle, message] of [
   assert.ok(workerSource.includes(needle), message);
 }
 assert.ok(sitemapGenerator.includes("{ path: '/kho-phim'"), 'catalog root is missing from the static sitemap');
+assert.ok(!routesConfig.includes('"/kho-phim*"') && routesConfig.includes('"/kho-phim/trang/*"'), 'Static catalog root and dynamic catalog pages are not split for quota safety');
+assert.ok(!/^\/\*\s+\/index\.html\s+200\s*$/m.test(redirects), 'Unknown URLs still fall through to an HTTP 200 SPA soft 404');
+assert.match(notFoundPage, /noindex, follow/);
+for (const route of [
+  '/xem-phim-online', '/phim-han-quoc', '/the-loai/hanh-dong',
+  '/phim-vietsub', '/vu-tru-dam-my', '/about', '/blog', '/sitemap',
+]) {
+  assert.ok(redirects.includes(`${route} / 200`), `Missing fail-open SPA fallback for ${route}`);
+}
+assert.match(notFoundPage, /kp_static_404_route_recovery_v1/);
+assert.match(notFoundPage, /document\.open\(\);[\s\S]*document\.write\(html\);[\s\S]*document\.close\(\);/);
+assert.match(notFoundPage, /Mở lại đúng trang này/);
+assert.ok(!notFoundPage.includes('localStorage.clear'), '404 recovery must preserve watch history and resume state');
 for (const sourcePath of internalLinkSources) {
   const source = fs.readFileSync(sourcePath, 'utf8');
   assert.ok(!source.includes('?source=ophim'), `${sourcePath} emits a duplicate movie-detail URL variant`);
@@ -61,7 +77,7 @@ try {
   assert.match(indexResponse.headers.get('X-Robots-Tag') || '', /^index, follow/);
   assert.match(indexHtml, /rel="canonical" href="https:\/\/khophim\.org\/kho-phim"/);
   assert.match(indexHtml, /href="https:\/\/khophim\.org\/kho-phim\/trang\/1"/);
-  assert.match(indexHtml, /href="https:\/\/khophim\.org\/kho-phim\/trang\/2"/);
+  assert.doesNotMatch(indexHtml, /href="https:\/\/khophim\.org\/kho-phim\/trang\/2"/);
 
   const pageResponse = await worker.onRequest(contextFor('/kho-phim/trang/1'));
   const pageHtml = await pageResponse.text();

@@ -18,6 +18,7 @@ import {
 } from '@/utils/searchRanking';
 import { setSmartSessionCache } from '@/utils/smartCache';
 import { getAudioLanguageLabels } from '@/utils/audioLanguage';
+import { getMovieSearchText, movieMatchesSearchIntent, normalizeSearchText } from '@/utils/searchHelper';
 
 type ViewMode = 'grid' | 'list';
 type SortMode = SearchSortMode;
@@ -138,6 +139,34 @@ function getKnownAliasFallbackResults(keyword: string): MovieItem[] {
   const normalized = normalizeSearchText(keyword);
   const items: MovieItem[] = [];
 
+  if (normalized === 'cam' || normalized === 'phim cam') {
+    items.push({
+      _id: '21bb863a-6b4a-4bda-97af-248895dbaaed',
+      slug: 'cam',
+      name: 'Cám',
+      origin_name: 'The Sisters',
+      normalized_name: 'cam the sisters',
+      thumb_url: 'https://phimimg.com/upload/vod/20250302-1/887291d6f943171d2815f048130232dd.jpg',
+      poster_url: 'https://phimimg.com/upload/vod/20250302-1/95297d8023e0e6cca061455cdc22cef0.jpg',
+      type: 'single',
+      sub_docquyen: false,
+      chieurap: true,
+      time: '',
+      year: 2024,
+      quality: 'FHD',
+      lang: 'Vietsub',
+      episode_current: 'Full',
+      episode_total: '1',
+      current_episode: 1,
+      total_episodes: 1,
+      category: [{ id: '', name: 'Kinh Dị', slug: 'kinh-di' }],
+      country: [{ id: '', name: 'Việt Nam', slug: 'viet-nam' }],
+      modified: { time: '2026-08-25T16:10:44.979Z' },
+      source_site: 'canonical-safety-net',
+      source_name: 'KhoPhim',
+    });
+  }
+
   if (normalized === 'mua do' || normalized.includes('phim mua do')) {
     items.push({
       _id: '1148786f081772ed0fbfedee09d8d771',
@@ -235,36 +264,8 @@ function getKnownAliasFallbackResults(keyword: string): MovieItem[] {
 const VIRTUAL_GENRE_TERMS: Record<string, string[]> = {
 };
 
-function normalizeSearchText(value: string): string {
-  return value.toLowerCase().replace(/[đĐ]/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function getMovieSearchText(movie: MovieItem): string {
-  return normalizeSearchText([
-    movie.name,
-    movie.origin_name,
-    movie.title_vi,
-    movie.title_en,
-    movie.title_zh,
-    movie.title_original,
-    movie.normalized_name,
-    movie.slug,
-    movie.episode_current,
-    movie.episode_total,
-    movie.current_episode ? `tap ${movie.current_episode}` : '',
-    movie.total_episodes ? `season ${movie.total_episodes}` : '',
-    movie.category?.map((c) => c.name).join(' '),
-  ].filter(Boolean).join(' '));
-}
-
 function matchesSearchIntent(movie: MovieItem, keyword: string): boolean {
-  const query = normalizeSearchText(keyword).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!query) return false;
-  const haystack = getMovieSearchText(movie).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  const tokens = query.split(/\s+/).filter((token) => token.length >= 2 || /^\d+$/.test(token));
-  const words = new Set(haystack.split(/\s+/).filter(Boolean));
-  return ` ${haystack} `.includes(` ${query} `) ||
-    (tokens.length >= 3 && tokens.every((token) => words.has(token)));
+  return movieMatchesSearchIntent(movie, keyword);
 }
 
 function searchResultKey(movie: MovieItem, index: number): string {
@@ -415,7 +416,7 @@ export default function SearchPage() {
     // Check memory cache first (60s TTL for search)
     const normalizedKeyword = keyword.trim();
     const knownAliasItems = pg === 1 ? getKnownAliasFallbackResults(normalizedKeyword) : [];
-    const cacheKey = `search_v12_${normalizedKeyword.toLowerCase()}_${pg}`;
+    const cacheKey = `search_v14_${normalizedKeyword.toLowerCase()}_${pg}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {

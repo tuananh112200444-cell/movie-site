@@ -1,0 +1,46 @@
+[
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 2 (Special Endless)",
+    "episode_number": -1002,
+    "link_embed": "https://ok.ru/videoembed/11619209120344?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet-2",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 1 (Special Endless)",
+    "episode_number": -1001,
+    "link_embed": "https://ok.ru/videoembed/11619209054808?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 2 (Special Endless)",
+    "episode_number": -1002,
+    "link_embed": "https://abyssplayer.com/tmeAiExmr",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 2",
+    "slug": "tap-dac-biet-2",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 1 (Special Endless)",
+    "episode_number": -1001,
+    "link_embed": "https://abyssplayer.com/xkICt82VB",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 2",
+    "slug": "tap-dac-biet",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  }
+]

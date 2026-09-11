@@ -7,7 +7,7 @@ import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import Pagination from '@/components/base/Pagination';
 import SEO, { SITE_URL } from '@/components/base/SEO';
-import { fetchMoviesByType } from '@/services/movieApi';
+import { fetchQueerMovies } from '@/services/movieApi';
 import { setSmartSessionCache } from '@/utils/smartCache';
 import type { MovieItem } from '@/types/movie';
 
@@ -269,7 +269,11 @@ export default function MyNamPage() {
     setLoading(true);
     try {
       const sortParams = getSortParams(sort);
-      const data = await fetchMoviesByType('phim-bo', pg, sortParams.sortField, sortParams.sortType);
+      const data = await fetchQueerMovies(pg, {
+        country: country === 'all' ? undefined : country,
+        sortField: sortParams.sortField,
+        sortType: sortParams.sortType,
+      });
       const items = data.items ?? [];
       const seen = seenMapRef.current[cacheKey] ?? new Set<string>();
       if (reset) {
@@ -683,7 +687,7 @@ export default function MyNamPage() {
               <div className="grid movie-grid-desktop">
                 {filteredMovies.map((m, idx) => (
                   <div key={getMovieKey(m)} className="relative group">
-                    <MovieCard movie={m} priority={idx < 2} />
+                    <MovieCard movie={m} priority={idx < 2} contextLabel="BL / GL" />
                     <div className="absolute top-1.5 left-1.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                       <StatusBadge episode={m.episode_current} />
                     </div>

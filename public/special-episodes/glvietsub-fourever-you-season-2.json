@@ -1,0 +1,68 @@
+[
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt (The Sun from Another Star)",
+    "episode_number": -1003,
+    "link_embed": "https://ok.ru/videoembed/15982111427098?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet-the-sun-from-another-star",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt (Beside The Sky)",
+    "episode_number": -1002,
+    "link_embed": "https://ok.ru/videoembed/15982069811738?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet-beside-the-sky",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt",
+    "episode_number": -1001,
+    "link_embed": "https://ok.ru/videoembed/15470933248538?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt (The Sun from Another Star)",
+    "episode_number": -1003,
+    "link_embed": "https://player.abyssplayer.com/UoEdR1TtCO",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 2",
+    "slug": "tap-dac-biet-the-sun-from-another-star",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt (Beside The Sky)",
+    "episode_number": -1002,
+    "link_embed": "https://player.abyssplayer.com/EbgGMTiNV",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 2",
+    "slug": "tap-dac-biet-beside-the-sky",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt",
+    "episode_number": -1001,
+    "link_embed": "https://abyssplayer.com/uLuhVDoKJ",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 2",
+    "slug": "tap-dac-biet",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  }
+]

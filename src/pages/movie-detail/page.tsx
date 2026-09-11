@@ -20,6 +20,7 @@ import {
   hasPlayableUrl,
   pickBestEpisodeByScore,
   epSortKey,
+  isSpecialEpisode,
   getPosterUrl,
 } from '@/services/movieApi';
 import { runWhenIdle } from '@/utils/performance';
@@ -28,14 +29,42 @@ import {
   SOURCE_HEALTH_UPDATED_EVENT,
   warmPlayerSourceHealth,
 } from '@/services/playerSourceHealth';
+import {
+  VIEWER_REGION_UPDATED_EVENT,
+  warmViewerRegion,
+} from '@/services/viewerRegion';
+import {
+  fetchStaticMovieBootstrap,
+  normalizeDetailForCanonicalRoute,
+  readEmbeddedStaticMovieBootstrap,
+  staticMovieSourceSlug,
+  type StaticMovieBootstrapPayload,
+} from '@/services/staticMovieBootstrap';
 
 const UserComments = lazy(() => import('./components/UserComments'));
 const MovieReviewSection = lazy(() => import('@/components/feature/MovieReview'));
 const MovieDetailSEOBlock = lazy(() => import('./components/MovieDetailSEOBlock'));
+const MovieSeoProfileContent = lazy(() => import('@/components/feature/MovieSeoProfileContent'));
 const MovieDetailPlayerSection = lazy(() => import('./components/MovieDetailPlayerSection'));
 
 function getPlayableSourceUrl(ep: EpisodeData): string {
   return ep.link_m3u8?.trim() || ep.link_embed?.trim() || '';
+}
+
+function movieSeoText(value = ''): string {
+  return value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function movieSeoDescription(movie: MovieDetailResponse['movie']): string {
+  const content = movieSeoText(movie.content || '');
+  if (content.length >= 90) return content;
+  return [
+    `Xem thông tin và các tập đang có của ${movie.name}`,
+    movie.origin_name && movie.origin_name !== movie.name ? `(${movie.origin_name})` : '',
+    movie.year ? `phát hành năm ${movie.year}` : '',
+    movie.lang ? `bản ${movie.lang}` : '',
+    'trên KhoPhim.',
+  ].filter(Boolean).join(' ');
 }
 
 const PLAYBACK_PREFERENCE_PROVIDERS = new Set(['vsmov', 'kkphim', 'nguonc']);
@@ -133,6 +162,29 @@ function getHighestEpisodeFromServers(episodes: EpisodeServer[]): number {
   }, 0);
 }
 
+function getPlayableEpisodeNumbers(episodes: EpisodeServer[]): Set<number> {
+  const numbers = new Set<number>();
+  for (const server of episodes) {
+    for (const episode of server.server_data ?? []) {
+      if (!hasPlayableUrl(episode) || episode.is_scheduled) continue;
+      if (String(episode.audio_type || '').toLowerCase() === 'raw' || /\braw\b/i.test(String(episode.name || ''))) continue;
+      const number = getEpisodeNumber(episode);
+      if (Number.isFinite(number) && number > 0) numbers.add(number);
+    }
+  }
+  return numbers;
+}
+
+function countMissingEpisodeNumbers(episodes: EpisodeServer[], expected: number): number {
+  if (expected <= 1 || expected > 300) return 0;
+  const present = getPlayableEpisodeNumbers(episodes);
+  let missing = 0;
+  for (let number = 1; number <= expected; number += 1) {
+    if (!present.has(number)) missing += 1;
+  }
+  return missing;
+}
+
 function isPreviewOnlyDetail(detail: MovieDetailResponse): boolean {
   const movie = detail.movie as MovieDetailResponse['movie'] & {
     status?: string;
@@ -200,8 +252,9 @@ function shouldRefreshEpisodeDetail(detail: MovieDetailResponse): boolean {
   if (hasOnlyFullPlaceholderEpisodes(detail)) return true;
   const displayedCurrent = getAdvertisedCurrentEpisode(detail);
   if (displayedCurrent < 2) return false;
-  const playableCurrent = getHighestEpisodeFromServers(deduplicateAndLimitServers(detail.episodes ?? []));
-  return playableCurrent < displayedCurrent;
+  const visibleEpisodes = deduplicateAndLimitServers(detail.episodes ?? []);
+  const playableCurrent = getHighestEpisodeFromServers(visibleEpisodes);
+  return playableCurrent < displayedCurrent || countMissingEpisodeNumbers(visibleEpisodes, displayedCurrent) > 0;
 }
 
 function getLatestPlayableEpisodeSlug(episodes: EpisodeServer[]): string | undefined {
@@ -211,7 +264,9 @@ function getLatestPlayableEpisodeSlug(episodes: EpisodeServer[]): string | undef
   const translated = playable.filter((ep) =>
     String(ep.audio_type || '').toLowerCase() !== 'raw' && !/\braw\b/i.test(String(ep.name || ''))
   );
-  const latest = [...(translated.length > 0 ? translated : playable)]
+  const preferredPool = translated.length > 0 ? translated : playable;
+  const regular = preferredPool.filter((ep) => !isSpecialEpisode(ep));
+  const latest = [...(regular.length > 0 ? regular : preferredPool)]
     .sort((a, b) => epSortKey(b) - epSortKey(a))[0];
   return latest?.slug || latest?.name;
 }
@@ -236,6 +291,31 @@ function warmSourceHealthWithinStartupBudget(): Promise<void> {
   });
 }
 
+function hasPlayableEpisodeSource(detail: MovieDetailResponse | null | undefined): boolean {
+  return Boolean(detail?.episodes?.some((server) =>
+    (server.server_data ?? []).some((episode) => !episode.is_scheduled && hasPlayableUrl(episode))
+  ));
+}
+
+function hasAdvertisedEpisodeMetadata(movie: MovieDetailResponse['movie'] | null | undefined): boolean {
+  if (!movie) return false;
+  const currentEpisode = Number(movie.current_episode || 0);
+  const episodeLabel = String(movie.episode_current || '').trim().toLowerCase();
+  const advertisedNumber = Number(episodeLabel.match(/\d+/)?.[0] || 0);
+  return currentEpisode > 0 || advertisedNumber > 0 || /\bfull\b|hoàn\s*tất|hoan\s*tat/.test(episodeLabel);
+}
+
+function warmViewerRegionWithinStartupBudget(): Promise<void> {
+  const region = warmViewerRegion();
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(resolve, 300);
+    region.finally(() => {
+      window.clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 function getLatestPlayableEpisode(episodes: EpisodeData[]): EpisodeData | null {
   return [...episodes]
     .filter((ep) => hasPlayableUrl(ep) && !ep.is_scheduled)
@@ -244,6 +324,10 @@ function getLatestPlayableEpisode(episodes: EpisodeData[]): EpisodeData | null {
 
 export default function MovieDetailPage() {
   const { slug, episode: routeEpisode } = useParams<{ slug: string; episode?: string }>();
+  const embeddedStaticBootstrap = useMemo(
+    () => slug ? readEmbeddedStaticMovieBootstrap(slug) : null,
+    [slug],
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -272,18 +356,23 @@ export default function MovieDetailPage() {
   const { getResume, saveProgress, clearProgress } = useResumeWatch();
   const { isFav, toggle } = useFavorites();
 
-  const [detail, setDetail] = useState<MovieDetailResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [staticBootstrap, setStaticBootstrap] = useState<StaticMovieBootstrapPayload | null>(embeddedStaticBootstrap);
+  const [detail, setDetail] = useState<MovieDetailResponse | null>(embeddedStaticBootstrap?.detail ?? null);
+  const [loading, setLoading] = useState(() => !embeddedStaticBootstrap);
+  const [episodeDataLoading, setEpisodeDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeServer, setActiveServer] = useState(0);
   const [activeEp, setActiveEp] = useState<EpisodeData | null>(null);
   const [related, setRelated] = useState<MovieItem[]>([]);
+  const [relatedSettled, setRelatedSettled] = useState(false);
   const [resumeInfo, setResumeInfo] = useState<{ time: number; duration: number; progress: number; shouldResume: boolean } | null>(null);
   const [showResumeBanner, setShowResumeBanner] = useState(false);
   const [initialSeekTime, setInitialSeekTime] = useState(0);
   const [cinemaMode, setCinemaMode] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
   const [sourceHealthVersion, setSourceHealthVersion] = useState(0);
+  const [viewerRegionVersion, setViewerRegionVersion] = useState(0);
+  const isStaticMovieIndexable = staticBootstrap?.indexable === true;
 
   const playerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -291,14 +380,28 @@ export default function MovieDetailPage() {
   const pendingProgressRef = useRef<{ time: number; duration: number } | null>(null);
   const playbackTimeRef = useRef(0);
   const activeSourceSelectedAtRef = useRef(Date.now());
+  const sourceSelectionLockUntilRef = useRef(0);
+  const automaticStartupHandoffKeyRef = useRef('');
+  const sourceRepairStateRef = useRef({ key: '', startedAt: 0, inFlight: false });
   const lastProgressSavedAtRef = useRef(0);
   const activeEpRef = useRef<string | null>(null);
   const relatedFetchedRef = useRef(false);
   const resumeCheckedKeyRef = useRef('');
+  const detailRef = useRef<MovieDetailResponse | null>(detail);
+
+  useEffect(() => {
+    detailRef.current = detail;
+  }, [detail]);
 
   useEffect(() => {
     activeSourceSelectedAtRef.current = Date.now();
   }, [activeEp?.link_embed, activeEp?.link_m3u8, activeEp?.slug]);
+
+  useEffect(() => {
+    automaticStartupHandoffKeyRef.current = '';
+    sourceSelectionLockUntilRef.current = 0;
+    sourceRepairStateRef.current = { key: '', startedAt: 0, inFlight: false };
+  }, [activeEp?.slug, slug]);
 
   // Warm the shared viewer-health map as soon as the watch route opens. The
   // former app-level idle task ran only on a hard refresh and could start 15s
@@ -312,13 +415,21 @@ export default function MovieDetailPage() {
     window.addEventListener(SOURCE_HEALTH_UPDATED_EVENT, handleHealthUpdate);
     document.addEventListener('visibilitychange', refreshHealth);
     refreshHealth();
-    const refreshTimer = window.setInterval(refreshHealth, 5 * 60 * 1000);
+    const refreshTimer = window.setInterval(refreshHealth, 30 * 60 * 1000);
     return () => {
       window.clearInterval(refreshTimer);
       document.removeEventListener('visibilitychange', refreshHealth);
       window.removeEventListener(SOURCE_HEALTH_UPDATED_EVENT, handleHealthUpdate);
     };
   }, [isWatchPage, slug]);
+
+  useEffect(() => {
+    if (!isWatchPage) return;
+    const handleRegionUpdate = () => setViewerRegionVersion((version) => version + 1);
+    window.addEventListener(VIEWER_REGION_UPDATED_EVENT, handleRegionUpdate);
+    void warmViewerRegion();
+    return () => window.removeEventListener(VIEWER_REGION_UPDATED_EVENT, handleRegionUpdate);
+  }, [isWatchPage]);
 
   // Preserve old shared/resume links that used /phim/:slug?tap=:episode.
   useEffect(() => {
@@ -357,7 +468,9 @@ export default function MovieDetailPage() {
           observer.disconnect();
         }
       },
-      { rootMargin: '600px' } // increased from 400px to defer more
+      // Keep recommendation images out of the initial viewport/LCP window.
+      // They begin loading as soon as the visitor starts moving toward them.
+      { rootMargin: '0px 0px -45% 0px' }
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -366,17 +479,42 @@ export default function MovieDetailPage() {
   /* ── Fetch movie detail ── */
   useEffect(() => {
     if (!slug) return;
-    const isFresh = searchParams.has('fresh');
+    const hasFreshParam = searchParams.has('fresh');
     const source = preferredSource || undefined;
     let cancelled = false;
     let autoRecoverySucceeded = false;
     const recoveryTimers: number[] = [];
-    if (isFresh) {
+    const bootstrapController = new AbortController();
+    const embeddedBootstrap = readEmbeddedStaticMovieBootstrap(slug);
+    const existingDetail = detailRef.current;
+    const existingDetailMatchesRoute = existingDetail?.movie?.slug === slug;
+    const existingPlayableDetail = existingDetailMatchesRoute && hasPlayableEpisodeSource(existingDetail)
+      ? existingDetail
+      : null;
+    const playbackMetadata = embeddedBootstrap?.detail ?? (existingDetailMatchesRoute ? existingDetail : null);
+    const forcePlaybackRefresh = Boolean(
+      isWatchPage &&
+      !existingPlayableDetail &&
+      playbackMetadata &&
+      (!isPreviewOnlyDetail(playbackMetadata) || hasAdvertisedEpisodeMetadata(playbackMetadata.movie))
+    );
+    const isFresh = hasFreshParam || forcePlaybackRefresh;
+    const bootstrapPromise = embeddedBootstrap
+      ? Promise.resolve(embeddedBootstrap)
+      : fetchStaticMovieBootstrap(slug, bootstrapController.signal);
+    const detailSourceSlug = staticMovieSourceSlug(embeddedBootstrap, slug);
+    if (hasFreshParam) {
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('fresh');
       setSearchParams(nextParams, { replace: true });
     }
-    setLoading(true);
+    setStaticBootstrap(embeddedBootstrap);
+    // Keep a source catalogue already loaded on the information page during
+    // SPA navigation. Static bootstrap intentionally has metadata only and
+    // must not replace playable episodes with an empty catalogue.
+    setDetail(existingPlayableDetail ?? embeddedBootstrap?.detail ?? null);
+    setLoading(!embeddedBootstrap);
+    setEpisodeDataLoading(true);
     setError(null);
     setActiveServer(0);
     setActiveEp(null);
@@ -390,19 +528,35 @@ export default function MovieDetailPage() {
     // budget applies already-cached outage knowledge without holding the first
     // player render behind a slow health refresh. Late health still triggers
     // the guarded same-episode handoff below.
-    const detailRequest = fetchMovieDetail(slug, isFresh, source);
+    // The static bootstrap is intentionally independent from the dynamic
+    // playback request. It normally resolves from the same-origin CDN in a
+    // fraction of a second and removes the information-page skeleton while
+    // Supabase/provider episodes continue loading in the background.
+    void bootstrapPromise.then((payload) => {
+      if (cancelled || !payload) return;
+      setStaticBootstrap(payload);
+      setDetail((current) => current?.movie?.slug === slug ? current : payload.detail);
+      setLoading(false);
+    });
+
+    const detailRequest = fetchMovieDetail(detailSourceSlug, isFresh, source);
     const initialSourceHealth = isWatchPage
       ? warmSourceHealthWithinStartupBudget()
       : Promise.resolve();
+    const initialViewerRegion = isWatchPage
+      ? warmViewerRegionWithinStartupBudget()
+      : Promise.resolve();
 
-    Promise.all([detailRequest, initialSourceHealth])
-      .then(([data]) => {
+    Promise.all([detailRequest, bootstrapPromise, initialSourceHealth, initialViewerRegion])
+      .then(([data, bootstrap]) => {
         if (cancelled) return;
         if (!data) {
-          setError(`Không thể tải thông tin phim "${slug}". Phim không tồn tại hoặc đang được cập nhật.`);
+          if (!bootstrap) {
+            setError(`Không thể tải thông tin phim "${slug}". Phim không tồn tại hoặc đang được cập nhật.`);
+          }
           return;
         }
-        let resolvedData = data;
+        let resolvedData = normalizeDetailForCanonicalRoute(data, slug, bootstrap?.detail);
 
         setDetail(resolvedData);
         const deduped = deduplicateAndLimitServers(resolvedData.episodes ?? []);
@@ -429,18 +583,19 @@ export default function MovieDetailPage() {
                   navigator.onLine === false ||
                   document.visibilityState !== 'visible'
                 ) return;
-                void fetchMovieDetail(slug, true, source)
+                void fetchMovieDetail(detailSourceSlug, true, source)
                   .then((recovered) => {
                     if (cancelled || autoRecoverySucceeded || !recovered) return;
-                    const recoveredServers = deduplicateAndLimitServers(recovered.episodes ?? []);
+                    const normalizedRecovered = normalizeDetailForCanonicalRoute(recovered, slug, bootstrap?.detail);
+                    const recoveredServers = deduplicateAndLimitServers(normalizedRecovered.episodes ?? []);
                     if (recoveredServers.length === 0) return;
                     autoRecoverySucceeded = true;
-                    setDetail(recovered);
+                    setDetail(normalizedRecovered);
                     const preferred = preferredSource
                       ? pickBestEpisodeByScore(recoveredServers, undefined, preferredSource)
                       : null;
                     const bestIdx = preferred?.serverIndex ?? pickBestServerIndex(recoveredServers);
-                    const originalIdx = (recovered.episodes ?? []).findIndex(
+                    const originalIdx = (normalizedRecovered.episodes ?? []).findIndex(
                       (server) => server === recoveredServers[bestIdx],
                     );
                     setActiveServer(originalIdx >= 0 ? originalIdx : bestIdx);
@@ -452,14 +607,19 @@ export default function MovieDetailPage() {
         }
 
         if (!isFresh && shouldRefreshEpisodeDetail(data)) {
-          void fetchMovieDetail(slug, true, source)
+          void fetchMovieDetail(detailSourceSlug, true, source)
             .then((refreshed) => {
-              const oldMax = getHighestEpisodeFromServers(deduplicateAndLimitServers(data.episodes ?? []));
+              const oldServers = deduplicateAndLimitServers(data.episodes ?? []);
+              const oldMax = getHighestEpisodeFromServers(oldServers);
               const refreshedMax = refreshed
                 ? getHighestEpisodeFromServers(deduplicateAndLimitServers(refreshed.episodes ?? []))
                 : 0;
-              if (refreshed && refreshedMax > oldMax) {
-                resolvedData = refreshed;
+              const expected = Math.max(getAdvertisedCurrentEpisode(data), oldMax);
+              const oldMissing = countMissingEpisodeNumbers(oldServers, expected);
+              const refreshedServers = refreshed ? deduplicateAndLimitServers(refreshed.episodes ?? []) : [];
+              const refreshedMissing = refreshed ? countMissingEpisodeNumbers(refreshedServers, Math.max(expected, refreshedMax)) : oldMissing;
+              if (refreshed && (refreshedMax > oldMax || refreshedMissing < oldMissing)) {
+                resolvedData = normalizeDetailForCanonicalRoute(refreshed, slug, bootstrap?.detail);
                 setDetail(resolvedData);
                 const deduped = deduplicateAndLimitServers(resolvedData.episodes ?? []);
                 if (deduped.length > 0) {
@@ -477,25 +637,42 @@ export default function MovieDetailPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        setError(`Không thể tải thông tin phim "${slug}". Phim có thể chưa được lưu hoặc slug không khớp.`);
+        void bootstrapPromise.then((bootstrap) => {
+          if (!cancelled && !bootstrap) {
+            setError(`Không thể tải thông tin phim "${slug}". Phim có thể chưa được lưu hoặc slug không khớp.`);
+          }
+        });
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setEpisodeDataLoading(false);
+        }
       });
 
     return () => {
       cancelled = true;
+      bootstrapController.abort();
       recoveryTimers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [preferredSource, slug]);
+  }, [isWatchPage, preferredSource, slug]);
 
   // Related content is non-critical. Fetch it only after the visitor approaches
   // the lower page sections, so the player never competes with source APIs.
   useEffect(() => {
+    relatedFetchedRef.current = false;
+    setRelated([]);
+    setRelatedSettled(false);
+  }, [slug]);
+
+  useEffect(() => {
     if (isWatchPage || !showBottom || !detail?.movie || !slug || relatedFetchedRef.current) return;
     const genre = detail.movie.category?.[0]?.slug;
     const country = detail.movie.country?.[0]?.slug;
-    if (!genre && !country) return;
+    if (!genre && !country) {
+      setRelatedSettled(true);
+      return;
+    }
 
     let cancelled = false;
     relatedFetchedRef.current = true;
@@ -505,7 +682,10 @@ export default function MovieDetailPage() {
           setRelated(result.items?.filter((item) => item.slug !== slug).slice(0, 6) ?? []);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setRelatedSettled(true);
+      });
 
     return () => {
       cancelled = true;
@@ -587,7 +767,10 @@ export default function MovieDetailPage() {
       (server.server_data ?? []).forEach((episode) => {
         if (!hasPlayableUrl(episode) || episode.is_scheduled) return;
         const sortKey = epSortKey(episode);
-        const key = Number.isFinite(sortKey)
+        const specialNumber = Number(episode.episode_number || 0);
+        const key = isSpecialEpisode(episode)
+          ? `special:${specialNumber < 0 ? Math.abs(specialNumber) : episode.slug || episode.name}`
+          : Number.isFinite(sortKey)
           ? String(sortKey)
           : `special:${episode.slug || episode.name}`;
         if (!byKey.has(key)) byKey.set(key, episode);
@@ -595,6 +778,14 @@ export default function MovieDetailPage() {
     });
     return Array.from(byKey.values()).sort((a, b) => epSortKey(a) - epSortKey(b));
   }, [filteredEpisodes]);
+
+  const detailEpisodeSummary = useMemo(() => {
+    const specialCount = detailEpisodeLinks.filter((episode) => isSpecialEpisode(episode)).length;
+    const regularCount = detailEpisodeLinks.length - specialCount;
+    return specialCount > 0
+      ? `${regularCount} tập chính · ${specialCount} tập đặc biệt`
+      : `${regularCount} tập`;
+  }, [detailEpisodeLinks]);
 
   useEffect(() => {
     if (!isWatchPage || !hasEpisodes) return;
@@ -645,6 +836,12 @@ export default function MovieDetailPage() {
     }
     return epCurrent === 'trailer' || epCurrent === 'sap chieu' || epCurrent === 'dang cap nhat';
   }, [detail]);
+
+  const hasAdvertisedEpisodes = useMemo(() => {
+    return !isTrailerOnly && hasAdvertisedEpisodeMetadata(displayMovie);
+  }, [displayMovie, isTrailerOnly]);
+
+  const canOpenWatchPage = hasEpisodes || hasAdvertisedEpisodes;
 
   const requestedEpisode = useMemo(
     () => normalizeRequestedEpisode(routeEpisode),
@@ -707,6 +904,23 @@ export default function MovieDetailPage() {
     setInitialSeekTime(0);
   }, [activeEp, detail?.episodes, filteredEpisodes, hasEpisodes, isTrailerOnly, isWatchPage, preferredSource, requestedEpisode]);
 
+  useEffect(() => {
+    if (!viewerRegionVersion || !isWatchPage || !activeEp || !detail?.episodes) return;
+    const handoffKey = `${slug || ''}|${activeEp.slug || activeEp.name || ''}`;
+    if (
+      Date.now() < sourceSelectionLockUntilRef.current
+      || automaticStartupHandoffKeyRef.current === handoffKey
+    ) return;
+    if (playbackTimeRef.current >= 8 || Date.now() - activeSourceSelectedAtRef.current >= 8_000) return;
+    const best = pickBestEpisodeByScore(filteredEpisodes, activeEp.slug || activeEp.name, preferredSource);
+    if (!best || getPlayableSourceUrl(best.episode) === getPlayableSourceUrl(activeEp)) return;
+    const originalIdx = resolveOriginalServerIndex(filteredEpisodes[best.serverIndex], detail.episodes);
+    automaticStartupHandoffKeyRef.current = handoffKey;
+    sourceSelectionLockUntilRef.current = Date.now() + 15_000;
+    setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
+    setActiveEp(best.episode);
+  }, [activeEp, detail?.episodes, filteredEpisodes, isWatchPage, preferredSource, slug, viewerRegionVersion]);
+
   const trailerEmbedUrl = useMemo(
     () => (detail?.movie?.trailer_url ? getTrailerEmbedUrl(detail.movie.trailer_url) : null),
     [detail?.movie?.trailer_url]
@@ -738,6 +952,11 @@ export default function MovieDetailPage() {
   // same-episode source. Do not interrupt a viewer whose video is playing.
   useEffect(() => {
     if (!isWatchPage || sourceHealthVersion === 0 || !activeEp || !detail?.episodes) return;
+    const handoffKey = `${slug || ''}|${activeEp.slug || activeEp.name || ''}`;
+    if (
+      Date.now() < sourceSelectionLockUntilRef.current
+      || automaticStartupHandoffKeyRef.current === handoffKey
+    ) return;
     const currentUrl = getPlayableSourceUrl(activeEp);
     if (!currentUrl || !isRecentlyBadSourceHost(currentUrl)) return;
     const currentPlaybackTime = Math.max(
@@ -782,10 +1001,12 @@ export default function MovieDetailPage() {
     );
     flushProgress();
     const originalIdx = resolveOriginalServerIndex(alternativeServers[best.serverIndex], detail.episodes);
+    automaticStartupHandoffKeyRef.current = handoffKey;
+    sourceSelectionLockUntilRef.current = Date.now() + 15_000;
     setActiveServer(originalIdx >= 0 ? originalIdx : best.serverIndex);
     setActiveEp(best.episode);
     setInitialSeekTime(resumeAt);
-  }, [activeEp, detail?.episodes, filteredEpisodes, flushProgress, isWatchPage, sourceHealthVersion]);
+  }, [activeEp, detail?.episodes, filteredEpisodes, flushProgress, isWatchPage, slug, sourceHealthVersion]);
 
   const handleSelectEp = useCallback((ep: EpisodeData, seekTime = 0) => {
     if (!hasPlayableUrl(ep)) {
@@ -816,6 +1037,11 @@ export default function MovieDetailPage() {
     if (!targetServer || !detail?.episodes) return;
     const originalIdx = resolveOriginalServerIndex(targetServer, detail.episodes);
     if (originalIdx < 0) return;
+    // Manual choices and PlayerBox's immediate fatal failover both arrive via
+    // this handler. Give that decision exclusive control briefly so async
+    // region/health effects cannot select a second source in the same cycle.
+    sourceSelectionLockUntilRef.current = Date.now() + 15_000;
+    automaticStartupHandoffKeyRef.current = `${slug || ''}|${activeEp?.slug || activeEp?.name || ''}`;
     const newServerData = detail.episodes[originalIdx]?.server_data ?? [];
     if (activeEp) {
       const activeNumber = activeEp.episode_number ?? Number((activeEp.slug || activeEp.name || '').match(/\d+/)?.[0] ?? 0);
@@ -840,7 +1066,7 @@ export default function MovieDetailPage() {
       return;
     }
     setActiveServer(originalIdx);
-  }, [filteredEpisodes, detail?.episodes, activeEp, flushProgress, showToast]);
+  }, [filteredEpisodes, detail?.episodes, activeEp, flushProgress, showToast, slug]);
 
   const handleTimeUpdate = useCallback((time: number, duration: number) => {
     if (!slug || !activeEpRef.current) return;
@@ -892,38 +1118,65 @@ export default function MovieDetailPage() {
   const handleRefetchMovie = useCallback(async () => {
     if (!slug) return;
     const targetEpisode = activeEpRef.current || requestedEpisode;
+    const currentEpisode = activeEp;
+    const currentSourceUrl = currentEpisode ? getPlayableSourceUrl(currentEpisode) : '';
+    const repairKey = `${slug}|${targetEpisode || ''}|${currentSourceUrl}`;
+    const repairState = sourceRepairStateRef.current;
+    if (
+      repairState.inFlight
+      || (repairState.key === repairKey && Date.now() - repairState.startedAt < 30_000)
+    ) return;
+    sourceRepairStateRef.current = { key: repairKey, startedAt: Date.now(), inFlight: true };
     const resumeAt = Math.max(
       playbackTimeRef.current,
       pendingProgressRef.current?.time ?? 0,
     );
     flushProgress();
-    setLoading(true);
-    setError(null);
-    setActiveEp(null);
-    setShowResumeBanner(false);
+    // Preserve the mounted player while the repair request runs. Unmounting it
+    // here produced the visible black flash and reset iframe/HLS state.
     try {
-      const data = await fetchMovieDetail(slug, true, preferredSource || undefined);
+      const sourceSlug = staticMovieSourceSlug(staticBootstrap, slug);
+      const refreshed = await fetchMovieDetail(sourceSlug, true, preferredSource || undefined);
+      const data = refreshed
+        ? normalizeDetailForCanonicalRoute(refreshed, slug, staticBootstrap?.detail)
+        : null;
       if (!data) {
-        setError('Không thể tải thông tin phim');
         showToast('Không tìm thấy nguồn phim nào khác.', 'error');
-        setDetail(null);
         return;
       }
-      setDetail(data);
       const deduped = deduplicateAndLimitServers(data.episodes ?? []);
       let recoveredSource = false;
       if (deduped.length > 0) {
+        const independentServers = deduped
+          .map((server) => ({
+            ...server,
+            server_data: (server.server_data ?? []).filter((episode) => {
+              const sourceUrl = getPlayableSourceUrl(episode);
+              return sourceUrl && sourceUrl !== currentSourceUrl && !isRecentlyBadSourceHost(sourceUrl);
+            }),
+          }))
+          .filter((server) => server.server_data.length > 0);
+        const repairCandidates = independentServers.length > 0 ? independentServers : deduped;
         const recovered = targetEpisode
-          ? pickBestEpisodeByScore(deduped, targetEpisode, preferredSource)
+          ? pickBestEpisodeByScore(repairCandidates, targetEpisode, preferredSource)
           : null;
-        if (recovered) {
+        if (recovered && getPlayableSourceUrl(recovered.episode) !== currentSourceUrl) {
           recoveredSource = true;
-          const originalIdx = resolveOriginalServerIndex(deduped[recovered.serverIndex], data.episodes ?? []);
+          const recoveredUrl = getPlayableSourceUrl(recovered.episode);
+          const originalIdx = (data.episodes ?? []).findIndex((server) =>
+            (server.server_data ?? []).some((episode) => getPlayableSourceUrl(episode) === recoveredUrl),
+          );
+          if (originalIdx < 0) return;
+          sourceSelectionLockUntilRef.current = Date.now() + 15_000;
+          automaticStartupHandoffKeyRef.current = `${slug}|${targetEpisode || ''}`;
+          setDetail(data);
           playbackTimeRef.current = resumeAt;
-          setActiveServer(originalIdx >= 0 ? originalIdx : recovered.serverIndex);
+          setActiveServer(originalIdx);
           setActiveEp(recovered.episode);
           setInitialSeekTime(resumeAt);
-        } else {
+          setShowResumeBanner(false);
+        } else if (!currentEpisode) {
+          setDetail(data);
           const preferred = preferredSource
             ? pickBestEpisodeByScore(deduped, undefined, preferredSource)
             : null;
@@ -934,19 +1187,18 @@ export default function MovieDetailPage() {
           setInitialSeekTime(0);
         }
       } else {
-        setActiveServer(-1);
+        if (!currentEpisode) setActiveServer(-1);
       }
       showToast(
         recoveredSource ? 'Đã tìm thấy nguồn phim mới!' : 'Tập này vẫn chưa có nguồn phát hoạt động.',
         recoveredSource ? 'success' : 'error',
       );
     } catch {
-      setError('Không thể tải thông tin phim');
       showToast('Không tìm thấy nguồn phim nào khác.', 'error');
     } finally {
-      setLoading(false);
+      sourceRepairStateRef.current.inFlight = false;
     }
-  }, [flushProgress, preferredSource, requestedEpisode, showToast, slug]);
+  }, [activeEp, flushProgress, preferredSource, requestedEpisode, showToast, slug, staticBootstrap]);
 
   const handleFavToggle = useCallback(() => {
     if (!detail?.movie) return;
@@ -957,7 +1209,9 @@ export default function MovieDetailPage() {
   /* ── Loading ── */
   if (loading) return (
     <div className="angular-detail-page min-h-screen kp-cinema-page text-white" data-player-fix="viewer-resilience-20260824">
-      <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
+      {!isStaticMovieIndexable && (
+        <SEO title="Đang tải phim..." description="Xem phim online HD miễn phí tại KhoPhim." noIndex={true} />
+      )}
       <Navbar />
       <main className="min-h-[calc(100dvh-4rem)] max-w-[1760px] mx-auto px-3 sm:px-4 pt-24 pb-10">
         <div className="flex flex-row gap-3 sm:gap-8 mb-8">
@@ -1003,9 +1257,54 @@ export default function MovieDetailPage() {
 
   const movie = displayMovie;
   const favored = isFav(movie._id);
+  const shouldNoIndexMovieInfo = staticBootstrap
+    ? !isStaticMovieIndexable
+    : !hasEpisodes && !trailerEmbedUrl;
 
   return (
     <div className={`angular-detail-page ${isWatchPage ? 'is-watch-mode' : 'is-info-mode'} min-h-screen kp-cinema-page text-white`}>
+      {!isWatchPage && (
+        <SEO
+          title={`${movie.name}${movie.year ? ` (${movie.year})` : ''} - Xem phim ${movie.lang || movie.quality || 'HD'}`}
+          description={movieSeoDescription(movie)}
+          canonical={`/phim/${slug ?? ''}`}
+          ogImage={getPosterUrl(movie.poster_url || movie.thumb_url)}
+          ogType="video.movie"
+          noIndex={shouldNoIndexMovieInfo}
+          publishedYear={movie.year}
+          genre={movie.category?.map((item) => item.name).filter(Boolean).join(', ')}
+          updatedAt={movie.modified?.time}
+          schema={[
+            {
+              '@context': 'https://schema.org',
+              '@type': 'Movie',
+              '@id': `https://khophim.org/phim/${slug ?? ''}#movie`,
+              name: movie.name,
+              alternateName: movie.origin_name || undefined,
+              url: `https://khophim.org/phim/${slug ?? ''}`,
+              image: getPosterUrl(movie.poster_url || movie.thumb_url),
+              description: movieSeoDescription(movie),
+              dateCreated: movie.year ? String(movie.year) : undefined,
+              genre: movie.category?.map((item) => item.name).filter(Boolean) ?? [],
+              countryOfOrigin: movie.country?.map((item) => ({ '@type': 'Country', name: item.name })) ?? [],
+              actor: movie.actor?.filter(Boolean).slice(0, 12).map((name) => ({ '@type': 'Person', name })) ?? [],
+              director: movie.director?.filter(Boolean).slice(0, 6).map((name) => ({ '@type': 'Person', name })) ?? [],
+              inLanguage: 'vi-VN',
+              potentialAction: hasEpisodes
+                ? { '@type': 'WatchAction', target: `https://khophim.org/xem-phim/${slug ?? ''}` }
+                : undefined,
+            },
+            {
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'KhoPhim', item: 'https://khophim.org' },
+                { '@type': 'ListItem', position: 2, name: movie.name, item: `https://khophim.org/phim/${slug ?? ''}` },
+              ],
+            },
+          ]}
+        />
+      )}
       <Navbar />
 
       <main id="main-content">
@@ -1030,11 +1329,13 @@ export default function MovieDetailPage() {
             slug={slug ?? ''}
             favored={favored}
             isTrailerOnly={isTrailerOnly}
-            hasEpisodes={hasEpisodes}
+            hasEpisodes={canOpenWatchPage}
+            episodeDataLoading={episodeDataLoading}
+            noIndex={shouldNoIndexMovieInfo}
             onFavToggle={handleFavToggle}
             onWatchNow={() => {
-              if (!hasEpisodes && !isTrailerOnly) {
-                showToast('Phim đang cập nhật, chưa có tập phim', 'info');
+              if (!canOpenWatchPage && !isTrailerOnly) {
+                showToast(episodeDataLoading ? 'Đang tải danh sách tập phim' : 'Phim chưa có tập để xem', 'info');
                 return;
               }
               const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
@@ -1056,7 +1357,7 @@ export default function MovieDetailPage() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h2 id="detail-episodes-title" className="font-black text-white sm:text-lg">Danh sách tập</h2>
-                <p className="mt-0.5 text-xs text-white/60">{detailEpisodeLinks.length} tập · mở trong chế độ xem tập trung</p>
+                <p className="mt-0.5 text-xs text-white/60">{detailEpisodeSummary} · mở trong chế độ xem tập trung</p>
               </div>
               <Link to={withPlaybackPreference(`/xem-phim/${slug ?? ''}`)} className="flex min-h-11 items-center gap-1.5 rounded-xl bg-red-500 px-3 text-xs font-bold text-white touch-manipulation">
                 <i className="ri-play-fill" /> Xem phim
@@ -1117,6 +1418,7 @@ export default function MovieDetailPage() {
         activeServer={activeFilteredIndex}
         onSwitchServer={handleSwitchServer}
         onRefetchMovie={handleRefetchMovie}
+        episodeDataLoading={episodeDataLoading}
         initialSeekTime={initialSeekTime}
         onVideoEnded={() => { if (slug && activeEp) clearProgress(slug, activeEp.slug); }}
         slug={slug ?? ''}
@@ -1134,8 +1436,24 @@ export default function MovieDetailPage() {
       {!isWatchPage && <div className="max-w-[1760px] mx-auto px-3 sm:px-4 pb-12">
         {showBottom ? (
           <>
-            {related.length > 0 && (
-              <div className="mb-8">
+            {!relatedSettled ? (
+              <div className="mb-8 min-h-[640px] sm:min-h-[420px] lg:min-h-[390px]" aria-label="Đang tải phim liên quan">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 bg-red-500 rounded-full" />
+                  <div className="h-5 w-32 skeleton rounded" />
+                </div>
+                <div className="grid movie-grid-desktop">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="space-y-2">
+                      <div className="skeleton rounded-xl" style={{ aspectRatio: '2/3' }} />
+                      <div className="h-4 skeleton rounded w-5/6" />
+                      <div className="h-3 skeleton rounded w-1/2" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : related.length > 0 ? (
+              <div className="mb-8 min-h-[640px] sm:min-h-[420px] lg:min-h-[390px]">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-1 h-4 bg-red-500 rounded-full" />
                   <h2 className="text-white font-bold text-sm sm:text-base">Phim Liên Quan</h2>
@@ -1149,7 +1467,7 @@ export default function MovieDetailPage() {
                   {related.map((m) => <MovieCard key={m._id} movie={m} />)}
                 </div>
               </div>
-            )}
+            ) : null}
 
             <AdsterraRectangleBanner />
 
@@ -1170,14 +1488,24 @@ export default function MovieDetailPage() {
 
             <Suspense fallback={<div className="h-60 skeleton rounded-xl" />}>
               <MovieDetailSEOBlock movie={movie} slug={slug ?? ''} />
+              <MovieSeoProfileContent
+                slug={slug ?? ''}
+                movieName={movie.name}
+                defaultNoIndex={shouldNoIndexMovieInfo}
+                initialProfile={staticBootstrap?.seo_profile}
+              />
             </Suspense>
           </>
         ) : (
-          <div ref={bottomRef} className="space-y-4">
+          <div ref={bottomRef} className="space-y-4 min-h-[640px] sm:min-h-[420px] lg:min-h-[390px]">
             <div className="h-6 skeleton rounded w-32" />
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="skeleton rounded-xl" style={{ aspectRatio: '2/3' }} />
+                <div key={i} className="space-y-2">
+                  <div className="skeleton rounded-xl" style={{ aspectRatio: '2/3' }} />
+                  <div className="h-4 skeleton rounded w-5/6" />
+                  <div className="h-3 skeleton rounded w-1/2" />
+                </div>
               ))}
             </div>
           </div>

@@ -7,10 +7,23 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 // otherwise valid artifact nondeterministically fail. Deterministic source
 // contracts remain covered by system:contracts, watch:test and diagnostics:test.
 const steps = [
-  ['security:secrets'], ['security:supabase'], ['schema:test'], ['seo:upcoming:test'], ['seo:ongoing:test'], ['system:contracts'], ['sync:safety:test'], ['type-check'], ['build'],
+  ['security:secrets'], ['security:supabase'], ['schema:test'], ['seo:audit'], ['seo:upcoming:test'], ['seo:ongoing:test'], ['seo:indexing:test'], ['seo:gsc:test'], ['seo:brain:test'], ['seo:hot:test'], ['seo:people-first:test'], ['seo:category:test'], ['system:contracts'], ['sync:safety:test'], ['type-check'], ['build'],
   ['home:test'], ['list:test'], ['search:test'], ['movie:data:test'], ['watch:test'], ['diagnostics:test'],
 ];
 const report = { started_at: new Date().toISOString(), status: 'running', steps: [] };
+
+async function writeReport() {
+  const contents = `${JSON.stringify(report, null, 2)}\n`;
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    try {
+      await writeFile('release-gate-report.json', contents, 'utf8');
+      return;
+    } catch (error) {
+      if (!['EPERM', 'EBUSY', 'UNKNOWN'].includes(error?.code) || attempt === 6) throw error;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, attempt * 100));
+    }
+  }
+}
 
 function run(name) {
   return new Promise((resolve) => {
@@ -27,11 +40,11 @@ for (const [name] of steps) {
   report.steps.push(result);
   if (!result.ok) {
     report.status = 'failed'; report.failed_step = name; report.finished_at = new Date().toISOString();
-    await writeFile('release-gate-report.json', `${JSON.stringify(report, null, 2)}\n`);
+    await writeReport();
     console.error(`[release-gate] STOP: ${name} failed. Deployment is not allowed.`);
     process.exit(1);
   }
 }
 report.status = 'passed'; report.finished_at = new Date().toISOString();
-await writeFile('release-gate-report.json', `${JSON.stringify(report, null, 2)}\n`);
+await writeReport();
 console.log('\n[release-gate] PASSED. The artifact is eligible for deployment.');

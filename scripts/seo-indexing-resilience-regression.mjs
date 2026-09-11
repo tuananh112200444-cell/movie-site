@@ -20,16 +20,28 @@ requireText(worker, 'kp_stale=1', 'dynamic sitemaps have no stale snapshot key')
 requireText(worker, "X-Sitemap-Cache', 'STALE-FALLBACK", 'dynamic sitemaps cannot recover from a temporary upstream outage');
 requireText(worker, "X-Sitemap-Proxy': 'cloudflare-pages-priority-index'", 'root sitemap still depends on the database during crawl recovery');
 requireText(worker, "pathname === '/sitemap-movies-archive.xml'", 'archive movie sitemaps are not retained outside the priority index');
-requireText(worker, "SEO_PRERENDER_VERSION = '20260820-cohort-parity-v24'", 'crawler cache was not rotated for the cohort parity release');
+requireText(worker, "SEO_PRERENDER_VERSION = '20260903-editorial-cohort-v1'", 'crawler cache was not rotated for the editorial-quality index release');
 requireText(worker, 'function rewriteSpaDocument', 'SPA source HTML is not rewritten with route-specific SEO metadata');
 requireText(worker, 'async function spaRouteMeta', 'SPA route metadata is not resolved before the client app mounts');
-requireText(worker, 'const isIndexable = isHighValueIndexCandidate(movie)', 'movie robots directives do not use the public high-value cohort gate');
+requireText(worker, "seoUrl.searchParams.set('v', SEO_PRERENDER_VERSION)", 'movie prerender can reuse an upstream eligibility snapshot from an older cohort');
+requireText(worker, 'staticMovieSlug: indexable', 'SPA movie metadata does not preserve the edge-approved index cohort');
+requireText(worker, 'name="kp-static-movie"', 'SPA HTML does not receive the persistent movie cohort marker');
+requireText(worker, 'const automaticIndexable = isHighValueIndexCandidate(movie)', 'movie robots directives do not use the public high-value cohort gate');
+requireText(worker, "seoProfile.index_mode === 'index'", 'published SEO Studio index approval is not enforced in crawler HTML');
+requireText(worker, ": automaticIndexable", 'pages without a published SEO Studio profile do not use the automatic cohort gate');
+requireText(worker, 'getStaticMovieDocument(context, request, slug)', 'crawler movie HTML still depends on a database request for every crawl');
+requireText(worker, "if (typeof item === 'string')", 'movie prerender rejects string taxonomy rows that the sitemap accepts');
+requireText(worker, "!/^(?:undefined|null)$/i.test(id)", 'movie prerender can publish an invalid YouTube embed ID');
 requireText(movieSitemap, 'outputLimit: 100', 'recent sitemap is not bounded to the 100-URL cohort');
 requireText(movieSitemap, 'outputLimit: 60', 'ongoing sitemap is not bounded to the 60-URL cohort');
 requireText(movieSitemap, 'outputLimit: 20', 'upcoming sitemap is not bounded to the 20-URL cohort');
 requireText(movieSitemap, 'isHighValueCohortMovie(movie)', 'movie sitemap does not enforce high-value cohort completeness');
 requireText(movieSitemap, 'seenContent.has(fingerprint)', 'movie sitemap does not remove exact synopsis duplicates');
+requireText(movieSitemap, "description.length >= 500", 'movie sitemap still exposes thin automatically generated pages');
+requireText(movieSitemap, 'hasUsefulPerson(movie.director)', 'movie sitemap does not require useful editorial metadata');
 requireText(movieSitemap, ".order('movie_id', { ascending: true })", 'archive sitemap chunks are not ordered by a stable key');
+requireText(movieSitemap, 'fetchEligibleMovies(5000)', 'archive sitemap does not load the full high-value candidate pool');
+requireText(movieSitemap, 'movies.slice(options.offset, options.offset + options.outputLimit)', 'archive sitemap still paginates before high-value filtering');
 
 if (/fetchEligibleMovies[\s\S]*?\.order\('quality_score'[\s\S]*?\.range\(/.test(movieSitemap)) {
   failures.push('archive sitemap pagination still shifts when quality scores change');

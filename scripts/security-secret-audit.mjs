@@ -1,11 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const tracked = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
+const GIT_OUTPUT_LIMIT = 32 * 1024 * 1024;
+
+const tracked = execFileSync('git', ['ls-files'], { encoding: 'utf8', maxBuffer: GIT_OUTPUT_LIMIT })
   .split(/\r?\n/)
   .filter(Boolean);
 
-const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { encoding: 'utf8' })
+const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { encoding: 'utf8', maxBuffer: GIT_OUTPUT_LIMIT })
   .split(/\r?\n/)
   .filter(Boolean);
 
@@ -13,6 +15,10 @@ const files = [...new Set([...tracked, ...untracked])].filter((file) => {
   return !/^node_modules\//.test(file) &&
     !/^out\//.test(file) &&
     !/^dist\//.test(file) &&
+    !/^work\//.test(file) &&
+    !/^test-results\//.test(file) &&
+    !/^playwright-report\//.test(file) &&
+    !/^\.tmp-workers-types\//.test(file) &&
     !/^\.git\//.test(file) &&
     !/^tmp_/.test(file) &&
     !/\.br$|\.gz$|\.png$|\.jpe?g$|\.gif$|\.webp$|\.ico$|\.mp4$|\.zip$/i.test(file);

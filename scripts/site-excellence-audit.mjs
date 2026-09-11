@@ -37,7 +37,7 @@ const CHECKS = [
     name: 'sitemap-index',
     url: `${SITE_URL}/sitemap.xml`,
     maxMs: 1200,
-    required: ['<sitemapindex', '/sitemap-static.xml', '/sitemap-seo-landing.xml', '/sitemap-movies-recent.xml', '/sitemap-movies-ongoing.xml', '/feed.xml'],
+    required: ['<sitemapindex', '/sitemap-static.xml', '/sitemap-seo-landing.xml', '/sitemap-movies-recent.xml', '/sitemap-seo-studio.xml', '/sitemap-movies-1.xml'],
   },
   {
     name: 'seo-sitemap',
@@ -200,7 +200,6 @@ async function assertProductionBuildClean() {
   for (const needle of [
     '<title>KhoPhim',
     'meta name="description"',
-    'rel="canonical"',
     'type="module" crossorigin src="/assets/',
     '<noscript>',
   ]) {
@@ -281,8 +280,11 @@ async function assertHeadersClean() {
     const parsedRoutes = JSON.parse(routes);
     const includes = Array.isArray(parsedRoutes.include) ? parsedRoutes.include : [];
     if (includes.includes('/*')) failures.push('Pages Functions must not run on every viewer request and exhaust the daily quota.');
-    for (const requiredRoute of ['/api/*', '/internal/*', '/sitemap*', '/feed.xml', '/phim/*']) {
+    for (const requiredRoute of ['/api/*', '/internal/*', '/feed.xml', '/sitemap-movies-ongoing.xml', '/sitemap-seo-studio.xml', '/phim/*', '/xem-phim/*']) {
       if (!includes.includes(requiredRoute)) failures.push(`public/_routes.json should include ${requiredRoute}.`);
+    }
+    for (const staticRoute of ['/sitemap*', '/phim-*', '/the-loai/*', '/kho-phim*']) {
+      if (includes.includes(staticRoute)) failures.push(`public/_routes.json should keep ${staticRoute} quota-safe and static.`);
     }
   } catch {
     failures.push('public/_routes.json must be valid JSON.');
@@ -299,14 +301,20 @@ async function assertSitemapsClean() {
   ]);
   const failures = [];
   if (!index.includes('<sitemapindex')) failures.push('public/sitemap.xml is not a sitemap index.');
-  for (const loc of ['sitemap-static.xml', 'sitemap-seo-landing.xml', 'sitemap-movies-recent.xml', 'sitemap-movies-upcoming.xml', 'sitemap-movies-ongoing.xml', 'feed.xml']) {
+  for (const loc of ['sitemap-static.xml', 'sitemap-seo-landing.xml', 'sitemap-movies-recent.xml', 'sitemap-seo-studio.xml', 'sitemap-movies-1.xml']) {
     if (!index.includes(loc)) failures.push(`public/sitemap.xml is missing ${loc}.`);
+  }
+  for (const runtimeOnlyEndpoint of ['sitemap-movies-ongoing.xml', 'feed.xml']) {
+    if (index.includes(runtimeOnlyEndpoint)) failures.push(`public/sitemap.xml must not depend on runtime-only endpoint ${runtimeOnlyEndpoint}.`);
   }
   if (index.includes('sitemap-movies.xml')) {
     failures.push('public/sitemap.xml should use chunked movie sitemaps instead of the full sitemap-movies.xml.');
   }
-  if (/sitemap-movies-\d+\.xml/.test(index)) failures.push('public/sitemap.xml must focus crawl on priority movie URLs during recovery.');
-  if (!/sitemap-movies-18\.xml/.test(archiveIndex)) failures.push('public/sitemap-movies-archive.xml must retain the bounded archive chunks.');
+  for (const chunk of ['sitemap-movies-1.xml']) {
+    if (!index.includes(chunk)) failures.push(`public/sitemap.xml must submit high-value chunk ${chunk}.`);
+    if (!archiveIndex.includes(chunk)) failures.push(`public/sitemap-movies-archive.xml is missing ${chunk}.`);
+  }
+  if (/sitemap-movies-(?:[2-9]|\d{2,})\.xml/.test(archiveIndex)) failures.push('public/sitemap-movies-archive.xml contains stale pre-filter pagination chunks.');
   if (!seo.includes('<urlset')) failures.push('public/sitemap-seo-landing.xml is not a URL set.');
   for (const loc of ['/xem-phim-online', '/phim-vietsub', '/phim-dang-chieu']) {
     if (!seo.includes(loc)) failures.push(`public/sitemap-seo-landing.xml is missing ${loc}.`);

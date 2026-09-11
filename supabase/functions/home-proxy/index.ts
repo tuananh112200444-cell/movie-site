@@ -26,6 +26,12 @@ const HOME_MIN_SECTION_ITEMS = 6;
 const HOME_FRESH_EPISODE_DAYS = 14;
 const STATIC_HOME_FALLBACK_URL = 'https://khophim.org/home-fallback.json';
 const STATIC_QUEER_FALLBACK_URL = 'https://khophim.org/queer-fallback.json?v=202608231630';
+function minimumHomeSectionItems(key: string): number {
+  if (key === 'vsmov-4k') return 2;
+  if (key === 'top-rated') return 5;
+  if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan', 'queer', 'onlyflix-moi'].includes(key)) return 5;
+  return HOME_MIN_SECTION_ITEMS;
+}
 function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
@@ -70,16 +76,83 @@ function isRetiredOphimCatalogItem(value: unknown): boolean {
   return false;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function hasCanonicalMovieIdentity(movie: Record<string, unknown>): boolean {
+  return UUID_PATTERN.test(String(movie._id || movie.id || '').trim());
+}
+
+function isCanonicalPublicMovie(movie: Record<string, unknown>): boolean {
+  if (!hasCanonicalMovieIdentity(movie)) return false;
+  if (movie.is_published === false) return false;
+  if (movie.superseded_by_movie_id) return false;
+  const catalogStatus = String(movie.seo_catalog_status || 'published').trim().toLowerCase();
+  return !['hidden', 'draft', 'superseded'].includes(catalogStatus);
+}
+
+function isQueerUniverseMovie(movie: Record<string, unknown>): boolean {
+  const source = normalizeTitle(`${movie.source_site || ''} ${movie.source_name || ''}`);
+  if (/(?:admin queer|blvietsub|glvietsub|vu tru dam my)/.test(source)) return true;
+
+  const taxonomy = Array.isArray(movie.category)
+    ? movie.category.map((item) => {
+        if (!item || typeof item !== 'object') return '';
+        const term = item as Record<string, unknown>;
+        return `${term.slug || ''} ${term.name || ''}`;
+      }).join(' ')
+    : '';
+  const marker = normalizeTitle(taxonomy);
+  return /(?:^|\s)(?:bl|gl)(?:\s|$)|dam my|bach hop|boys? love|girls? love|yuri|lesbian/.test(marker);
+}
+
+function isFreshHomepageCandidate(movie: Record<string, unknown>): boolean {
+  const currentYear = new Date().getFullYear();
+  const year = Number(movie.year || 0);
+  if (year >= currentYear - 1 && year <= currentYear + 1) return true;
+  if (year < currentYear - 2 || year > currentYear + 1) return false;
+
+  const label = normalizeTitle(movie.episode_current || '');
+  const currentEpisode = Math.max(
+    Number(movie.current_episode || 0) || 0,
+    extractEpisodeNumber(movie.episode_current),
+  );
+  const totalEpisodes = Math.max(
+    Number(movie.total_episodes || 0) || 0,
+    extractEpisodeNumber(movie.episode_total),
+  );
+  const isOngoing = currentEpisode > 0
+    && (!totalEpisodes || currentEpisode < totalEpisodes)
+    && !/(hoan tat|full|end)/.test(label);
+  const episodeChangedAt = Date.parse(String(movie.last_episode_change_at || ''));
+  return isOngoing
+    && Number.isFinite(episodeChangedAt)
+    && Date.now() - episodeChangedAt <= HOME_FRESH_EPISODE_DAYS * 86400000;
+}
+
 function filteredSectionItems(sections: Record<string, unknown[]> | null | undefined, key: string): unknown[] {
   return ((sections?.[key] ?? []) as unknown[])
     .filter((movie) => !isRetiredOphimCatalogItem(movie))
+    // Provider lists are discovery inputs only. Every public card must already
+    // resolve to the site's canonical UUID before it can enter cache, stale
+    // fallback, or a visitor response.
+    .filter((movie) => isCanonicalPublicMovie(movie as Record<string, unknown>))
+    // A single/full movie is not automatically a theatrical release. The
+    // previous fallback treated every single as cinema content, which mixed
+    // series, BL titles and old catalogue rows into the cinema shelf.
+    .filter((movie) => key !== 'phim-chieu-rap' || (movie as Record<string, unknown>).chieurap === true)
+    .filter((movie) => key !== 'vsmov-4k' || (
+      /vsmov/i.test(`${(movie as Record<string, unknown>).source_site || ''} ${(movie as Record<string, unknown>).source_name || ''}`)
+      && /(?:4k|2160p|uhd)/i.test(String((movie as Record<string, unknown>).quality || ''))
+    ))
+    .filter((movie) => key !== 'queer' || isQueerUniverseMovie(movie as Record<string, unknown>))
+    .filter((movie) => key !== 'trending' || isFreshHomepageCandidate(movie as Record<string, unknown>))
     .filter((m) => key === 'onlyflix-moi' || !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
 }
 
 function cacheHasRequestedSections(sections: Record<string, unknown[]> | null | undefined, requestedSections: string[]): boolean {
   if (!sections) return false;
   return requestedSections.every((key) =>
-    filteredSectionItems(sections, key).length >= (key === 'queer' ? 5 : HOME_MIN_SECTION_ITEMS)
+    filteredSectionItems(sections, key).length >= minimumHomeSectionItems(key)
   );
 }
 
@@ -136,7 +209,7 @@ function mergeFreshWithStableCache(
   for (const key of keys) {
     const fresh = freshSections[key] ?? [];
     const cached = filteredSectionItems(cacheSections, key) as Record<string, unknown>[];
-    const minimumItems = key === 'queer' ? 5 : HOME_MIN_SECTION_ITEMS;
+    const minimumItems = minimumHomeSectionItems(key);
     merged[key] = fresh.length >= minimumItems || cached.length < minimumItems
       ? fresh
       : cached;
@@ -337,7 +410,17 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
     next_episode_name: String(m.next_episode_name ?? ''),
     schedule_note: String(m.schedule_note ?? ''),
     time: String(m.time ?? ''),
-    modified: m.modified ?? { time: new Date().toISOString() },
+    // Never manufacture freshness at response time. Stable feeds carry the
+    // semantic clock that made the row eligible; an absent clock stays empty
+    // instead of every card becoming "just updated" together.
+    modified: m.modified ?? {
+      time: m.feed_sort_at
+        ?? m.last_episode_change_at
+        ?? m.published_at
+        ?? m.created_at
+        ?? m.updated_at
+        ?? '',
+    },
     category: Array.isArray(m.category) ? m.category : [],
     country: Array.isArray(m.country) ? m.country : [],
     chieurap: Boolean(m.chieurap ?? false),
@@ -346,10 +429,18 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
     source_name: sourceSite === 'phimapi'
       ? 'KKPhim'
       : String(m.source_name ?? (sourceSite === 'ophim' ? 'OPhim' : sourceSite)),
+    is_published: m.is_published,
+    seo_catalog_status: String(m.seo_catalog_status ?? 'published'),
+    superseded_by_movie_id: m.superseded_by_movie_id ?? null,
+    created_at: String(m.created_at ?? ''),
+    published_at: String(m.published_at ?? ''),
+    last_episode_change_at: String(m.last_episode_change_at ?? ''),
     tmdb_id: String(m.tmdb_id ?? ((m.tmdb as Record<string, unknown> | undefined)?.id ?? '')),
     hero_backdrop_url: String(m.hero_backdrop_url ?? ''),
     hero_poster_url: String(m.hero_poster_url ?? ''),
     tmdb_popularity: Number(m.tmdb_popularity ?? 0) || 0,
+    tmdb_vote_average: Number(m.tmdb_vote_average ?? 0) || 0,
+    tmdb_vote_count: Number(m.tmdb_vote_count ?? 0) || 0,
   };
 }
 
@@ -365,13 +456,35 @@ async function fetchVsmov4KMovies(limit: number): Promise<Record<string, unknown
     if (!response.ok) return [];
 
     const payload = await response.json() as Record<string, unknown>;
-    return extractItems(payload)
+    const candidates = extractItems(payload)
       .map((raw) => cleanMovieItem({
         ...(raw as Record<string, unknown>),
         quality: '4K',
         source_site: 'vsmov',
         source_name: 'VSMov',
       }, 'vsmov'))
+      .filter((movie): movie is Record<string, unknown> => Boolean(movie))
+      .slice(0, Math.max(limit, 24));
+    const verified = await Promise.all(candidates.map(async (movie) => {
+      try {
+        const detailResponse = await fetch(`https://vsmov.com/api/phim/${encodeURIComponent(String(movie.slug || ''))}`, {
+          signal: timeoutSignal(3500),
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'KhoPhim/1.0 (+https://khophim.org)',
+          },
+        });
+        if (!detailResponse.ok) return null;
+        const detailPayload = await detailResponse.json() as Record<string, unknown>;
+        const serialized = JSON.stringify(detailPayload);
+        return /"(?:link_m3u8|link_embed|m3u8|embed)"\s*:\s*"https?:\/\//i.test(serialized)
+          ? movie
+          : null;
+      } catch {
+        return null;
+      }
+    }));
+    return verified
       .filter((movie): movie is Record<string, unknown> => Boolean(movie))
       .slice(0, limit);
   } catch {
@@ -409,8 +522,9 @@ async function filterQuarantinedExactMovies(
 }
 
 /* ── Build trending list from new-movies ── */
-const HOME_OVERRIDE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,status,source_site,source_name,year,type,tmdb_id,ophim_id,ophim_slug,is_published';
-const HOME_SUPABASE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,hero_backdrop_url,hero_poster_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,source_site,source_name,year,type,category,country,updated_at,is_published,tmdb_id';
+const HOME_OVERRIDE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,status,seo_catalog_status,superseded_by_movie_id,source_site,source_name,year,type,tmdb_id,tmdb_vote_average,tmdb_vote_count,tmdb_popularity,ophim_id,ophim_slug,is_published,published_at,last_episode_change_at';
+const HOME_SUPABASE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,hero_backdrop_url,hero_poster_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,source_site,source_name,year,type,category,country,chieurap,created_at,updated_at,published_at,last_episode_change_at,seo_catalog_status,superseded_by_movie_id,is_published,tmdb_id,tmdb_vote_average,tmdb_vote_count,tmdb_popularity';
+const HOME_TOP_RATED_SELECT = HOME_SUPABASE_SELECT.replace(',chieurap', '');
 
 function normalizeTitle(value: unknown): string {
   return String(value || '')
@@ -612,6 +726,11 @@ function applyMovieOverride(item: Record<string, unknown>, override: Record<stri
     next_episode_at: override.next_episode_at ?? item.next_episode_at,
     next_episode_name: override.next_episode_name ?? item.next_episode_name,
     schedule_note: override.schedule_note ?? item.schedule_note,
+    is_published: override.is_published,
+    seo_catalog_status: override.seo_catalog_status,
+    superseded_by_movie_id: override.superseded_by_movie_id,
+    published_at: override.published_at ?? item.published_at,
+    last_episode_change_at: override.last_episode_change_at ?? item.last_episode_change_at,
     source_site: override.source_site || 'supabase',
     source_name: override.source_name || 'Supabase',
   };
@@ -665,6 +784,7 @@ async function enrichWithPlayableEpisodeCounts(
   if (ids.length === 0) return sections;
 
   const maxByMovieId = new Map<string, number>();
+  const verificationUnavailableIds = new Set<string>();
   const setMax = (movieId: unknown, episodeNumber: unknown) => {
     const id = String(movieId || '');
     const num = Number(episodeNumber || 0) || extractEpisodeNumber(episodeNumber);
@@ -694,6 +814,15 @@ async function enrichWithPlayableEpisodeCounts(
           .eq('is_active', true)
           .abortSignal(timeoutSignal(1200)),
       ]);
+
+      if (movieEpisodes.error || episodes.error || streams.error) {
+        // Publication is already protected by the database playback gate. A
+        // transient timeout in this extra homepage audit is unknown, not a
+        // conclusive playback failure; retain the canonical card and retry on
+        // the next cache refresh.
+        chunk.forEach((id) => verificationUnavailableIds.add(id));
+        continue;
+      }
 
       for (const row of (movieEpisodes.data ?? []) as Record<string, unknown>[]) {
         if (String(row.source || '').toLowerCase() === 'hidden') continue;
@@ -725,7 +854,14 @@ async function enrichWithPlayableEpisodeCounts(
       // Provider-only cards remain eligible for the edge provider fallback.
       .filter((item) => {
         const id = String(item._id || '');
-        return !storedMovieIds.has(id) || maxByMovieId.has(id);
+        // `is_published` is already maintained by the database's authoritative
+        // playback-aware publication trigger and periodic audit. This request
+        // audit may refine/cap episode numbers, but must not contradict that
+        // single source of truth or blank a shelf after a transient empty read.
+        return !storedMovieIds.has(id)
+          || item.is_published === true
+          || verificationUnavailableIds.has(id)
+          || maxByMovieId.has(id);
       })
       .map((item) => capEpisodeToPlayable(item, maxByMovieId.get(String(item._id || '')) || 0));
   }
@@ -824,9 +960,11 @@ async function buildTrending(
       .select(`${HOME_SUPABASE_SELECT},tmdb_popularity,quality,lang`)
       .eq('is_published', true)
       .not('poster_url', 'is', null)
-      .gte('updated_at', new Date(Date.now() - 90 * 86400000).toISOString())
+      // Publication recovery can republish an old canonical movie after a
+      // provider outage. Discovery time is the authoritative "new" clock.
+      .gte('created_at', new Date(Date.now() - 90 * 86400000).toISOString())
       .order('tmdb_popularity', { ascending: false, nullsFirst: false })
-      .order('updated_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false, nullsFirst: false })
       .limit(limit * 3)
       .abortSignal(timeoutSignal(1800)),
     fetchFreshEpisodeMovies(supabase, limit * 2),
@@ -839,7 +977,11 @@ async function buildTrending(
     { data: extNew, name: 'phimapi' },
     {
       data: popularResult.data?.length
-        ? { items: popularResult.data.map((movie) => ({ ...movie, _id: movie.id, modified: { time: movie.updated_at } })) }
+        ? { items: popularResult.data.map((movie) => ({
+            ...movie,
+            _id: movie.id,
+            modified: { time: movie.last_episode_change_at || movie.published_at || movie.updated_at },
+          })) }
         : null,
       name: 'supabase-popular',
     },
@@ -1148,10 +1290,12 @@ async function fetchSupabaseSection(
     } else {
       const types = supabaseTypeValues(typeOrCategory);
       query = types.length === 1 ? query.eq('type', types[0]) : query.in('type', types);
+      if (typeOrCategory === 'phim-chieu-rap') query = query.eq('chieurap', true);
     }
 
     const { data, error } = await query
-      .order('updated_at', { ascending: false, nullsFirst: false })
+      .order('last_episode_change_at', { ascending: false, nullsFirst: false })
+      .order('published_at', { ascending: false, nullsFirst: false })
       .limit(limit * 2)
       .abortSignal(timeoutSignal(1500));
 
@@ -1161,11 +1305,45 @@ async function fetchSupabaseSection(
       .map((row) => cleanMovieItem({
         ...row,
         _id: row.id,
-        modified: { time: row.updated_at || new Date().toISOString() },
+        modified: { time: row.last_episode_change_at || row.published_at || row.updated_at || new Date().toISOString() },
       }, 'supabase'))
       .filter(Boolean)
+      .filter((movie) => isCanonicalPublicMovie(movie as Record<string, unknown>))
       .filter((m) => !isTrailerOnly((m as Record<string, unknown>).episode_current as string))
       .slice(0, limit) as Record<string, unknown>[];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchTopRatedHomeMovies(
+  supabase: ReturnType<typeof createClient>,
+  limit = 5,
+): Promise<Record<string, unknown>[]> {
+  try {
+    const { data, error } = await supabase
+      .from('movies')
+      .select(HOME_TOP_RATED_SELECT)
+      .eq('is_published', true)
+      .gt('tmdb_vote_average', 0)
+      .gte('tmdb_vote_count', 10)
+      .order('tmdb_vote_average', { ascending: false, nullsFirst: false })
+      .order('tmdb_vote_count', { ascending: false, nullsFirst: false })
+      .order('tmdb_popularity', { ascending: false, nullsFirst: false })
+      .limit(limit * 20)
+      .abortSignal(timeoutSignal(1800));
+    if (error || !data) return [];
+
+    return (data as Record<string, unknown>[])
+      .map((row) => cleanMovieItem({
+        ...row,
+        _id: row.id,
+        modified: { time: row.last_episode_change_at || row.published_at || row.updated_at || '' },
+      }, 'supabase-top-rated'))
+      .filter((movie): movie is Record<string, unknown> => Boolean(movie && isCanonicalPublicMovie(movie)))
+      .filter((movie) => !isTrailerOnly(movie.episode_current as string))
+      .filter((movie) => !/(?:^|[^a-z0-9])ophim(?:[^a-z0-9]|$)|ophim1\.com|opstream|tmdb.?catalog/i.test(`${movie.source_site || ''} ${movie.source_name || ''}`))
+      .slice(0, limit);
   } catch {
     return [];
   }
@@ -1420,7 +1598,7 @@ async function fetchSection(
   const candidates = [
     ...singaporeItems,
     ...readItems(kkphimPayload, 'phimapi'),
-  ];
+  ].filter((item) => typeOrCategory !== 'phim-chieu-rap' || item.chieurap === true);
 
   const itemScore = (item: Record<string, unknown>) => {
     const currentEpisode = Math.max(
@@ -1441,12 +1619,98 @@ async function fetchSection(
     return String(a.slug || '').localeCompare(String(b.slug || ''), 'vi');
   });
   const seen = new Set<string>();
-  return sorted.filter((item) => {
+  const uniqueSorted = sorted.filter((item) => {
     const key = String(item.slug || item._id || '').trim();
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, limit);
+  });
+
+  // Canonical database rows are the public truth. Provider rows remain useful
+  // discovery candidates, but can only replace a canonical position later if
+  // the override mapper resolves them to a published UUID.
+  // Keep a wider discovery window until after canonical mapping and playback
+  // verification. Slicing before those gates allowed a handful of unverified
+  // provider cards to crowd valid canonical films out of a shelf.
+  return mergeSectionWithPriority(uniqueSorted, singaporeItems, limit * 2);
+}
+
+function taxonomyHasSlug(value: unknown, slug: string): boolean {
+  return Array.isArray(value) && value.some((item) => {
+    if (!item || typeof item !== 'object') return false;
+    return String((item as Record<string, unknown>).slug || '').toLowerCase() === slug;
+  });
+}
+
+async function fetchStableCanonicalHomePool(
+  supabase: ReturnType<typeof createClient>,
+  limit = 36,
+): Promise<Record<string, unknown>[]> {
+  try {
+    const [newFeed, episodeFeed] = await Promise.all([
+      supabase.rpc('get_stable_catalog_feed', {
+        p_mode: 'new', p_limit: limit, p_offset: 0,
+      }).abortSignal(timeoutSignal(5000)),
+      supabase.rpc('get_stable_catalog_feed', {
+        p_mode: 'episode_updates', p_limit: limit, p_offset: 0,
+      }).abortSignal(timeoutSignal(5000)),
+    ]);
+    // Homepage discovery must lead with genuinely new canonical movies.
+    // Episode updates remain in the pool as a fallback for sparse taxonomy
+    // shelves, while /phim-moi-cap-nhat keeps its dedicated update feed.
+    const rows = [
+      ...((newFeed.data ?? []) as Array<{ item?: Record<string, unknown> }>),
+      ...((episodeFeed.data ?? []) as Array<{ item?: Record<string, unknown> }>),
+    ];
+    const seen = new Set<string>();
+    return rows
+      .map((row) => row.item)
+      .filter((item): item is Record<string, unknown> => Boolean(item))
+      .map((item) => cleanMovieItem({ ...item, _id: item.id }, 'supabase-stable-feed'))
+      .filter((item): item is Record<string, unknown> => Boolean(item && isCanonicalPublicMovie(item)))
+      .filter((item) => {
+        const key = String(item._id || item.slug || '');
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  } catch {
+    return [];
+  }
+}
+
+function canonicalPoolForSection(
+  pool: Record<string, unknown>[],
+  key: string,
+  limit: number,
+): Record<string, unknown>[] {
+  const type = (movie: Record<string, unknown>) => String(movie.type || '').toLowerCase();
+  let candidates = pool;
+  if (key === 'trending') candidates = pool.filter((movie) => isFreshHomepageCandidate(movie));
+  else if (key === 'top-rated') {
+    candidates = [...pool]
+      .filter((movie) => Number(movie.tmdb_vote_average || 0) > 0)
+      .sort((a, b) => {
+        const ratingDiff = Number(b.tmdb_vote_average || 0) - Number(a.tmdb_vote_average || 0);
+        if (ratingDiff !== 0) return ratingDiff;
+        return Number(b.tmdb_vote_count || 0) - Number(a.tmdb_vote_count || 0);
+      });
+  }
+  else if (key === 'vsmov-4k') candidates = [];
+  else if (key === 'phim-chieu-rap') {
+    candidates = pool.filter((movie) => movie.chieurap === true);
+  } else if (key === 'phim-le' || key === 'top10-single') {
+    candidates = pool.filter((movie) => ['single', 'phim-le'].includes(type(movie)));
+  } else if (key === 'phim-bo' || key === 'top10-series') {
+    candidates = pool.filter((movie) => ['series', 'phim-bo'].includes(type(movie)));
+  } else if (key === 'hoat-hinh') {
+    candidates = pool.filter((movie) => movieLooksAnimated(movie));
+  } else if (key === 'queer') {
+    candidates = pool.filter((movie) => isQueerUniverseMovie(movie));
+  } else if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) {
+    candidates = pool.filter((movie) => taxonomyHasSlug(movie.country, key));
+  }
+  return candidates.slice(0, key === 'top-rated' ? 5 : key.startsWith('top10-') ? 10 : limit);
 }
 
 /* ── Supabase custom overrides ── */
@@ -1530,7 +1794,7 @@ async function handleRequest(req: Request): Promise<Response> {
   const forceRefresh = isPrivilegedCaller
     && url.searchParams.get('refresh') === '1'
     && req.headers.get(INTERNAL_REFRESH_HEADER) === '1';
-  const CACHE_KEY = 'homepage_v3';
+  const CACHE_KEY = 'homepage_v4_vsmov_4k';
   const CACHE_TTL_MIN = 30;
 
 
@@ -1632,9 +1896,22 @@ async function handleRequest(req: Request): Promise<Response> {
 
   /* 3. Build requested sections in parallel with 3s timeout each */
   const limit = 18;
-
+  // The stable feed is fast, indexed, canonical, and sufficient for a public
+  // cold start. Expensive provider enrichment is reserved for privileged
+  // refreshes or the rare case where the canonical pool itself is unavailable.
+  const stableCanonicalPool = await fetchStableCanonicalHomePool(supabase, 36);
+  // Public traffic must never fan out into a dozen recovery queries when the
+  // database is already slow. Only the authenticated maintenance refresh may
+  // enrich from providers; visitors use the indexed canonical feed or stale
+  // canonical cache.
+  const buildEnrichedSections = forceRefresh;
   const sectionPromises: Record<string, Promise<Record<string, unknown>[]>> = {};
 
+  if (requestedSections.includes('top-rated')) {
+    sectionPromises['top-rated'] = fetchTopRatedHomeMovies(supabase, 5);
+  }
+
+  if (buildEnrichedSections) {
   if (requestedSections.includes('trending')) {
     sectionPromises.trending = buildTrending(supabase, limit);
   }
@@ -1648,7 +1925,7 @@ async function handleRequest(req: Request): Promise<Response> {
     sectionPromises['vsmov-4k'] = fetchVsmov4KMovies(limit);
   }
   if (requestedSections.includes('phim-chieu-rap')) {
-    sectionPromises['phim-chieu-rap'] = fetchSection(supabase, 'phim-chieu-rap', false, limit, true);
+    sectionPromises['phim-chieu-rap'] = fetchSection(supabase, 'phim-chieu-rap', false, limit, false);
   }
   if (requestedSections.includes('onlyflix-moi')) {
     sectionPromises['onlyflix-moi'] = fetchOnlyflixTrendingMovies(supabase, limit);
@@ -1677,6 +1954,7 @@ async function handleRequest(req: Request): Promise<Response> {
   if (requestedSections.includes('queer')) {
     sectionPromises.queer = fetchQueerUniverseSection(supabase, limit);
   }
+  }
 
   // Race: all sections must finish within 5s total
   const entries = Object.entries(sectionPromises);
@@ -1696,6 +1974,19 @@ async function handleRequest(req: Request): Promise<Response> {
     freshSections[key] = items;
   }
 
+  // One indexed canonical read is the deterministic recovery path for every
+  // shelf. It prevents a burst of independent section timeouts from turning a
+  // healthy published catalogue into an empty homepage.
+  for (const key of requestedSections) {
+    const minimumItems = minimumHomeSectionItems(key);
+    if ((freshSections[key]?.length ?? 0) >= minimumItems) continue;
+    freshSections[key] = mergeSectionWithPriority(
+      freshSections[key] ?? [],
+      canonicalPoolForSection(stableCanonicalPool, key, limit),
+      limit * 2,
+    );
+  }
+
   // Optional rails can be empty while their connector or database query is
   // recovering. Seed only those sparse rails from the last deployed snapshot;
   // the common override/quarantine/playback gates below still validate every
@@ -1703,9 +1994,10 @@ async function handleRequest(req: Request): Promise<Response> {
   const stableSectionFallback = await readStaticHomeFallback(requestedSections);
   if (stableSectionFallback) {
     for (const key of requestedSections) {
-      if ((freshSections[key]?.length ?? 0) >= HOME_MIN_SECTION_ITEMS) continue;
+      const minimumItems = minimumHomeSectionItems(key);
+      if ((freshSections[key]?.length ?? 0) >= minimumItems) continue;
       const stableItems = stableSectionFallback[key] as Record<string, unknown>[] | undefined;
-      if ((stableItems?.length ?? 0) >= HOME_MIN_SECTION_ITEMS) {
+      if ((stableItems?.length ?? 0) >= minimumItems) {
         freshSections[key] = stableItems ?? [];
       }
     }
@@ -1722,6 +2014,17 @@ async function handleRequest(req: Request): Promise<Response> {
           .find((row): row is Record<string, unknown> => Boolean(row));
         if (!ov) return item;
         const merged = applyMovieOverride(item, ov);
+        if (key === 'vsmov-4k') {
+          return {
+            ...merged,
+            slug: item.slug,
+            poster_url: item.poster_url,
+            thumb_url: item.thumb_url,
+            quality: '4K',
+            source_site: 'vsmov',
+            source_name: 'VSMov',
+          };
+        }
         if (key !== 'phim-chieu-rap') return merged;
         return {
           ...merged,
@@ -1806,7 +2109,13 @@ async function handleRequest(req: Request): Promise<Response> {
     }
   }
 
-  const safeFreshSections = await enrichWithPlayableEpisodeCounts(supabase, freshSections);
+  const playableFreshSections = await enrichWithPlayableEpisodeCounts(supabase, freshSections);
+  const safeFreshSections = Object.fromEntries(
+    Object.entries(playableFreshSections).map(([key, items]) => [
+      key,
+      (filteredSectionItems({ [key]: items }, key) as Record<string, unknown>[]).slice(0, limit),
+    ]),
+  ) as Record<string, Record<string, unknown>[]>;
 
   /* 5. Stale-while-revalidate when every healthy source is temporarily unavailable. */
   const hasAnyFresh = Object.values(safeFreshSections).some((arr) => arr.length > 0);
@@ -1852,13 +2161,13 @@ async function handleRequest(req: Request): Promise<Response> {
       .update(payload)
       .eq('id', CACHE_KEY)
       .select('id')
-      .abortSignal(timeoutSignal(3000));
+      .abortSignal(timeoutSignal(6000));
 
     if (!updateError && (!updatedRows || updatedRows.length === 0)) {
       await supabase
         .from('home_page_cache')
         .upsert({ id: CACHE_KEY, ...payload }, { onConflict: 'id' })
-        .abortSignal(timeoutSignal(3000));
+        .abortSignal(timeoutSignal(6000));
     }
   } catch {
     /* ignore cache write errors */
@@ -1873,6 +2182,8 @@ async function handleRequest(req: Request): Promise<Response> {
   return jsonResponse({ status: true, source: 'fresh', sections: payload }, 200, {
     'Cache-Control': homeCacheControl(60),
     'X-Cache': 'MISS',
+    'X-KhoPhim-Canonical-Pool': String(stableCanonicalPool.length),
+    'X-KhoPhim-Canonical-Cards': String(Object.values(safeFreshSections).reduce((sum, items) => sum + items.length, 0)),
   });
 }
 

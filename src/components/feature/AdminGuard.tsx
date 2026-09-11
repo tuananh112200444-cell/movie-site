@@ -407,6 +407,9 @@ export default function AdminGuard({ children }: AdminGuardProps) {
             <Link to="/admin/seo" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
               <i className="ri-seo-line" /> SEO Tools
             </Link>
+            <Link to="/admin/seo-studio" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-cyan-300 hover:bg-cyan-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
+              <i className="ri-focus-3-line" /> SEO Studio
+            </Link>
             <Link to="/admin/ping" onClick={() => setShowLogout(false)} className="w-full flex items-center gap-2 px-3 py-2 text-white/60 hover:text-sky-400 hover:bg-sky-500/10 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap">
               <i className="ri-radar-line" /> Ping Status
             </Link>

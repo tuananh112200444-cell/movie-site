@@ -52,12 +52,39 @@ export async function findCanonicalMovieByIdentity(
   },
 ) {
   const year = Number(input.year || 0);
-  // A title without a verified year is not strong enough to merge two movies.
-  if (!Number.isInteger(year) || year < 1888 || year > 2200) return null;
-
-  const fields = 'id,slug,name,origin_name,title_vi,title_en,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,is_published';
+  const hasVerifiedYear = Number.isInteger(year) && year >= 1888 && year <= 2200;
+  const fields = 'id,slug,name,origin_name,title_vi,title_en,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,is_published,superseded_by_movie_id';
   const provider = String(input.provider || '').trim().toLowerCase();
   const providerSlug = String(input.providerSlug || '').trim().toLowerCase();
+  const inputNames = unique(input.names);
+  const inputNormalizedNames = unique([
+    ...input.normalizedNames,
+    ...inputNames.map(normalizedTitleIdentity),
+  ]).filter((value) => value.length >= 6);
+
+  // Prefer an already-published exact catalogue identity before registering a
+  // provider identity. This prevents a provider-localized title from creating
+  // a second movie when its English/original title already owns the public
+  // slug (for example: Crazy Love, Moo-Moo! -> crazy-love-moo-moo).
+  const existingCandidates: Record<string, unknown>[] = [];
+  for (const normalizedName of inputNormalizedNames) {
+    let query = db.from('movies').select(fields)
+      .eq('slug', normalizedName)
+      .is('superseded_by_movie_id', null)
+      .limit(5);
+    if (hasVerifiedYear) query = query.eq('year', year);
+    const { data, error } = await query;
+    if (!error) existingCandidates.push(...(data || []));
+  }
+  if (existingCandidates.length > 0) {
+    return [...new Map(existingCandidates.map((movie) => [String(movie.id), movie])).values()]
+      .sort((a, b) => canonicalPriority(b) - canonicalPriority(a))[0] || null;
+  }
+
+  // Outside an exact globally-unique slug, a title without a verified year is
+  // not strong enough to merge two different movie records.
+  if (!hasVerifiedYear) return null;
+
   if (provider && providerSlug && db.rpc) {
     const originalTitle = String(input.originalTitle || input.names[1] || input.names[0] || '').trim();
     const localizedTitle = String(input.localizedTitle || input.names[0] || originalTitle).trim();
@@ -84,11 +111,8 @@ export async function findCanonicalMovieByIdentity(
     }
   }
   const candidates: Record<string, unknown>[] = [];
-  let names = unique(input.names);
-  let normalizedNames = unique([
-    ...input.normalizedNames,
-    ...names.map(normalizedTitleIdentity),
-  ]).filter((value) => value.length >= 6);
+  let names = inputNames;
+  let normalizedNames = inputNormalizedNames;
 
   // Two exact passes let a bilingual catalogue row bridge provider-localized
   // titles. The mandatory year and exact per-title verification keep this out
@@ -99,14 +123,14 @@ export async function findCanonicalMovieByIdentity(
       const exactCaseInsensitiveName = name.replaceAll('%', '\\%').replaceAll('_', '\\_');
       for (const column of TITLE_FIELDS) {
         const { data, error } = await db.from('movies').select(fields).eq('year', year)
-          .ilike(column, exactCaseInsensitiveName).limit(20);
+          .is('superseded_by_movie_id', null).ilike(column, exactCaseInsensitiveName).limit(20);
         if (!error) passCandidates.push(...(data || []));
       }
     }
 
     for (const normalizedName of normalizedNames) {
       const { data, error } = await db.from('movies').select(fields).eq('year', year)
-        .ilike('normalized_name', `%${normalizedName}%`).limit(50);
+        .is('superseded_by_movie_id', null).ilike('normalized_name', `%${normalizedName}%`).limit(50);
       if (error) continue;
       passCandidates.push(...(data || []).filter((movie: Record<string, unknown>) =>
         movieTitleIdentities(movie).includes(normalizedName)
@@ -140,7 +164,17 @@ export async function retireSourceMovieDuplicate(
   const provider = String(input.provider || '').toLowerCase();
   const sourceIdentity = `${input.source?.source_site || ''} ${input.source?.source_name || ''}`.toLowerCase();
   if (!sourceId || !targetId || sourceId === targetId || !sourceSlug || !targetSlug || !provider) return false;
-  if (!sourceIdentity.includes(provider)) return false;
+  if (!sourceIdentity.includes(provider) && !sourceSlug.startsWith(`${provider}-`)) return false;
+
+  // Collapse any older alias chain directly onto the final canonical movie.
+  // Detail lookup intentionally does not guess or recursively follow titles.
+  const { error: aliasRedirectError } = await db.from('movie_slug_aliases').update({
+    movie_id: targetId,
+    canonical_slug: targetSlug,
+    reason: `auto-${provider}-canonical-identity`,
+    updated_at: new Date().toISOString(),
+  }).eq('movie_id', sourceId);
+  if (aliasRedirectError) throw aliasRedirectError;
 
   const { error: aliasError } = await db.from('movie_slug_aliases').upsert({
     alias_slug: sourceSlug,
@@ -153,6 +187,8 @@ export async function retireSourceMovieDuplicate(
 
   const { error: retireError } = await db.from('movies').update({
     is_published: false,
+    seo_catalog_status: 'superseded',
+    superseded_by_movie_id: targetId,
     source_site: 'merged',
     source_name: `Merged into ${targetSlug}`,
     tmdb_id: null,
@@ -162,6 +198,18 @@ export async function retireSourceMovieDuplicate(
     updated_at: new Date().toISOString(),
   }).eq('id', sourceId);
   if (retireError) throw retireError;
+
+  // A retired row must no longer own provider identity. Without this redirect,
+  // the next sync resolves straight back to the hidden duplicate forever.
+  const { error: providerIdentityError } = await db.from('provider_movie_identities')
+    .update({ movie_id: targetId, last_seen_at: new Date().toISOString() })
+    .eq('movie_id', sourceId);
+  if (providerIdentityError) throw providerIdentityError;
+
+  const { error: canonicalIdentityError } = await db.from('canonical_movie_identities')
+    .update({ movie_id: targetId, updated_at: new Date().toISOString() })
+    .eq('movie_id', sourceId);
+  if (canonicalIdentityError) throw canonicalIdentityError;
 
   await db.from('movie_api_cache').delete().in('slug', [sourceSlug, targetSlug]);
   await db.from('home_page_cache').delete().neq('id', '__never__');

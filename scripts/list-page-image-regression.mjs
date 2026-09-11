@@ -7,6 +7,9 @@ const movieDetailHeroSource = await readFile('src/pages/movie-detail/components/
 const homeProxySource = await readFile('supabase/functions/home-proxy/index.ts', 'utf8');
 const providerSyncSource = await readFile('supabase/functions/sync-ophim-movies/index.ts', 'utf8');
 const edgeSource = await readFile('functions/[[path]].js', 'utf8');
+const genrePageSource = await readFile('src/pages/genre/page.tsx', 'utf8');
+const countryPageSource = await readFile('src/pages/country/page.tsx', 'utf8');
+const redirectsSource = await readFile('public/_redirects', 'utf8');
 const artworkRepairMigration = await readFile('supabase/migrations/20260823054500_repair_ophim_artwork_paths.sql', 'utf8');
 const failures = [];
 
@@ -23,11 +26,35 @@ if (movieApiSource.includes('await enrichMoviesWithSupabaseEpisodeCounts(')) {
   failures.push('List/search pages still scan episode tables instead of using the stored movie episode summary.');
 }
 if (
-  !movieApiSource.includes('large phimimg originals')
-  || movieApiSource.includes('phimimg\\.com|icdn\\.darkbytes\\.xyz')
+  !movieApiSource.includes('wsrv explicitly blocks through the proxy')
+  || !movieApiSource.includes('phimimg\\.com|icdn\\.darkbytes\\.xyz')
+  || !movieApiSource.includes('&default=1')
   || movieApiSource.includes('return `/cdn-cgi/image/width=${safeWidth}')
 ) {
-  failures.push('Production phimimg posters must use free resizing without paid Cloudflare Images transformations.');
+  failures.push('Blocked phimimg posters must bypass wsrv without enabling paid Cloudflare Images transformations.');
+}
+if (/sourcePage\s*=\s*pg\s*\*\s*2/.test(genrePageSource) || /sourcePage\s*=\s*page\s*\*\s*2/.test(countryPageSource)) {
+  failures.push('Catalogue pages must not fetch two database pages and discard half of the returned movies.');
+}
+if (!genrePageSource.includes('sourcePageSize === PAGE_SIZE') || !countryPageSource.includes('sourcePageSize === PAGE_SIZE')) {
+  failures.push('Catalogue pagination must retain the actual provider page size when a fallback source is active.');
+}
+if (!genrePageSource.includes('priority={idx < 4}') || genrePageSource.includes('priority={idx < 12}')) {
+  failures.push('Genre pages must reserve eager image priority for the first visible row only.');
+}
+if (!movieApiSource.includes('Try every resized candidate before downloading a full-resolution origin.')) {
+  failures.push('Poster fallback ordering must prefer all resized candidates before full-resolution origins.');
+}
+if (!movieApiSource.includes('pushUrl(FALLBACK_IMG);')) {
+  failures.push('The local poster placeholder must remain the final fallback after origin images.');
+}
+for (const route of ['/the-loai/hanh-dong', '/the-loai/tinh-cam', '/phim-han-quoc', '/phim-viet-nam']) {
+  if (!redirectsSource.includes(`${route} / 200`)) {
+    failures.push(`Known catalogue route is missing its fail-open SPA fallback: ${route}`);
+  }
+}
+if (/^\/\*\s+\/index\.html\s+200$/m.test(redirectsSource)) {
+  failures.push('Catalogue recovery must not replace the real unknown-route 404 with a soft-404 catch-all.');
 }
 if (!movieCardSource.includes('return getPortraitImagePaths(movie)')) {
   failures.push('Portrait movie cards do not use the provider-aware artwork contract.');

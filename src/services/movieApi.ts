@@ -1,10 +1,11 @@
 import type { MovieListResponse, MovieDetailResponse, EpisodeServer, EpisodeData, MovieItem, MovieCategory, MovieCountry, MovieDetail, Movie } from '../types/movie';
 import { preloadBatch } from '../utils/imagePreloader';
 import { mergeMoviesUnique, sortMoviesForSearch } from '../utils/searchRanking';
-import { normalizeSearchText } from '../utils/searchHelper';
+import { movieMatchesSearchIntent, normalizeSearchText } from '../utils/searchHelper';
 import { setSmartSessionCache } from '../utils/smartCache';
 import { supabase } from '@/lib/supabase';
 import { isRecentlyBadExactSourceHost, isRecentlyBadSourceCluster } from '@/services/playerSourceHealth';
+import { isInternationalViewer } from '@/services/viewerRegion';
 import { getProviderEpisodeNumber, isFractionalProviderEpisode, normalizeVerifiedSeasonNumbering } from '../../supabase/functions/_shared/episode-numbering';
 
 declare const __IS_PREVIEW__: boolean;
@@ -101,6 +102,27 @@ function detailHasPlayableEpisodes(detail: MovieDetailResponse | null): boolean 
   return detail.episodes.some((srv) => srv.server_data?.some((ep) =>
     !isRetiredOphimEpisode(ep, srv.server_name) && hasPlayableUrl(ep)
   ) ?? false);
+}
+
+function detailHasCompleteAdvertisedSequence(detail: MovieDetailResponse | null): boolean {
+  if (!detailHasPlayableEpisodes(detail)) return false;
+  const expected = Math.max(
+    Number(detail?.movie?.current_episode || 0) || 0,
+    Number(String(detail?.movie?.episode_current || '').match(/\d+/)?.[0] || 0),
+  );
+  if (expected <= 1 || expected > 300) return true;
+  const present = new Set<number>();
+  for (const server of detail?.episodes ?? []) {
+    for (const episode of server.server_data ?? []) {
+      if (isRetiredOphimEpisode(episode, server.server_name) || !hasPlayableUrl(episode)) continue;
+      const number = getEpisodeNumberFromData(episode);
+      if (number > 0 && number <= expected) present.add(number);
+    }
+  }
+  for (let number = 1; number <= expected; number += 1) {
+    if (!present.has(number)) return false;
+  }
+  return true;
 }
 
 function isRetiredOphimEpisode(ep: EpisodeData, serverName = ''): boolean {
@@ -675,6 +697,10 @@ function usesLegacyOphimArtworkRoles(movie: MovieArtworkFields): boolean {
   const thumb = String(movie.thumb_url || '').trim();
   const poster = String(movie.poster_url || '').trim();
   if (/image\.tmdb\.org|phimimg\.com/i.test(`${thumb} ${poster}`)) return false;
+  // VSMOV stores its wide still in poster_url (`thumb_*`) and portrait cover
+  // in thumb_url (`poster_*`). Detect the verified filename pair so cards use
+  // the portrait asset instead of cropping a landscape still.
+  if (/vsmov\.com/i.test(`${thumb} ${poster}`) && /\/thumb_/i.test(poster) && /\/poster_/i.test(thumb)) return true;
   const source = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
   return source.includes('ophim') || /(?:^|\/)img\.ophim\.live\//i.test(`${thumb} ${poster}`) || (!/^https?:\/\//i.test(thumb) && !/^https?:\/\//i.test(poster));
 }
@@ -717,6 +743,13 @@ export function getImageUrl(path: string): string {
 }
 
 export function applyImageElementFallback(image: HTMLImageElement): void {
+  const original = getOriginalImageFromProxy(image.currentSrc || image.src);
+  if (original && image.dataset.kpOriginalFallbackApplied !== '1') {
+    image.dataset.kpOriginalFallbackApplied = '1';
+    image.removeAttribute('srcset');
+    image.src = original;
+    return;
+  }
   if (image.dataset.kpFallbackApplied === '1') return;
   image.dataset.kpFallbackApplied = '1';
   image.removeAttribute('srcset');
@@ -732,8 +765,10 @@ const OPTIMIZE_ENABLED = true;
 function getTmdbCardImageUrl(original: string, requestedWidth: number): string | null {
   if (!/^https?:\/\/image\.tmdb\.org\/t\/p\//i.test(original)) return null;
 
-  const size = requestedWidth <= 340
-    ? 'w342'
+  const size = requestedWidth <= 185
+    ? 'w185'
+    : requestedWidth <= 340
+      ? 'w342'
     : requestedWidth <= 560
       ? 'w500'
       : requestedWidth <= 900
@@ -743,14 +778,18 @@ function getTmdbCardImageUrl(original: string, requestedWidth: number): string |
   return original.replace(/\/t\/p\/[^/]+\//i, `/t/p/${size}/`);
 }
 
-export function getOptimizedImageUrl(path: string, width = 360, quality = 82): string {
+function getPhotonImageUrl(original: string, width: number, quality: number): string | null {
+  const match = original.match(/^https?:\/\/(phimimg\.com)(\/[^?#]+)(?:[?#].*)?$/i);
+  if (!match) return null;
+  return `https://i0.wp.com/${match[1]}${match[2]}?w=${width}&quality=${quality}&strip=all`;
+}
+
+export function getOptimizedImageUrl(path: string, width = 360, quality = 82, minimumWidth = 180): string {
   let original = getImageUrl(path);
   if (!OPTIMIZE_ENABLED || !original || original === FALLBACK_IMG) return original;
   // Rebuild already-proxied URLs for the actual component size. Keeping an old
   // wsrv URL here caused small mobile posters to download 768-832px variants.
-  if (original.includes('wsrv.nl/?url=')) {
-    original = getOriginalImageFromProxy(original) || original;
-  }
+  original = getOriginalImageFromProxy(original) || original;
   // TMDB supports fixed CDN renditions. Use them directly instead of requesting
   // an unnecessary original-sized poster through a third-party proxy.
   const tmdbImage = getTmdbCardImageUrl(original, width);
@@ -763,13 +802,19 @@ export function getOptimizedImageUrl(path: string, width = 360, quality = 82): s
   const maxWidth = isDesktop ? 1680 : 1120;
   const minQuality = isDesktop ? 82 : 78;
   const maxQuality = isDesktop ? 88 : 84;
-  const safeWidth = Math.max(180, Math.min(Math.round(width * density), maxWidth));
+  const safeWidth = Math.max(Math.max(48, minimumWidth), Math.min(Math.round(width * density), maxWidth));
   const safeQuality = Math.max(minQuality, Math.min(quality, maxQuality));
-  // Use the shared free resizing proxy for large phimimg originals. Mobile
-  // detail pages previously downloaded 800 kB source JPEGs for 96 px posters.
+  // wsrv rejects phimimg.com. Photon accepts this provider and returns a
+  // correctly sized, long-cache image instead of multi-megabyte originals.
+  const photonImage = getPhotonImageUrl(original, safeWidth, safeQuality);
+  if (photonImage) return photonImage;
+  // Keep CDNs with native renditions direct and avoid known proxy rejections.
   if (shouldBypassImageProxy(original)) return original;
   const encoded = encodeURIComponent(original);
-  return `https://wsrv.nl/?url=${encoded}&w=${safeWidth}&q=${safeQuality}&output=webp&fit=cover&we`;
+  // wsrv's free `default=1` contract redirects to the untouched origin if a
+  // future policy/filter change rejects another provider. This keeps cards
+  // visible without a second React render or a paid image service.
+  return `https://wsrv.nl/?url=${encoded}&w=${safeWidth}&q=${safeQuality}&output=webp&fit=cover&we&default=1`;
 }
 
 export function getOptimizedImageSrcSet(path: string, widths: number[], quality = 82): string {
@@ -781,10 +826,14 @@ export function getOptimizedImageSrcSet(path: string, widths: number[], quality 
 }
 
 function getOriginalImageFromProxy(url: string): string | null {
-  if (!url.includes('wsrv.nl/?url=')) return null;
   try {
     const parsed = new URL(url);
-    return parsed.searchParams.get('url');
+    if (parsed.hostname === 'wsrv.nl') return parsed.searchParams.get('url');
+    if (/^i[0-2]\.wp\.com$/i.test(parsed.hostname)) {
+      const original = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+      if (/^phimimg\.com\//i.test(original)) return `https://${original}`;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -795,7 +844,10 @@ function isVolatileOphimVodImage(url: string): boolean {
 }
 
 function shouldBypassImageProxy(url: string): boolean {
-  return /^https?:\/\/(image\.tmdb\.org|blogger\.googleusercontent\.com|[^/]+\.bp\.blogspot\.com|i\.ibb\.co|pic1\.iqiyipic\.com|vcover-hz-pic\.wetvinfo\.com|icdn\.darkbytes\.xyz)\//i.test(url);
+  // Keep CDNs with their own renditions direct, and never send a domain that
+  // wsrv explicitly blocks through the proxy. These origins already publish
+  // long-lived browser/CDN cache headers, so bypassing avoids an extra RTT.
+  return /^https?:\/\/(image\.tmdb\.org|blogger\.googleusercontent\.com|[^/]+\.bp\.blogspot\.com|i\.ibb\.co|pic1\.iqiyipic\.com|vcover-hz-pic\.wetvinfo\.com|phimimg\.com|icdn\.darkbytes\.xyz)\//i.test(url);
 }
 
 export function getImageFallbacks(primaryPath?: string, altPath?: string): string[] {
@@ -827,6 +879,7 @@ export function getOptimizedImageFallbacks(
   width = 620,
   quality = 88,
   includeOriginalFallback = true,
+  minimumWidth = 180,
 ): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
@@ -836,14 +889,20 @@ export function getOptimizedImageFallbacks(
     urls.push(url);
   };
 
-  for (const url of getImageFallbacks(primaryPath, altPath)) {
-    if (url === FALLBACK_IMG) {
-      pushUrl(url);
-      continue;
-    }
-    pushUrl(getOptimizedImageUrl(url, width, quality));
-    if (includeOriginalFallback) pushUrl(url);
+  const fallbackUrls = getImageFallbacks(primaryPath, altPath);
+  // Try every resized candidate before downloading a full-resolution origin.
+  // The local placeholder is always last: placing it before the origins makes
+  // a successful placeholder stop the hook before it reaches a working image.
+  for (const url of fallbackUrls) {
+    if (url === FALLBACK_IMG) continue;
+    pushUrl(getOptimizedImageUrl(url, width, quality, minimumWidth));
   }
+  if (includeOriginalFallback) {
+    for (const url of fallbackUrls) {
+      if (url !== FALLBACK_IMG) pushUrl(url);
+    }
+  }
+  pushUrl(FALLBACK_IMG);
 
   return urls.length ? urls : [FALLBACK_IMG];
 }
@@ -871,13 +930,38 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+function repairDisplayText(value: unknown): string {
+  let text = String(value ?? '');
+  text = text.replace(/&(#x[0-9a-f]+|#\d+|apos|quot|amp|lt|gt);/gi, (entity, token: string) => {
+    const lower = token.toLowerCase();
+    const named: Record<string, string> = { apos: "'", quot: '"', amp: '&', lt: '<', gt: '>' };
+    if (named[lower]) return named[lower];
+    const numeric = lower.startsWith('#x') ? Number.parseInt(lower.slice(2), 16) : Number.parseInt(lower.slice(1), 10);
+    return Number.isFinite(numeric) && numeric >= 0 && numeric <= 0x10ffff ? String.fromCodePoint(numeric) : entity;
+  });
+  let looksBroken = /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(text);
+  for (let attempt = 0; attempt < 2 && looksBroken; attempt += 1) {
+    try {
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(
+        Uint8Array.from(Array.from(text), (char) => char.charCodeAt(0) & 255),
+      );
+      if (!decoded || decoded === text) break;
+      text = decoded;
+      looksBroken = /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(text);
+    } catch {
+      break;
+    }
+  }
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 function normalizeTaxonomy<T extends MovieCategory | MovieCountry>(value: unknown): T[] {
   if (!Array.isArray(value)) return [];
   return value
     .map((item) => {
       const record = asRecord(item);
       if (!record) return null;
-      const name = String(record.name ?? '').trim();
+      const name = repairDisplayText(record.name);
       const slug = String(record.slug ?? '').trim();
       if (!name || !slug) return null;
       return {
@@ -1013,7 +1097,17 @@ function sortListItems(
   const direction = sortType === 'asc' ? 1 : -1;
   const valueOf = (item: MovieListResponse['items'][number]): number => {
     if (sortField === 'year') return Number(item.year) || 0;
-    if (sortField === 'modified.time') return new Date(item.modified?.time ?? 0).getTime() || 0;
+    if (sortField === 'modified.time') {
+      // Operational updates (poster, metadata, source health) must not make
+      // an old title look new. Use only release/episode feed clocks here.
+      return new Date(
+        item.last_episode_change_at
+          || item.created_at
+          || item.published_at
+          || item.modified?.time
+          || 0,
+      ).getTime() || 0;
+    }
     return 0;
   };
   return [...items].sort((a, b) => (valueOf(a) - valueOf(b)) * direction);
@@ -1022,7 +1116,7 @@ function sortListItems(
 // Keep this list aligned with the production `movies` table. `chieurap` used
 // to be present in an upstream payload but is not a database column; selecting
 // it made every direct list request fail with PostgREST 42703/HTTP 400.
-const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, updated_at, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, thumb_url, poster_url, hero_backdrop_url, hero_poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, created_at, updated_at, published_at, last_episode_change_at, is_published, seo_catalog_status, superseded_by_movie_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
 // Minimal public contract used when an optional column is renamed/removed in
 // production. Cards remain usable while the richer schema is being repaired.
 const SUPABASE_LIST_CORE_SELECT = 'id, slug, name, origin_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, category, country, is_published, updated_at, source_site, source_name';
@@ -1069,11 +1163,86 @@ function rememberSupabaseList(key: string, value: MovieListResponse | null): voi
 function typeFilterValues(type?: string): string[] {
   if (!type || type === 'phim-moi-cap-nhat') return [];
   if (type === 'phim-chieu-rap') return [];
+  // Upcoming is a state, not a physical movie type in the canonical table.
+  // It is handled by its trailer/schedule predicate in the query below.
+  if (type === 'phim-sap-chieu') return [];
   if (type === 'phim-le') return ['single', 'phim-le'];
   if (type === 'phim-bo') return ['series', 'phim-bo'];
   if (type === 'hoat-hinh') return ['hoathinh'];
   if (type === 'tv-shows') return ['tvshows', 'tv-shows'];
   return [type];
+}
+
+function currentCatalogYear(): number {
+  return new Date().getFullYear();
+}
+
+function hasSaneCatalogYear(item: Pick<MovieItem, 'year'>, allowHistorical = false): boolean {
+  const year = Number(item.year || 0);
+  if (!Number.isFinite(year) || year < 1888 || year > currentCatalogYear() + 1) return false;
+  return allowHistorical || year >= currentCatalogYear() - 1;
+}
+
+function isRealEpisodeUpdate(item: Pick<MovieItem, 'current_episode' | 'total_episodes' | 'episode_current' | 'last_episode_change_at' | 'created_at' | 'published_at'>): boolean {
+  const changedAt = Date.parse(String(item.last_episode_change_at || ''));
+  if (!Number.isFinite(changedAt)) return false;
+  const initialAt = Date.parse(String(item.created_at || item.published_at || ''));
+  const label = String(item.episode_current || '').toLowerCase();
+  const current = Number(item.current_episode || 0);
+  const total = Number(item.total_episodes || 0);
+  const ongoing = current > 0 && (!total || current < total) && !/(?:hoàn|hoan)\s*tất|\bfull\b|\bend\b/.test(label);
+  return ongoing || !Number.isFinite(initialAt) || changedAt > initialAt + 6 * 60 * 60 * 1000;
+}
+
+function filterCatalogueListingItems(
+  items: MovieListResponse['items'],
+  params: Pick<SupabaseListParams, 'type' | 'year' | 'sortField'>,
+): MovieListResponse['items'] {
+  const showingFreshFeed = !params.year && params.sortField === 'modified.time';
+  const sortingByYear = params.sortField === 'year';
+  return items.filter((item) => {
+    if (params.type === 'phim-sap-chieu' && !isConfirmedUpcomingMovie(item)) return false;
+    if (params.type === 'phim-sap-chieu') return true;
+    if (showingFreshFeed && !hasSaneCatalogYear(item)) return false;
+    if (sortingByYear && !hasSaneCatalogYear(item, true)) return false;
+    return params.type === 'phim-sap-chieu' || (item.episode_current ?? '').toLowerCase().trim() !== 'trailer';
+  });
+}
+
+function isConfirmedUpcomingMovie(item: Pick<MovieItem, 'year' | 'episode_current' | 'schedule_type' | 'release_at' | 'next_episode_at'>): boolean {
+  const currentYear = currentCatalogYear();
+  const year = Number(item.year || 0);
+  if (!Number.isFinite(year) || year < currentYear || year > currentYear + 2) return false;
+  const status = String(item.episode_current || '').toLowerCase().trim();
+  const scheduled = String(item.schedule_type || '').toLowerCase() === 'upcoming';
+  const trailer = status === 'trailer' || status === 'teaser';
+  if (!scheduled && !trailer) return false;
+  const date = Date.parse(String(item.release_at || item.next_episode_at || ''));
+  return !Number.isFinite(date) || date >= Date.now() - 24 * 60 * 60 * 1000;
+}
+
+function itemHasTaxonomySlug(item: MovieItem, key: 'category' | 'country', slug?: string): boolean {
+  if (!slug) return true;
+  return (item[key] ?? []).some((term) => String(term?.slug || '').toLowerCase() === slug.toLowerCase());
+}
+
+function externalItemMatchesRequestedCatalogue(item: MovieItem, params: SupabaseListParams): boolean {
+  if (!itemHasTaxonomySlug(item, 'category', params.category)) return false;
+  if (!itemHasTaxonomySlug(item, 'country', params.country)) return false;
+  if (params.year && Number(item.year || 0) !== Number(params.year)) return false;
+
+  if (params.type === 'phim-sap-chieu') return isConfirmedUpcomingMovie(item);
+  if (params.type === 'phim-chieu-rap' || !params.type || params.type === 'phim-moi-cap-nhat') return true;
+
+  const expectedTypes = typeFilterValues(params.type);
+  return expectedTypes.length === 0 || expectedTypes.includes(String(item.type || '').toLowerCase());
+}
+
+function filterExternalCatalogueItems(items: MovieListResponse['items'], params: SupabaseListParams): MovieListResponse['items'] {
+  return filterCatalogueListingItems(
+    sortListItems(items.filter((item) => externalItemMatchesRequestedCatalogue(item, params)), params.sortField, params.sortType),
+    params,
+  );
 }
 
 async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): Promise<MovieListResponse | null> {
@@ -1087,36 +1256,10 @@ async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): 
   const to = from + SUPABASE_LIST_PAGE_SIZE - 1;
 
   try {
-    if (typeof window !== 'undefined' && !import.meta.env.DEV) {
-      // Keyword searches use the canonical /api/search RPC path. Ordinary
-      // catalogue pages share one five-minute Edge cache across all viewers.
-      if (params.keyword?.trim()) return null;
-      const edgeUrl = new URL('/api/movies', window.location.origin);
-      if (params.type) edgeUrl.searchParams.set('type', params.type);
-      if (params.category) edgeUrl.searchParams.set('category', params.category);
-      if (params.country) edgeUrl.searchParams.set('country', params.country);
-      if (params.year) edgeUrl.searchParams.set('year', params.year);
-      edgeUrl.searchParams.set('page', String(page));
-      if (params.sortField) edgeUrl.searchParams.set('sortField', params.sortField);
-      edgeUrl.searchParams.set('sortType', params.sortType ?? 'desc');
-      edgeUrl.searchParams.set('v', '1');
-      const response = await fetch(edgeUrl.toString(), {
-        cache: 'force-cache',
-        headers: { Accept: 'application/json' },
-      });
-      if (response.ok) {
-        const payload = await response.json() as MovieListResponse;
-        const rawItems = (payload.items ?? []) as unknown as Record<string, unknown>[];
-        const items = sortListItems(
-          rawItems.filter((item) => !isRetiredOphimCatalogItem(item)).map(toSupabaseMovieItem),
-          params.sortField,
-          params.sortType,
-        ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer');
-        return { ...payload, items };
-      }
-      // Continue with the same Singapore database contract when the Pages
-      // Worker route is unavailable; never fall back to an external catalogue.
-    }
+    // Keyword searches use the canonical search RPC below. Ordinary catalogue
+    // pages read Supabase directly so every visitor does not spend a Pages
+    // Function request before reaching the same database.
+    if (params.keyword?.trim()) return null;
 
     const buildQuery = (selectFields: string, coreContract: boolean) => {
       let query = supabase
@@ -1130,10 +1273,29 @@ async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): 
       const typeValues = typeFilterValues(params.type);
       if (typeValues.length === 1) query = query.eq('type', typeValues[0]);
       else if (typeValues.length > 1) query = query.in('type', typeValues);
+      if (params.type === 'phim-sap-chieu') {
+        // Never use the generic latest catalogue as an upcoming fallback.
+        // These are the only two states the database can prove are upcoming.
+        query = query.or('episode_current.ilike.%trailer%,schedule_type.eq.upcoming');
+        query = query
+          .gte('year', currentCatalogYear())
+          .lte('year', currentCatalogYear() + 2);
+      }
 
       if (params.category) query = query.filter('category', 'cs', JSON.stringify([{ slug: params.category }]));
       if (params.country) query = query.filter('country', 'cs', JSON.stringify([{ slug: params.country }]));
       if (params.year) query = query.eq('year', Number(params.year));
+      if (!params.year && params.sortField === 'modified.time') {
+        // All catalogue pages whose default is “Mới cập nhật” share this
+        // contract: a historical import must never be presented as fresh.
+        query = query
+          .gte('year', currentCatalogYear() - 1)
+          .lte('year', currentCatalogYear() + 1);
+      } else if (params.sortField === 'year') {
+        query = query
+          .gte('year', 1888)
+          .lte('year', currentCatalogYear() + 1);
+      }
       if (params.keyword?.trim()) {
         const safeKw = escapePostgrestIlike(params.keyword.trim());
         const normalizedKw = escapePostgrestIlike(normalizeSearchText(params.keyword.trim()));
@@ -1153,7 +1315,9 @@ async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): 
       const ascending = params.sortType === 'asc';
       query = params.sortField === 'year'
         ? query.order('year', { ascending, nullsFirst: false }).order('updated_at', { ascending: false, nullsFirst: false })
-        : query.order('updated_at', { ascending, nullsFirst: false });
+        : params.sortField === 'modified.time'
+          ? query.order('last_episode_change_at', { ascending, nullsFirst: false }).order('created_at', { ascending: false, nullsFirst: false })
+          : query.order('created_at', { ascending: false, nullsFirst: false });
       return query.range(from, to);
     };
 
@@ -1173,13 +1337,13 @@ async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): 
     const { data, count, error } = response;
     if (error || !data || data.length === 0) return null;
 
-    const items = sortListItems(
+    const items = filterCatalogueListingItems(sortListItems(
       (data as unknown as Record<string, unknown>[])
         .filter((item) => !isRetiredOphimCatalogItem(item))
         .map(toSupabaseMovieItem),
       params.sortField,
       params.sortType,
-    ).filter((item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer');
+    ), params);
     const totalItems = count ?? items.length;
 
     return {
@@ -1219,34 +1383,130 @@ async function fetchMoviesFromSupabaseList(params: SupabaseListParams): Promise<
 }
 
 export async function fetchNewMovies(page = 1): Promise<MovieListResponse> {
-  return fetchFreshMovieList(page);
+  return fetchStableCatalogFeed('new', page);
 }
 
-export async function fetchLatestReleaseMovies(page = 1): Promise<MovieListResponse> {
-  // "Phim mới" means titles with the most recently synced release/episode, not
-  // the highest release year. The source sync updates updated_at when its
-  // episode list changes, so keep that ordering intact all the way to the UI.
-  const result = await fetchFreshMovieList(page);
-  return {
-    ...result,
-    items: sortListItems(result.items ?? [], 'modified.time', 'desc'),
-  };
+export type StableCatalogFeedMode = 'new' | 'episode_updates';
+
+async function fetchStableCatalogFeed(
+  mode: StableCatalogFeedMode,
+  page = 1,
+): Promise<MovieListResponse> {
+  const currentPage = Math.max(1, page);
+  const from = (currentPage - 1) * SUPABASE_LIST_PAGE_SIZE;
+  const to = from + SUPABASE_LIST_PAGE_SIZE - 1;
+
+  try {
+    const { data, error } = await supabase
+      .rpc('get_stable_catalog_feed', {
+        p_mode: mode,
+        p_limit: SUPABASE_LIST_PAGE_SIZE,
+        p_offset: from,
+      })
+      .abortSignal(AbortSignal.timeout(5_500));
+
+    if (!error && Array.isArray(data)) {
+      const rows = data as Array<{ item?: Record<string, unknown>; total_count?: number | string }>;
+      const items = rows
+        .map((row) => row.item)
+        .filter((item): item is Record<string, unknown> => Boolean(item))
+        .map(toSupabaseMovieItem)
+        .filter((movie) => hasSaneCatalogYear(movie))
+        .filter((movie) => mode !== 'episode_updates' || isRealEpisodeUpdate(movie))
+        .filter((movie) => movie.slug && movie.name && (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer');
+      const totalItems = Number(rows[0]?.total_count || items.length) || items.length;
+      return {
+        status: true,
+        items,
+        pagination: {
+          currentPage,
+          totalItems,
+          totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE,
+          totalPages: Math.max(1, Math.ceil(totalItems / SUPABASE_LIST_PAGE_SIZE)),
+        },
+      };
+    }
+
+    // Database-only compatibility fallback. Never show a provider discovery
+    // card before its canonical movie and playback have passed publication.
+    // `published_at` may advance when an old movie recovers from a provider
+    // outage. Immutable discovery time keeps the new-movie fallback truthful.
+    const sortColumn = mode === 'episode_updates' ? 'last_episode_change_at' : 'created_at';
+    let query = supabase
+      .from('movies')
+      .select(`${SUPABASE_LIST_SELECT},published_at,last_episode_change_at`, { count: 'estimated' })
+      .eq('is_published', true)
+      .order(sortColumn, { ascending: false, nullsFirst: false })
+      .range(from, to)
+      .abortSignal(AbortSignal.timeout(5_500));
+    query = query
+      .gte('year', currentCatalogYear() - 1)
+      .lte('year', currentCatalogYear() + 1);
+    if (mode === 'episode_updates') query = query.not('last_episode_change_at', 'is', null);
+    const fallback = await query;
+    if (fallback.error || !fallback.data) throw fallback.error || new Error('Stable catalogue unavailable');
+    const items = (fallback.data as Record<string, unknown>[])
+      .map((item) => ({ ...item, updated_at: item[sortColumn] || item.updated_at }))
+      .map(toSupabaseMovieItem)
+      .filter((movie) => hasSaneCatalogYear(movie))
+      .filter((movie) => mode !== 'episode_updates' || isRealEpisodeUpdate(movie))
+      .filter((movie) => movie.slug && movie.name && (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer');
+    const totalItems = fallback.count ?? items.length;
+    return {
+      status: true,
+      items,
+      pagination: {
+        currentPage,
+        totalItems,
+        totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE,
+        totalPages: Math.max(1, Math.ceil(totalItems / SUPABASE_LIST_PAGE_SIZE)),
+      },
+    };
+  } catch {
+    return {
+      status: false,
+      items: [],
+      pagination: {
+        currentPage,
+        totalItems: 0,
+        totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE,
+        totalPages: 1,
+      },
+    };
+  }
+}
+
+export async function fetchLatestReleaseMovies(
+  page = 1,
+  mode: StableCatalogFeedMode = 'new',
+): Promise<MovieListResponse> {
+  // The RPC is already ordered by the immutable publication or genuine
+  // episode-change clock. Re-sorting here used to revive stale imports.
+  return fetchStableCatalogFeed(mode, page);
 }
 
 /**
- * Start the primary catalog and existing upstream fallback together. During a
- * database slowdown, visitors receive the first valid current list rather
- * than waiting for the catalog timeout before fallback work even begins.
+ * Start both reads together, but give the canonical database a short priority
+ * window. Returning whichever provider responds first made the "latest" page
+ * show an upstream discovery feed with missing episode labels even while the
+ * synchronized catalogue already contained newer, playable records.
  */
 async function fetchFreshMovieList(page: number): Promise<MovieListResponse> {
   const supabasePromise = fetchMoviesFromSupabaseList({ page, sortField: 'modified.time', sortType: 'desc' });
   const upstreamPromise = fetchNewMoviesMultiSource(page);
-  const winner = await raceFirstValidWithTimeout<MovieListResponse>([
-    supabasePromise.then((result) => ((result?.items?.length ?? 0) > 0 ? result : null)).catch(() => null),
-    upstreamPromise.then((result) => ((result.items?.length ?? 0) > 0 ? result : null)).catch(() => null),
-  ], 5_500);
 
-  if (winner) return winner;
+  const canonical = await raceFirstValidWithTimeout<MovieListResponse>([
+    supabasePromise.then((result) => ((result?.items?.length ?? 0) > 0 ? result : null)).catch(() => null),
+  ], 2_800);
+
+  if (canonical) return canonical;
+
+  const fallback = await raceFirstValidWithTimeout<MovieListResponse>([
+    upstreamPromise.then((result) => ((result.items?.length ?? 0) > 0 ? result : null)).catch(() => null),
+    supabasePromise.then((result) => ((result?.items?.length ?? 0) > 0 ? result : null)).catch(() => null),
+  ], 2_500);
+
+  if (fallback) return fallback;
 
   const [supabaseResult, upstreamResult] = await Promise.all([supabasePromise, upstreamPromise]);
   return supabaseResult ?? upstreamResult;
@@ -1262,14 +1522,11 @@ export async function fetchMoviesByType(
   if (!preferKkphim) {
     const supabaseResult = await fetchMoviesFromSupabaseList({ type, page, sortField, sortType });
     if (supabaseResult) return supabaseResult;
-  }
-
-  if (type === 'phim-sap-chieu') {
-    const latest = await fetchNewMoviesMultiSource(page).catch(() => null);
-    if (latest && (latest.items?.length ?? 0) > 0) {
-      const currentYear = new Date().getFullYear();
-      const fallbackItems = (latest.items ?? []).filter((item) => (item.year ?? 0) >= currentYear - 1);
-      return withFilteredItemsPagination(latest, sortListItems(fallbackItems.length > 0 ? fallbackItems : latest.items ?? [], 'year', 'desc'), page);
+    // If the canonical catalogue has no confirmed trailer/schedule, finish
+    // promptly with an honest empty state. Third-party "upcoming" endpoints
+    // were returning already-completed releases and left this page loading.
+    if (type === 'phim-sap-chieu') {
+      return { status: true, items: [], pagination: { currentPage: page, totalItems: 0, totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE, totalPages: 1 } };
     }
   }
 
@@ -1297,26 +1554,15 @@ export async function fetchMoviesByType(
   const result = await preferPrimaryWithFallback(promises, 1800, 6000);
   if (result) {
     // Filter out trailer-only items from list endpoints
-    const filteredItems = (result.items ?? []).filter(
-      (item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer'
-    );
+    const filteredItems = filterExternalCatalogueItems(result.items ?? [], { type, page, sortField, sortType });
     if (filteredItems.length > 0 || type !== 'phim-sap-chieu') {
-      return withFilteredItemsPagination(result, sortListItems(filteredItems, sortField, sortType), page);
+      return withFilteredItemsPagination(result, filteredItems, page);
     }
   }
 
   if (preferKkphim) {
     const supabaseFallback = await fetchMoviesFromSupabaseList({ type, page, sortField, sortType });
     if (supabaseFallback) return supabaseFallback;
-  }
-
-  if (type === 'phim-sap-chieu') {
-    const latest = await fetchNewMoviesMultiSource(page).catch(() => null);
-    if (latest && (latest.items?.length ?? 0) > 0) {
-      const currentYear = new Date().getFullYear();
-      const fallbackItems = (latest.items ?? []).filter((item) => (item.year ?? 0) >= currentYear - 1);
-      return withFilteredItemsPagination(latest, sortListItems(fallbackItems.length > 0 ? fallbackItems : latest.items ?? [], 'year', 'desc'), page);
-    }
   }
 
   // All failed — return empty
@@ -1360,14 +1606,84 @@ export async function fetchMoviesByCategory(params: {
   const result = await preferPrimaryWithFallback(promises, 1800, 6000);
   if (result) {
     // Filter out trailer-only items from list endpoints
-    const filteredItems = (result.items ?? []).filter(
-      (item) => (item.episode_current ?? '').toLowerCase().trim() !== 'trailer'
-    );
-    return withFilteredItemsPagination(result, sortListItems(filteredItems, params.sortField, params.sortType), params.page ?? 1);
+    const filteredItems = filterExternalCatalogueItems(result.items ?? [], params);
+    return withFilteredItemsPagination(result, filteredItems, params.page ?? 1);
 
   }
 
   return { status: false, items: [], pagination: { currentPage: params.page ?? 1, totalItems: 0, totalItemsPerPage: 24, totalPages: 1 } };
+}
+
+/**
+ * Dedicated catalogue for the Mỹ Nam / BL-GL experience. It deliberately
+ * queries only vetted queer sources instead of downloading every drama series
+ * and hoping that a client-side country check removes unrelated shows.
+ */
+export async function fetchQueerMovies(
+  page = 1,
+  options: { country?: string; sortField?: string; sortType?: 'asc' | 'desc' } = {},
+): Promise<MovieListResponse> {
+  if (!ENABLE_SUPABASE_TEXT_SEARCH) {
+    return { status: false, items: [], pagination: { currentPage: page, totalItems: 0, totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE, totalPages: 1 } };
+  }
+
+  const currentPage = Math.max(1, page);
+  const from = (currentPage - 1) * SUPABASE_LIST_PAGE_SIZE;
+  const to = from + SUPABASE_LIST_PAGE_SIZE - 1;
+  const sortField = options.sortField ?? 'modified.time';
+  const ascending = options.sortType === 'asc';
+
+  try {
+    let query = supabase
+      .from('movies')
+      .select(SUPABASE_QUEER_LIST_SELECT, { count: 'estimated' })
+      .eq('is_published', true)
+      .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%,source_site.ilike.%glvietsub%,source_name.ilike.%glvietsub%,source_site.ilike.%gl vietsub%,source_name.ilike.%gl vietsub%');
+
+    if (options.country && options.country !== 'all') {
+      query = query.filter('country', 'cs', JSON.stringify([{ slug: options.country }]));
+    }
+    if (sortField === 'modified.time') {
+      query = query
+        .gte('year', currentCatalogYear() - 1)
+        .lte('year', currentCatalogYear() + 1)
+        .order('last_episode_change_at', { ascending, nullsFirst: false })
+        .order('created_at', { ascending, nullsFirst: false });
+    } else {
+      query = query
+        .gte('year', 1888)
+        .lte('year', currentCatalogYear() + 1)
+        .order('year', { ascending, nullsFirst: false })
+        .order('created_at', { ascending: false, nullsFirst: false });
+    }
+
+    const { data, count, error } = await query.range(from, to).abortSignal(AbortSignal.timeout(5_500));
+    if (error || !data) throw error || new Error('queer_catalog_unavailable');
+    const items = filterCatalogueListingItems(
+      sortListItems(
+        (data as Record<string, unknown>[])
+          .filter((row) => !isRetiredOphimCatalogItem(row))
+          .map(toSupabaseMovieItem)
+          .filter((movie) => movieMatchesQueerUniverse(movie)),
+        sortField,
+        options.sortType,
+      ),
+      { sortField },
+    );
+    const totalItems = count ?? items.length;
+    return {
+      status: true,
+      items,
+      pagination: {
+        currentPage,
+        totalItems,
+        totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE,
+        totalPages: Math.max(1, Math.ceil(totalItems / SUPABASE_LIST_PAGE_SIZE)),
+      },
+    };
+  } catch {
+    return { status: false, items: [], pagination: { currentPage, totalItems: 0, totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE, totalPages: 1 } };
+  }
 }
 
 export async function searchMovies(keyword: string, page = 1, signal?: AbortSignal): Promise<MovieListResponse> {
@@ -1480,13 +1796,6 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
   const endpoints = typeof window !== 'undefined'
     ? [
         {
-          url: new URL('/api/movie-detail', window.location.origin),
-          timeoutMs: 7_500,
-          delayMs: 0,
-          headers: undefined,
-          allowRefresh: true,
-        },
-        {
           url: new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`),
           // A cold Edge isolate can exceed nine seconds while assembling a
           // large multi-provider catalogue. Keep the loading state bounded,
@@ -1495,9 +1804,16 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
           // A short hedge removes an entire failed Pages round trip during
           // quota/fail-open windows, while a healthy gateway normally wins
           // before this public read starts.
-          delayMs: 150,
+          delayMs: 0,
           headers: { apikey: SUPABASE_ANON_KEY },
           allowRefresh: false,
+        },
+        {
+          url: new URL('/api/movie-detail', window.location.origin),
+          timeoutMs: 7_500,
+          delayMs: 1_200,
+          headers: undefined,
+          allowRefresh: true,
         },
       ]
     : [{
@@ -1509,15 +1825,17 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
       }];
 
   const controllers: AbortController[] = [];
+  let winnerFound = false;
   const requests = endpoints.map(async (endpoint): Promise<MovieDetailResponse | null> => {
     if (endpoint.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, endpoint.delayMs));
+    if (winnerFound) return null;
     const controller = new AbortController();
     controllers.push(controller);
     const timer = setTimeout(() => controller.abort(), endpoint.timeoutMs);
     endpoint.url.searchParams.set('slug', slug);
     // Version the public Edge cache key whenever stream-health/scoring rules
     // change so a healthy revalidated source is not shadowed by an older POP.
-    endpoint.url.searchParams.set('rev', '20260823-provider-score-v10');
+    endpoint.url.searchParams.set('rev', '20260903-special-episodes-v13');
     if (forceRefresh && endpoint.allowRefresh) endpoint.url.searchParams.set('refresh', '1');
     if (source) endpoint.url.searchParams.set('source', source);
 
@@ -1530,7 +1848,10 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
       const contentType = res.headers.get('content-type') ?? '';
       if (!res.ok || !contentType.toLowerCase().includes('application/json')) return null;
       const data = await res.json() as MovieDetailResponse;
-      if (data?.movie?.slug || data?.movie?.name) return data;
+      if (data?.movie?.slug || data?.movie?.name) {
+        winnerFound = true;
+        return data;
+      }
     } catch (e) {
       if (!isAbortLikeError(e) && import.meta.env.DEV) console.warn('[movieApi] Proxy fetch failed:', e);
     } finally {
@@ -1663,6 +1984,7 @@ function parseMovieDetailPayload(payload: Record<string, unknown>, fallbackSlug?
           link_embed: normalizeDailymotionUrl(String(ep.link_embed ?? '')),
           link_m3u8: String(ep.link_m3u8 ?? ''),
           subtitle_url: String(ep.subtitle_url ?? ep.subtitle ?? ''),
+          episode_number: Number(ep.episode_number ?? 0) || undefined,
         }))
         .filter((ep) => hasPlayableUrl(ep));
 
@@ -2136,28 +2458,7 @@ export async function searchMoviesInSupabase(
   }
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 2500);
   const hasStrongSearchHit = (movies: MovieItem[]): boolean => {
-    const normalizedQuery = normalizeSearchText(kw);
-    const tokens = normalizedQuery
-      .split(/\s+/)
-      .map((token) => token.trim())
-      .filter((token) => token.length >= 2);
-    if (!normalizedQuery || tokens.length === 0) return movies.length > 0;
-
-    return movies.some((movie) => {
-      const haystack = normalizeSearchText([
-        movie.name,
-        movie.origin_name,
-        movie.title_vi,
-        movie.title_en,
-        movie.title_zh,
-        movie.title_original,
-        movie.normalized_name,
-        movie.slug?.replace(/-/g, ' '),
-      ].filter(Boolean).join(' '));
-      const words = new Set(haystack.split(/\s+/).filter(Boolean));
-      if (` ${haystack} `.includes(` ${normalizedQuery} `)) return true;
-      return tokens.length >= 3 && tokens.every((token) => words.has(token));
-    });
+    return movies.some((movie) => movieMatchesSearchIntent(movie, kw));
   };
   try {
     // Production search is served by the same-origin Cloudflare gateway. It
@@ -2165,21 +2466,26 @@ export async function searchMoviesInSupabase(
     // database is unhealthy, without a browser CORS preflight.
     if (typeof window !== 'undefined') {
       const searchEndpoints = [
+        // Prefer the same-origin Cloudflare POP cache. Supabase remains the
+        // authoritative index behind that gateway. When Pages Functions are
+        // over quota, the bundled search shard below answers suggestions;
+        // browsers must not stampede the Supabase Function directly.
         { url: new URL('/api/search', window.location.origin), headers: { Accept: 'application/json' } },
-        {
-          url: new URL(`${SUPABASE_URL}/functions/v1/search-index-proxy`),
-          headers: { Accept: 'application/json', apikey: SUPABASE_ANON_KEY },
-        },
       ];
+      let gatewayReturnedNotFound = false;
       for (const endpoint of searchEndpoints) {
         endpoint.url.searchParams.set('q', kw);
         endpoint.url.searchParams.set('limit', String(limit));
+        endpoint.url.searchParams.set('v', '20260827-canonical-dedupe-v2');
         const edgeResponse = await fetch(endpoint.url.toString(), {
           signal: controller.signal,
-          cache: 'force-cache',
+          // Search freshness is owned by the edge gateways. Keeping an older
+          // response in the browser can hide a newly published canonical film.
+          cache: 'no-store',
           headers: endpoint.headers,
         });
         const contentType = edgeResponse.headers.get('content-type') || '';
+        if (edgeResponse.status === 404) gatewayReturnedNotFound = true;
         if (!edgeResponse.ok || !contentType.toLowerCase().includes('application/json')) continue;
         const edgePayload = await edgeResponse.json() as { items?: Record<string, unknown>[] };
         const edgeMovies = sortMoviesForSearch(
@@ -2193,6 +2499,38 @@ export async function searchMoviesInSupabase(
         // Retrying the same RPC directly from every browser doubles cold-query
         // work and bypasses request coalescing.
         return hasStrongSearchHit(edgeMovies) ? edgeMovies : [];
+      }
+      // A confirmed same-origin 404 means the Pages search gateway is absent,
+      // not that the canonical Supabase index has no movie. Use the public
+      // read-only index directly before falling back to provider search.
+      if (gatewayReturnedNotFound && SUPABASE_URL && SUPABASE_ANON_KEY) {
+        try {
+          const directUrl = new URL(`${SUPABASE_URL}/functions/v1/search-index-proxy`);
+          directUrl.searchParams.set('q', kw);
+          directUrl.searchParams.set('limit', String(limit));
+          const directResponse = await fetch(directUrl.toString(), {
+            signal: controller.signal,
+            cache: 'no-store',
+            headers: {
+              Accept: 'application/json',
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          });
+          if (directResponse.ok) {
+            const payload = await directResponse.json() as { items?: Record<string, unknown>[] };
+            const directMovies = sortMoviesForSearch(
+              mergeMoviesUnique((payload.items ?? [])
+                .filter((item) => !isRetiredOphimCatalogItem(item))
+                .map(toSupabaseMovieItem)),
+              kw,
+              'relevance',
+            ).slice(0, limit);
+            if (hasStrongSearchHit(directMovies)) return directMovies;
+          }
+        } catch {
+          // Provider/static fallbacks below keep autocomplete responsive.
+        }
       }
       // Both edge read paths failed. Never bypass its open circuit with a direct browser PostgREST retry;
       // use the bundled static search shards instead.
@@ -2426,24 +2764,7 @@ async function loadStaticSearchFallback(): Promise<MovieItem[]> {
 }
 
 function matchesStaticSearchFallback(movie: MovieItem, keyword: string): boolean {
-  const query = normalizeSearchText(keyword).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!query) return false;
-  const haystack = normalizeSearchText([
-    movie.name,
-    movie.origin_name,
-    movie.title_vi,
-    movie.title_en,
-    movie.title_zh,
-    movie.title_original,
-    movie.slug?.replace(/-/g, ' '),
-    movie.category?.map((item) => `${item.name} ${item.slug}`).join(' '),
-    movie.country?.map((item) => `${item.name} ${item.slug}`).join(' '),
-  ].filter(Boolean).join(' ')).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (haystack.includes(query)) return true;
-  const compactQuery = query.replace(/\s+/g, '');
-  if (compactQuery.length >= 6 && haystack.replace(/\s+/g, '').includes(compactQuery)) return true;
-  const tokens = query.split(' ').filter((token) => token.length >= 2 || /^\d+$/.test(token));
-  return tokens.length >= 2 && tokens.every((token) => haystack.includes(token));
+  return movieMatchesSearchIntent(movie, keyword);
 }
 
 /**
@@ -2554,8 +2875,8 @@ const QUEER_UNIVERSE_TERMS = [
 ];
 const QUEER_SOURCE_TERMS = ['blvietsub', 'bl vietsub', 'bl-vietsub', 'glvietsub', 'gl vietsub', 'vu tru dam my'];
 const BLVIETSUB_SLUG_PREFIX = 'blvietsub-';
-const QUEER_FALLBACK_URL = '/queer-fallback.json?v=202608231630';
-const SUPABASE_QUEER_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+const QUEER_FALLBACK_URL = '/queer-fallback.json?v=20260904-pure-v2';
+const SUPABASE_QUEER_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, published_at, last_episode_change_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
 const BLVIETSUB_SEARCH_TERMS = [
   'bl',
   'boy love',
@@ -3356,7 +3677,7 @@ async function fetchMovieDetailFromOPhimForMovie(movie?: Partial<MovieDetail> | 
 }
 function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
   const currentEpisode = Number(m.current_episode || 0) || undefined;
-  const episodeCurrent = (m.episode_current as string) || '';
+  const episodeCurrent = repairDisplayText(m.episode_current);
   const episodeTextNumber = getEpisodeNumberFromText(episodeCurrent);
   const normalizedEpisodeCurrent =
     currentEpisode && currentEpisode > episodeTextNumber
@@ -3365,22 +3686,24 @@ function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
   const item: MovieItem = {
     _id: (m.id as string) || '',
     name: getMovieDisplayName({
-      name: (m.name as string) || '',
-      title_vi: (m.title_vi as string) || '',
-      title_en: (m.title_en as string) || '',
-      title_zh: (m.title_zh as string) || '',
-      origin_name: (m.origin_name as string) || '',
+      name: repairDisplayText(m.name),
+      title_vi: repairDisplayText(m.title_vi),
+      title_en: repairDisplayText(m.title_en),
+      title_zh: repairDisplayText(m.title_zh),
+      origin_name: repairDisplayText(m.origin_name),
     }),
     slug: (m.slug as string) || '',
-    origin_name: (m.origin_name as string) || '',
+    origin_name: repairDisplayText(m.origin_name),
     type: (m.type as string) || 'phim-le',
     thumb_url: (m.thumb_url as string) || (m.poster_url as string) || '',
     poster_url: (m.poster_url as string) || '',
+    hero_backdrop_url: (m.hero_backdrop_url as string) || undefined,
+    hero_poster_url: (m.hero_poster_url as string) || undefined,
     quality: (m.quality as string) || 'HD',
     lang: (m.lang as string) || '',
     year: (m.year as number) || 0,
     episode_current: normalizedEpisodeCurrent,
-    episode_total: (m.episode_total as string) || '',
+    episode_total: repairDisplayText(m.episode_total),
     current_episode: currentEpisode || episodeTextNumber || undefined,
     total_episodes: Number(m.total_episodes || 0) || undefined,
     schedule_type: (m.schedule_type as MovieItem['schedule_type']) || '',
@@ -3392,7 +3715,20 @@ function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
     sub_docquyen: false,
     chieurap: false,
     time: (m.time as string) || '',
-    modified: { time: (m.updated_at as string) || (m.created_at as string) || new Date().toISOString() },
+    modified: {
+      time: (m.feed_sort_at as string)
+        || (m.last_episode_change_at as string)
+        || (m.published_at as string)
+        || (m.created_at as string)
+        || (m.updated_at as string)
+        || new Date().toISOString(),
+    },
+    created_at: (m.created_at as string) || undefined,
+    published_at: (m.published_at as string) || undefined,
+    last_episode_change_at: (m.last_episode_change_at as string) || undefined,
+    is_published: m.is_published === undefined ? undefined : Boolean(m.is_published),
+    seo_catalog_status: (m.seo_catalog_status as string) || undefined,
+    superseded_by_movie_id: (m.superseded_by_movie_id as string) || null,
     ophim_id: (m.ophim_id as string) || undefined,
     tmdb_id: (m.tmdb_id as string) || undefined,
     source_site: (m.source_site as string) || 'supabase',
@@ -3634,6 +3970,8 @@ export async function searchQueerUniverseMovies(
 }
 
 function movieMatchesQueerUniverse(movie: MovieItem, raw?: Record<string, unknown>): boolean {
+  const sourceIdentity = normalizeQueerSearchText(`${movie.source_site || ''} ${movie.source_name || ''}`);
+  if (QUEER_SOURCE_TERMS.some((term) => sourceIdentity.includes(normalizeQueerSearchText(term)))) return true;
   const taxonomy = [
     ...(movie.category ?? []).flatMap((item) => [item.name, item.slug]),
     ...(movie.country ?? []).flatMap((item) => [item.name, item.slug]),
@@ -3655,9 +3993,7 @@ function movieMatchesQueerUniverse(movie: MovieItem, raw?: Record<string, unknow
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
-  return QUEER_UNIVERSE_TERMS.some((term) =>
-    haystack.includes(term.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
-  );
+  return /(?:^|\s)(?:bl|gl)(?:\s|$)|dam my|bach hop|boys? love|girls? love|yuri|lesbian/.test(haystack);
 }
 
 function getQueerCatalogIdentity(movie: MovieItem): string {
@@ -3714,6 +4050,75 @@ function getMovieUpdateTime(movie: MovieItem): number {
   const time = new Date(movie.modified?.time ?? 0).getTime();
   return Number.isFinite(time) ? time : 0;
 }
+
+function isGlvietsubCatalogMovie(movie: MovieItem): boolean {
+  return normalizeQueerSearchText(`${movie.source_site || ''} ${movie.source_name || ''} ${movie.slug || ''}`)
+    .includes('glvietsub');
+}
+
+function prepareQueerHomeRail(items: MovieItem[], limit: number, glvietsubOnly = false): MovieItem[] {
+  return uniqueMoviesBySlug(items)
+    .filter((movie) => !glvietsubOnly || isGlvietsubCatalogMovie(movie))
+    .filter((movie) => Boolean(movie.poster_url || movie.thumb_url))
+    .sort((a, b) => getMovieUpdateTime(b) - getMovieUpdateTime(a))
+    .slice(0, limit);
+}
+
+/**
+ * Load the compact GLVietsub rail used by the regular homepage. Prefer the
+ * source-pure live catalogue, but never remove the whole shelf when the
+ * public Data API is slow or temporarily has no GL rows. The shared queer
+ * snapshot is already used by the dedicated portal and is the last-known-good
+ * fallback for this optional homepage rail.
+ */
+export async function fetchGlvietsubHomeMovies(options: {
+  limit?: number;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+} = {}): Promise<MovieItem[]> {
+  const limit = Math.min(12, Math.max(1, options.limit ?? 12));
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(options.signal?.reason);
+  if (options.signal?.aborted) controller.abort(options.signal.reason);
+  else options.signal?.addEventListener('abort', abortFromParent, { once: true });
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 5000);
+
+  try {
+    const { data, error } = await supabase
+      .from('movies')
+      .select(SUPABASE_QUEER_LIST_SELECT)
+      .eq('is_published', true)
+      .or('source_site.ilike.%glvietsub%,source_name.ilike.%glvietsub%')
+      // `updated_at` advances during metadata and health work. The homepage
+      // rail must follow a real episode change, then first publication.
+      .order('last_episode_change_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false, nullsFirst: false })
+      .limit(Math.max(24, limit * 2))
+      .abortSignal(controller.signal);
+
+    if (error) throw error;
+
+    const glvietsubMovies = prepareQueerHomeRail(
+      ((data ?? []) as Record<string, unknown>[]).map(toSupabaseMovieItem),
+      limit,
+      true,
+    );
+    if (glvietsubMovies.length > 0) return glvietsubMovies;
+
+    const fallbackMovies = await loadStaticQueerFallback(options.signal);
+    return prepareQueerHomeRail(fallbackMovies, limit, true);
+  } catch (error) {
+    if ((error as Error)?.name !== 'AbortError') {
+      console.warn('[fetchGlvietsubHomeMovies] Exception:', error);
+    }
+    const fallbackMovies = await loadStaticQueerFallback(options.signal);
+    return prepareQueerHomeRail(fallbackMovies, limit, true);
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', abortFromParent);
+  }
+}
+
 export async function fetchQueerUniverseSections(options: { limit?: number; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<{
   featured: MovieItem[];
   newUpdates: MovieItem[];
@@ -3721,7 +4126,7 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
 }> {
   const limit = options.limit ?? 18;
   const buildSections = (items: MovieItem[]) => {
-    const sorted = uniqueMoviesBySlug(items).filter((movie) => {
+    const sorted = uniqueMoviesBySlug(items).filter((movie) => movieMatchesQueerUniverse(movie)).filter((movie) => {
       const artwork = `${movie.poster_url || ''} ${movie.thumb_url || ''}`.trim();
       return Boolean(artwork) && !/vietnam-flag-watercolor-760\.jpg/i.test(artwork);
     }).sort((a, b) => {
@@ -3762,7 +4167,11 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
       // therefore rewritten to index.html and cannot be parsed as JSON. Reuse
       // the canonical Singapore home-proxy client used by every other rail.
       const payload = await fetchHomePageData(['queer'], { signal: controller.signal });
-      return buildSections((payload.sections.queer ?? []) as MovieItem[]);
+      const liveQueer = ((payload.sections.queer ?? []) as MovieItem[])
+        .filter((movie) => movieMatchesQueerUniverse(movie));
+      if (liveQueer.length >= 5) return buildSections(liveQueer);
+      const fallbackMovies = await loadStaticQueerFallback(options.signal);
+      return buildSections([...liveQueer, ...fallbackMovies]);
     }
 
     const { data: markedRows } = await supabase
@@ -3857,7 +4266,12 @@ export async function fetchQueerUniverseSections(options: { limit?: number; time
   }
 }
 export function epSortKey(ep: EpisodeData): number {
-  if (isSpecialEpisode(ep)) return Infinity;
+  if (isSpecialEpisode(ep)) {
+    const storedIdentity = Number(ep.episode_number ?? 0);
+    if (storedIdentity < 0) return 100_000 + Math.abs(storedIdentity);
+    const ordinal = Number(String(ep.slug || ep.name || '').match(/(\d+)/)?.[1] || 0);
+    return 100_000 + (ordinal || 99_999);
+  }
   const explicit = Number(ep.episode_number ?? 0);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
   const text = ep.slug || ep.name || '';
@@ -3867,9 +4281,12 @@ export function epSortKey(ep: EpisodeData): number {
   return Infinity;
 }
 
-export function isSpecialEpisode(ep?: Pick<EpisodeData, 'name' | 'slug'> | null): boolean {
+export function isSpecialEpisode(ep?: Pick<EpisodeData, 'name' | 'slug' | 'episode_number'> | null): boolean {
+  if (Number(ep?.episode_number || 0) < 0) return true;
   const text = `${ep?.slug || ''} ${ep?.name || ''}`.toLowerCase();
   return text.includes('tap-dac-biet') || text.includes('tập đặc biệt') || text.includes('special episode')
+    || /(?:^|[\s_-])(?:pilot|extra|bonus)(?:$|[\s_-])/.test(text)
+    || text.includes('ngoại truyện') || text.includes('ngoai truyen')
     || (/(?:^|\D)\d{1,3}\.\d{1,2}(?:\D|$)/.test(String(ep?.name || '')) && /\bpart\s*\d+\b/i.test(String(ep?.name || '')));
 }
 
@@ -3902,6 +4319,65 @@ function raceFirstValidWithTimeout<T>(
   });
 }
 
+function mapStoredSpecialEpisodeRows(data: Array<Record<string, unknown>>): EpisodeServer[] {
+  const grouped = new Map<string, EpisodeData[]>();
+  for (const raw of data) {
+      const episodeNumber = Number(raw.episode_number || 0);
+      const linkEmbed = String(raw.link_embed || '').trim();
+      const linkM3u8 = String(raw.link_m3u8 || '').trim();
+      if (!(episodeNumber < 0) || (!linkEmbed && !linkM3u8)) continue;
+      const serverName = String(raw.server_name || 'Nguồn đặc biệt');
+      const storedAudioType = String(raw.audio_type || '').trim().toLowerCase();
+      const audioType: EpisodeData['audio_type'] = ['vietsub', 'thuyetminh', 'longtieng', 'raw'].includes(storedAudioType)
+        ? storedAudioType as EpisodeData['audio_type']
+        : undefined;
+      const rows = grouped.get(serverName) ?? [];
+      rows.push({
+        name: String(raw.episode_name || raw.slug || 'Tập đặc biệt'),
+        slug: String(raw.slug || `special-${Math.abs(episodeNumber)}`),
+        episode_number: episodeNumber,
+        filename: '',
+        link_embed: linkEmbed,
+        link_m3u8: linkM3u8,
+        subtitle_url: String(raw.subtitle_url || ''),
+        audio_type: audioType,
+        source_provider: String(raw.source || '') || undefined,
+      });
+      grouped.set(serverName, rows);
+  }
+  return [...grouped].map(([server_name, server_data]) => ({ server_name, server_data }));
+}
+
+async function fetchStoredSpecialEpisodeServers(slug: string, timeoutMs = 3500): Promise<EpisodeServer[]> {
+  if (!supabase || !slug) return [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    if (typeof window !== 'undefined') {
+      const staticResponse = await fetch(`/special-episodes/${encodeURIComponent(slug)}.json`, {
+        signal: controller.signal,
+        cache: 'force-cache',
+        headers: { Accept: 'application/json' },
+      });
+      if (staticResponse.ok && (staticResponse.headers.get('content-type') || '').includes('application/json')) {
+        const staticRows = await staticResponse.json() as Array<Record<string, unknown>>;
+        const staticServers = Array.isArray(staticRows) ? mapStoredSpecialEpisodeRows(staticRows) : [];
+        if (staticServers.length > 0) return staticServers;
+      }
+    }
+
+    const { data, error } = await supabase
+      .rpc('get_public_special_episodes', { p_slug: slug })
+      .abortSignal(controller.signal);
+    if (error || !Array.isArray(data)) return [];
+    return mapStoredSpecialEpisodeRows(data as Array<Record<string, unknown>>);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function preferPrimaryWithFallback<T>(
   promises: Promise<T | null>[],
   primaryWaitMs: number,
@@ -3928,7 +4404,16 @@ function withNullTimeout<T>(
    Dùng khi OPhim không có phim hoặc bị lỗi
    OPTIMIZED: chỉ 2 nguồn dự phòng nhanh nhất
    ════════════════════════════════════════════ */
-async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailResponse | null> {
+async function fetchMovieDetailFromExternal(
+  slug: string,
+  allowProductionEmergency = false,
+): Promise<MovieDetailResponse | null> {
+  // Production movie detail must use the canonical edge proxy. Direct browser
+  // provider calls normally remain development-only. The one exception is a
+  // bounded emergency read after every canonical endpoint has already failed
+  // (for example while Pages Functions are fail-open after quota exhaustion).
+  // Exact slug validation below prevents another movie's stream being used.
+  if (!ALLOW_BROWSER_PROVIDER_FALLBACK && !allowProductionEmergency) return null;
   const sources = [
     { url: `https://phimapi.com/phim/${encodeURIComponent(slug)}` },
     { url: `https://phimapi.net/phim/${encodeURIComponent(slug)}` },
@@ -3964,7 +4449,7 @@ async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailRe
       .catch((err) => {
         clearTimeout(t);
         if (import.meta.env.DEV && !isAbortLikeError(err)) {
-          console.warn(`[fetchMovieDetailFromExternal] ${name} failed:`, (err as Error).message);
+          console.warn(`[fetchMovieDetailFromExternal] ${new URL(url).hostname} failed:`, (err as Error).message);
         }
         return null;
       });
@@ -3979,7 +4464,7 @@ async function fetchMovieDetailFromExternal(slug: string): Promise<MovieDetailRe
 
 export async function fetchMovieDetail(slug: string, forceRefresh = false, source?: string): Promise<MovieDetailResponse | null> {
   const detailSourceKey = source || 'default';
-  const cacheKey = `detail_v10_no_ophim_${detailSourceKey}_${slug}`;
+  const cacheKey = `detail_v12_special_rpc_${detailSourceKey}_${slug}`;
   const inflightKey = `${detailSourceKey}:${slug}`;
   // Xóa cache key cũ nếu còn sót
   apiCache.delete(`detail_${slug}`);
@@ -3992,7 +4477,10 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
   const ttl = TTL_CONFIG.detail;
   const cached = getCached<MovieDetailResponse>(cacheKey, ttl);
 
-  if (cached && !cached.stale && !forceRefresh && cached.data && detailHasPlayableEpisodes(cached.data)) return cached.data;
+  if (
+    cached && !cached.stale && !forceRefresh && cached.data &&
+    detailHasCompleteAdvertisedSequence(cached.data)
+  ) return cached.data;
 
   const inflight = detailInflight.get(inflightKey);
   if (inflight && !forceRefresh) return inflight;
@@ -4009,6 +4497,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
   }
 
   const promise = (async (): Promise<MovieDetailResponse | null> => {
+    const storedSpecialEpisodesPromise = fetchStoredSpecialEpisodeServers(slug).catch(() => []);
     let blvietsubPromise: Promise<MovieDetailResponse | null> | undefined;
 
     let ophim: MovieDetailResponse | null = null;
@@ -4039,12 +4528,16 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       // The proxy is not a preferred provider: it is the canonical, scored
       // union of every provider. Give that neutral result a sub-second head
       // start, then race every already-running exact-slug source together.
-      const proxyPlayablePromise = proxyPromise
-        .then((data) => (detailHasPlayableEpisodes(data) ? data : null))
+      const proxyPlayablePromise = Promise.all([proxyPromise, storedSpecialEpisodesPromise])
+        .then(([data, specialServers]) => {
+          if (!detailHasCompleteAdvertisedSequence(data)) return null;
+          if (!data || specialServers.length === 0) return data;
+          return { ...data, episodes: mergeEpisodeServers(data.episodes ?? [], specialServers) };
+        })
         .catch(() => null);
       const playablePromises = [
         proxyPlayablePromise,
-        supabaseFallbackPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)),
+        supabaseFallbackPromise.then((data) => (detailHasCompleteAdvertisedSequence(data) ? data : null)),
         immediateExternalPromise.then((data) => (detailHasPlayableEpisodes(data) ? data : null)),
       ];
       // The public union is the only response that contains every stored
@@ -4090,7 +4583,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
         : withNullTimeout(fetchMovieDetailFromOPhim(slug, false), 4500);
       blvietsubPromise = withNullTimeout(fetchMovieDetailFromBlvietsub(slug), 5000);
       [proxy, sb, ophim, blvietsub] = await Promise.all([
-        proxyPromise.catch(() => null),
+        proxyPlayablePromise,
         supabaseFallbackPromise,
         ophimFallbackPromise,
         blvietsubPromise,
@@ -4197,8 +4690,15 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
 
     // ── STEP 4: External fallback ──
     let external = externalPromise ? await externalPromise.catch(() => null) : await fetchMovieDetailFromExternal(slug);
+    if (!external && typeof window !== 'undefined') {
+      // Only reached after the canonical Supabase/Pages paths and their
+      // provider-neutral recovery have completed without a playable result.
+      // This preserves normal source scoring while keeping released movies
+      // watchable during a temporary Pages Functions fail-open window.
+      external = await fetchMovieDetailFromExternal(slug, true);
+    }
     if (!external && canonicalSlug && canonicalSlug !== slug) {
-      external = await fetchMovieDetailFromExternal(canonicalSlug);
+      external = await fetchMovieDetailFromExternal(canonicalSlug, typeof window !== 'undefined');
     }
     if (external && detailHasPlayableEpisodes(external)) {
       setCached(cacheKey, external);
@@ -4667,6 +5167,26 @@ function getRecentBadHostPenalty(ep: EpisodeData): number {
   }
 }
 
+function getInternationalPlaybackBonus(ep: EpisodeData): number {
+  if (!isInternationalViewer()) return 0;
+  const m3u8 = String(ep.link_m3u8 || '').trim();
+  const embed = String(ep.link_embed || '').trim();
+  const host = getUrlHost(m3u8 || embed);
+
+  // These direct HLS families returned segment-capable CORS responses from
+  // Singapore during production verification. Prefer them abroad so playback
+  // does not depend on a geo-sensitive provider iframe.
+  if (m3u8 && (/kkphimplayer/i.test(host) || /phim1280\.tv$/i.test(host))) return 1800;
+  if (m3u8 && /streamvsmov\.com$/i.test(host)) return 1400;
+  if (m3u8 && /cdnvideo11\.shop$|streamcdn4\.site$/i.test(host)) return 1200;
+  if (m3u8 && /opstream/i.test(host)) return -500;
+  if (m3u8) return 700;
+
+  if (/dailymotion\.com$|dai\.ly$|vimeo\.com$|ok\.ru$/i.test(host)) return 650;
+  if (embed) return -450;
+  return 0;
+}
+
 function getBestPlayableEpisodeScore(server: EpisodeServer): number {
   const playable = (server.server_data ?? []).filter((ep) =>
     hasPlayableUrl(ep) && !ep.is_scheduled && !isRetiredOphimEpisode(ep, server.server_name)
@@ -4687,6 +5207,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   const lower = url.toLowerCase();
   let score = 0;
   const hasBrowserManagedStreamcEmbed = /https?:\/\/[^/]*streamc\.xyz\//i.test(embed);
+  const internationalBonus = getInternationalPlaybackBonus(ep);
   if (!url) return -10000;
   if (!m3u8 && embed && isBlvietsubWatchPageUrl(embed)) return -10000;
   const storedPlaybackScore = Number(ep.source_playback_score);
@@ -4708,7 +5229,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
     const browserEmbedPenalty = !m3u8 && hasBrowserManagedStreamcEmbed
       ? STREAMC_IFRAME_ONLY_PENALTY
       : 0;
-    return effectiveStoredPlaybackScore * 3 + transportBonus - browserEmbedPenalty
+    return effectiveStoredPlaybackScore * 3 + transportBonus + internationalBonus - browserEmbedPenalty
       - getRecentBadHostPenalty(ep);
   }
   score += getSourceResilienceScore(ep);
@@ -4756,7 +5277,7 @@ function getEpisodeReliabilityScore(ep: EpisodeData): number {
   if (host === 'blvietsub.com' || host === 'www.blvietsub.com') score -= 900;
   if (embed && !m3u8 && score < 20) score += 10;
 
-  return score - getRecentBadHostPenalty(ep);
+  return score + internationalBonus - getRecentBadHostPenalty(ep);
 }
 
 export function getServerQualityScore(server: EpisodeServer): number {
@@ -4966,7 +5487,7 @@ export function pickBestEpisodeAcrossServers(
 export function pickBestEpisodeByScore(
   episodes: EpisodeServer[],
   targetEpSlug?: string,
-  _preferredProvider?: string,
+  preferredProvider?: string,
 ): { serverIndex: number; episode: EpisodeData; sourceLabel: string | null } | null {
   const candidates: {
     serverIndex: number;
@@ -5009,7 +5530,19 @@ export function pickBestEpisodeByScore(
   });
 
   if (!candidates.length) return null;
-  const rankedCandidates = candidates;
+  const preferredCodeIndex = (() => {
+    const normalized = String(preferredProvider || '').trim().toUpperCase();
+    if (!normalized) return -1;
+    if (normalized === 'PHIMAPI') return STREAM_SERVER_CODES.indexOf('KKPHIM');
+    return STREAM_SERVER_CODES.indexOf(normalized as typeof STREAM_SERVER_CODES[number]);
+  })();
+  const preferredCandidates = preferredCodeIndex >= 0
+    ? candidates.filter((candidate) => candidate.sourceCodeIndex === preferredCodeIndex)
+    : [];
+  // A source carried by a clicked provider-specific card is an explicit user
+  // choice. Honor it when that provider has a playable candidate; reliability
+  // scoring still decides among that provider's mirrors and episodes.
+  const rankedCandidates = preferredCandidates.length > 0 ? preferredCandidates : candidates;
   // RAW is a useful early-access choice, but must never silently replace a
   // translated episode when the viewer did not explicitly request an episode.
   const selectableCandidates = !targetText && rankedCandidates.some((candidate) =>
@@ -5825,6 +6358,67 @@ export function evictAllMovieCaches(slug: string): void {
 // Alias backward-compatible
 export { evictAllMovieCaches as evictDetailCache };
 
+type Top10TodayRow = {
+  item?: unknown;
+  rank?: number;
+  viewers_today?: number;
+  watch_seconds_today?: number;
+  signal_source?: 'first_party_views' | 'tmdb_fallback';
+};
+
+let top10TodayCache: { expiresAt: number; items: Movie[] } | null = null;
+
+export async function fetchTop10TodayMovies(options: {
+  signal?: AbortSignal;
+  limit?: number;
+  timeoutMs?: number;
+} = {}): Promise<Movie[]> {
+  const limit = Math.max(1, Math.min(options.limit ?? 10, 10));
+  if (top10TodayCache && top10TodayCache.expiresAt > Date.now()) {
+    return top10TodayCache.items.slice(0, limit);
+  }
+
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(options.signal?.reason);
+  if (options.signal?.aborted) controller.abort(options.signal.reason);
+  else options.signal?.addEventListener('abort', abortFromCaller, { once: true });
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 5_000);
+
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_top10_movies_today`, {
+      method: 'POST',
+      signal: controller.signal,
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ p_limit: limit }),
+    });
+    if (!response.ok) throw new Error(`Top 10 RPC failed (${response.status})`);
+    const rows = await response.json() as Top10TodayRow[];
+    const seen = new Set<string>();
+    const items = rows
+      .sort((a, b) => Number(a.rank ?? 999) - Number(b.rank ?? 999))
+      .map((row) => parseMovieItem(row.item))
+      .filter((movie): movie is Movie => {
+        if (!movie?.slug || seen.has(movie.slug)) return false;
+        seen.add(movie.slug);
+        return (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer';
+      })
+      .slice(0, limit);
+
+    if (items.length === 0) throw new Error('Top 10 RPC returned no playable movies');
+    top10TodayCache = { expiresAt: Date.now() + 5 * 60_000, items };
+    return items;
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', abortFromCaller);
+  }
+}
+
 type HomePageDataResult = {
   status: boolean;
   source: 'cache' | 'stale' | 'fresh';
@@ -5871,25 +6465,42 @@ async function fetchHomePageDataUncached(
 
   try {
     let res: Response | null = null;
+    let data: {
+      status: boolean;
+      source: 'cache' | 'stale' | 'fresh';
+      sections: Record<string, unknown[]>;
+    } | null = null;
     for (const endpoint of urls) {
       const candidate = await fetch(endpoint.url.toString(), {
         signal: controller.signal,
         cache: 'default',
         headers: endpoint.headers,
       });
-      const contentType = candidate.headers.get('content-type') || '';
-      if (candidate.ok && contentType.toLowerCase().includes('application/json')) {
+      if (candidate.ok) {
+        // Pages may serve the generated `/api/home` asset with a generic MIME
+        // type even though its body is valid JSON. Parse defensively instead
+        // of discarding every homepage shelf solely because of that header.
+        const candidateData = await candidate.json().catch(() => null) as typeof data;
+        if (!candidateData || !candidateData.sections || typeof candidateData.sections !== 'object') continue;
+        const candidateQueer = sections.includes('queer')
+          ? ((candidateData?.sections?.queer ?? []) as unknown[])
+          : [];
+        const candidateTrending = sections.includes('trending')
+          ? ((candidateData?.sections?.trending ?? []) as unknown[])
+          : [];
+        // Pages can serve a valid generic static homepage response while its
+        // source-specific queer rail is empty. Do not treat that as success:
+        // continue to the Supabase home proxy, which owns the canonical BL/GL
+        // catalogue. This affects only requests that explicitly ask for queer.
+        if (sections.includes('queer') && candidateQueer.length < 5) continue;
+        if (sections.includes('trending') && candidateTrending.length < 12) continue;
         res = candidate;
+        data = candidateData;
         break;
       }
     }
     clearTimeout(timer);
-    if (!res) throw new Error('home-proxy returned no JSON response');
-    const data = (await res.json()) as {
-      status: boolean;
-      source: 'cache' | 'stale' | 'fresh';
-      sections: Record<string, unknown[]>;
-    };
+    if (!res || !data) throw new Error('home-proxy returned no complete JSON response');
 
     const parsedSections: Record<string, Movie[]> = {};
     for (const [key, items] of Object.entries(data.sections)) {
@@ -5937,26 +6548,29 @@ function parseMovieItem(raw: unknown): Movie | null {
   const m = raw as Record<string, unknown>;
   if (!m.slug || !m.name) return null;
   const displayName = getMovieDisplayName({
-    name: String(m.name || ''),
-    title_vi: String(m.title_vi || ''),
-    title_en: String(m.title_en || ''),
-    origin_name: String(m.origin_name || ''),
+    name: repairDisplayText(m.name),
+    title_vi: repairDisplayText(m.title_vi),
+    title_en: repairDisplayText(m.title_en),
+    origin_name: repairDisplayText(m.origin_name),
   });
   return {
     _id: String(m._id ?? m.id ?? ''),
     name: displayName,
     slug: String(m.slug),
-    origin_name: String(m.origin_name ?? ''),
+    origin_name: repairDisplayText(m.origin_name),
     type: String(m.type ?? 'single'),
     thumb_url: String(m.thumb_url ?? ''),
     poster_url: String(m.poster_url ?? ''),
     hero_backdrop_url: String(m.hero_backdrop_url ?? '') || undefined,
     hero_poster_url: String(m.hero_poster_url ?? '') || undefined,
+    tmdb_popularity: Number(m.tmdb_popularity || 0) || undefined,
+    tmdb_vote_average: Number(m.tmdb_vote_average || 0) || undefined,
+    tmdb_vote_count: Number(m.tmdb_vote_count || 0) || undefined,
     quality: String(m.quality ?? 'HD'),
     lang: String(m.lang ?? ''),
     year: Number(m.year ?? 0),
-    episode_current: String(m.episode_current ?? ''),
-    episode_total: String(m.episode_total ?? ''),
+    episode_current: repairDisplayText(m.episode_current),
+    episode_total: repairDisplayText(m.episode_total),
     current_episode: Number(m.current_episode || 0) || undefined,
     total_episodes: Number(m.total_episodes || 0) || undefined,
     schedule_type: (m.schedule_type as MovieItem['schedule_type']) || '',
@@ -5968,7 +6582,15 @@ function parseMovieItem(raw: unknown): Movie | null {
     next_episode_name: String(m.next_episode_name ?? '') || undefined,
     schedule_note: String(m.schedule_note ?? '') || undefined,
     time: String(m.time ?? ''),
-    modified: { time: String((m.modified as { time?: string } | undefined)?.time ?? new Date().toISOString()) },
+    modified: {
+      time: String(
+        (m.modified as { time?: string } | undefined)?.time
+        ?? m.last_episode_change_at
+        ?? m.published_at
+        ?? m.created_at
+        ?? '',
+      ),
+    },
     category: normalizeTaxonomy<MovieCategory>(m.category),
     country: normalizeTaxonomy<MovieCountry>(m.country),
     chieurap: Boolean(m.chieurap ?? false),
@@ -5984,5 +6606,8 @@ function parseMovieItem(raw: unknown): Movie | null {
     showtimes: '',
     source_site: String(m.source_site ?? m.source_name ?? ''),
     source_name: String(m.source_name ?? ''),
+    created_at: String(m.created_at ?? '') || undefined,
+    published_at: String(m.published_at ?? '') || undefined,
+    last_episode_change_at: String(m.last_episode_change_at ?? '') || undefined,
   };
 }

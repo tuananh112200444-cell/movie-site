@@ -10,6 +10,8 @@ type CheckResult = {
   status: number | null;
   elapsed_ms: number;
   error: string | null;
+  attempts: number;
+  first_elapsed_ms: number | null;
 };
 
 type ActionItem = {
@@ -21,6 +23,37 @@ type ActionItem = {
 
 const SITE_URL = 'https://khophim.org';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
+
+function resolvePublicApiKey(): string {
+  const legacyAnonKey = String(Deno.env.get('SUPABASE_ANON_KEY') || '').trim();
+  if (legacyAnonKey) return legacyAnonKey;
+
+  const configuredKeys = String(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') || '').trim();
+  if (!configuredKeys) return '';
+  try {
+    const candidates: string[] = [];
+    const visit = (value: unknown) => {
+      if (typeof value === 'string') {
+        candidates.push(value.trim());
+      } else if (Array.isArray(value)) {
+        value.forEach(visit);
+      } else if (value && typeof value === 'object') {
+        Object.values(value as Record<string, unknown>).forEach(visit);
+      }
+    };
+    visit(JSON.parse(configuredKeys));
+    return candidates.find((value) => value.startsWith('sb_publishable_'))
+      || candidates.find((value) => value.startsWith('eyJ'))
+      || '';
+  } catch {
+    return '';
+  }
+}
+
+const SUPABASE_PUBLIC_API_KEY = resolvePublicApiKey();
+const SUPABASE_PUBLIC_HEADERS = SUPABASE_PUBLIC_API_KEY
+  ? { apikey: SUPABASE_PUBLIC_API_KEY }
+  : {};
 
 const CHECKS = [
   { key: 'home', label: 'Trang chu', group: 'page' as const, url: `${SITE_URL}/` },
@@ -34,9 +67,9 @@ const CHECKS = [
   { key: 'rss-feed', label: 'RSS phim moi', group: 'seo' as const, url: `${SITE_URL}/feed.xml` },
   { key: 'press-kit', label: 'Press kit', group: 'page' as const, url: `${SITE_URL}/press/` },
   { key: 'mhophim', label: 'MHoPhim', group: 'page' as const, url: 'https://mhophim.com/' },
-  { key: 'home-proxy', label: 'Home proxy', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/home-proxy` },
-  { key: 'search-index', label: 'Search index cache', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/search-index-proxy?limit=80` },
-  { key: 'movie-detail', label: 'Movie detail proxy', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/movie-detail-proxy?slug=goi-ngay-bac-si-khuong`, headers: { 'X-KhoPhim-Proxy-Secret': Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') ?? '' } },
+  { key: 'home-proxy', label: 'Home proxy', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/home-proxy`, headers: { ...SUPABASE_PUBLIC_HEADERS } },
+  { key: 'search-index', label: 'Search API', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/search-index-proxy?q=ben%20bo&limit=8`, headers: { ...SUPABASE_PUBLIC_HEADERS } },
+  { key: 'movie-detail', label: 'Movie detail proxy', group: 'api' as const, url: `${SUPABASE_URL}/functions/v1/movie-detail-proxy?slug=goi-ngay-bac-si-khuong`, headers: { ...SUPABASE_PUBLIC_HEADERS, 'X-KhoPhim-Proxy-Secret': Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') ?? '' } },
 ];
 
 function getCorsHeaders(origin: string | null): Record<string, string> {
@@ -69,7 +102,11 @@ function json(body: unknown, status: number, corsHeaders: Record<string, string>
   });
 }
 
-async function runCheck(check: typeof CHECKS[number]): Promise<CheckResult> {
+function slowThreshold(group: CheckResult['group']): number {
+  return group === 'api' ? 4500 : 2500;
+}
+
+async function runSingleCheck(check: typeof CHECKS[number]): Promise<CheckResult> {
   const started = performance.now();
   try {
     const response = await fetch(check.url, {
@@ -91,6 +128,8 @@ async function runCheck(check: typeof CHECKS[number]): Promise<CheckResult> {
       status: response.status,
       elapsed_ms: elapsed,
       error: response.ok ? null : `HTTP ${response.status}`,
+      attempts: 1,
+      first_elapsed_ms: null,
     };
   } catch (error) {
     return {
@@ -102,13 +141,33 @@ async function runCheck(check: typeof CHECKS[number]): Promise<CheckResult> {
       status: null,
       elapsed_ms: Math.round(performance.now() - started),
       error: error instanceof Error ? error.message : String(error),
+      attempts: 1,
+      first_elapsed_ms: null,
     };
   }
 }
 
+async function runCheck(check: typeof CHECKS[number]): Promise<CheckResult> {
+  const first = await runSingleCheck(check);
+  if (check.group !== 'api' || (first.ok && first.elapsed_ms <= slowThreshold(check.group))) {
+    return first;
+  }
+
+  // Edge isolates and database pools can have a one-off cold start. Retry only
+  // a failed/slow API once so the dashboard reports sustained latency instead
+  // of turning a recovered cold start into an incident.
+  const retry = await runSingleCheck(check);
+  const best = retry.ok && (!first.ok || retry.elapsed_ms < first.elapsed_ms) ? retry : first;
+  return {
+    ...best,
+    attempts: 2,
+    first_elapsed_ms: first.elapsed_ms,
+  };
+}
+
 function buildActions(results: CheckResult[]): ActionItem[] {
   const failed = results.filter((item) => !item.ok);
-  const slow = results.filter((item) => item.ok && item.elapsed_ms > (item.group === 'api' ? 4500 : 2500));
+  const slow = results.filter((item) => item.ok && item.elapsed_ms > slowThreshold(item.group));
   const items: ActionItem[] = [];
 
   if (failed.length > 0) {
@@ -158,7 +217,7 @@ Deno.serve(async (req) => {
     }
 
     const failed = results.filter((item) => !item.ok).length;
-    const slow = results.filter((item) => item.ok && item.elapsed_ms > (item.group === 'api' ? 4500 : 2500)).length;
+    const slow = results.filter((item) => item.ok && item.elapsed_ms > slowThreshold(item.group)).length;
     const score = Math.max(0, 100 - failed * 18 - slow * 6);
     const supabase = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', { auth: { persistSession: false } });
     const { data: operationsHealth } = await supabase

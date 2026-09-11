@@ -4,6 +4,7 @@ import { extractImageFromHtml } from '../../../scripts/image-source-utils.mjs';
 import { countPlayableEpisodes, maxPlayableEpisodeNumber as getMaxPlayableEpisodeNumber, shouldPublishMovieFromSync, shouldIncludeMovieForBlvietsubSync } from '../../../scripts/blvietsub-sync-utils.mjs';
 import { resolveLocalizedMovieTitles } from '../_shared/tmdb-title-localization.ts';
 import { findCanonicalMovieByIdentity, retireSourceMovieDuplicate } from '../_shared/movie-identity.ts';
+import { resolveSourceTitleFields } from '../../../scripts/source-title-localization.mjs';
 
 const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://blvietsub.com/sitemap_index.xml';
 const BLVIETSUB_PROXY_URL = Deno.env.get('BLVIETSUB_PROXY_URL') || 'https://khophim.org/internal/blvietsub-proxy';
@@ -108,6 +109,7 @@ interface LocalEpisodeStats {
 interface ParsedEntry {
   postId: string;
   title: string;
+  titleVi?: string;
   originName: string;
   titleEn?: string;
   titleOriginal?: string;
@@ -126,18 +128,23 @@ interface ParsedEntry {
 }
 
 async function enrichEntryTitles(entry: ParsedEntry): Promise<void> {
+  const sourceTitles = resolveSourceTitleFields(entry.title, entry.originName);
+  entry.originName = sourceTitles.titleOriginal || entry.originName;
   const localized = await resolveLocalizedMovieTitles({
-    titleVi: entry.title,
-    sourceOriginal: entry.originName,
+    titleVi: sourceTitles.titleVi || entry.title,
+    sourceOriginal: sourceTitles.titleOriginal || entry.originName,
     year: entry.year,
     tmdbToken: TMDB_READ_ACCESS_TOKEN,
   });
-  entry.titleEn = localized.titleEn;
-  entry.titleOriginal = localized.titleOriginal || entry.originName;
+  entry.titleVi = sourceTitles.titleVi
+    || (normalizeText(localized.titleVi) !== normalizeText(entry.title) ? localized.titleVi : '');
+  entry.titleEn = sourceTitles.titleEn || localized.titleEn;
+  entry.titleOriginal = localized.titleOriginal || sourceTitles.titleOriginal || entry.originName;
   entry.tmdbId = localized.tmdbId;
   entry.aliasNames = uniqueTextValues([
     ...(entry.aliasNames || []),
     entry.title,
+    entry.titleVi,
     entry.originName,
     entry.titleEn,
     entry.titleOriginal,
@@ -396,11 +403,17 @@ function getImage(entry: BloggerEntry): string {
   return image.replace(/\/s\d+\//, '/s640/');
 }
 
+function validReleaseYear(value: unknown): number {
+  const year = Number(value || 0);
+  const maximumYear = new Date().getUTCFullYear() + 1;
+  return Number.isInteger(year) && year >= 1888 && year <= maximumYear ? year : 0;
+}
+
 function getEntryYear(entry: BloggerEntry): number {
   const terms = entry.category?.map((item) => item.term || '') || [];
   const categoryYear = terms.find((term) => /^(19|20)\d{2}$/.test(term));
   const titleYear = entry.title?.$t?.match(/\b(19|20)\d{2}\b/)?.[0];
-  return Number(categoryYear || titleYear || 0);
+  return validReleaseYear(categoryYear || titleYear || 0);
 }
 
 function inferServerName(rawServerName: string, embedUrl: string): string {
@@ -484,7 +497,8 @@ function parseEpisodes(content = ''): ParsedEpisode[] {
     for (const match of block.html.matchAll(/data-embed=["']([^"']+)["'][\s\S]*?<span>([^<]+)<\/span>/gi)) {
       const embed = match[1].replace(/&amp;/g, '&').trim();
       const label = match[2].trim();
-      const episodeNumber = Number(label.match(/\d+/)?.[0] || 0);
+      const info = parseEpisodeInfo(label);
+      const episodeNumber = info.number;
       if (!episodeNumber || !embed) continue;
 
       try {
@@ -498,8 +512,8 @@ function parseEpisodes(content = ''): ParsedEpisode[] {
       if (episodes.has(key)) continue;
       episodes.set(key, {
         episode_number: episodeNumber,
-        episode_name: `${TAP_LABEL} ${episodeNumber}`,
-        slug: `tap-${episodeNumber}`,
+        episode_name: info.label,
+        slug: info.slug,
         link_embed: embed,
         server_name: serverName,
       });
@@ -844,22 +858,43 @@ async function findBestMovieForEntry(
   indexes: ReturnType<typeof buildMovieIndexes>,
 ): Promise<MovieRow | null> {
   const localMatch = findMovieForEntry(entry, indexes);
-  const globalMatch = await findGlobalMovieForEntry(supabase, entry);
+  // Legacy source rows often retain an English/original title that disappeared
+  // from the current provider page. Carry those exact aliases into the global
+  // lookup so the public Admin slug can still win canonical selection.
+  const identityEntry = localMatch ? {
+    ...entry,
+    aliasNames: uniqueTextValues([
+      ...(entry.aliasNames || []),
+      localMatch.name,
+      localMatch.origin_name,
+      localMatch.title_vi,
+      localMatch.title_en,
+      localMatch.title_original,
+    ]),
+  } : entry;
+  const globalMatch = await findGlobalMovieForEntry(supabase, identityEntry);
   return selectPreferredMovie([localMatch, globalMatch].filter((movie): movie is MovieRow => Boolean(movie?.id)));
 }
 
-function findBlvietsubSourceDuplicate(entry: ParsedEntry, rows: MovieRow[], targetId: string): MovieRow | null {
+function findBlvietsubSourceDuplicates(entry: ParsedEntry, rows: MovieRow[], targetId: string): MovieRow[] {
   const sourceUrl = String(entry.sourceUrl || '').replace(/\/+$/, '');
   const generatedSlug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
-  return rows.find((candidate) =>
-    candidate.id !== targetId
-    && `${candidate.source_site || ''} ${candidate.source_name || ''}`.toLowerCase().includes('blvietsub')
-    && (
-      String(candidate.source_url || '').replace(/\/+$/, '') === sourceUrl
+  const entryKeys = getEntryCompactTitleKeys(entry);
+  const currentYear = new Date().getFullYear();
+  return rows.filter((candidate) => {
+    if (candidate.id === targetId) return false;
+    const exactSourceIdentity = String(candidate.source_url || '').replace(/\/+$/, '') === sourceUrl
       || String(candidate.showtimes || '').replace(/\/+$/, '') === sourceUrl
-      || candidate.slug === generatedSlug
-    )
-  ) || null;
+      || candidate.slug === generatedSlug;
+    const sourceIdentity = `${candidate.source_site || ''} ${candidate.source_name || ''}`.toLowerCase();
+    const isBlvietsubSibling = sourceIdentity.includes('blvietsub')
+      || candidate.slug.startsWith('blvietsub-')
+      || exactSourceIdentity;
+    if (!isBlvietsubSibling) return false;
+    const exactTitleIdentity = getMovieCompactTitleKeys(candidate).some((key) => entryKeys.includes(key));
+    const invalidFutureYear = Number(candidate.year || 0) > currentYear + 1;
+    return exactSourceIdentity || (exactTitleIdentity && (hasCompatibleYear(entry.year, candidate.year) || invalidFutureYear));
+  });
 }
 
 async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<MovieRow[]> {
@@ -868,8 +903,8 @@ async function fetchExistingQueerMovies(supabase: SupabaseClient): Promise<Movie
   for (let from = 0; from < 10000; from += pageSize) {
     const { data, error } = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, title_original, tmdb_id, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year')
-      .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%')
+      .select('id, slug, name, origin_name, title_vi, title_en, title_original, tmdb_id, source_site, source_name, showtimes, source_url, thumb_url, poster_url, episode_current, current_episode, total_episodes, year, superseded_by_movie_id')
+      .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub%,source_url.ilike.%blvietsub%,slug.ilike.blvietsub-%')
       .range(from, from + pageSize - 1);
 
     if (error) throw new Error(`movies select: ${error.message}`);
@@ -1123,15 +1158,33 @@ function addParsedEpisode(
 }
 
 function parseEpisodeToken(value: string): number {
-  const numbers = String(value || '').match(/\d+/g);
-  if (!numbers?.length) return 1;
-  return Number(numbers[numbers.length - 1] || 1) || 1;
+  return parseEpisodeInfo(value).number;
 }
 
 function parseEpisodeInfo(value: string): { number: number; label: string; slug: string; end: number } {
   const raw = decodeHtml(String(value || '')).trim();
+  const normalized = slugify(raw);
   const numbers = raw.match(/\d+/g);
-  if (!numbers?.length) return { number: 1, label: `${TAP_LABEL} 1`, slug: 'tap-1', end: 1 };
+  const explicitNumber = Number(numbers?.[numbers.length - 1] || 0) || 0;
+  const isExtra = /(?:^|-)(?:extra|ngoai-truyen|bonus)(?:-|$)/.test(normalized);
+  const isPilot = /(?:^|-)pilot(?:-|$)/.test(normalized);
+  const isSpecial = isExtra || isPilot || /(?:^|-)(?:tap-)?dac-biet(?:-|$)/.test(normalized)
+    || /(?:^|-)special(?:-episode)?(?:-|$)/.test(normalized);
+  if (isSpecial) {
+    const number = isPilot
+      ? -(3000 + Math.max(explicitNumber, 1))
+      : isExtra
+        ? -(2000 + Math.max(explicitNumber, 1))
+        : -(1000 + Math.max(explicitNumber, 1));
+    const label = raw || (isPilot ? 'Pilot' : isExtra ? 'Tập Extra' : 'Tập Đặc Biệt');
+    const slug = isPilot
+      ? `pilot${explicitNumber > 1 ? `-${explicitNumber}` : ''}`
+      : isExtra
+        ? `tap-extra${explicitNumber ? `-${explicitNumber}` : ''}`
+        : `tap-dac-biet${explicitNumber > 1 ? `-${explicitNumber}` : ''}`;
+    return { number, label, slug, end: 0 };
+  }
+  if (!numbers?.length) return { number: 0, label: raw, slug: normalized, end: 0 };
   const start = Number(numbers[0] || 1) || 1;
   const end = Number(numbers[numbers.length - 1] || start) || start;
   const isRange = numbers.length >= 2 && /[-~–—]/.test(raw) && end > start;
@@ -1234,10 +1287,13 @@ function getWordPressReleaseYear(html: string, updatedAt = ''): number {
   ];
   for (const pattern of explicitPatterns) {
     const year = Number(html.match(pattern)?.[1] || 0);
-    if (year >= 1888 && year <= 2200) return year;
+    if (validReleaseYear(year)) return year;
   }
-  const fallbackYear = new Date(updatedAt || Date.now()).getFullYear();
-  return fallbackYear >= 1888 && fallbackYear <= 2200 ? fallbackYear : 0;
+  // Publish/update timestamps are not release years. Treat an absent explicit
+  // year as unknown so exact title identity can bridge legacy and current URLs
+  // without manufacturing future-year duplicates from malformed metadata.
+  void updatedAt;
+  return 0;
 }
 
 function parseWordPressMoviePage(movieUrl: string, updatedAt: string, html: string, playerHtml = ''): ParsedEntry | null {
@@ -1454,7 +1510,7 @@ async function createMovieFromEntry(
     slug,
     name: entry.title,
     origin_name: entry.originName,
-    title_vi: entry.title,
+    title_vi: entry.titleVi || '',
     title_en: entry.titleEn || (entry.originName !== entry.title ? entry.originName : ''),
     title_original: entry.titleOriginal || entry.originName,
     tmdb_id: entry.tmdbId || null,
@@ -1471,7 +1527,8 @@ async function createMovieFromEntry(
     episode_total: '',
     current_episode: maxEpisode,
     total_episodes: maxEpisode,
-    year: entry.year || new Date().getFullYear(),
+    // An absent release year is unknown, not the year we happened to sync it.
+    year: validReleaseYear(entry.year),
     actor: [],
     director: [],
     category: entry.category,
@@ -1662,13 +1719,21 @@ async function updateMovieMetadata(
   if (movieOwnsBlvietsubIdentity) {
     assignChanged('source_site', SOURCE_SITE, movie.source_site);
     assignChanged('source_name', SOURCE_NAME, movie.source_name);
+    const entryYear = validReleaseYear(entry.year);
+    if (entryYear && entryYear !== Number(movie.year || 0)) update.year = entryYear;
   }
 
+  const titleVi = String(entry.titleVi || '').trim();
   const originName = String(entry.originName || '').trim();
   const titleEn = String(entry.titleEn || (originName !== entry.title ? originName : '')).trim();
   const titleOriginal = String(entry.titleOriginal || originName).trim();
   if (originName) {
-    if (!String(movie.origin_name || '').trim()) update.origin_name = originName;
+    const currentOriginName = String(movie.origin_name || '').trim();
+    if (!currentOriginName || normalizeText(currentOriginName) === normalizeText(entry.title)) update.origin_name = originName;
+  }
+  if (movieOwnsBlvietsubIdentity && titleVi) {
+    const currentTitleVi = String(movie.title_vi || '').trim();
+    if (!currentTitleVi || normalizeText(currentTitleVi) === normalizeText(entry.title)) update.title_vi = titleVi;
   }
   const currentTitleEn = String(movie.title_en || '').trim();
   if (titleEn && (!currentTitleEn || normalizeText(currentTitleEn) === normalizeText(entry.title))) update.title_en = titleEn;
@@ -2366,9 +2431,9 @@ serve(async (req) => {
         movie = await createMovieFromEntry(supabase, entry);
         created = true;
       }
-      const sourceDuplicate = findBlvietsubSourceDuplicate(entry, movieRows, movie.id);
+      const sourceDuplicates = findBlvietsubSourceDuplicates(entry, movieRows, movie.id);
       const syncResult = await syncEntryToMovie(supabase, movie, entry);
-      if (sourceDuplicate) {
+      for (const sourceDuplicate of sourceDuplicates) {
         await retireSourceMovieDuplicate(supabase, {
           source: sourceDuplicate as unknown as Record<string, unknown>,
           target: movie as unknown as Record<string, unknown>,
@@ -2458,9 +2523,9 @@ serve(async (req) => {
           matched += 1;
         }
 
-        const sourceDuplicate = findBlvietsubSourceDuplicate(entry, movieRows, movie.id);
+        const sourceDuplicates = findBlvietsubSourceDuplicates(entry, movieRows, movie.id);
         const syncResult = await syncEntryToMovie(supabase, movie, entry);
-        if (sourceDuplicate) {
+        for (const sourceDuplicate of sourceDuplicates) {
           await retireSourceMovieDuplicate(supabase, {
             source: sourceDuplicate as unknown as Record<string, unknown>,
             target: movie as unknown as Record<string, unknown>,

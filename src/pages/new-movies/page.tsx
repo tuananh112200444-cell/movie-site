@@ -1,7 +1,5 @@
-﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { useHeroLazyLoad } from '@/hooks/useHeroLazyLoad';
-import { useImageFallback } from '@/hooks/useImageFallback';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
@@ -9,56 +7,45 @@ import Pagination from '@/components/base/Pagination';
 import AdsterraNativeBanner from '@/components/feature/AdsterraNativeBanner';
 import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
 import SEO, { SITE_URL } from '@/components/base/SEO';
-import { fetchLatestReleaseMovies, fetchMoviesByType, getFeaturedUrl, getSmallThumbUrl } from '@/services/movieApi';
-import { useLazySection } from '@/hooks/useLazySection';
+import { fetchLatestReleaseMovies, getFeaturedUrl, getSmallThumbUrl, type StableCatalogFeedMode } from '@/services/movieApi';
+import { useImageFallback } from '@/hooks/useImageFallback';
 import { isImagePreloaded, markImagePreloaded } from '@/utils/imagePreloader';
 import { movieDetailUrl } from '@/utils/slugEncoder';
 import type { Movie } from '@/types/movie';
 
 const PAGE_SIZE = 36;
-const NEW_MOVIES_INITIAL_TIMEOUT_MS = 6000;
-const NEW_MOVIES_TYPES = ['phim-le', 'phim-bo', 'phim-chieu-rap', 'hoat-hinh', 'tv-shows'] as const;
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
-  return Promise.race([
-    promise,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
-  ]);
-}
+const FEEDS = {
+  new: {
+    path: '/phim-moi-nhat', label: 'Phim Mới Nhất', shortLabel: 'Phim mới',
+    eyebrow: 'NEW RELEASES', icon: 'ri-sparkling-2-line',
+    description: 'Những phim vừa được thêm vào KhoPhim, sắp xếp theo thời điểm xuất hiện thực tế.',
+    sectionTitle: 'Mới Có Trên KhoPhim', gridTitle: 'Danh Sách Phim Mới',
+  },
+  episode_updates: {
+    path: '/phim-moi-cap-nhat', label: 'Phim Mới Cập Nhật', shortLabel: 'Tập mới',
+    eyebrow: 'EPISODE UPDATES', icon: 'ri-refresh-line',
+    description: 'Những phim vừa có số tập mới; sửa ảnh, mô tả hoặc nguồn phát không làm đảo thứ tự.',
+    sectionTitle: 'Vừa Có Tập Mới', gridTitle: 'Các Phim Đang Cập Nhật',
+  },
+} as const;
+
+const CATEGORY_LINKS = [
+  { label: 'Phim lẻ', href: '/phim-le', icon: 'ri-movie-2-line' },
+  { label: 'Phim bộ', href: '/phim-bo', icon: 'ri-tv-2-line' },
+  { label: 'Chiếu rạp', href: '/phim-chieu-rap', icon: 'ri-building-4-line' },
+  { label: 'Hoạt hình', href: '/hoat-hinh', icon: 'ri-gamepad-line' },
+  { label: 'Hàn Quốc', href: '/phim-han-quoc', icon: 'ri-heart-3-line' },
+  { label: 'Trung Quốc', href: '/phim-trung-quoc', icon: 'ri-ancient-gate-line' },
+] as const;
 
 function getMovieKey(movie: Movie): string {
-  return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
-}
-
-function sortByNewReleasePriority(movies: Movie[]): Movie[] {
-  return [...movies].sort((a, b) => {
-    const ta = new Date(a.modified?.time ?? 0).getTime();
-    const tb = new Date(b.modified?.time ?? 0).getTime();
-    if (ta !== tb) return tb - ta;
-
-    // When two updates arrive together, surface a continuing series before a
-    // completed title. Episode count is deliberately only a tie-breaker: a
-    // long-running older show must not bury a title that received a new episode.
-    const fa = isCompletedMovie(a) ? 1 : 0;
-    const fb = isCompletedMovie(b) ? 1 : 0;
-    if (fa !== fb) return fa - fb;
-
-    const ea = firstNumber(a.current_episode) || firstNumber(a.episode_current);
-    const eb = firstNumber(b.current_episode) || firstNumber(b.episode_current);
-    if (ea !== eb) return eb - ea;
-
-    return (Number(b.year) || 0) - (Number(a.year) || 0);
-  });
-}
-
-function isCompletedMovie(movie: Movie): boolean {
-  const label = String(movie.episode_current ?? '').trim().toLowerCase();
-  return ['full', 'full hd', 'hoàn tất', 'hoan tat', 'completed'].includes(label);
+  return movie._id || movie.slug || `${movie.name}-${movie.year || ''}`;
 }
 
 function firstNumber(value?: string | number): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  const match = String(value ?? '').match(/\d+/);
+  const match = String(value || '').match(/\d+/);
   return match ? Number(match[0]) : 0;
 }
 
@@ -72,658 +59,346 @@ function recoverJoinedEpisode(rawNumber: number, totalEpisodes: number): number 
 }
 
 function normalizeEpisodeCurrent(movie: Movie): string {
-  const raw = String(movie.episode_current ?? '').trim();
+  const raw = String(movie.episode_current || '').trim();
   const lower = raw.toLowerCase();
-  const fixedLabels = ['full', 'full hd', 'hoàn tất', 'hoan tat', 'trailer', 'sắp chiếu', 'sap chieu'];
   if (!raw) return 'Đang cập nhật';
-  if (fixedLabels.includes(lower)) return raw;
+  if (/^(full|full hd|hoàn tất|hoan tat|trailer|sắp chiếu|sap chieu)/.test(lower)) return raw;
 
   const rawNumber = firstNumber(raw);
   const year = firstNumber(movie.year);
   const total = firstNumber(movie.total_episodes) || firstNumber(movie.episode_total);
-  const currentRaw = firstNumber(movie.current_episode);
+  const storedCurrent = firstNumber(movie.current_episode);
   const recoveredCurrent = recoverJoinedEpisode(rawNumber, total);
   const current = recoveredCurrent || (
-    currentRaw > 0 && currentRaw !== year && currentRaw < 500 ? currentRaw : 0
+    storedCurrent > 0 && storedCurrent !== year && storedCurrent < 500 ? storedCurrent : 0
   );
 
-  if (current > 0) {
-    return total > 0 && total >= current ? `Tập ${current}/${total}` : `Tập ${current}`;
-  }
-
-  if (rawNumber === year || rawNumber >= 500) {
-    return 'Đang cập nhật';
-  }
-
+  if (current > 0) return total >= current ? `Tập ${current}/${total}` : `Tập ${current}`;
+  if (rawNumber === year || rawNumber >= 500) return 'Đang cập nhật';
   return raw;
 }
 
-function normalizeNewMovieItem(movie: Movie): Movie | null {
-  const key = getMovieKey(movie);
-  if (!key || !movie.name || !movie.slug) return null;
-  return {
-    ...movie,
-    episode_current: normalizeEpisodeCurrent(movie),
-  };
+function normalizeFeedItems(items: Movie[]): Movie[] {
+  const seen = new Set<string>();
+  return items.flatMap((movie) => {
+    const key = getMovieKey(movie);
+    const status = String(movie.seo_catalog_status || 'published').toLowerCase();
+    const episode = String(movie.episode_current || '').toLowerCase();
+    if (!key || seen.has(key) || !movie.slug || !movie.name) return [];
+    if (movie.is_published === false || movie.superseded_by_movie_id) return [];
+    if (['hidden', 'draft', 'superseded', 'awaiting_playback'].includes(status)) return [];
+    if (/\b(trailer|teaser)\b/.test(episode)) return [];
+    seen.add(key);
+    return [{ ...movie, episode_current: normalizeEpisodeCurrent(movie) }];
+  });
 }
 
-async function fetchFastLatestMovies(page: number): Promise<Movie[]> {
-  const primary = await withTimeout(fetchLatestReleaseMovies(page), NEW_MOVIES_INITIAL_TIMEOUT_MS);
-  if (primary?.items?.length) return primary.items;
-
-  const results = await Promise.allSettled(
-    NEW_MOVIES_TYPES.map((type) => fetchMoviesByType(type, page, 'modified.time', 'desc'))
-  );
-  return results
-    .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchMoviesByType>>> => result.status === 'fulfilled')
-    .flatMap((result) => result.value.items ?? []);
+function feedTime(movie: Movie, mode: StableCatalogFeedMode): string {
+  return mode === 'episode_updates'
+    ? String(movie.last_episode_change_at || movie.modified?.time || '')
+    : String(movie.created_at || movie.published_at || movie.modified?.time || '');
 }
 
-function buildNewMoviesSchema(pageLabel: string, basePath: string) {
-  const isUpdatePage = basePath === '/phim-moi-cap-nhat';
-  const pageDescription = isUpdatePage
-    ? 'Tổng hợp phim vừa cập nhật tập hoặc nguồn phát mới nhất tại KhoPhim. Phim lẻ, phim bộ, phim chiếu rạp và anime vietsub HD miễn phí.'
-    : 'Tổng hợp phim mới nhất 2026 cập nhật hàng ngày tại KhoPhim. Phim lẻ, phim bộ, phim chiếu rạp, anime mới nhất vietsub HD Full HD miễn phí.';
+function formatFeedDate(movie: Movie, mode: StableCatalogFeedMode): string {
+  const value = Date.parse(feedTime(movie, mode));
+  if (!Number.isFinite(value)) return mode === 'episode_updates' ? 'Vừa cập nhật' : 'Mới thêm';
+  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
+}
 
+function buildNewMoviesSchema(mode: StableCatalogFeedMode) {
+  const feed = FEEDS[mode];
   return [
-  {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Trang Chủ', item: SITE_URL },
-      { '@type': 'ListItem', position: 2, name: `${pageLabel} 2026`, item: `${SITE_URL}${basePath}` },
-    ],
-  },
-  {
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    name: `${pageLabel} 2026 – KhoPhim`,
-    url: `${SITE_URL}${basePath}`,
-    description: pageDescription,
-    inLanguage: 'vi',
-    isPartOf: { '@type': 'WebSite', name: 'KhoPhim', url: SITE_URL },
-  },
-  {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: [
-      {
-        '@type': 'Question',
-        name: isUpdatePage ? 'Phim mới cập nhật hôm nay xem ở đâu miễn phí?' : 'Phim mới nhất hôm nay xem ở đâu miễn phí?',
-        acceptedAnswer: {
-          '@type': 'Answer',
-          text: `Trang ${pageLabel} tổng hợp phim vừa được thêm hoặc thay đổi dữ liệu tập, nguồn phát và thông tin phim trên KhoPhim.`,
-        },
-      },
-      {
-        '@type': 'Question',
-        name: 'Phim mới 2026 vietsub xem ở đâu miễn phí?',
-        acceptedAnswer: {
-          '@type': 'Answer',
-          text: 'KhoPhim có đầy đủ phim mới 2026 vietsub miễn phí bao gồm phim lẻ, phim bộ, phim chiếu rạp, anime và TV shows. Tất cả đều được cập nhật nhanh nhất, chất lượng HD Full HD.',
-        },
-      },
-      {
-        '@type': 'Question',
-        name: 'KhoPhim cập nhật phim mới bao lâu một lần?',
-        acceptedAnswer: {
-          '@type': 'Answer',
-          text: 'KhoPhim cập nhật phim mới liên tục hàng ngày, 24/7. Phim từ Hàn Quốc, Trung Quốc, Âu Mỹ, Nhật Bản, Thái Lan và Việt Nam đều được cập nhật nhanh nhất ngay sau khi phát hành.',
-        },
-      },
-    ],
-  },
+    {
+      '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Trang Chủ', item: SITE_URL },
+        { '@type': 'ListItem', position: 2, name: feed.label, item: `${SITE_URL}${feed.path}` },
+      ],
+    },
+    {
+      '@context': 'https://schema.org', '@type': 'CollectionPage',
+      name: `${feed.label} – KhoPhim`, url: `${SITE_URL}${feed.path}`,
+      description: feed.description, inLanguage: 'vi',
+      isPartOf: { '@type': 'WebSite', name: 'KhoPhim', url: SITE_URL },
+    },
   ];
 }
 
-const FILTERS = [
-  { key: 'all', label: 'Tất Cả', icon: 'ri-grid-line', color: 'from-red-600 to-rose-500' },
-  { key: 'phim-le', label: 'Phim Lẻ', icon: 'ri-movie-2-line', color: 'from-orange-600 to-amber-500' },
-  { key: 'phim-bo', label: 'Phim Bộ', icon: 'ri-tv-2-line', color: 'from-pink-600 to-rose-500' },
-  { key: 'phim-chieu-rap', label: 'Chiếu Rạp', icon: 'ri-building-4-line', color: 'from-yellow-600 to-amber-500' },
-  { key: 'hoat-hinh', label: 'Hoạt Hình', icon: 'ri-gamepad-line', color: 'from-teal-600 to-emerald-500' },
-  { key: 'tv-shows', label: 'TV Shows', icon: 'ri-broadcast-line', color: 'from-cyan-600 to-sky-500' },
-] as const;
-
-type FilterKey = typeof FILTERS[number]['key'];
-
-const STATS = [
-  { icon: 'ri-film-line', value: 'Nhiều', label: 'Danh mục phim' },
-  { icon: 'ri-refresh-line', value: 'Hàng ngày', label: 'Cập nhật' },
-  { icon: 'ri-hd-line', value: 'HD / 4K', label: 'Chất lượng' },
-  { icon: 'ri-global-line', value: '10+', label: 'Quốc gia' },
-];
-
 export default function NewMoviesPage() {
-  const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const poolRef     = useRef<Movie[]>([]);
-  const seenRef     = useRef(new Set<string>());
-  const nextApiRef  = useRef(1);
-  const apiDoneRef  = useRef(false);
-  const fetchingRef = useRef(false);
-  const initRef     = useRef(false);
-  const { sectionRef: seoRef, visible: seoVisible } = useLazySection('300px');
-
-  const [pool, setPool]             = useState<Movie[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [poolReady, setPoolReady]   = useState(false);
-  const [fetchingMore, setFetchingMore] = useState(false);
-  // ── Page derived directly from URL param (single source of truth) ──
-  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
-  const basePath = location.pathname === '/phim-moi-cap-nhat' ? '/phim-moi-cap-nhat' : '/phim-moi-nhat';
-  const isUpdatePage = basePath === '/phim-moi-cap-nhat';
-  const pageLabel = isUpdatePage ? 'Phim Mới Cập Nhật' : 'Phim Mới Nhất';
-  const pageDescription = isUpdatePage
-    ? 'Tổng hợp phim vừa cập nhật tập, nguồn phát hoặc thông tin từ nhiều thể loại'
-    : 'Tổng hợp phim mới được thêm và phim vừa cập nhật từ nhiều thể loại';
-  const pageSchema = useMemo(() => buildNewMoviesSchema(pageLabel, basePath), [pageLabel, basePath]);
-
-  const handleSetPage = useCallback((p: number) => {
-    navigate({
-      pathname: basePath,
-      search: p > 1 ? `?page=${p}` : '',
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [basePath, navigate]);
-  const [filterType, setFilterType] = useState<FilterKey>('all');
-  const didResetFilterRef = useRef(false);
-  const { heroRef, showHeroBg, heroImgLoaded, setHeroImgLoaded } = useHeroLazyLoad();
-
-  const addToPool = useCallback((items: Movie[]) => {
-    const normalized = items
-      .map(normalizeNewMovieItem)
-      .filter((movie): movie is Movie => Boolean(movie));
-    // Filter out movies that have already been seen
-    const fresh = normalized.filter((m) => {
-      const key = getMovieKey(m);
-      return key && !seenRef.current.has(key);
-    });
-    if (fresh.length === 0) return;
-    fresh.forEach((m) => seenRef.current.add(getMovieKey(m)));
-    // Keep this page ordered by the newest release/episode update. Year and
-    // episode number are only tie-breakers inside sortByNewReleasePriority.
-    poolRef.current = sortByNewReleasePriority([...poolRef.current, ...fresh]);
-    setPool(poolRef.current);
-  }, []);
+  const [searchParams] = useSearchParams();
+  const mode: StableCatalogFeedMode = location.pathname === FEEDS.episode_updates.path ? 'episode_updates' : 'new';
+  const feed = FEEDS[mode];
+  const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1);
+  const requestSequence = useRef(0);
+  const [retryKey, setRetryKey] = useState(0);
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [pagination, setPagination] = useState({ totalItems: 0, totalPages: 1 });
 
   useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
+    const sequence = ++requestSequence.current;
     setLoading(true);
+    setError(false);
+    setMovies([]);
 
-    fetchFastLatestMovies(1).then((items) => {
-      addToPool(items);
-      nextApiRef.current = 2;
-      setPoolReady(true);
-      setLoading(false);
-    }).catch(() => {
-      setPoolReady(true);
-      setLoading(false);
-    });
-  }, [addToPool]);
+    fetchLatestReleaseMovies(page, mode)
+      .then((response) => {
+        if (requestSequence.current !== sequence) return;
+        if (!response.status) throw new Error('stable_feed_unavailable');
+        const normalized = normalizeFeedItems(response.items);
+        const reportedPages = Math.max(1, response.pagination.totalPages || 1);
+        const canContinue = response.items.length >= PAGE_SIZE;
+        const effectivePages = Math.max(reportedPages, canContinue ? page + 1 : page);
+        setMovies(normalized);
+        setPagination({
+          totalItems: Math.max(response.pagination.totalItems || 0, normalized.length),
+          totalPages: effectivePages,
+        });
+        if (page > effectivePages) {
+          navigate({ pathname: feed.path, search: effectivePages > 1 ? `?page=${effectivePages}` : '' }, { replace: true });
+        }
+      })
+      .catch(() => {
+        if (requestSequence.current === sequence) setError(true);
+      })
+      .finally(() => {
+        if (requestSequence.current === sequence) setLoading(false);
+      });
 
-  const fetchMore = useCallback(async () => {
-    if (fetchingRef.current || apiDoneRef.current) return;
-    fetchingRef.current = true;
-    setFetchingMore(true);
-    const nextPage = nextApiRef.current;
-    const result = filterType === 'all'
-      ? { items: await fetchFastLatestMovies(nextPage).catch(() => []) }
-      : await fetchMoviesByType(filterType, nextPage, 'modified.time', 'desc').catch(() => null);
-    const items = result?.items ?? [];
-    if (items.length > 0) addToPool(items);
-    nextApiRef.current += 1;
-    if (items.length === 0) apiDoneRef.current = true;
-    fetchingRef.current = false;
-    setFetchingMore(false);
-  }, [addToPool, filterType]);
+    return () => {
+      if (requestSequence.current === sequence) requestSequence.current += 1;
+    };
+  }, [feed.path, mode, navigate, page, retryKey]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [page]);
+  }, [mode, page]);
 
-  // Reset to page 1 when filter changes (skip on mount)
-  useEffect(() => {
-    if (!didResetFilterRef.current) { didResetFilterRef.current = true; return; }
-    apiDoneRef.current = false;
-    fetchingRef.current = false;
-    nextApiRef.current = filterType === 'all' ? 2 : 1;
-    navigate({ pathname: basePath, search: '' }, { replace: true });
-  }, [filterType, basePath, navigate]);
-
-  const filteredPool = useMemo(() => {
-    if (filterType === 'all') return pool;
-    return pool.filter((m) => {
-      if (filterType === 'phim-le') return m.type === 'single';
-      if (filterType === 'phim-bo') return m.type === 'series';
-      if (filterType === 'hoat-hinh') return m.type === 'hoathinh';
-      if (filterType === 'tv-shows') return m.type === 'tvshows';
-      if (filterType === 'phim-chieu-rap') return m.chieurap;
-      return true;
-    });
-  }, [pool, filterType]);
-
-  useEffect(() => {
-    if (!poolReady) return;
-    const needed = 5 + page * PAGE_SIZE;
-    const available = filterType === 'all' ? pool.length : filteredPool.length;
-    if (available < needed && !apiDoneRef.current && !fetchingRef.current) {
-      fetchMore();
-    }
-  }, [poolReady, page, pool.length, filteredPool.length, filterType, fetchMore]);
-
-  // Featured: first 5 movies
-  const featuredMovies = filteredPool.slice(0, 5);
-  const featuredMain = featuredMovies[0];
-  const featuredSide = featuredMovies.slice(1, 5);
-
-  // Page movies (skip featured)
-  const pageMovies = filteredPool.slice(5 + (page - 1) * PAGE_SIZE, 5 + page * PAGE_SIZE);
-  const gridStart = 5 + (page - 1) * PAGE_SIZE;
-  const hasEnoughData = filteredPool.length > gridStart;
-  const showLoading = loading || (poolReady && !hasEnoughData);
-  const totalPages = Math.ceil(Math.max(0, filteredPool.length - 5) / PAGE_SIZE) + (apiDoneRef.current ? 0 : 3);
-  const hasNext = !apiDoneRef.current || (page * PAGE_SIZE < Math.max(0, filteredPool.length - 5));
-
-  // Self-referencing canonical
-  const canonicalUrl = page > 1 ? `${SITE_URL}${basePath}?page=${page}` : `${SITE_URL}${basePath}`;
-  const prevPage = page > 1
-    ? (page > 2 ? `${SITE_URL}${basePath}?page=${page - 1}` : `${SITE_URL}${basePath}`)
-    : undefined;
-  const nextPage = hasNext ? `${SITE_URL}${basePath}?page=${page + 1}` : undefined;
-
-  const activeFilter = FILTERS.find((f) => f.key === filterType) ?? FILTERS[0];
+  const featured = page === 1 ? movies.slice(0, 3) : [];
+  const gridMovies = page === 1 ? movies.slice(3) : movies;
+  const hasNext = page < pagination.totalPages;
+  const canonical = page > 1 ? `${SITE_URL}${feed.path}?page=${page}` : `${SITE_URL}${feed.path}`;
+  const previous = page > 1 ? `${SITE_URL}${feed.path}${page > 2 ? `?page=${page - 1}` : ''}` : undefined;
+  const next = hasNext ? `${SITE_URL}${feed.path}?page=${page + 1}` : undefined;
+  const pageSchema = useMemo(() => buildNewMoviesSchema(mode), [mode]);
+  const visibleCountLabel = pagination.totalItems > movies.length
+    ? `${pagination.totalItems.toLocaleString('vi-VN')} phim`
+    : `${movies.length} phim trên trang`;
+  const retry = useCallback(() => setRetryKey((current) => current + 1), []);
 
   return (
-    <div className="angular-catalog-page min-h-screen kp-cinema-page text-white">
+    <div className="min-h-screen bg-[#080a10] text-white">
       <SEO
-        title={`${pageLabel} 2026 – Vietsub HD Miễn Phí | KhoPhim`}
-        description={`${pageDescription} trên KhoPhim.`}
-        keywords="phim mới nhất 2026, phim mới cập nhật hôm nay, xem phim mới online miễn phí, phim mới vietsub hôm nay, phim mới nhất hôm nay, phim mới cập nhật 2026, xem phim mới miễn phí HD, phim mới ra 2026, phim hot 2026, phim hay mới nhất"
-        canonical={canonicalUrl}
-        prev={prevPage}
-        next={nextPage}
+        title={`${feed.label} – Vietsub HD Miễn Phí | KhoPhim`}
+        description={`${feed.description} Xem miễn phí với nguồn phát đã được kiểm tra trên KhoPhim.`}
+        keywords="phim mới nhất, phim mới cập nhật, phim vietsub, phim có tập mới, xem phim mới miễn phí"
+        canonical={canonical}
+        prev={previous}
+        next={next}
         ogType="website"
         schema={pageSchema}
       />
       <Navbar />
 
-      {/* ── Hero Banner ── */}
-      <div ref={heroRef} className="relative overflow-hidden">
-        <div className="absolute inset-0">
-          {showHeroBg ? (
-            <img
-              src="https://readdy.ai/api/search-image?query=cinematic film reel collection dark background with glowing red light rays movie posters scattered dramatic lighting professional photography ultra wide angle deep black background with subtle red glow abstract cinema atmosphere&width=1400&height=400&seq=newmovies-hero-bg-002&orientation=landscape"
-              alt={pageLabel}
-              className={`w-full h-full object-cover object-center transition-opacity duration-700 ${heroImgLoaded ? 'opacity-20' : 'opacity-0'}`}
-              onLoad={() => setHeroImgLoaded(true)}
-            />
-          ) : null}
-          <div
-            className={`absolute inset-0 bg-gradient-to-br from-red-900/40 to-rose-900/20 ${showHeroBg && heroImgLoaded ? 'opacity-0' : 'opacity-50'} transition-opacity duration-500`}
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#080a10] via-[#080a10]/80 to-[#080a10]/50" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#080a10] via-transparent to-[#080a10]/40" />
+      <header className="relative overflow-hidden border-b border-white/[0.06] pt-20 sm:pt-28">
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <div className="absolute -right-24 -top-32 h-96 w-96 rounded-full bg-red-600/10 blur-[100px]" />
+          <div className="absolute -left-24 bottom-0 h-64 w-64 rounded-full bg-amber-500/[0.06] blur-[90px]" />
+          <div className="absolute inset-0 opacity-[0.025] [background-image:linear-gradient(rgba(255,255,255,.6)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.6)_1px,transparent_1px)] [background-size:56px_56px]" />
         </div>
 
-        <div className="absolute top-0 right-1/4 w-72 h-72 bg-red-600/8 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 w-48 h-48 bg-rose-500/6 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative max-w-[1760px] mx-auto px-4 pt-20 sm:pt-28 pb-6 sm:pb-10">
-          <nav className="flex items-center gap-1.5 mb-5 text-xs text-white/30">
-            <Link to="/" className="hover:text-white/60 transition-colors">Trang chủ</Link>
-            <i className="ri-arrow-right-s-line" />
-            <span className="text-white/50">{pageLabel}</span>
+        <div className="relative mx-auto max-w-[1760px] px-4 pb-8 sm:px-6 sm:pb-12 lg:px-8">
+          <nav className="mb-5 flex items-center gap-1.5 text-xs text-white/35" aria-label="Breadcrumb">
+            <Link to="/" className="transition-colors hover:text-white">Trang chủ</Link>
+            <i className="ri-arrow-right-s-line" aria-hidden="true" />
+            <span className="text-white/60">{feed.label}</span>
           </nav>
 
-          <div className="flex items-center gap-2 mb-3">
-            <div className="flex items-center gap-2 bg-red-500/12 border border-red-500/25 rounded-full px-3.5 py-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-              </span>
-              <span className="text-[11px] font-bold text-red-400 uppercase tracking-widest">Cập nhật hàng ngày</span>
+          <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div>
+              <p className="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-red-400">
+                <span className="h-px w-8 bg-red-500" aria-hidden="true" />{feed.eyebrow}
+              </p>
+              <h1 className="max-w-4xl text-3xl font-black tracking-[-0.035em] text-white sm:text-5xl lg:text-6xl">{feed.label}</h1>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/48 sm:text-base">{feed.description}</p>
             </div>
-            {!loading && pool.length > 0 && (
-              <span className="text-[11px] text-white/40 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
-                {pool.length.toLocaleString()}+ bộ phim
-              </span>
-            )}
+
+            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-1.5" aria-label="Chọn loại danh sách">
+              {(Object.keys(FEEDS) as StableCatalogFeedMode[]).map((feedMode) => {
+                const option = FEEDS[feedMode];
+                const active = mode === feedMode;
+                return (
+                  <Link key={feedMode} to={option.path} aria-current={active ? 'page' : undefined}
+                    className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors ${active ? 'bg-red-500 text-white' : 'text-white/48 hover:bg-white/[0.06] hover:text-white'}`}>
+                    <i className={option.icon} aria-hidden="true" />{option.shortLabel}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
 
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight mb-2">
-            {pageLabel} <span className="text-red-500">2026</span>
-            {page > 1 ? <span className="text-white/40 text-xl ml-2">– Trang {page}</span> : ''}
-          </h1>
-          <p className="text-white/40 text-xs sm:text-sm md:text-base max-w-lg leading-relaxed mb-4 sm:mb-6">
-            {pageDescription}
-          </p>
-
-          <div className="flex flex-wrap gap-3 sm:gap-4 md:gap-6">
-            {STATS.map((s) => (
-              <div key={s.label} className="flex items-center gap-2.5">
-                <div className="w-8 h-8 flex items-center justify-center bg-red-500/12 border border-red-500/20 rounded-lg">
-                  <i className={`${s.icon} text-red-400 text-sm`} />
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-white">{s.value}</div>
-                  <div className="text-[11px] text-white/30">{s.label}</div>
-                </div>
-              </div>
-            ))}
+          <div className="mt-7 flex flex-wrap items-center gap-2 text-xs text-white/42">
+            <span className="rounded-full border border-white/[0.08] bg-black/20 px-3 py-1.5">
+              <i className="ri-database-2-line mr-1.5 text-red-400" aria-hidden="true" />
+              {loading ? 'Đang đọc danh mục…' : visibleCountLabel}
+            </span>
+            <span className="rounded-full border border-white/[0.08] bg-black/20 px-3 py-1.5">
+              <i className="ri-shield-check-line mr-1.5 text-emerald-400" aria-hidden="true" />Chỉ phim đã xuất bản
+            </span>
+            <span className="rounded-full border border-white/[0.08] bg-black/20 px-3 py-1.5">Trang {page}</span>
           </div>
         </div>
-      </div>
+      </header>
 
       <main className="cinema-page-container">
         <AdsterraResponsiveBanner />
 
-        {/* ── Filter Tabs ── */}
-        <div className="mb-6 -mt-1">
-          <div className="cinema-toolbar-panel flex flex-wrap gap-1.5 p-2 sm:p-3">
-            {FILTERS.map(({ key, label, icon, color }) => (
-              <button
-                key={key}
-                onClick={() => { setFilterType(key); handleSetPage(1); }}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap border ${
-                  filterType === key
-                    ? `bg-gradient-to-r ${color} text-white border-transparent shadow-lg shadow-red-500/10`
-                    : 'bg-black/20 text-white/45 hover:text-white border-white/[0.07] hover:border-white/15'
-                }`}
-              >
-                <i className={`${icon} text-sm`} />
-                {label}
-                {filterType === key && filteredPool.length > 0 && (
-                  <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-0.5">
-                    {filteredPool.length}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+        <nav className="mb-8 flex gap-2 overflow-x-auto pb-1 scrollbar-hide" aria-label="Khám phá nhanh theo danh mục">
+          {CATEGORY_LINKS.map((category) => (
+            <Link key={category.href} to={category.href}
+              className="flex min-h-10 flex-shrink-0 items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.035] px-3.5 text-xs font-semibold text-white/52 transition-colors hover:border-red-400/30 hover:bg-red-500/10 hover:text-white">
+              <i className={`${category.icon} text-red-400`} aria-hidden="true" />{category.label}
+            </Link>
+          ))}
+        </nav>
 
-          {filterType !== 'all' && (
-            <div className="mt-2.5 flex items-center gap-2 text-xs text-white/30">
-              <i className={`${activeFilter.icon} text-red-400/60`} />
-              <span>Đang lọc: <strong className="text-white/50">{activeFilter.label}</strong></span>
-              <span className="text-white/15">·</span>
-              <span>{filteredPool.length} phim</span>
-              <button
-                onClick={() => { setFilterType('all'); handleSetPage(1); }}
-                className="ml-2 text-red-400/70 hover:text-red-400 transition-colors cursor-pointer"
-              >
-                Xóa lọc
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* ── Featured Section (only page 1, not loading) ── */}
-        {!loading && page === 1 && featuredMain && (
-          <section className="home-section-surface mb-10">
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="cinema-section-title text-sm sm:text-base">Mới Cập Nhật Hôm Nay</h2>
-              <span className="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <span className="w-1 h-1 bg-green-400 rounded-full animate-pulse" />
-                LIVE
-              </span>
-            </div>
-
-            <div className="flex flex-col lg:flex-row gap-4">
-              {/* Main featured */}
-              <div className="lg:w-[58%] flex-shrink-0">
-                <FeaturedCard movie={featuredMain} />
-              </div>
-
-              {/* Side stack */}
-              <div className="lg:flex-1 grid grid-cols-2 gap-3">
-                {featuredSide.map((m) => (
-                  <SideFeaturedCard key={getMovieKey(m)} movie={m} />
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* ── Section header for grid ── */}
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <h2 className="cinema-section-title text-sm sm:text-base">Tất Cả Phim Mới</h2>
-          </div>
-          {!loading && filteredPool.length > 0 && (
-            <span className="cinema-chip rounded-full px-3 py-1 text-xs text-white/35">
-              Trang {page} · {filteredPool.length.toLocaleString()} phim
-            </span>
-          )}
-        </div>
-
-        {/* ── Movie Grid: 10 cols, smaller posters ── */}
-        {showLoading ? (
-          <div className="grid movie-grid-desktop">
-            {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-              <div key={i}>
-                <div className="aspect-[2/3] skeleton rounded-lg" />
-                <div className="mt-1.5 h-2.5 skeleton rounded w-4/5" />
-                <div className="mt-1 h-2 skeleton rounded w-1/2" />
-              </div>
-            ))}
-          </div>
-        ) : pageMovies.length === 0 ? (
-          <div className="cinema-empty-state flex flex-col items-center justify-center py-24 text-white/30">
-            <i className="ri-film-line text-5xl mb-3" />
-            <p className="text-lg">Không có phim nào</p>
-            <button
-              onClick={() => { setFilterType('all'); handleSetPage(1); }}
-              className="mt-4 px-6 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl text-sm transition-all cursor-pointer whitespace-nowrap"
-            >
-              Xem tất cả phim
-            </button>
-          </div>
-        ) : (
-          <div className="grid movie-grid-desktop">
-            {pageMovies.map((m, idx) => (
-              <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 4} />
-            ))}
-          </div>
-        )}
-
-        {/* Fetch-more indicator */}
-        {(fetchingMore || (poolReady && !hasEnoughData)) && (
-          <div className="flex justify-center mt-8">
-            <span className="flex items-center gap-2 text-sm text-white/30 bg-white/[0.03] border border-white/[0.06] px-5 py-2.5 rounded-full">
-              <i className="ri-loader-4-line animate-spin" /> Đang tải thêm phim...
-            </span>
-          </div>
-        )}
-
-        {/* ── Pagination ── */}
-        {!showLoading && pageMovies.length > 0 && (
-          <Pagination currentPage={page} totalPages={totalPages} basePath={basePath} hasNext={hasNext} />
-        )}
-
-        {!showLoading && pageMovies.length > 0 && <AdsterraNativeBanner />}
-
-        {/* SEO content block */}
-        <div ref={seoRef}>
-          {seoVisible && (
-            <section className="mt-16 border-t border-white/5 pt-12">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-                <div className="lg:col-span-1 space-y-3">
-                  <h2 className="text-base font-bold text-white/80 mb-4">Tại Sao Chọn KhoPhim?</h2>
-                  {[
-                    { icon: 'ri-refresh-line', title: 'Cập nhật hàng ngày', desc: 'Phim mới nhất từ tất cả thể loại và quốc gia' },
-                    { icon: 'ri-hd-line', title: 'Thông tin chất lượng', desc: 'Hiển thị theo dữ liệu của từng nguồn phim' },
-                    { icon: 'ri-global-line', title: '10+ quốc gia', desc: 'Hàn, Trung, Âu Mỹ, Nhật, Thái, Việt Nam...' },
-                    { icon: 'ri-shield-check-line', title: 'Hoàn toàn miễn phí', desc: 'Không cần đăng ký, không cần tài khoản' },
-                  ].map((f) => (
-                    <div key={f.title} className="flex items-start gap-3 p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl">
-                      <div className="w-8 h-8 flex items-center justify-center bg-red-500/15 rounded-lg flex-shrink-0">
-                        <i className={`${f.icon} text-red-400 text-sm`} />
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-white/80">{f.title}</div>
-                        <div className="text-xs text-white/35 mt-0.5">{f.desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="lg:col-span-2">
-                  <h2 className="text-base font-bold text-white/80 mb-4">Câu Hỏi Thường Gặp</h2>
-                  <div className="space-y-2.5">
-                    {[
-                      {
-                        q: 'Phim mới nhất hôm nay xem ở đâu?',
-                        a: 'Trang Phim Mới Nhất tổng hợp các phim vừa được thêm hoặc cập nhật trong dữ liệu KhoPhim và cho phép lọc theo loại phim.'
-                      },
-                      {
-                        q: 'Phim mới 2026 vietsub xem ở đâu miễn phí?',
-                        a: 'KhoPhim có đầy đủ phim mới 2026 vietsub miễn phí bao gồm phim lẻ, phim bộ, phim chiếu rạp, anime và TV shows. Tất cả đều được cập nhật nhanh nhất, chất lượng HD Full HD.'
-                      },
-                      {
-                        q: 'KhoPhim cập nhật phim mới bao lâu một lần?',
-                        a: 'KhoPhim cập nhật phim mới liên tục hàng ngày, 24/7. Phim từ Hàn Quốc, Trung Quốc, Âu Mỹ, Nhật Bản, Thái Lan và Việt Nam đều được cập nhật nhanh nhất ngay sau khi phát hành.'
-                      },
-                      {
-                        q: 'Có thể xem phim mới trên điện thoại không?',
-                        a: 'Có! KhoPhim tương thích hoàn toàn với điện thoại và máy tính bảng. Giao diện responsive, player tự động điều chỉnh chất lượng theo tốc độ mạng của bạn.'
-                      },
-                    ].map((item) => (
-                      <details key={item.q} className="group bg-[#13151f] border border-white/[0.06] rounded-xl overflow-hidden">
-                        <summary className="flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer list-none select-none">
-                          <strong className="text-white/75 text-sm font-medium leading-snug">{item.q}</strong>
-                          <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-                            <i className="ri-add-line text-white/30 group-open:hidden" />
-                            <i className="ri-subtract-line text-red-400 hidden group-open:block" />
-                          </span>
-                        </summary>
-                        <div className="px-4 pb-4">
-                          <p className="text-white/45 text-sm leading-relaxed">{item.a}</p>
-                        </div>
-                      </details>
-                    ))}
+        {error ? <FeedError onRetry={retry} /> : loading ? <FeedSkeleton /> : movies.length === 0 ? <FeedEmpty /> : (
+          <>
+            {featured.length > 0 && (
+              <section className="mb-10" aria-labelledby="latest-featured-title">
+                <div className="mb-4 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-400">EDITOR'S WINDOW</p>
+                    <h2 id="latest-featured-title" className="mt-1 text-xl font-black tracking-tight sm:text-2xl">{feed.sectionTitle}</h2>
                   </div>
+                  <span className="hidden text-xs text-white/35 sm:block">Theo thứ tự canonical của KhoPhim</span>
                 </div>
-              </div>
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,.8fr)]">
+                  <FeaturedCard movie={featured[0]} mode={mode} />
+                  {featured.length > 1 && (
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+                      {featured.slice(1).map((movie) => <SideFeaturedCard key={getMovieKey(movie)} movie={movie} mode={mode} />)}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
-              <div className="pt-6 border-t border-white/5">
-                <h2 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Danh mục phim</h2>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: 'Phim Lẻ Vietsub', href: '/phim-le' },
-                    { label: 'Phim Bộ', href: '/phim-bo' },
-                    { label: 'Phim Chiếu Rạp', href: '/phim-chieu-rap' },
-                    { label: 'Hoạt Hình & Anime', href: '/hoat-hinh' },
-                    { label: 'TV Shows', href: '/tv-shows' },
-                    { label: 'Phim Hàn Quốc', href: '/phim-han-quoc' },
-                    { label: 'Phim Trung Quốc', href: '/phim-trung-quoc' },
-                    { label: 'Phim Âu Mỹ', href: '/phim-au-my' },
-                    { label: 'Phim Thái Lan', href: '/phim-thai-lan' },
-                    { label: 'Phim Nhật Bản', href: '/phim-nhat-ban' },
-                    { label: 'Phim Việt Nam', href: '/phim-viet-nam' },
-                    { label: 'Phim Sắp Chiếu', href: '/phim-sap-chieu' },
-                    { label: 'Phim Mới Cập Nhật', href: '/phim-moi-cap-nhat' },
-                    { label: 'Lọc Phim Nâng Cao', href: '/filter' },
-                  ].map((r) => (
-                    <Link
-                      key={r.href}
-                      to={r.href}
-                      className="px-3.5 py-1.5 bg-white/[0.04] hover:bg-red-500/10 text-white/45 hover:text-red-400 border border-white/[0.07] hover:border-red-500/25 rounded-full text-xs transition-all cursor-pointer whitespace-nowrap"
-                    >
-                      {r.label}
-                    </Link>
-                  ))}
-                </div>
+            <section aria-labelledby="latest-grid-title">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 id="latest-grid-title" className="cinema-section-title text-base sm:text-lg">{feed.gridTitle}</h2>
+                <span className="rounded-full border border-white/[0.07] bg-white/[0.03] px-3 py-1 text-xs text-white/38">{gridMovies.length} mục</span>
+              </div>
+              <div className="grid movie-grid-desktop">
+                {gridMovies.map((movie, index) => <MovieCard key={getMovieKey(movie)} movie={movie} priority={index < 6} />)}
               </div>
             </section>
-          )}
-        </div>
+
+            <Pagination currentPage={page} totalPages={pagination.totalPages} basePath={feed.path} hasNext={hasNext} />
+            <AdsterraNativeBanner />
+          </>
+        )}
+
+        <FeedExplanation />
       </main>
       <Footer />
     </div>
   );
 }
 
-/* ── Featured Main Card ── */
-function FeaturedCard({ movie }: { movie: Movie }) {
-  const imagePath = movie.thumb_url || movie.poster_url;
-  const fallbackPath = movie.poster_url || movie.thumb_url;
-  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    imagePath,
-    fallbackPath,
-    isImagePreloaded(getFeaturedUrl(imagePath)),
-    1180,
-    88,
-  );
-  const ep = (movie.episode_current ?? '').toLowerCase().trim();
-  const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
-  const isTrailer = ep === 'trailer';
-
+function FeedError({ onRetry }: { onRetry: () => void }) {
   return (
-    <Link to={movieDetailUrl(movie.slug)} className="movie-card-contain movie-art-frame movie-art-frame--wide group relative block rounded-2xl overflow-hidden bg-[#16192a] cursor-pointer">
-      <div className="relative" style={{ aspectRatio: '16/9' }}>
-        {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton z-[1]" />}
-        {imgError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">
-            <i className="ri-image-line text-white/20 text-3xl" />
-          </div>
-        )}
-        <img
-          src={currentSrc}
-          alt={movie.name}
-          loading="eager"
-          decoding="sync"
-          className={`w-full h-full object-cover object-center transition-all duration-700 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-          style={{ filter: 'contrast(1.05) saturate(1.1) brightness(0.92)' }}
-          onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
-          onError={onError}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
+    <section className="rounded-3xl border border-red-400/15 bg-red-500/[0.055] px-6 py-16 text-center" role="alert">
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-red-500/12 text-2xl text-red-400"><i className="ri-wifi-off-line" /></div>
+      <h2 className="mt-5 text-xl font-bold">Chưa tải được danh sách phim</h2>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/45">Kết nối danh mục đang bận. Bạn có thể thử lại mà không cần tải lại toàn bộ trang.</p>
+      <button type="button" onClick={onRetry} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-red-500 px-5 text-sm font-bold text-white hover:bg-red-400">
+        <i className="ri-refresh-line" />Thử lại
+      </button>
+    </section>
+  );
+}
 
-        {/* Badges */}
-        <div className="absolute top-3 left-3 flex items-center gap-1.5 z-[2]">
-          <span className="flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full">
-            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-            MỚI NHẤT
-          </span>
-          {movie.quality && (
-            <span className="text-[10px] font-black bg-black/70 text-white px-2 py-0.5 rounded-md border border-white/15">{movie.quality}</span>
-          )}
+function FeedEmpty() {
+  return (
+    <section className="rounded-3xl border border-white/[0.07] bg-white/[0.025] px-6 py-20 text-center">
+      <i className="ri-film-line text-5xl text-white/18" />
+      <h2 className="mt-4 text-xl font-bold text-white/80">Chưa có phim phù hợp</h2>
+      <p className="mt-2 text-sm text-white/40">Danh sách sẽ tự cập nhật khi phim vượt qua kiểm tra xuất bản.</p>
+      <Link to="/" className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-white/10 px-5 text-sm font-semibold text-white/65 hover:bg-white/[0.06] hover:text-white">Về trang chủ</Link>
+    </section>
+  );
+}
+
+function FeedSkeleton() {
+  return (
+    <div aria-label="Đang tải danh sách phim" aria-busy="true">
+      <div className="mb-10 grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,.8fr)]">
+        <div className="aspect-[16/8.2] rounded-3xl skeleton" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-1"><div className="aspect-[16/10] rounded-2xl skeleton" /><div className="aspect-[16/10] rounded-2xl skeleton" /></div>
+      </div>
+      <div className="grid movie-grid-desktop">
+        {Array.from({ length: 18 }, (_, index) => <div key={index}><div className="aspect-[2/3] rounded-lg skeleton" /><div className="mt-2 h-3 w-4/5 rounded skeleton" /><div className="mt-1.5 h-2.5 w-1/2 rounded skeleton" /></div>)}
+      </div>
+    </div>
+  );
+}
+
+function FeedExplanation() {
+  return (
+    <section className="mt-16 border-t border-white/[0.06] pt-10">
+      <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr]">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-400">HIỂU ĐÚNG DANH SÁCH</p>
+          <h2 className="mt-2 text-xl font-bold">Hai trang, hai ý nghĩa rõ ràng</h2>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-white/43">“Phim mới” dùng thời điểm phim được thêm vào KhoPhim. “Tập mới” chỉ thay đổi khi số tập thực sự tăng. Việc sửa poster, mô tả hoặc thay nguồn phát không đưa phim cũ lên đầu.</p>
         </div>
-
-        <div className="absolute top-3 right-3 z-[2] flex flex-col items-end gap-1">
-          {movie.lang && (
-            <span className="text-[10px] font-bold bg-white/15 text-white px-2 py-0.5 rounded-md">{movie.lang}</span>
-          )}
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
-            isFull ? 'bg-green-500/20 text-green-400 border-green-500/30'
-              : isTrailer ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-              : 'bg-sky-500/20 text-sky-400 border-sky-500/30'
-          }`}>
-            {movie.episode_current}
-          </span>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(Object.keys(FEEDS) as StableCatalogFeedMode[]).map((feedMode) => {
+            const option = FEEDS[feedMode];
+            return (
+              <Link key={feedMode} to={option.path} className="group rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 hover:border-red-400/25 hover:bg-red-500/[0.05]">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-red-500/10 text-red-400"><i className={option.icon} /></span>
+                  <div><strong className="text-sm text-white/85 group-hover:text-white">{option.label}</strong><p className="mt-0.5 text-xs text-white/35">{feedMode === 'new' ? 'Theo ngày thêm phim' : 'Theo lần tăng số tập'}</p></div>
+                </div>
+              </Link>
+            );
+          })}
         </div>
+      </div>
+    </section>
+  );
+}
 
-        {/* Bottom info */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 z-[2]">
-          <h3 className="min-h-[3rem] text-lg font-bold leading-6 text-white line-clamp-2 group-hover:text-red-400 transition-colors md:min-h-0 md:text-xl md:line-clamp-1">
-            {movie.name}
-          </h3>
-          <p className="text-white/50 text-xs mt-1 line-clamp-1">{movie.origin_name}</p>
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {movie.year && <span className="text-[11px] text-white/50">{movie.year}</span>}
-            {movie.time && (
-              <>
-                <span className="text-white/20 text-[10px]">·</span>
-                <span className="text-[11px] text-white/40">{movie.time}</span>
-              </>
-            )}
-            <span className="ml-auto flex items-center gap-1 bg-red-500/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
-              <i className="ri-play-fill" /> Xem Ngay
-            </span>
+function FeaturedCard({ movie, mode }: { movie: Movie; mode: StableCatalogFeedMode }) {
+  const imagePath = movie.hero_backdrop_url || movie.thumb_url || movie.hero_poster_url || movie.poster_url;
+  const fallbackPath = movie.thumb_url || movie.poster_url;
+  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(imagePath, fallbackPath, isImagePreloaded(getFeaturedUrl(imagePath)), 1180, 88);
+  return (
+    <Link to={movieDetailUrl(movie.slug)} className="movie-card-contain movie-art-frame movie-art-frame--wide group relative block overflow-hidden rounded-3xl bg-[#151823]">
+      <div className="relative aspect-[16/8.2] min-h-[260px]">
+        {!loaded && !hasError && <div className="absolute inset-0 skeleton" />}
+        {hasError && <div className="absolute inset-0 grid place-items-center bg-[#151823] text-4xl text-white/15"><i className="ri-image-line" /></div>}
+        <img src={currentSrc} alt={movie.name} loading="eager" decoding="async"
+          className={`h-full w-full object-cover transition duration-700 group-hover:scale-[1.025] ${loaded && !hasError ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }} onError={onError} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" /><div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/10 to-transparent" />
+        <div className="absolute left-3 top-3 flex items-center gap-2 sm:left-5 sm:top-5">
+          <span className="rounded-full bg-red-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white">{mode === 'new' ? 'Mới thêm' : 'Tập mới'}</span>
+          {movie.quality && <span className="rounded-md border border-white/15 bg-black/60 px-2 py-1 text-[10px] font-bold text-white">{movie.quality}</span>}
+        </div>
+        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-white/48">{formatFeedDate(movie, mode)}</p>
+          <h3 className="max-w-3xl text-xl font-black leading-tight text-white sm:text-3xl">{movie.name}</h3>
+          {movie.origin_name && <p className="mt-1 line-clamp-1 text-xs text-white/46 sm:text-sm">{movie.origin_name}</p>}
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/58">
+            {movie.year ? <span>{movie.year}</span> : null}{movie.lang ? <span>· {movie.lang}</span> : null}
+            {movie.episode_current ? <span className="rounded-md bg-white/10 px-2 py-1 text-white/80">{movie.episode_current}</span> : null}
+            <span className="ml-auto hidden min-h-10 items-center gap-2 rounded-full bg-white px-4 font-bold text-black sm:inline-flex"><i className="ri-play-fill" />Xem ngay</span>
           </div>
         </div>
       </div>
@@ -731,62 +406,22 @@ function FeaturedCard({ movie }: { movie: Movie }) {
   );
 }
 
-/* ── Side Featured Card (smaller) ── */
-function SideFeaturedCard({ movie }: { movie: Movie }) {
-  const imagePath = movie.thumb_url || movie.poster_url;
-  const fallbackPath = movie.poster_url || movie.thumb_url;
-  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    imagePath,
-    fallbackPath,
-    isImagePreloaded(getSmallThumbUrl(imagePath)),
-    420,
-    84,
-  );
-  const ep = (movie.episode_current ?? '').toLowerCase().trim();
-  const isFull = ep === 'full' || ep === 'hoàn tất' || ep === 'full hd';
-
+function SideFeaturedCard({ movie, mode }: { movie: Movie; mode: StableCatalogFeedMode }) {
+  const imagePath = movie.hero_backdrop_url || movie.thumb_url || movie.hero_poster_url || movie.poster_url;
+  const fallbackPath = movie.thumb_url || movie.poster_url;
+  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(imagePath, fallbackPath, isImagePreloaded(getSmallThumbUrl(imagePath)), 520, 84);
   return (
-    <Link
-      to={movieDetailUrl(movie.slug)}
-      className="movie-card-contain movie-art-frame movie-art-frame--wide group relative block overflow-hidden rounded-lg bg-[#16192a] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d14]"
-      aria-label={`Xem phim ${movie.name}`}
-    >
-      <div className="relative aspect-[16/11] sm:aspect-[16/10]">
-        {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton z-[1]" />}
-        {imgError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">
-            <i className="ri-image-line text-white/20 text-2xl" />
-          </div>
-        )}
-        <img
-          src={currentSrc}
-          alt={movie.name}
-          loading="lazy"
-          className={`w-full h-full object-cover object-center transition-all duration-500 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-          style={{ filter: 'contrast(1.05) saturate(1.08)' }}
-          onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }}
-          onError={onError}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-
-        <div className="absolute top-2 left-2 z-[2]">
-          {movie.quality && (
-            <span className="text-[9px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded">{movie.quality}</span>
-          )}
-        </div>
-
-        <div className="absolute bottom-0 left-0 right-0 z-[2] p-2 sm:p-2.5">
-          <h4 className="min-h-8 text-[11px] font-bold leading-4 text-white line-clamp-2 group-hover:text-red-400 transition-colors sm:min-h-0 sm:text-xs">
-            {movie.name}
-          </h4>
-          <div className="flex items-center gap-1.5 mt-1">
-            {movie.year && <span className="text-[10px] text-white/40">{movie.year}</span>}
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-              isFull ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-sky-500/20 text-sky-400 border-sky-500/30'
-            }`}>
-              {movie.episode_current}
-            </span>
-          </div>
+    <Link to={movieDetailUrl(movie.slug)} className="movie-card-contain movie-art-frame movie-art-frame--wide group relative block overflow-hidden rounded-2xl bg-[#151823]">
+      <div className="relative aspect-[16/10]">
+        {!loaded && !hasError && <div className="absolute inset-0 skeleton" />}{hasError && <div className="absolute inset-0 grid place-items-center text-2xl text-white/15"><i className="ri-image-line" /></div>}
+        <img src={currentSrc} alt={movie.name} loading="lazy" decoding="async"
+          className={`h-full w-full object-cover transition duration-500 group-hover:scale-[1.035] ${loaded && !hasError ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => { onLoad(); markImagePreloaded(currentSrc); }} onError={onError} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
+        <div className="absolute left-2.5 top-2.5 rounded-full bg-black/60 px-2 py-1 text-[9px] font-bold text-white/80">{formatFeedDate(movie, mode)}</div>
+        <div className="absolute inset-x-0 bottom-0 p-3">
+          <h3 className="line-clamp-2 text-sm font-bold leading-5 text-white group-hover:text-red-300">{movie.name}</h3>
+          <div className="mt-1.5 flex items-center gap-2 text-[10px] text-white/48">{movie.year ? <span>{movie.year}</span> : null}{movie.episode_current ? <span className="truncate rounded bg-white/10 px-1.5 py-0.5 text-white/75">{movie.episode_current}</span> : null}</div>
         </div>
       </div>
     </Link>

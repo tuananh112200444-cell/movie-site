@@ -1,93 +1,89 @@
-import { useState, useEffect } from 'react';
-import { useImageFallback } from '../../../hooks/useImageFallback';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchMoviesByType, fetchNewMovies, getImageUrl } from '../../../services/movieApi';
+import { Flame, ImageOff, Play, Sparkles, Trophy } from 'lucide-react';
+import { useImageFallback } from '../../../hooks/useImageFallback';
+import { fetchTop10TodayMovies, getLandscapeImagePaths } from '../../../services/movieApi';
 import type { MovieItem } from '../../../types/movie';
-import { ImageOff, Play, Sparkles, Trophy } from 'lucide-react';
 import { trackMovieClick } from '../../../utils/analytics';
 
-/* ── helpers ── */
-function getThumbUrl(path: string): string {
-  if (!path) return '';
-  return getImageUrl(path);
-}
-
-function getEpBadge(ep?: string): string {
-  if (!ep) return '';
-  const s = ep.toLowerCase().trim();
-  if (s === 'full' || s === 'full hd') return 'FULL';
-  if (s.startsWith('hoàn tất')) {
-    const inner = ep.replace(/hoàn tất\s*/i, '').replace(/[()]/g, '').trim();
-    return inner || 'FULL';
+function getEpisodeBadge(value?: string): string {
+  if (!value) return '';
+  const normalized = value.toLowerCase().trim();
+  if (normalized === 'full' || normalized === 'full hd') return 'FULL';
+  if (normalized.startsWith('hoàn tất')) {
+    return value.replace(/hoàn tất\s*/i, '').replace(/[()]/g, '').trim() || 'FULL';
   }
-  return ep;
+  return value;
 }
 
-function getCountryLabel(movie: MovieItem): string {
-  const countries = (movie as unknown as { country?: { name: string }[] })?.country ?? [];
-  return countries.map(c => c.name).slice(0, 2).join(', ');
+function getRankStyle(rank: number): {
+  badge: string;
+  border: string;
+  glow: string;
+  label: string;
+} {
+  if (rank === 1) {
+    return {
+      badge: 'from-amber-300 via-yellow-400 to-orange-500 text-[#321400]',
+      border: 'border-amber-300/55',
+      glow: 'shadow-[0_18px_55px_-28px_rgba(251,191,36,0.9)]',
+      label: 'Dẫn đầu',
+    };
+  }
+  if (rank === 2) {
+    return {
+      badge: 'from-slate-100 via-slate-300 to-slate-500 text-slate-950',
+      border: 'border-slate-300/35',
+      glow: 'shadow-[0_18px_50px_-30px_rgba(203,213,225,0.75)]',
+      label: 'Top 3',
+    };
+  }
+  if (rank === 3) {
+    return {
+      badge: 'from-orange-300 via-orange-500 to-amber-700 text-[#2b1004]',
+      border: 'border-orange-400/40',
+      glow: 'shadow-[0_18px_50px_-30px_rgba(251,146,60,0.75)]',
+      label: 'Top 3',
+    };
+  }
+  return {
+    badge: 'from-white/90 to-white/60 text-[#141722]',
+    border: 'border-white/[0.11]',
+    glow: 'shadow-[0_16px_45px_-34px_rgba(0,0,0,0.9)]',
+    label: 'Đang hot',
+  };
 }
 
-function getCategoryLabel(movie: MovieItem): string {
-  const cats = (movie as unknown as { category?: { name: string }[] })?.category ?? [];
-  return cats.slice(0, 2).map(c => c.name).join(' · ');
+interface RankingCardProps {
+  movie: MovieItem;
+  rank: number;
 }
 
-/* ── rank badge ── */
-const RANK_CFG: Record<number, { numColor: string; stroke: string; glow: string; border: string }> = {
-  1: { numColor: '#FBBF24', stroke: '#92400E', glow: 'rgba(251,191,36,0.25)', border: 'rgba(251,191,36,0.25)' },
-  2: { numColor: '#CBD5E1', stroke: '#334155', glow: 'rgba(148,163,184,0.15)', border: 'rgba(148,163,184,0.2)' },
-  3: { numColor: '#FB923C', stroke: '#7C2D12', glow: 'rgba(251,146,60,0.2)',  border: 'rgba(251,146,60,0.2)'  },
-};
-const DEFAULT_RANK = { numColor: 'rgba(255,255,255,0.18)', stroke: '#0f172a', glow: 'transparent', border: 'transparent' };
-
-/* ── single card ── */
-interface CardProps { movie: MovieItem; rank: number }
-
-function Top10Card({ movie, rank }: CardProps) {
-  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.poster_url || movie.thumb_url,
-    movie.thumb_url || movie.poster_url,
+function RankingCard({ movie, rank }: RankingCardProps) {
+  const { primary: primaryImage, fallback: fallbackImage } = getLandscapeImagePaths(movie);
+  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
+    primaryImage,
+    fallbackImage,
+    false,
+    520,
+    86,
+    { preferredAspect: 'landscape' },
   );
-  const epBadge  = getEpBadge(movie.episode_current);
-  const country  = getCountryLabel(movie);
-  const category = getCategoryLabel(movie);
-  const rc       = RANK_CFG[rank] ?? DEFAULT_RANK;
-  const isTop3   = rank <= 3;
+  const rankStyle = getRankStyle(rank);
+  const episode = getEpisodeBadge(movie.episode_current);
 
   return (
     <Link
       to={`/phim/${encodeURIComponent(movie.slug || '')}`}
-      className="flex items-stretch gap-0 group cursor-pointer"
+      aria-label={`Hạng ${rank}: ${movie.name}`}
+      className={`group relative min-w-0 overflow-hidden rounded-2xl border bg-[#11141d] ${rankStyle.border} ${rankStyle.glow} transition duration-300 hover:-translate-y-1 hover:border-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300`}
       onClick={() => trackMovieClick(movie.slug || '', movie.name || '', 'home')}
     >
-      {/* ── Rank number ── */}
-      <div
-        className="flex-shrink-0 w-[38px] md:w-[46px] flex items-center justify-center"
-        style={{ filter: isTop3 ? `drop-shadow(0 0 8px ${rc.glow})` : 'none' }}
-      >
-        <span
-          className="font-black leading-none select-none text-[44px] md:text-[52px]"
-          style={{
-            color: rc.numColor,
-            WebkitTextStroke: `2px ${rc.stroke}`,
-            fontFamily: "'Bebas Neue', 'Impact', 'Arial Black', sans-serif",
-            letterSpacing: '-1px',
-          }}
-        >
-          {rank}
-        </span>
-      </div>
-
-      {/* ── Thumbnail ── */}
-      <div
-        className="flex-shrink-0 relative rounded-lg overflow-hidden w-[120px] md:w-[148px] aspect-video bg-white/5"
-        style={{ border: `1px solid ${rc.border}` }}
-      >
-        {!imgLoaded && !imgError && <div className="absolute inset-0 animate-pulse bg-white/5" />}
-        {imgError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">
-            <ImageOff className="h-6 w-6 text-white/20" aria-hidden="true" />
+      <div className="relative aspect-[16/11] min-h-[128px] overflow-hidden bg-[#171b27] sm:min-h-0">
+        {!loaded && !hasError && <div className="absolute inset-0 animate-pulse bg-white/[0.055]" />}
+        {hasError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#181b25]">
+            <ImageOff className="h-7 w-7 text-white/25" aria-hidden="true" />
           </div>
         )}
         <img
@@ -95,221 +91,72 @@ function Top10Card({ movie, rank }: CardProps) {
           alt={movie.name}
           loading="lazy"
           fetchPriority="low"
-          className={`w-full h-full object-cover object-top transition-all duration-300 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-          style={{ filter: 'contrast(1.04) saturate(1.1)' }}
+          className={`h-full w-full object-cover object-top transition duration-500 group-hover:scale-[1.06] ${loaded && !hasError ? 'opacity-100' : 'opacity-0'}`}
           onLoad={onLoad}
           onError={onError}
         />
 
-        {/* dark overlay on hover */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/35 transition-colors duration-300" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#090b11] via-[#090b11]/45 to-black/5" />
+        <div className="absolute inset-x-0 bottom-0 h-3/4 bg-[linear-gradient(to_top,rgba(7,9,14,0.98),rgba(7,9,14,0.68)_48%,transparent)]" />
 
-        {/* play button */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full bg-white/25 flex items-center justify-center opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300">
-            <Play className="ml-0.5 h-4 w-4 fill-current text-white" aria-hidden="true" />
-          </div>
-        </div>
-
-        {/* ep badge bottom-left */}
-        {epBadge && (
-          <span className="absolute bottom-1.5 left-1.5 z-10 text-[9px] font-bold bg-red-500 text-white px-1.5 py-[3px] rounded leading-none">
-            {epBadge}
+        <div className="absolute left-2 top-2 flex items-center gap-1.5 sm:left-2.5 sm:top-2.5">
+          <span className={`grid h-9 min-w-9 place-items-center rounded-xl bg-gradient-to-br px-1.5 text-base font-black leading-none shadow-lg sm:h-10 sm:min-w-10 sm:text-lg ${rankStyle.badge}`}>
+            {String(rank).padStart(2, '0')}
           </span>
-        )}
-
-        {/* quality top-right */}
-        {movie.quality && (
-          <span className="absolute top-1.5 right-1.5 z-10 text-[9px] font-bold bg-black/75 text-white/90 px-1.5 py-[3px] rounded leading-none border border-white/10">
-            {movie.quality}
-          </span>
-        )}
-
-        {/* top-3 shimmer bar */}
-        {isTop3 && (
-          <div
-            className="absolute top-0 left-0 right-0 h-[2px]"
-            style={{ background: `linear-gradient(90deg, transparent, ${rc.numColor}80, transparent)` }}
-          />
-        )}
-      </div>
-
-      {/* ── Info ── */}
-      <div className="flex-1 min-w-0 pl-3 flex flex-col justify-center gap-0.5">
-        <p className={`
-          text-[13px] md:text-[14px] font-semibold leading-snug line-clamp-2
-          transition-colors duration-200
-          ${isTop3 ? 'text-white/95 group-hover:text-amber-400' : 'text-white/80 group-hover:text-red-400'}
-        `}>
-          {movie.name}
-        </p>
-
-        {movie.origin_name && (
-          <p className="text-[11px] text-white/30 line-clamp-1 mt-0.5">
-            {movie.origin_name}
-          </p>
-        )}
-
-        {/* meta row */}
-        <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 mt-1.5">
-          {movie.year && (
-            <span className="text-[10px] font-medium text-white/45 bg-white/5 px-1.5 py-0.5 rounded">
-              {movie.year}
+          {rank <= 3 && (
+            <span className="hidden rounded-full border border-white/15 bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white/80 backdrop-blur-sm sm:inline-flex">
+              {rankStyle.label}
             </span>
           )}
-          {movie.lang && (
-            <span className="text-[10px] font-medium text-sky-400/70 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/15">
-              {movie.lang}
+        </div>
+
+        <div className="absolute right-2 top-2 flex items-center gap-1 sm:right-2.5 sm:top-2.5">
+          {movie.quality && (
+            <span className="rounded-md border border-white/15 bg-black/65 px-1.5 py-1 text-[9px] font-black uppercase text-white backdrop-blur-sm">
+              {movie.quality}
             </span>
           )}
-          {country && (
-            <span className="text-[10px] text-white/35">{country}</span>
+        </div>
+
+        <div className="absolute inset-0 grid place-items-center opacity-0 transition duration-300 group-hover:opacity-100">
+          <span className="grid h-11 w-11 scale-75 place-items-center rounded-full border border-white/35 bg-white/20 text-white shadow-xl backdrop-blur-md transition duration-300 group-hover:scale-100">
+            <Play className="ml-0.5 h-5 w-5 fill-current" aria-hidden="true" />
+          </span>
+        </div>
+
+        <div className="absolute inset-x-0 bottom-0 p-2.5 sm:p-3">
+          <h4 className="line-clamp-2 min-h-[2.35rem] text-[13px] font-black leading-[1.18] text-white drop-shadow-md sm:text-[14px] lg:text-[15px]">
+            {movie.name}
+          </h4>
+          {movie.origin_name && (
+            <p className="mt-1 hidden truncate text-[10px] text-white/48 sm:block">
+              {movie.origin_name}
+            </p>
           )}
-        </div>
-
-        {category && (
-          <p className="text-[10px] text-white/25 mt-1 line-clamp-1">{category}</p>
-        )}
-      </div>
-    </Link>
-  );
-}
-
-/* ── skeleton ── */
-function SkeletonCard() {
-  return (
-    <div className="flex items-stretch gap-0">
-      <div className="flex-shrink-0 w-[38px] md:w-[46px] flex items-center justify-center">
-        <div className="w-7 h-10 bg-white/5 rounded animate-pulse" />
-      </div>
-      <div className="flex-shrink-0 w-[120px] md:w-[148px] aspect-video bg-white/5 rounded-lg animate-pulse" />
-      <div className="flex-1 pl-3 flex flex-col justify-center gap-2">
-        <div className="h-3.5 bg-white/5 rounded animate-pulse w-5/6" />
-        <div className="h-3 bg-white/5 rounded animate-pulse w-2/3" />
-        <div className="flex gap-1.5 mt-0.5">
-          <div className="h-4 w-10 bg-white/5 rounded animate-pulse" />
-          <div className="h-4 w-12 bg-white/5 rounded animate-pulse" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MobileTop10Card({ movie, rank }: CardProps) {
-  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.poster_url || movie.thumb_url,
-    movie.thumb_url || movie.poster_url,
-  );
-  const epBadge = getEpBadge(movie.episode_current);
-  const rc = RANK_CFG[rank] ?? DEFAULT_RANK;
-
-  return (
-    <Link
-      to={`/phim/${encodeURIComponent(movie.slug || '')}`}
-      className="group flex w-[292px] flex-shrink-0 snap-start items-center rounded-xl border border-white/[0.07] bg-white/[0.035] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors active:bg-white/[0.07]"
-      onClick={() => trackMovieClick(movie.slug || '', movie.name || '', 'home')}
-    >
-      <span
-        className="w-8 flex-shrink-0 text-center text-[34px] font-black leading-none"
-        style={{
-          color: rc.numColor,
-          WebkitTextStroke: `1.5px ${rc.stroke}`,
-          fontFamily: "'Bebas Neue', 'Impact', 'Arial Black', sans-serif",
-        }}
-        aria-label={`Hạng ${rank}`}
-      >
-        {rank}
-      </span>
-      <div className="relative ml-1 h-[74px] w-[118px] flex-shrink-0 overflow-hidden rounded-lg bg-white/5" style={{ border: `1px solid ${rc.border}` }}>
-        {!imgLoaded && !imgError && <div className="absolute inset-0 animate-pulse bg-white/5" />}
-        {imgError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#1a1d27] z-[1]">
-            <ImageOff className="h-5 w-5 text-white/20" aria-hidden="true" />
+          <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[9px] font-semibold text-white/58 sm:text-[10px]">
+            {episode ? (
+              <span className="max-w-[4.8rem] truncate rounded bg-red-500 px-1.5 py-0.5 font-black leading-none text-white">
+                {episode}
+              </span>
+            ) : null}
+            {movie.year ? <span>{movie.year}</span> : null}
+            {movie.year && movie.lang ? <span className="text-white/20">•</span> : null}
+            {movie.lang ? <span className="truncate text-sky-300/85">{movie.lang}</span> : null}
           </div>
-        )}
-        <img
-          src={currentSrc}
-          alt={movie.name}
-          loading="lazy"
-          fetchPriority="low"
-          className={`h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-          style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-          onLoad={onLoad}
-          onError={onError}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-        {epBadge && (
-          <span className="absolute bottom-1.5 left-1.5 text-[8px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded">
-            {epBadge}
-          </span>
-        )}
-        {movie.quality && (
-          <span className="absolute right-1.5 top-1.5 text-[8px] font-bold bg-black/70 text-white/90 px-1.5 py-0.5 rounded">
-            {movie.quality}
-          </span>
-        )}
-      </div>
-      <div className="min-w-0 flex-1 pl-2.5">
-        <p className="line-clamp-2 text-[12px] font-bold leading-[17px] text-white/90 group-hover:text-amber-300">
-          {movie.name}
-        </p>
-        {movie.origin_name && (
-          <p className="mt-0.5 line-clamp-1 text-[9px] text-white/30">{movie.origin_name}</p>
-        )}
-        <div className="mt-1.5 flex items-center gap-1.5 text-[9px]">
-          {movie.year ? <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-white/45">{movie.year}</span> : null}
-          {movie.lang ? <span className="line-clamp-1 text-sky-300/75">{movie.lang}</span> : null}
         </div>
       </div>
     </Link>
   );
 }
 
-function MobileSkeletonCard() {
+function RankingSkeleton() {
   return (
-    <div className="h-[94px] w-[292px] flex-shrink-0 rounded-xl bg-white/5 animate-pulse" />
-  );
-}
-
-/* ── divider between items ── */
-function ItemDivider() {
-  return <div className="h-px bg-white/[0.04] mx-0" />;
-}
-
-/* ── column ── */
-interface ColumnProps {
-  items: MovieItem[];
-  startRank: number;
-  loading: boolean;
-  skeletonCount: number;
-}
-
-function RankColumn({ items, startRank, loading, skeletonCount }: ColumnProps) {
-  return (
-    <div className="rounded-2xl bg-white/[0.025] border border-white/[0.06] overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.045)]">
-      {loading
-        ? Array.from({ length: skeletonCount }).map((_, i) => (
-            <div key={i}>
-              <div className="px-3 py-3 md:py-3.5">
-                <SkeletonCard />
-              </div>
-              {i < skeletonCount - 1 && <ItemDivider />}
-            </div>
-          ))
-        : items.map((movie, idx) => (
-            <div key={movie._id}>
-              <div className="px-3 py-3 md:py-3.5 hover:bg-white/[0.03] transition-colors duration-200">
-                <Top10Card movie={movie} rank={startRank + idx} />
-              </div>
-              {idx < items.length - 1 && <ItemDivider />}
-            </div>
-          ))
-      }
+    <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.035]">
+      <div className="aspect-[16/11] min-h-[128px] animate-pulse bg-white/[0.055] sm:min-h-0" />
     </div>
   );
 }
 
-/* ── main ── */
 interface Top10TodaySectionProps {
   initialMovies?: MovieItem[];
   loading?: boolean;
@@ -331,10 +178,9 @@ export default function Top10TodaySection({
   useEffect(() => {
     let cancelled = false;
     if (initialMovies.length > 0) {
-      const filtered = initialMovies
-        .filter(m => (m.episode_current ?? '').toLowerCase().trim() !== 'trailer')
-        .slice(0, 10);
-      setMovies(filtered);
+      setMovies(initialMovies
+        .filter((movie) => (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer')
+        .slice(0, 10));
       setLoading(false);
       return () => { cancelled = true; };
     }
@@ -345,72 +191,57 @@ export default function Top10TodaySection({
     }
 
     setLoading(true);
-    (variant === 'series'
-      ? fetchMoviesByType('phim-bo', 1, 'modified.time', 'desc')
-      : fetchNewMovies(1))
-      .then((res) => {
-        if (!cancelled && res.items?.length) {
-          const filtered = res.items
-            .filter(m => (m.episode_current ?? '').toLowerCase().trim() !== 'trailer')
-            .slice(0, 10);
-          setMovies(filtered);
-        }
+    fetchTop10TodayMovies({ limit: 10, timeoutMs: 5_000 })
+      .then((items) => {
+        if (!cancelled) setMovies(items
+          .filter((movie) => (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer')
+          .slice(0, 10));
       })
-      .catch(() => {})
+      .catch(() => undefined)
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [initialMovies, parentLoading, variant]);
+  }, [initialMovies, parentLoading]);
 
   const isSeries = variant === 'series';
 
   return (
-    <section className="mb-7 md:mb-12 home-section-surface">
-      {/* ── Header ── */}
-      <div className="flex items-center gap-3 mb-4 md:mb-5">
-        <div className="relative flex-shrink-0">
-          <div className={`w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br ${isSeries ? 'from-cyan-400 to-violet-600' : 'from-amber-400 to-orange-600'} flex items-center justify-center`}>
-            <Trophy className="h-4 w-4 text-white md:h-[18px] md:w-[18px]" fill="currentColor" aria-hidden="true" />
+    <section className="mb-8 md:mb-12" aria-labelledby="top10-today-title">
+      <div className="relative mb-4 overflow-hidden rounded-2xl border border-amber-300/15 bg-[radial-gradient(circle_at_8%_20%,rgba(245,158,11,0.18),transparent_34%),linear-gradient(115deg,rgba(20,22,31,0.98),rgba(11,13,20,0.96))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-5 lg:mb-5 lg:rounded-3xl lg:p-6">
+        <div className="pointer-events-none absolute -right-4 -top-12 select-none text-[116px] font-black leading-none text-white/[0.025] sm:text-[148px]" aria-hidden="true">
+          10
+        </div>
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div className={`grid h-12 w-12 flex-shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${isSeries ? 'from-cyan-400 to-violet-600' : 'from-amber-300 via-orange-400 to-red-500'} text-white shadow-[0_10px_30px_-12px_rgba(249,115,22,0.9)] sm:h-14 sm:w-14`}>
+              <Trophy className="h-6 w-6 sm:h-7 sm:w-7" fill="currentColor" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-amber-300/80 sm:text-[10px]">
+                <Flame className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true" />
+                Bảng xếp hạng trong ngày
+              </div>
+              <h3 id="top10-today-title" className="text-xl font-black leading-tight tracking-[-0.025em] text-white sm:text-2xl lg:text-[1.85rem]">
+                {title ?? (isSeries ? 'Top 10 Phim Bộ Hôm Nay' : 'Top 10 Phim Lẻ Hay Nhức Nách')}
+              </h3>
+              <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-white/48 sm:text-xs">
+                {subtitle ?? 'Xếp hạng từ lượt xem thực tế trên KhoPhim trong ngày'}
+              </p>
+            </div>
           </div>
-          <div className="absolute inset-0 rounded-lg bg-red-500/40 blur-md -z-10" />
-        </div>
 
-        <div className="flex flex-col">
-          <h3 className="text-lg md:text-2xl lg:text-[1.55rem] font-black text-white leading-tight">
-            {title ?? (isSeries ? 'Top 10 Phim Bộ Hôm Nay' : 'Top 10 Phim Lẻ Hay Nhức Nách')}
-          </h3>
-          <span className="text-[10px] text-white/30">
-            {subtitle ?? (isSeries ? 'Những bộ phim đang cuốn người xem quay lại mỗi ngày' : 'Phim xem được, nổi bật và đáng dành thời gian')}
-          </span>
+          <div className="inline-flex w-fit flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-3 py-2 text-[9px] font-black uppercase tracking-[0.12em] text-emerald-300 sm:text-[10px]">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            Cập nhật tự động
+          </div>
         </div>
-
-        <span className="flex items-center gap-1 text-[10px] text-green-400 ml-1">
-          <Sparkles className="h-3 w-3" aria-hidden="true" />
-          TỰ ĐỘNG
-        </span>
       </div>
 
-      {/* ── 2-column grid ── */}
-      <div className="home-rail-scroll flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-3 scrollbar-hide lg:hidden">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 lg:gap-4" aria-label="Bảng xếp hạng 10 phim hôm nay">
         {loading
-          ? Array.from({ length: 10 }).map((_, i) => <MobileSkeletonCard key={i} />)
-          : movies.slice(0, 10).map((movie, idx) => (
-              <MobileTop10Card key={movie._id} movie={movie} rank={idx + 1} />
+          ? Array.from({ length: 10 }).map((_, index) => <RankingSkeleton key={index} />)
+          : movies.slice(0, 10).map((movie, index) => (
+              <RankingCard key={movie._id || movie.slug} movie={movie} rank={index + 1} />
             ))}
-      </div>
-
-      <div className="hidden lg:grid lg:grid-cols-2 gap-4 xl:gap-5">
-        <RankColumn
-          items={movies.slice(0, 5)}
-          startRank={1}
-          loading={loading}
-          skeletonCount={5}
-        />
-        <RankColumn
-          items={movies.slice(5, 10)}
-          startRank={6}
-          loading={loading}
-          skeletonCount={5}
-        />
       </div>
     </section>
   );

@@ -42,9 +42,22 @@ function pemBytes(pem: string): Uint8Array {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
+function googlePrivateKey(): string {
+  const encoded = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY_BASE64') || '';
+  if (encoded) {
+    try {
+      const binary = atob(encoded.replace(/\s+/g, ''));
+      return new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+    } catch {
+      throw new Error('Google service account Base64 key is invalid');
+    }
+  }
+  return Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY') || '';
+}
+
 async function googleAccessToken(): Promise<string> {
   const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL') || '';
-  const privateKey = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY') || '';
+  const privateKey = googlePrivateKey();
   if (!email || !privateKey) throw new Error('Google service account secrets are missing');
   const now = Math.floor(Date.now()/1000);
   const header = base64Url(JSON.stringify({ alg:'RS256', typ:'JWT' }));
@@ -68,12 +81,22 @@ function isoDate(daysAgo: number): string {
   return date.toISOString().slice(0,10);
 }
 
-async function searchAnalytics(token: string, dimension: 'page'|'query') {
+type SearchDimension = 'page'|'query';
+type SearchFilter = { dimension: SearchDimension; operator: 'contains'|'notContains'|'equals'; expression: string };
+
+async function searchAnalytics(token: string, dimensions: SearchDimension[], filters: SearchFilter[] = []) {
   const startDate = isoDate(31);
   const endDate = isoDate(3);
   const response = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(PROPERTY_URI)}/searchAnalytics/query`, {
     method:'POST', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-    body:JSON.stringify({ startDate, endDate, dimensions:[dimension], rowLimit:2500, dataState:'final' }),
+    body:JSON.stringify({
+      startDate,
+      endDate,
+      dimensions,
+      rowLimit:2500,
+      dataState:'final',
+      ...(filters.length ? { dimensionFilterGroups:[{ groupType:'and', filters }] } : {}),
+    }),
     signal:AbortSignal.timeout(30000),
   });
   const data = await response.json();
@@ -139,6 +162,40 @@ async function ensureCanonicalSitemap(token: string, forceSubmit = false) {
 }
 
 type Candidate = { id:string; slug:string };
+
+function hasUsefulPerson(values: unknown): boolean {
+  return Array.isArray(values) && values.some((value) => {
+    const normalized = String(value || '').toLocaleLowerCase('vi-VN')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+      .replace(/[^a-z0-9]+/g, ' ').trim();
+    return normalized.length >= 2
+      && !/^(?:dang cap nhat|updating|unknown|n a|null)$/.test(normalized);
+  });
+}
+
+function isStrongInspectionCandidate(movie: Record<string, unknown> | null | undefined): boolean {
+  if (!movie || movie.is_published !== true || movie.superseded_by_movie_id) return false;
+  return Number(movie.tmdb_id || 0) > 0
+    && hasUsefulPerson(movie.actor)
+    && hasUsefulPerson(movie.director)
+    && Array.isArray(movie.category) && movie.category.length > 0
+    && Array.isArray(movie.country) && movie.country.length > 0;
+}
+
+function hasTrustedYouTubeTrailer(value: unknown): boolean {
+  try {
+    const url = new URL(String(value || '').trim());
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (url.protocol !== 'https:') return false;
+    if (host === 'youtu.be') return url.pathname.replace(/^\/+/, '').length >= 6;
+    if (host !== 'youtube.com' && host !== 'm.youtube.com') return false;
+    return url.pathname === '/watch'
+      ? String(url.searchParams.get('v') || '').length >= 6
+      : /^\/(?:embed|shorts)\/[A-Za-z0-9_-]{6,}/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
 
 function inspectionDiagnosis(result: Record<string,unknown>): { recommendation:string; priority:number } {
   const verdict = String(result.verdict || 'UNKNOWN');
@@ -219,21 +276,29 @@ function normalizedQuery(value: string): string {
     .trim();
 }
 
-function queryClass(value: string): 'khophim_brand'|'legacy_brand'|'generic_movie'|'other' {
+function queryClass(value: string): 'khophim_brand'|'legacy_brand'|'competitor_navigation'|'generic_movie'|'title_or_entity' {
   const query = normalizedQuery(value);
-  if (/kho[ ._-]*phim|khophim|khopim|khphim|khohim|khophom|khophum/.test(query)) return 'khophim_brand';
-  if (/mho[ ._-]*phim|mhophim|mhop|mhphim|hophim/.test(query)) return 'legacy_brand';
+  const compact = query.replace(/[^a-z0-9]+/g, '');
+  if (/(khophim|khopim|khpim|khohim|khhim|kophim|chpim|chhim|khophi|khophum|khophom|khopihm|khonphim|kholhim|khophin|phimkho)/.test(compact)) return 'khophim_brand';
+  if (/(mhophim|mhopphim|mhphim|hophim)/.test(compact)) return 'legacy_brand';
+  if (/(luphim|cobaphim|phimhaynet|ahaphim|mamohim|phimcobe|phimvuiorg|chophimfun)/.test(compact)) return 'competitor_navigation';
   if (/xem phim|phim online|phim vietsub|phim mới|phim moi|phim bộ|phim bo|phim lẻ|phim le|phim chiếu rạp|phim chieu rap|anime|hoạt hình|hoat hinh/.test(query)) return 'generic_movie';
-  return 'other';
+  return 'title_or_entity';
 }
 
 async function dashboard(supabase: ReturnType<typeof createClient>) {
   const {data:run} = await supabase.from('seo_gsc_runs').select('*').order('started_at',{ascending:false}).limit(1).maybeSingle();
   const runId = run?.id;
-  const [{data:inspections},{data:pages},{data:queries}] = await Promise.all([
+  const [{data:inspections},{data:pages},{data:queries},{data:queryPages},{data:workItems},{data:brainRun},{data:releaseRequests},{data:hotMovieRun},{data:hotMovieCandidates}] = await Promise.all([
     supabase.from('seo_url_inspections').select('url,slug,verdict,coverage_state,indexing_state,page_fetch_state,last_crawl_time,inspected_at,recommendation,priority').order('priority',{ascending:false}).order('inspected_at',{ascending:false}).limit(50),
     supabase.from('seo_search_metrics').select('dimension_value,clicks,impressions,ctr,position,collected_at').eq('run_id',runId).eq('dimension_type','page').order('impressions',{ascending:false}).limit(25),
     supabase.from('seo_search_metrics').select('dimension_value,clicks,impressions,ctr,position,collected_at').eq('run_id',runId).eq('dimension_type','query').order('impressions',{ascending:false}).limit(2500),
+    supabase.from('seo_query_page_metrics').select('query,page,clicks,impressions,ctr,position,collected_at').eq('run_id',runId).order('impressions',{ascending:false}).limit(100),
+    supabase.from('seo_work_items').select('id,movie_id,slug,movie_name,task_type,status,priority_score,urgency,reason,required_fields,evidence,due_at,last_seen_at').in('status',['pending','in_progress']).order('priority_score',{ascending:false}).order('last_seen_at',{ascending:false}).limit(5),
+    supabase.from('seo_brain_runs').select('id,source_gsc_run_id,started_at,finished_at,status,candidate_count,queued_count,summary,error_message').order('started_at',{ascending:false}).limit(1).maybeSingle(),
+    supabase.from('seo_static_release_requests').select('id,slug,reason,requested_version,status,requested_at,deployed_at,deployment_url,error_message').in('status',['pending','processing','failed']).order('requested_at',{ascending:false}).limit(10),
+    supabase.from('seo_hot_movie_runs').select('id,started_at,finished_at,status,sources_attempted,sources_succeeded,signals_seen,matched_count,missing_count,summary,error_message').order('started_at',{ascending:false}).limit(1).maybeSingle(),
+    supabase.from('seo_hot_movie_candidates').select('id,source,source_key,title,original_title,release_date,release_year,source_rank,demand_score,source_url,matched_movie_id,matched_slug,match_status,match_confidence,readiness_status,recommended_action,evidence,last_seen_at,expires_at').eq('active',true).gt('expires_at',new Date().toISOString()).order('demand_score',{ascending:false}).order('source_rank',{ascending:true,nullsFirst:false}).limit(40),
   ]);
   const queryVisibility:Record<string,{queries:number;clicks:number;impressions:number}> = {};
   for (const item of queries || []) {
@@ -249,7 +314,13 @@ async function dashboard(supabase: ReturnType<typeof createClient>) {
     inspections:inspections || [],
     top_pages:pages || [],
     top_queries:(queries || []).slice(0,25),
-    query_visibility:queryVisibility,
+    top_query_pages:queryPages || [],
+    query_visibility:Object.entries(queryVisibility).map(([class_name,summary])=>({class_name,...summary})),
+    daily_work_items:workItems || [],
+    latest_brain_run:brainRun || null,
+    static_release_requests:releaseRequests || [],
+    latest_hot_movie_run:hotMovieRun || null,
+    hot_movie_candidates:hotMovieCandidates || [],
   };
 }
 
@@ -271,9 +342,11 @@ Deno.serve(async (req) => {
     const input = await req.json().catch(()=>({})) as {inspection_limit?:number;resubmit_sitemap?:boolean};
     const inspectionLimit = Math.max(1,Math.min(Number(input.inspection_limit || 25),50));
     const token = await googleAccessToken();
-    const [pageResult,queryResult,sitemapResult,gaTotalResult,gaCountryResult,gaDeviceResult] = await Promise.allSettled([
-      searchAnalytics(token,'page'),
-      searchAnalytics(token,'query'),
+    const [pageResult,queryResult,queryPageResult,movieQueryPageResult,sitemapResult,gaTotalResult,gaCountryResult,gaDeviceResult] = await Promise.allSettled([
+      searchAnalytics(token,['page']),
+      searchAnalytics(token,['query']),
+      searchAnalytics(token,['query','page']),
+      searchAnalytics(token,['query','page'],[{dimension:'page',operator:'contains',expression:'/phim/'}]),
       ensureCanonicalSitemap(token,input.resubmit_sitemap === true),
       ga4Report(token),
       ga4Report(token,'country'),
@@ -282,6 +355,8 @@ Deno.serve(async (req) => {
     const analyticsErrors = [
       ...(pageResult.status === 'rejected' ? [`page: ${pageResult.reason instanceof Error ? pageResult.reason.message : String(pageResult.reason)}`] : []),
       ...(queryResult.status === 'rejected' ? [`query: ${queryResult.reason instanceof Error ? queryResult.reason.message : String(queryResult.reason)}`] : []),
+      ...(queryPageResult.status === 'rejected' ? [`query_page: ${queryPageResult.reason instanceof Error ? queryPageResult.reason.message : String(queryPageResult.reason)}`] : []),
+      ...(movieQueryPageResult.status === 'rejected' ? [`movie_query_page: ${movieQueryPageResult.reason instanceof Error ? movieQueryPageResult.reason.message : String(movieQueryPageResult.reason)}`] : []),
     ];
     const sitemapError = sitemapResult.status === 'rejected'
       ? (sitemapResult.reason instanceof Error ? sitemapResult.reason.message : String(sitemapResult.reason))
@@ -299,6 +374,8 @@ Deno.serve(async (req) => {
     const fallbackRange = {startDate:isoDate(31),endDate:isoDate(3),rows:[] as Record<string,unknown>[]};
     const pageData = pageResult.status === 'fulfilled' ? pageResult.value : fallbackRange;
     const queryData = queryResult.status === 'fulfilled' ? queryResult.value : fallbackRange;
+    const queryPageData = queryPageResult.status === 'fulfilled' ? queryPageResult.value : fallbackRange;
+    const movieQueryPageData = movieQueryPageResult.status === 'fulfilled' ? movieQueryPageResult.value : fallbackRange;
     const metrics = [
       ...pageData.rows.map((row:Record<string,unknown>)=>({run_id:run.id,dimension_type:'page',dimension_value:String((row.keys as string[])?.[0] || ''),date_start:pageData.startDate,date_end:pageData.endDate,clicks:Number(row.clicks||0),impressions:Number(row.impressions||0),ctr:Number(row.ctr||0),position:Number(row.position||0)})),
       ...queryData.rows.map((row:Record<string,unknown>)=>({run_id:run.id,dimension_type:'query',dimension_value:String((row.keys as string[])?.[0] || ''),date_start:queryData.startDate,date_end:queryData.endDate,clicks:Number(row.clicks||0),impressions:Number(row.impressions||0),ctr:Number(row.ctr||0),position:Number(row.position||0)})),
@@ -307,24 +384,60 @@ Deno.serve(async (req) => {
       const {error} = await supabase.from('seo_search_metrics').insert(metrics);
       if (error) throw error;
     }
+    const queryPageRows = new Map<string,Record<string,unknown>>();
+    for (const row of [...queryPageData.rows,...movieQueryPageData.rows]) {
+      const keys = row.keys as string[];
+      const key = `${String(keys?.[0] || '')}\u0000${String(keys?.[1] || '')}`;
+      if (keys?.[0] && keys?.[1]) queryPageRows.set(key,row);
+    }
+    const queryPageMetrics = [...queryPageRows.values()].map((row:Record<string,unknown>)=>({
+      run_id:run.id,
+      query:String((row.keys as string[])?.[0] || ''),
+      page:String((row.keys as string[])?.[1] || ''),
+      date_start:queryPageData.startDate,
+      date_end:queryPageData.endDate,
+      clicks:Number(row.clicks||0),
+      impressions:Number(row.impressions||0),
+      ctr:Number(row.ctr||0),
+      position:Number(row.position||0),
+    })).filter(row=>row.query && row.page);
+    if (queryPageMetrics.length) {
+      const {error} = await supabase.from('seo_query_page_metrics').insert(queryPageMetrics);
+      if (error) throw error;
+    }
     const staleBefore = Date.now()-72*3600000;
     const [{data:eligible,error:candidateError},{data:known,error:knownError}] = await Promise.all([
-      supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at,index_tier,quality_score,freshness_score,last_episode_change_at').eq('eligible_for_index',true).in('index_tier',['ongoing','upcoming','playable']).order('quality_score',{ascending:false}).order('movie_updated_at',{ascending:false}).limit(1500),
+      supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at,index_tier,quality_score,freshness_score,last_episode_change_at,content_length,movies!inner(id,slug,is_published,superseded_by_movie_id,tmdb_id,actor,director,category,country,year,trailer_url)').eq('eligible_for_index',true).in('index_tier',['ongoing','playable','upcoming']).gte('quality_score',85).gte('content_length',350).eq('movies.is_published',true).is('movies.superseded_by_movie_id',null).not('movies.tmdb_id','is',null).order('quality_score',{ascending:false}).order('movie_updated_at',{ascending:false}).limit(1500),
       supabase.from('seo_url_inspections').select('url,inspected_at').order('inspected_at',{ascending:true}).limit(5000),
     ]);
     if (candidateError) throw candidateError;
     if (knownError) throw knownError;
     const inspectedAt = new Map((known || []).map(item=>[String(item.url),Date.parse(String(item.inspected_at || '')) || 0]));
     const candidateRows = (eligible || [])
-      .map(item=>({
-        id:String(item.movie_id),
-        slug:String(item.slug),
-        tier:String(item.index_tier || ''),
-        score:Number(item.quality_score || 0),
-        freshness:Number(item.freshness_score || 0),
-        episodeChangedAt:Date.parse(String(item.last_episode_change_at || '')) || 0,
-        updatedAt:Date.parse(String(item.movie_updated_at || '')) || 0,
-      }))
+      .flatMap(item=>{
+        const nested = Array.isArray(item.movies) ? item.movies[0] : item.movies;
+        const movie = nested && typeof nested === 'object' ? nested as Record<string,unknown> : null;
+        if (!isStrongInspectionCandidate(movie)) return [];
+        const tier = String(item.index_tier || '');
+        const score = Number(item.quality_score || 0);
+        const contentLength = Number(item.content_length || 0);
+        if (tier === 'upcoming') {
+          const currentYear = new Date().getUTCFullYear();
+          if (score < 88 || contentLength < 350 || Number(movie?.year || 0) < currentYear
+            || !hasTrustedYouTubeTrailer(movie?.trailer_url)) return [];
+        } else if (contentLength < 500) {
+          return [];
+        }
+        return [{
+          id:String(item.movie_id),
+          slug:String(movie?.slug || item.slug),
+          tier,
+          score,
+          freshness:Number(item.freshness_score || 0),
+          episodeChangedAt:Date.parse(String(item.last_episode_change_at || '')) || 0,
+          updatedAt:Date.parse(String(item.movie_updated_at || '')) || 0,
+        }];
+      })
       .filter(item=>{
         const lastInspection = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(item.slug)}`) || 0;
         if (lastInspection < staleBefore) return true;
@@ -350,9 +463,10 @@ Deno.serve(async (req) => {
       const {error} = await supabase.from('seo_url_inspections').upsert(inspections,{onConflict:'url'});
       if (error) throw error;
     }
+    const {data:brainResult,error:brainError} = await supabase.rpc('refresh_seo_operations_brain',{p_source_run_id:run.id});
     const indexed = inspections.filter(item=>item.verdict==='PASS').length;
-    const success = (analyticsErrors.length < 2 || inspections.length > 0) && !sitemapError;
-    const operationalErrors = [...analyticsErrors, ...(sitemapError ? [`sitemap: ${sitemapError}`] : []), ...inspectionErrors].slice(0,10);
+    const success = (analyticsErrors.length < 2 || inspections.length > 0) && !sitemapError && !brainError;
+    const operationalErrors = [...analyticsErrors, ...(sitemapError ? [`sitemap: ${sitemapError}`] : []), ...(brainError ? [`brain: ${brainError.message}`] : []), ...inspectionErrors].slice(0,10);
     await supabase.from('seo_gsc_runs').update({
       finished_at:new Date().toISOString(),
       success,
@@ -370,6 +484,9 @@ Deno.serve(async (req) => {
         inspection_errors:inspectionErrors.slice(0,10),
         date_start:pageData.startDate,
         date_end:pageData.endDate,
+        query_pages_collected:queryPageMetrics.length,
+        seo_brain:brainResult || null,
+        seo_brain_error:brainError?.message || null,
       },
     }).eq('id',run.id);
     return json({
@@ -377,6 +494,7 @@ Deno.serve(async (req) => {
       run_id:run.id,
       pages:pageData.rows.length,
       queries:queryData.rows.length,
+      query_pages:queryPageMetrics.length,
       inspected:inspections.length,
       indexed,
       sitemap:sitemapStatus,
@@ -385,6 +503,8 @@ Deno.serve(async (req) => {
       ga4_error:ga4Error || null,
       analytics_errors:analyticsErrors.slice(0,4),
       inspection_errors:inspectionErrors.slice(0,10),
+      seo_brain:brainResult || null,
+      seo_brain_error:brainError?.message || null,
     },success ? 200 : 502,headers);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

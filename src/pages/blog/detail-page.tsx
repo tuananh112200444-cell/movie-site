@@ -5,6 +5,7 @@ import Footer from '../../components/feature/Footer';
 import SEO from '../../components/base/SEO';
 import { blogPosts, blogCategories } from '../../mocks/blogPosts';
 import NotFound from '../NotFound';
+import SocialBrandIcon from '@/components/base/SocialBrandIcon';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('vi-VN', {
@@ -29,8 +30,8 @@ function SocialShare({ title, url }: { title: string; url: string }) {
   const shareLinks = [
     {
       name: 'Facebook',
-      icon: 'ri-facebook-fill',
-      color: 'bg-[#1877F2] hover:bg-[#166fe5]',
+      brand: 'facebook' as const,
+      color: 'bg-gradient-to-br from-[#2d8cff] to-[#1264d8] hover:brightness-110 shadow-[0_6px_18px_rgba(24,119,242,0.22)]',
       href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
     },
     {
@@ -73,7 +74,9 @@ function SocialShare({ title, url }: { title: string; url: string }) {
             className={`flex items-center gap-1.5 px-3 py-1.5 ${link.color} text-white text-xs font-medium rounded-lg transition-colors`}
             title={`Chia sẻ qua ${link.name}`}
           >
-            <i className={`${link.icon} text-sm`} />
+            {'brand' in link && link.brand
+              ? <SocialBrandIcon platform={link.brand} className="h-4 w-4" />
+              : <i className={`${link.icon} text-sm`} aria-hidden="true" />}
             <span className="hidden sm:inline">{link.name}</span>
           </a>
         ) : (
@@ -82,7 +85,7 @@ function SocialShare({ title, url }: { title: string; url: string }) {
             onClick={link.onClick}
             className={`flex items-center gap-1.5 px-3 py-1.5 ${link.color} text-white text-xs font-medium rounded-lg transition-colors cursor-pointer`}
           >
-            <i className={`${link.icon} text-sm`} />
+            <i className={`${link.icon} text-sm`} aria-hidden="true" />
             <span className="hidden sm:inline">{link.name}</span>
           </button>
         )

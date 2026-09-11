@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { isPortraitPhoneViewport, tryLockPlayerLandscape, unlockPlayerOrientation } from '@/utils/playerFullscreen';
+import PlayerWatermark from './PlayerWatermark';
+import {
+  clearPlayerPseudoFullscreenLayout,
+  exitPlayerFullscreen,
+  getPlayerFullscreenElement,
+  isPortraitPhoneViewport,
+  requestPlayerFullscreen,
+  requestPlayerVideoFullscreen,
+  exitPlayerVideoFullscreen,
+  syncPlayerPseudoFullscreenLayout,
+  tryLockPlayerLandscape,
+  unlockPlayerOrientation,
+} from '@/utils/playerFullscreen';
 
 interface Props {
   src: string;
@@ -53,12 +65,13 @@ const REPEATED_STALL_WINDOW_MS = 90_000;
 const MAX_REPEATED_SHORT_STALLS = 4;
 const MIN_FATAL_STALL_MS = 45_000;
 const RECOVERY_COOLDOWN_MS = 12_000;
-const PLAYER_LOGO_URL = '/brand/khophim-favicon-v2-96.png';
-const STABLE_PLAYBACK_SECONDS = 15;
+const STABLE_PLAYBACK_SECONDS = 30;
 // Five-minute samples retain long-watch evidence without turning every active
 // viewer into a database write every minute. Startup/stable/fatal events remain
 // immediate, so source failover does not wait for this heartbeat.
 const PLAYBACK_HEARTBEAT_SECONDS = 300;
+const LONG_SEEK_DISTANCE_SECONDS = 20;
+const SEEK_RECOVERY_DELAY_MS = 8_000;
 
 function getPlaybackProfile() {
   if (typeof window === 'undefined') {
@@ -99,20 +112,6 @@ function getPlaybackProfile() {
   };
 }
 
-function PlayerWatermark() {
-  return (
-    <div className="pointer-events-none absolute left-2 top-2 z-30 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-white/85 shadow-lg shadow-black/30 backdrop-blur-md sm:left-4 sm:top-4 sm:gap-2 sm:px-2.5">
-      <img
-        src={PLAYER_LOGO_URL}
-        alt=""
-        className="h-5 w-5 rounded object-contain sm:h-6 sm:w-6"
-        draggable={false}
-      />
-      <span className="text-[10px] font-black tracking-wide sm:text-xs">khophim.org</span>
-    </div>
-  );
-}
-
 function fmtTime(s: number): string {
   if (!isFinite(s) || s < 0) return '0:00';
   const h = Math.floor(s / 3600);
@@ -129,6 +128,20 @@ function getBufferedAhead(video: HTMLVideoElement): number {
     }
   }
   return 0;
+}
+
+function isTimeBuffered(video: HTMLVideoElement, target: number, padding = 0.25): boolean {
+  try {
+    for (let index = 0; index < video.buffered.length; index += 1) {
+      if (
+        video.buffered.start(index) - padding <= target
+        && target <= video.buffered.end(index) + padding
+      ) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
 }
 
 function finitePlaybackTime(value: unknown): number {
@@ -228,6 +241,8 @@ export default function LightweightHlsPlayer({
   const wasPlayingBeforeOfflineRef = useRef(false);
   const pseudoFsRef = useRef(false);
   const scrollPositionRef = useRef(0);
+  const fullscreenOperationRef = useRef(0);
+  const fullscreenFallbackExitRef = useRef(false);
   const sourceOpenedAtRef = useRef(Date.now());
   const firstPlayingAtRef = useRef(0);
   const watchedSecondsRef = useRef(0);
@@ -239,6 +254,13 @@ export default function LightweightHlsPlayer({
   const heartbeatBucketRef = useRef(0);
   const initialTimeRef = useRef(finitePlaybackTime(initialTime));
   const appliedExternalSeekRef = useRef<{ src: string; time: number } | null>(null);
+  const userSeekActiveRef = useRef(false);
+  const activeSeekTargetRef = useRef(0);
+  const seekWasPlayingRef = useRef(false);
+  const seekRecoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrubActiveRef = useRef(false);
+  const scrubTargetRef = useRef(0);
+  const suppressSeekClickUntilRef = useRef(0);
   const callbacksRef = useRef({
     onTimeUpdate,
     onEnded,
@@ -268,6 +290,7 @@ export default function LightweightHlsPlayer({
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [pipActive, setPipActive] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   // Callback identity changes must never rebuild MediaSource. Keep the latest
   // handlers in a ref so parent renders (progress, countdowns, health UI) are
@@ -458,19 +481,34 @@ export default function LightweightHlsPlayer({
       if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
   }, [subtitleUrl, captionsEnabled]);
-  /* ── Detect pseudo-fullscreen via resize ── */
+  const syncPseudoFullscreenLayout = useCallback(() => {
+    const el = containerRef.current;
+    if (!el || !pseudoFsRef.current) return;
+    syncPlayerPseudoFullscreenLayout(el, isPortraitPhoneViewport());
+  }, []);
+
+  /* ── Keep fullscreen aligned when a phone rotates ── */
   const checkPseudoFullscreen = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
+    syncPseudoFullscreenLayout();
     // If element is visually viewport-filling, treat as pseudo fullscreen
     const rect = el.getBoundingClientRect();
     const isPseudo = pseudoFsRef.current || (rect.width >= window.innerWidth - 2 && rect.height >= window.innerHeight - 2);
     if (isPseudo !== isFullscreen) setIsFullscreen(isPseudo);
-  }, [isFullscreen]);
+  }, [isFullscreen, syncPseudoFullscreenLayout]);
 
   useEffect(() => {
     window.addEventListener('resize', checkPseudoFullscreen);
-    return () => window.removeEventListener('resize', checkPseudoFullscreen);
+    window.addEventListener('orientationchange', checkPseudoFullscreen);
+    window.visualViewport?.addEventListener('resize', checkPseudoFullscreen);
+    window.visualViewport?.addEventListener('scroll', checkPseudoFullscreen);
+    return () => {
+      window.removeEventListener('resize', checkPseudoFullscreen);
+      window.removeEventListener('orientationchange', checkPseudoFullscreen);
+      window.visualViewport?.removeEventListener('resize', checkPseudoFullscreen);
+      window.visualViewport?.removeEventListener('scroll', checkPseudoFullscreen);
+    };
   }, [checkPseudoFullscreen]);
 
   /* ── Controls auto-hide ── */
@@ -771,6 +809,18 @@ export default function LightweightHlsPlayer({
     const video = videoRef.current;
     if (!video) return;
 
+    const clearSeekRecoveryTimer = () => {
+      if (seekRecoveryTimerRef.current) {
+        clearTimeout(seekRecoveryTimerRef.current);
+        seekRecoveryTimerRef.current = null;
+      }
+    };
+    const finishUserSeek = () => {
+      userSeekActiveRef.current = false;
+      seekWasPlayingRef.current = false;
+      clearSeekRecoveryTimer();
+    };
+
     const stopStallMonitor = () => {
       if (stallMonitorRef.current) {
         clearInterval(stallMonitorRef.current);
@@ -851,6 +901,13 @@ export default function LightweightHlsPlayer({
     const onWaiting = () => {
       setIsBuffering(true);
       clearStallTimer();
+      // A deliberate long seek is expected to empty the local buffer. Do not
+      // classify that wait as a source stall or start the ordinary recovery
+      // loop while the requested fragment is still downloading.
+      if (userSeekActiveRef.current) {
+        setErrorMsg('Đang tải đoạn vừa chọn...');
+        return;
+      }
       if (!video.paused && !video.ended && !document.hidden && navigator.onLine !== false) {
         const now = Date.now();
         const isNewStall = !stallStartedAtRef.current;
@@ -866,6 +923,7 @@ export default function LightweightHlsPlayer({
     };
     const onPlaying = () => {
       const now = Date.now();
+      finishUserSeek();
       if (!firstPlayingAtRef.current) firstPlayingAtRef.current = now;
       if (stallStartedAtRef.current) {
         stallSecondsRef.current += Math.max(0, (now - stallStartedAtRef.current) / 1000);
@@ -880,11 +938,30 @@ export default function LightweightHlsPlayer({
       if (!video.paused && !video.ended && navigator.onLine !== false) callbacksRef.current.onPlaybackStarted?.();
     };
     const onCanPlay = () => {
+      finishUserSeek();
       setIsBuffering(false);
       clearStallTimer();
       if (!video.paused && !video.ended) ensureStallMonitor();
     };
+    const onSeeking = () => {
+      setCurrentTime(video.currentTime);
+      if (!isTimeBuffered(video, video.currentTime)) {
+        setIsBuffering(true);
+        setErrorMsg('Đang tải đoạn vừa chọn...');
+      }
+    };
+    const onSeeked = () => {
+      setCurrentTime(video.currentTime);
+      lastPlaybackSecondRef.current = video.currentTime;
+      lastMetricPlaybackTimeRef.current = video.currentTime;
+      if (video.readyState >= 3) {
+        finishUserSeek();
+        setIsBuffering(false);
+        setErrorMsg('');
+      }
+    };
     const onTime = () => {
+      if (scrubActiveRef.current) return;
       const now = Date.now();
       if (now - lastTimeRef.current < 300) return;
       lastTimeRef.current = now;
@@ -938,9 +1015,13 @@ export default function LightweightHlsPlayer({
       callbacksRef.current.onVideoEnded?.();
     };
     const onFS = () => {
-      const docEl = document as Document & { webkitFullscreenElement?: Element };
-      const fs = Boolean(document.fullscreenElement || docEl.webkitFullscreenElement);
+      const fs = Boolean(getPlayerFullscreenElement());
       setIsFullscreen(fs || pseudoFsRef.current);
+      if (!fs && !pseudoFsRef.current) {
+        if (fullscreenFallbackExitRef.current) fullscreenFallbackExitRef.current = false;
+        else fullscreenOperationRef.current += 1;
+        unlockPlayerOrientation();
+      }
     };
 
     const onIOSBegin = () => setIsFullscreen(true);
@@ -957,6 +1038,8 @@ export default function LightweightHlsPlayer({
     video.addEventListener('stalled', onWaiting);
     video.addEventListener('playing', onPlaying);
     video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('seeking', onSeeking);
+    video.addEventListener('seeked', onSeeked);
     video.addEventListener('timeupdate', onTime);
     video.addEventListener('volumechange', onVol);
     video.addEventListener('ended', onEnd);
@@ -974,6 +1057,8 @@ export default function LightweightHlsPlayer({
       video.removeEventListener('stalled', onWaiting);
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('canplay', onCanPlay);
+      video.removeEventListener('seeking', onSeeking);
+      video.removeEventListener('seeked', onSeeked);
       video.removeEventListener('timeupdate', onTime);
       video.removeEventListener('volumechange', onVol);
       video.removeEventListener('ended', onEnd);
@@ -985,6 +1070,7 @@ export default function LightweightHlsPlayer({
       document.removeEventListener('webkitfullscreenchange', onFS);
       stopStallMonitor();
       clearStallTimer();
+      clearSeekRecoveryTimer();
     };
   }, []);
 
@@ -1063,11 +1149,71 @@ export default function LightweightHlsPlayer({
     v.muted = val === 0;
   }, []);
 
+  const commitSeek = useCallback((rawTarget: number) => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
+
+    const target = Math.max(0, Math.min(video.duration - 0.25, rawTarget));
+    const distance = Math.abs(video.currentTime - target);
+    const outsideBuffer = !isTimeBuffered(video, target);
+    const isLongSeek = distance >= LONG_SEEK_DISTANCE_SECONDS && outsideBuffer;
+    const shouldResume = seekWasPlayingRef.current || (!video.paused && !video.ended);
+    const hls = hlsRef.current;
+
+    userSeekActiveRef.current = outsideBuffer;
+    activeSeekTargetRef.current = target;
+    seekWasPlayingRef.current = shouldResume;
+    lastPlaybackSecondRef.current = target;
+    lastMetricPlaybackTimeRef.current = target;
+    setCurrentTime(target);
+    setIsBuffering(outsideBuffer);
+    setErrorMsg(outsideBuffer ? 'Đang tải đoạn vừa chọn...' : '');
+
+    if (seekRecoveryTimerRef.current) clearTimeout(seekRecoveryTimerRef.current);
+
+    // A large seek should cancel the fragment requested for the old playhead.
+    // Restarting at the target also prevents a slow phone from decoding and
+    // retaining tens of seconds that the viewer has explicitly skipped.
+    if (hls && isLongSeek) hls.stopLoad();
+
+    const fastVideo = video as HTMLVideoElement & { fastSeek?: (time: number) => void };
+    if (isLongSeek && typeof fastVideo.fastSeek === 'function') fastVideo.fastSeek(target);
+    else video.currentTime = target;
+
+    if (hls && isLongSeek) {
+      const lowestLevel = hls.levels.reduce((best, level, index, all) => {
+        if (best < 0) return index;
+        const bitrate = level.bitrate || Number.MAX_SAFE_INTEGER;
+        const bestBitrate = all[best].bitrate || Number.MAX_SAFE_INTEGER;
+        return bitrate < bestBitrate ? index : best;
+      }, -1);
+      if (lowestLevel >= 0) hls.nextLoadLevel = lowestLevel;
+      hls.startLoad(target, true);
+    } else if (hls && !hls.loadingEnabled) {
+      hls.startLoad(target, true);
+    }
+
+    if (outsideBuffer) {
+      seekRecoveryTimerRef.current = setTimeout(() => {
+        if (!userSeekActiveRef.current || activeSeekTargetRef.current !== target) return;
+        const activeHls = hlsRef.current;
+        if (activeHls) {
+          capToLowerAutoLevel(activeHls);
+          activeHls.startLoad(target, true);
+        }
+        if (seekWasPlayingRef.current) void video.play().catch(() => {});
+      }, SEEK_RECOVERY_DELAY_MS);
+    }
+
+    if (shouldResume) void video.play().catch(() => {});
+  }, []);
+
   const seekBy = useCallback((seconds: number) => {
     const v = videoRef.current;
     if (!v) return;
-    v.currentTime = Math.max(0, Math.min((v.duration || 0), v.currentTime + seconds));
-  }, []);
+    seekWasPlayingRef.current = !v.paused && !v.ended;
+    commitSeek(v.currentTime + seconds);
+  }, [commitSeek]);
 
   const setQualityLevel = useCallback((levelIndex: number) => {
     const hls = hlsRef.current;
@@ -1101,52 +1247,26 @@ export default function LightweightHlsPlayer({
   const enterPseudoFullscreen = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    const rotateToLandscape = isPortraitPhoneViewport();
     pseudoFsRef.current = true;
     scrollPositionRef.current = window.scrollY;
     setIsFullscreen(true);
-    el.style.position = 'fixed';
-    el.style.top = rotateToLandscape ? '50%' : '0';
-    el.style.left = rotateToLandscape ? '50%' : '0';
-    el.style.width = rotateToLandscape ? '100dvh' : '100dvw';
-    el.style.height = rotateToLandscape ? '100dvw' : '100dvh';
-    el.style.transform = rotateToLandscape ? 'translate(-50%, -50%) rotate(90deg)' : '';
-    el.style.zIndex = '9999';
-    el.style.borderRadius = '0';
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
     document.documentElement.classList.add('kp-player-pseudo-fullscreen');
-    // A transformed ancestor establishes a fixed-position containing block.
-    // Compensate its offset so the player aligns with the real viewport.
-    if (!rotateToLandscape) {
-      const fixedRect = el.getBoundingClientRect();
-      el.style.left = `${-fixedRect.left}px`;
-      el.style.top = `${-fixedRect.top}px`;
-    } else {
+    syncPseudoFullscreenLayout();
+    if (isPortraitPhoneViewport()) {
       void tryLockPlayerLandscape().then((locked) => {
-        if (!locked || !pseudoFsRef.current || window.innerWidth <= window.innerHeight) return;
-        el.style.top = '0';
-        el.style.left = '0';
-        el.style.width = '100dvw';
-        el.style.height = '100dvh';
-        el.style.transform = '';
+        if (locked) syncPseudoFullscreenLayout();
       });
     }
-  }, []);
+  }, [syncPseudoFullscreenLayout]);
 
   const exitPseudoFullscreen = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     pseudoFsRef.current = false;
     setIsFullscreen(false);
-    el.style.position = '';
-    el.style.top = '';
-    el.style.left = '';
-    el.style.width = '';
-    el.style.height = '';
-    el.style.transform = '';
-    el.style.zIndex = '';
-    el.style.borderRadius = '';
+    clearPlayerPseudoFullscreenLayout(el);
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
     document.documentElement.classList.remove('kp-player-pseudo-fullscreen');
@@ -1158,58 +1278,59 @@ export default function LightweightHlsPlayer({
     const el = containerRef.current;
     const video = videoRef.current;
     if (!el || !video) return;
+    const operation = ++fullscreenOperationRef.current;
 
     if (pseudoFsRef.current) {
       exitPseudoFullscreen();
       return;
     }
 
-    const safariDocument = document as Document & {
-      webkitFullscreenElement?: Element;
-      webkitFullscreenEnabled?: boolean;
-      webkitExitFullscreen?: () => void;
-    };
-    const nativeFullscreenElement = document.fullscreenElement || safariDocument.webkitFullscreenElement;
-    if (nativeFullscreenElement) {
-      if (document.exitFullscreen) await document.exitFullscreen().catch(() => {});
-      else safariDocument.webkitExitFullscreen?.();
+    if (getPlayerFullscreenElement()) {
+      await exitPlayerFullscreen();
       return;
     }
 
+    if (exitPlayerVideoFullscreen(video)) return;
+
     // Native fullscreen is the primary experience: it hides the browser/page
     // chrome and makes the movie occupy the physical screen.
-    try {
-      if (document.fullscreenEnabled === true && el.requestFullscreen) {
-        // The no-options form has the widest support (notably Safari and
-        // embedded mobile browsers) while still entering native fullscreen.
-        await el.requestFullscreen();
+    if (await requestPlayerFullscreen(el)) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      if (operation !== fullscreenOperationRef.current) return;
+      if (getPlayerFullscreenElement()) {
         if (isPortraitPhoneViewport()) {
           await tryLockPlayerLandscape();
           await new Promise((resolve) => window.setTimeout(resolve, 150));
-          if (window.innerWidth <= window.innerHeight && document.fullscreenElement) {
-            await document.exitFullscreen().catch(() => {});
+          if (window.innerWidth <= window.innerHeight && getPlayerFullscreenElement()) {
+            fullscreenFallbackExitRef.current = true;
+            await exitPlayerFullscreen();
+            if (operation !== fullscreenOperationRef.current) {
+              fullscreenFallbackExitRef.current = false;
+              return;
+            }
             enterPseudoFullscreen();
+            fullscreenFallbackExitRef.current = false;
             return;
           }
         }
-        await new Promise((resolve) => window.setTimeout(resolve, 250));
-        if (document.fullscreenElement || safariDocument.webkitFullscreenElement) return;
-      }
-      const iosVideo = video as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
-      if (iosVideo.webkitEnterFullscreen) {
-        iosVideo.webkitEnterFullscreen();
         return;
       }
-    } catch {
-      // Browsers embedded in social apps may deny native fullscreen.
     }
 
-    // Last-resort fallback keeps playback usable when native fullscreen is
-    // unavailable, but normal browsers always take the native path above.
+    if (operation !== fullscreenOperationRef.current) return;
+
+    if (requestPlayerVideoFullscreen(video)) {
+      setIsFullscreen(true);
+      return;
+    }
+
+    // iPhone's video-only fullscreen excludes HTML overlays. Expand the whole
+    // player in the page when container fullscreen is unavailable.
     enterPseudoFullscreen();
   }, [enterPseudoFullscreen, exitPseudoFullscreen]);
 
   useEffect(() => () => {
+    clearPlayerPseudoFullscreenLayout(containerRef.current);
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
     document.documentElement.classList.remove('kp-player-pseudo-fullscreen');
@@ -1226,17 +1347,75 @@ export default function LightweightHlsPlayer({
   }, [exitPseudoFullscreen]);
 
   /* ── Listen orientation change to exit pseudo-fullscreen ── */
-  const seekToPct = useCallback((pct: number) => {
-    const v = videoRef.current;
-    if (!v || !duration) return;
-    v.currentTime = pct * duration;
+  const progressTargetFromClientX = useCallback((element: HTMLDivElement, clientX: number): number => {
+    const rect = element.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+    return pct * duration;
   }, [duration]);
 
-  const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    seekToPct(pct);
-  }, [seekToPct]);
+  const previewScrubAt = useCallback((element: HTMLDivElement, clientX: number) => {
+    const target = progressTargetFromClientX(element, clientX);
+    scrubTargetRef.current = target;
+    setCurrentTime(target);
+  }, [progressTargetFromClientX]);
+
+  const handleProgressPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!duration || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    event.preventDefault();
+    const video = videoRef.current;
+    scrubActiveRef.current = true;
+    setIsScrubbing(true);
+    seekWasPlayingRef.current = Boolean(video && !video.paused && !video.ended);
+    if (seekWasPlayingRef.current) video?.pause();
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* optional on old mobile WebViews */ }
+    previewScrubAt(event.currentTarget, event.clientX);
+  }, [duration, previewScrubAt]);
+
+  const handleProgressPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubActiveRef.current) return;
+    event.preventDefault();
+    previewScrubAt(event.currentTarget, event.clientX);
+  }, [previewScrubAt]);
+
+  const finishProgressScrub = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubActiveRef.current) return;
+    event.preventDefault();
+    previewScrubAt(event.currentTarget, event.clientX);
+    scrubActiveRef.current = false;
+    setIsScrubbing(false);
+    suppressSeekClickUntilRef.current = Date.now() + 700;
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* optional on old mobile WebViews */ }
+    commitSeek(scrubTargetRef.current);
+  }, [commitSeek, previewScrubAt]);
+
+  const cancelProgressScrub = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubActiveRef.current) return;
+    scrubActiveRef.current = false;
+    setIsScrubbing(false);
+    suppressSeekClickUntilRef.current = Date.now() + 700;
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* optional on old mobile WebViews */ }
+    commitSeek(scrubTargetRef.current);
+  }, [commitSeek]);
+
+  const handleProgressClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (Date.now() < suppressSeekClickUntilRef.current || !duration) return;
+    seekWasPlayingRef.current = Boolean(videoRef.current && !videoRef.current.paused && !videoRef.current.ended);
+    commitSeek(progressTargetFromClientX(event.currentTarget, event.clientX));
+  }, [commitSeek, duration, progressTargetFromClientX]);
+
+  const handleProgressKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const video = videoRef.current;
+    if (!video || !duration) return;
+    let target: number | null = null;
+    if (event.key === 'ArrowLeft') target = video.currentTime - 5;
+    if (event.key === 'ArrowRight') target = video.currentTime + 5;
+    if (event.key === 'Home') target = 0;
+    if (event.key === 'End') target = duration - 0.25;
+    if (target === null) return;
+    event.preventDefault();
+    seekWasPlayingRef.current = !video.paused && !video.ended;
+    commitSeek(target);
+  }, [commitSeek, duration]);
 
   const retryStream = useCallback(() => {
     // The error UI temporarily replaces the video node, so its ref is null at
@@ -1276,6 +1455,7 @@ export default function LightweightHlsPlayer({
   return (
     <div
       ref={containerRef}
+      data-kp-player="hls"
       className={`relative w-full bg-black overflow-hidden select-none ${
         pseudoFsRef.current ? '' : 'aspect-video rounded-xl'
       }`}
@@ -1301,7 +1481,7 @@ export default function LightweightHlsPlayer({
           />
         )}
       </video>
-      <PlayerWatermark />
+      <PlayerWatermark active={showControls || !isPlaying} />
 
       {/* Loading */}
       {!loaded && (
@@ -1356,11 +1536,11 @@ export default function LightweightHlsPlayer({
 
         {/* Top bar */}
         <div data-controls className="relative z-10 flex items-center justify-between px-4 pt-2 pb-1">
-          {title && <p className="hidden sm:block text-white/70 text-sm font-medium truncate max-w-[50%]">{title}</p>}
+          {title && <p className="kp-desktop-player-control hidden sm:block text-white/70 text-sm font-medium truncate max-w-[50%]">{title}</p>}
         </div>
 
         {/* Bottom bar */}
-        <div data-controls className="relative z-10 px-3 pb-3 sm:px-4 sm:pb-4" onClick={(e) => e.stopPropagation()}>
+        <div data-controls className="kp-player-controls-bottom relative z-10 px-3 pb-3 sm:px-4 sm:pb-4" onClick={(e) => e.stopPropagation()}>
           {/* Progress */}
           <div
             role="slider"
@@ -1368,11 +1548,30 @@ export default function LightweightHlsPlayer({
             aria-valuemin={0}
             aria-valuemax={Math.max(0, Math.round(duration))}
             aria-valuenow={Math.max(0, Math.round(currentTime))}
-            className="group/progress flex h-5 w-full cursor-pointer items-center mb-1 relative touch-none"
+            aria-valuetext={`${fmtTime(currentTime)} trên ${fmtTime(duration)}`}
+            tabIndex={0}
+            className="group/progress relative mb-0.5 flex h-8 w-full cursor-pointer items-center touch-none select-none sm:mb-1 sm:h-6"
             onClick={handleProgressClick}
+            onKeyDown={handleProgressKeyDown}
+            onPointerDown={handleProgressPointerDown}
+            onPointerMove={handleProgressPointerMove}
+            onPointerUp={finishProgressScrub}
+            onPointerCancel={cancelProgressScrub}
           >
-            <div className="w-full h-1.5 group-hover/progress:h-2 rounded-full bg-white/35 overflow-hidden transition-[height]">
-              <div className="h-full rounded-full bg-red-500 transition-[width] duration-100" style={{ width: `${progress}%` }} />
+            {isScrubbing && (
+              <span
+                className="pointer-events-none absolute bottom-7 -translate-x-1/2 rounded-md bg-black/90 px-2 py-1 text-[11px] font-semibold text-white shadow-lg"
+                style={{ left: `${progress}%` }}
+              >
+                {fmtTime(currentTime)}
+              </span>
+            )}
+            <div className="relative h-2 w-full overflow-visible rounded-full bg-white/35 sm:h-1.5 sm:group-hover/progress:h-2">
+              <div className="h-full rounded-full bg-red-500" style={{ width: `${progress}%` }} />
+              <span
+                className={`pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-red-500 shadow-md transition-opacity ${isScrubbing ? 'opacity-100' : 'opacity-80 sm:opacity-0 sm:group-hover/progress:opacity-100'}`}
+                style={{ left: `${progress}%` }}
+              />
             </div>
           </div>
 
@@ -1382,14 +1581,14 @@ export default function LightweightHlsPlayer({
               <i className={`${isPlaying ? 'ri-pause-fill' : 'ri-play-fill'} text-lg ${!isPlaying ? 'ml-0.5' : ''}`} />
             </button>
 
-            <button aria-label="Lùi 10 giây" onClick={() => seekBy(-10)} title="Lùi 10 giây" className="hidden sm:flex w-11 h-11 items-center justify-center rounded-lg text-white/85 hover:text-white hover:bg-white/15 transition-all cursor-pointer flex-shrink-0">
+            <button aria-label="Lùi 10 giây" onClick={() => seekBy(-10)} title="Lùi 10 giây" className="flex h-10 w-10 items-center justify-center rounded-lg text-white/85 transition-all cursor-pointer flex-shrink-0 hover:bg-white/15 hover:text-white sm:h-11 sm:w-11">
               <i className="ri-replay-10-line text-lg" />
             </button>
-            <button aria-label="Tới 10 giây" onClick={() => seekBy(10)} title="Tới 10 giây" className="hidden sm:flex w-11 h-11 items-center justify-center rounded-lg text-white/85 hover:text-white hover:bg-white/15 transition-all cursor-pointer flex-shrink-0">
+            <button aria-label="Tới 10 giây" onClick={() => seekBy(10)} title="Tới 10 giây" className="flex h-10 w-10 items-center justify-center rounded-lg text-white/85 transition-all cursor-pointer flex-shrink-0 hover:bg-white/15 hover:text-white sm:h-11 sm:w-11">
               <i className="ri-forward-10-line text-lg" />
             </button>
 
-            <div className="hidden sm:flex items-center gap-1.5 group/vol">
+            <div className="kp-desktop-player-control hidden sm:flex items-center gap-1.5 group/vol">
               <button aria-label={isMuted ? 'Bật âm thanh' : 'Tắt âm thanh'} title={isMuted ? 'Bật âm thanh (M)' : 'Tắt âm thanh (M)'} onClick={toggleMute} className="w-11 h-11 flex items-center justify-center rounded-lg text-white/85 hover:text-white hover:bg-white/15 cursor-pointer">
                 <i className={`text-sm ${isMuted || volume === 0 ? 'ri-volume-mute-line text-red-400' : volume < 0.5 ? 'ri-volume-down-line' : 'ri-volume-up-line'}`} />
               </button>
@@ -1434,7 +1633,7 @@ export default function LightweightHlsPlayer({
               </div>
             )}
 
-            <div className="relative">
+            <div className="kp-desktop-player-control relative hidden sm:block">
               <button
                 onClick={() => { setShowSpeedMenu((value) => !value); setShowQualityMenu(false); }}
                 aria-label="Tốc độ phát"
@@ -1471,11 +1670,11 @@ export default function LightweightHlsPlayer({
               </button>
             )}
 
-            <button aria-label="Hình trong hình" onClick={togglePictureInPicture} title="Hình trong hình" className={`hidden sm:flex w-11 h-11 rounded-lg items-center justify-center cursor-pointer flex-shrink-0 hover:bg-white/15 ${pipActive ? 'text-red-400' : 'text-white/85 hover:text-white'}`}>
+            <button aria-label="Hình trong hình" onClick={togglePictureInPicture} title="Hình trong hình" className={`kp-desktop-player-control hidden sm:flex w-11 h-11 rounded-lg items-center justify-center cursor-pointer flex-shrink-0 hover:bg-white/15 ${pipActive ? 'text-red-400' : 'text-white/85 hover:text-white'}`}>
               <i className="ri-picture-in-picture-line text-lg" />
             </button>
 
-            <button aria-label={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'} title={isFullscreen ? 'Thoát toàn màn hình (F)' : 'Toàn màn hình (F)'} onClick={() => void toggleFullscreen()} className="w-11 h-11 flex items-center justify-center rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer flex-shrink-0">
+            <button data-kp-fullscreen="true" aria-label={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'} title={isFullscreen ? 'Thoát toàn màn hình (F)' : 'Toàn màn hình (F)'} onClick={() => void toggleFullscreen()} className="w-11 h-11 flex items-center justify-center rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer flex-shrink-0 touch-manipulation">
               <i className={`${isFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl`} />
             </button>
           </div>

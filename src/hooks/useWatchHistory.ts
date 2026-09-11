@@ -15,6 +15,9 @@ export interface WatchEntry {
   quality: string;
   lang: string;
   episode_current: string;
+  type?: string;
+  category?: MovieItem['category'];
+  country?: MovieItem['country'];
   lastEpSlug: string;
   lastEpName: string;
   watchedAt: number;
@@ -79,6 +82,9 @@ export function useWatchHistory() {
         quality: movie.quality,
         lang: movie.lang,
         episode_current: movie.episode_current,
+        type: movie.type,
+        category: movie.category,
+        country: movie.country,
         lastEpSlug: epSlug,
         lastEpName: epName,
         watchedAt: Date.now(),

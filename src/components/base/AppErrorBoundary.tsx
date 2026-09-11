@@ -80,10 +80,11 @@ interface Props {
 
 interface State {
   error: Error | null;
+  recovering: boolean;
 }
 
 export default class AppErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  state: State = { error: null, recovering: false };
   private recoveryResetTimer: number | null = null;
 
   componentDidMount() {
@@ -98,7 +99,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { error };
+    return { error, recovering: false };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -128,9 +129,15 @@ export default class AppErrorBoundary extends Component<Props, State> {
   }
 
   handleRetry = () => {
+    if (this.state.recovering) return;
     safeSessionRemove(RECOVERY_KEY);
-    recoverWithFreshUrl();
-    Promise.all([clearBrowserCaches(), removeLegacyServiceWorkers()]).catch(() => {});
+    this.setState({ recovering: true });
+    // Keep the current movie/episode URL, but do not navigate until stale
+    // caches and legacy workers have released the old hashed bundles. The old
+    // order navigated first, so mobile browsers often reopened the same broken
+    // release and made the retry button appear to do nothing.
+    Promise.allSettled([clearBrowserCaches(), removeLegacyServiceWorkers()])
+      .finally(() => recoverWithFreshUrl());
   };
 
   render() {
@@ -156,9 +163,10 @@ export default class AppErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={this.handleRetry}
+              disabled={this.state.recovering}
               className="inline-flex w-full sm:w-auto items-center justify-center rounded-lg bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-300"
             >
-              Tai lai
+              {this.state.recovering ? 'Đang khôi phục phim...' : 'Tải lại đúng phim này'}
             </button>
             <a
               href="/"

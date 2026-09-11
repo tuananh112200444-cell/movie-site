@@ -14,6 +14,7 @@ const rootElement = document.getElementById('root');
 declare global {
   interface Window {
     __KP_REACT_ROOT__?: Root;
+    __KP_STATIC_MOVIE_SLUG__?: string;
   }
 }
 
@@ -29,10 +30,16 @@ if (!rootElement) {
   document.body.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a10;color:#fff;font-family:Arial,sans-serif;padding:24px;text-align:center"><div><h1 style="font-size:24px;margin:0 0 12px">KhoPhim dang cap nhat</h1><p style="color:rgba(255,255,255,.72);margin:0 0 20px">Vui long tai lai trang de nhan phien ban moi nhat.</p><button onclick="location.reload()" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer">Tai lai</button></div></main>';
 } else {
   try {
+    const staticMovieShell = rootElement.querySelector<HTMLElement>('[data-kp-static-movie]');
+    const staticMovieMeta = document.head.querySelector<HTMLMetaElement>('meta[name="kp-static-movie"]');
+    window.__KP_STATIC_MOVIE_SLUG__ = staticMovieMeta?.content || staticMovieShell?.dataset.kpStaticMovie || '';
     rootElement.dataset.kpMounted = '1';
     rootElement.dataset.kpRelease = CLIENT_RELEASE_MARKER;
     rootElement.dataset.kpAssetRevision = ASSET_RECOVERY_REVISION;
-    if (!window.__KP_REACT_ROOT__ && rootElement.querySelectorAll('.page-root').length > 0) {
+    if (!window.__KP_REACT_ROOT__ && (
+      rootElement.querySelectorAll('.page-root').length > 0 ||
+      staticMovieShell
+    )) {
       rootElement.innerHTML = '';
     }
     window.__KP_REACT_ROOT__ ??= createRoot(rootElement);
@@ -45,8 +52,11 @@ if (!rootElement) {
   }
 }
 
-// Report Core Web Vitals after render without making it part of the critical boot chunk.
-void import('./utils/performance').then(({ reportWebVitals }) => reportWebVitals()).catch(() => {});
+// The local CWV logger only writes development diagnostics. Do not download
+// its chunk or create four no-op PerformanceObservers for production visitors.
+if (import.meta.env.DEV) {
+  void import('./utils/performance').then(({ reportWebVitals }) => reportWebVitals()).catch(() => {});
+}
 
 const STALE_TAB_RELOAD_MS = 30 * 60 * 1000;
 const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|dynamically imported module/i;

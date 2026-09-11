@@ -10,6 +10,8 @@ import { ThemeProvider } from "./context/ThemeContext";
 import AppErrorBoundary from "./components/base/AppErrorBoundary";
 import UpdateCoordinator from "./components/base/UpdateCoordinator";
 import AdsterraSocialBar from "./components/feature/AdsterraSocialBar";
+import { warmViewerRegion } from "./services/viewerRegion";
+import CinematicLogoIntro from "./components/feature/CinematicLogoIntro";
 
 const BackToTop = lazy(() => import("./components/base/BackToTop"));
 const CWVMonitor = lazy(() => import("./components/base/CWVMonitor"));
@@ -191,6 +193,10 @@ function SkipToContent() {
 }
 
 function App() {
+  useEffect(() => {
+    void warmViewerRegion();
+  }, []);
+
   return (
     <AppErrorBoundary>
       <ThemeProvider>
@@ -203,6 +209,7 @@ function App() {
                 <AdsterraSocialBar />
                 <ScrollProgressBar />
                 <AnimatedContent />
+                <CinematicLogoIntro />
                 <NonCriticalEnhancements />
               </AnalyticsProvider>
             </ToastProvider>

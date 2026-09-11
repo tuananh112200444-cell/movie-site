@@ -286,7 +286,9 @@ export default function MovieSection({
   const t = getTheme(theme);
   const ThemeIcon = t.icon;
 
-  const displayMovies = movies.slice(0, Math.max(cols * rows, 12));
+  // LazyMovieSection has already applied the section's explicit limit. Do not
+  // silently reduce a requested 15–18 card desktop shelf to twelve items.
+  const displayMovies = movies;
 
   if (loading && movies.length === 0) {
     return (
@@ -411,9 +413,9 @@ export default function MovieSection({
             ))}
           </div>
           {displayMovies.length > 5 && (
-            <div className="home-rail-scroll mt-3 flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-1 scrollbar-hide md:mt-4 md:gap-4">
+            <div className="mt-3 grid grid-cols-2 gap-2.5 md:mt-4 md:grid-cols-6 md:gap-4">
               {displayMovies.slice(5).map((movie, index) => (
-                <div key={`${movie._id}-anime-rail-${index}`} className={`shrink-0 snap-start ${carouselItemClass}`}>
+                <div key={`${movie._id}-anime-rail-${index}`} className="min-w-0">
                   <MovieCard movie={movie} />
                 </div>
               ))}
@@ -436,12 +438,14 @@ export default function MovieSection({
           ))}
         </div>
       ) : (
-        <div className="home-rail-frame hidden md:block">
-          <div className="home-rail-scroll reveal flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-7 pt-2.5 scrollbar-hide md:gap-4 md:pb-8 lg:gap-4 xl:gap-5">
+        <div
+          className="movie-section-desktop-grid reveal hidden gap-x-4 gap-y-7 pb-8 pt-2.5 md:grid lg:gap-x-5 lg:gap-y-8"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
             {displayMovies.map((movie, index) => (
               <div
                 key={`${movie._id}-${index}`}
-                className={`stagger-item group/card h-full ${carouselItemClass}`}
+                className="stagger-item group/card h-full min-w-0"
               >
                 <div className="h-full rounded-lg transition-transform duration-200 ease-out group-hover/card:-translate-y-1">
                   <MovieCard
@@ -452,7 +456,6 @@ export default function MovieSection({
                 </div>
               </div>
             ))}
-          </div>
         </div>
       )}
     </section>

@@ -1,28 +1,167 @@
-import { useRef, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchMoviesByCategory, getImageUrl } from '../../../services/movieApi';
-import { preloadMoviePosters } from '../../../utils/imagePreloader';
-import type { MovieItem } from '../../../types/movie';
+import { Award, ChevronRight, ImageOff, Play, Sparkles, Star } from 'lucide-react';
 import { useImageFallback } from '../../../hooks/useImageFallback';
-
-function getTopRating(name: string, idx: number): string {
-  const code = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const base = 9.9 - idx * 0.15 - (code % 10) * 0.01;
-  return Math.max(8.0, base).toFixed(1);
-}
-
-function getVoteCount(idx: number): string {
-  const counts = [142800, 98600, 87300, 76500, 65200, 54100, 48700, 43200, 38900, 34500];
-  const c = counts[idx] ?? 28000;
-  return c >= 1000 ? `${(c / 1000).toFixed(0)}K` : String(c);
-}
+import { fetchMoviesByCategory, getImageUrl, getPortraitImagePaths } from '../../../services/movieApi';
+import type { MovieItem } from '../../../types/movie';
+import { preloadMoviePosters } from '../../../utils/imagePreloader';
+import { trackMovieClick } from '../../../utils/analytics';
 
 interface TopRatedSectionProps {
   initialMovies?: MovieItem[];
   loading?: boolean;
+  limit?: number;
 }
 
-export default function TopRatedSection({ initialMovies = [], loading = false }: TopRatedSectionProps) {
+interface RatedCardProps {
+  movie: MovieItem;
+  rank: number;
+}
+
+function getEpisodeBadge(value?: string): string {
+  if (!value) return '';
+  const normalized = value.toLowerCase().trim();
+  if (normalized === 'full' || normalized === 'full hd') return 'FULL';
+  if (normalized.startsWith('hoàn tất')) {
+    return value.replace(/hoàn tất\s*/i, '').replace(/[()]/g, '').trim() || 'FULL';
+  }
+  return value;
+}
+
+function getRankStyle(rank: number): { badge: string; border: string; glow: string; label: string } {
+  if (rank === 1) {
+    return {
+      badge: 'from-amber-200 via-yellow-400 to-orange-500 text-[#321400]',
+      border: 'border-amber-300/50',
+      glow: 'shadow-[0_18px_52px_-30px_rgba(251,191,36,0.88)]',
+      label: 'Lựa chọn số 1',
+    };
+  }
+  if (rank === 2) {
+    return {
+      badge: 'from-slate-100 via-slate-300 to-slate-500 text-slate-950',
+      border: 'border-slate-300/30',
+      glow: 'shadow-[0_18px_48px_-32px_rgba(203,213,225,0.7)]',
+      label: 'Nổi bật',
+    };
+  }
+  if (rank === 3) {
+    return {
+      badge: 'from-orange-300 via-orange-500 to-amber-700 text-[#2a1004]',
+      border: 'border-orange-400/35',
+      glow: 'shadow-[0_18px_48px_-32px_rgba(251,146,60,0.7)]',
+      label: 'Nổi bật',
+    };
+  }
+  return {
+    badge: 'from-white/90 to-white/60 text-[#151722]',
+    border: 'border-white/[0.1]',
+    glow: 'shadow-[0_16px_44px_-34px_rgba(0,0,0,0.9)]',
+    label: 'Đề cử',
+  };
+}
+
+function RatedMovieCard({ movie, rank }: RatedCardProps) {
+  const { primary: primaryImage, fallback: fallbackImage } = getPortraitImagePaths(movie);
+  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
+    primaryImage,
+    fallbackImage,
+    false,
+    420,
+    86,
+    { preferredAspect: 'portrait' },
+  );
+  const rankStyle = getRankStyle(rank);
+  const episode = getEpisodeBadge(movie.episode_current);
+
+  return (
+    <Link
+      to={`/phim/${encodeURIComponent(movie.slug || '')}`}
+      aria-label={`Đề cử ${rank}: ${movie.name}`}
+      className={`group relative min-w-0 overflow-hidden rounded-2xl border bg-[#11141d] ${rankStyle.border} ${rankStyle.glow} transition duration-300 hover:-translate-y-1 hover:border-amber-200/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300`}
+      onClick={() => trackMovieClick(movie.slug || '', movie.name || '', 'home')}
+    >
+      <div className="relative aspect-[2/3] min-h-[224px] overflow-hidden bg-[#171b27] sm:min-h-0">
+        {!loaded && !hasError && <div className="absolute inset-0 animate-pulse bg-white/[0.055]" />}
+        {hasError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#181b25]">
+            <ImageOff className="h-7 w-7 text-white/25" aria-hidden="true" />
+          </div>
+        )}
+        <img
+          src={currentSrc}
+          alt={movie.name}
+          loading="lazy"
+          fetchPriority="low"
+          className={`h-full w-full object-cover object-center transition duration-500 group-hover:scale-[1.045] ${loaded && !hasError ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={onLoad}
+          onError={onError}
+        />
+
+        <div className="absolute inset-0 bg-gradient-to-t from-[#080a10] via-[#080a10]/18 to-black/20" />
+        <div className="absolute inset-x-0 bottom-0 h-[58%] bg-[linear-gradient(to_top,rgba(7,9,14,0.99),rgba(7,9,14,0.72)_48%,transparent)]" />
+
+        <div className="absolute left-2 top-2 flex items-center gap-1.5 sm:left-2.5 sm:top-2.5">
+          <span className={`grid h-9 min-w-9 place-items-center rounded-xl bg-gradient-to-br px-1.5 text-base font-black leading-none shadow-lg sm:h-10 sm:min-w-10 sm:text-lg ${rankStyle.badge}`}>
+            {String(rank).padStart(2, '0')}
+          </span>
+          {rank <= 3 && (
+            <span className="hidden rounded-full border border-white/15 bg-black/60 px-2 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-white/85 backdrop-blur-sm sm:inline-flex">
+              {rankStyle.label}
+            </span>
+          )}
+        </div>
+
+        {movie.quality && (
+          <span className="absolute right-2 top-2 rounded-md border border-white/15 bg-black/65 px-1.5 py-1 text-[9px] font-black uppercase text-white backdrop-blur-sm sm:right-2.5 sm:top-2.5">
+            {movie.quality}
+          </span>
+        )}
+
+        <div className="absolute inset-0 grid place-items-center opacity-0 transition duration-300 group-hover:opacity-100">
+          <span className="grid h-11 w-11 scale-75 place-items-center rounded-full border border-white/35 bg-white/20 text-white shadow-xl backdrop-blur-md transition duration-300 group-hover:scale-100">
+            <Play className="ml-0.5 h-5 w-5 fill-current" aria-hidden="true" />
+          </span>
+        </div>
+
+        <div className="absolute inset-x-0 bottom-0 p-2.5 sm:p-3">
+          <div className="mb-1.5 flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.1em] text-amber-300/90 sm:text-[10px]">
+            <Star className="h-3 w-3 fill-current" aria-hidden="true" />
+            KhoPhim đề cử
+          </div>
+          <h4 className="line-clamp-2 min-h-[2.35rem] text-[13px] font-black leading-[1.18] text-white drop-shadow-md sm:text-[14px] lg:text-[15px]">
+            {movie.name}
+          </h4>
+          {movie.origin_name && (
+            <p className="mt-1 hidden truncate text-[10px] text-white/45 sm:block">
+              {movie.origin_name}
+            </p>
+          )}
+          <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[9px] font-semibold text-white/58 sm:text-[10px]">
+            {episode ? (
+              <span className="max-w-[4.8rem] truncate rounded bg-red-500 px-1.5 py-0.5 font-black leading-none text-white">
+                {episode}
+              </span>
+            ) : null}
+            {movie.year ? <span>{movie.year}</span> : null}
+            {movie.year && movie.lang ? <span className="text-white/20">•</span> : null}
+            {movie.lang ? <span className="truncate text-sky-300/85">{movie.lang}</span> : null}
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function RatedCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.035]">
+      <div className="aspect-[2/3] min-h-[224px] animate-pulse bg-white/[0.055] sm:min-h-0" />
+    </div>
+  );
+}
+
+export default function TopRatedSection({ initialMovies = [], loading = false, limit = 10 }: TopRatedSectionProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [triggered, setTriggered] = useState(false);
 
@@ -36,28 +175,32 @@ export default function TopRatedSection({ initialMovies = [], loading = false }:
           observer.disconnect();
         }
       },
-      { rootMargin: '200px' }
+      { rootMargin: '240px' },
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, [triggered]);
 
   return (
-    <div ref={ref} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 430px' }}>
-      {triggered ? <TopRatedContent initialMovies={initialMovies} loading={loading} /> : <SectionSkeleton />}
+    <div
+      ref={ref}
+      className="[contain-intrinsic-size:0_1500px] lg:[contain-intrinsic-size:0_820px]"
+      style={{ contentVisibility: 'auto' }}
+    >
+      {triggered ? <TopRatedContent initialMovies={initialMovies} loading={loading} limit={limit} /> : <TopRatedSkeleton limit={limit} />}
     </div>
   );
 }
 
-function TopRatedContent({ initialMovies = [], loading: parentLoading = false }: TopRatedSectionProps) {
-  const [movies, setMovies] = useState<MovieItem[]>(initialMovies.slice(0, 10));
+function TopRatedContent({ initialMovies = [], loading: parentLoading = false, limit = 10 }: TopRatedSectionProps) {
+  const [movies, setMovies] = useState<MovieItem[]>(initialMovies.slice(0, limit));
   const [loading, setLoading] = useState(parentLoading && initialMovies.length === 0);
 
   useEffect(() => {
     if (initialMovies.length > 0) {
       const filtered = initialMovies
-        .filter(m => (m.episode_current ?? '').toLowerCase().trim() !== 'trailer')
-        .slice(0, 10);
+        .filter((movie) => (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer')
+        .slice(0, limit);
       setMovies(filtered);
       setLoading(false);
       preloadMoviePosters(filtered.slice(0, 4), getImageUrl, {
@@ -73,9 +216,6 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false }:
       return;
     }
 
-    // The production homepage must not rebuild this decorative rail with two
-    // independent filtered COUNT/list queries. The canonical home package and
-    // its static stale copy are the only production data paths.
     if (!import.meta.env.DEV) {
       setMovies([]);
       setLoading(false);
@@ -88,245 +228,82 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false }:
       fetchMoviesByCategory({ category: 'tinh-cam', page: 1 }),
     ]).then((results) => {
       const all: MovieItem[] = [];
-      results.forEach((r) => {
-        if (r.status === 'fulfilled') all.push(...(r.value.items ?? []));
+      results.forEach((result) => {
+        if (result.status === 'fulfilled') all.push(...(result.value.items ?? []));
       });
       const filtered = all
-        .filter(m => (m.episode_current ?? '').toLowerCase().trim() !== 'trailer')
-        .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
-        .slice(0, 10);
+        .filter((movie) => (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer')
+        .sort((a, b) => (b.tmdb_popularity ?? 0) - (a.tmdb_popularity ?? 0) || (b.year ?? 0) - (a.year ?? 0))
+        .slice(0, limit);
       setMovies(filtered);
-      preloadMoviePosters(filtered, getImageUrl, {
-        batchSize: 3,
-        delayBetweenBatches: 200,
-        delayBetweenImages: 25,
+      preloadMoviePosters(filtered.slice(0, 4), getImageUrl, {
+        batchSize: 2,
+        delayBetweenBatches: 250,
+        delayBetweenImages: 40,
       });
     }).finally(() => setLoading(false));
-  }, [initialMovies, parentLoading]);
+  }, [initialMovies, limit, parentLoading]);
 
-  if (loading) return <SectionSkeleton />;
-  if (movies.length === 0) return null;
+  if (!loading && movies.length === 0) return null;
 
   return (
-    <section className="mb-7 md:mb-10 home-section-surface">
-      <div className="mb-3 flex items-center justify-between gap-2 md:mb-5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="h-5 w-1 rounded-full bg-amber-400" />
-          <h3 className="gradient-heading-warm flex items-center gap-2 truncate text-lg font-black md:text-2xl lg:text-[1.55rem]">
-            <i className="ri-trophy-fill text-amber-400" />
-            Phim Được Đánh Giá Cao
-          </h3>
-          <span className="hidden rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-400 sm:inline-flex">
-            IMDb Top
-          </span>
+    <section className="mb-8 md:mb-12" aria-labelledby="top-rated-title">
+      <div className="relative mb-4 overflow-hidden rounded-2xl border border-amber-200/15 bg-[radial-gradient(circle_at_9%_22%,rgba(251,191,36,0.18),transparent_34%),radial-gradient(circle_at_88%_15%,rgba(139,92,246,0.13),transparent_30%),linear-gradient(115deg,rgba(20,22,31,0.98),rgba(10,12,19,0.97))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-5 lg:mb-5 lg:rounded-3xl lg:p-6">
+        <div className="pointer-events-none absolute -right-5 -top-14 select-none text-[116px] font-black leading-none text-white/[0.025] sm:text-[148px]" aria-hidden="true">
+          ★
         </div>
-        <Link
-          to="/filter"
-          className="flex cursor-pointer items-center gap-1 whitespace-nowrap text-xs text-white/40 transition-colors hover:text-amber-400 active:scale-95 active:text-amber-400"
-        >
-          Xem thêm <i className="ri-arrow-right-s-line text-sm" />
-        </Link>
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-amber-200 via-yellow-400 to-orange-500 text-[#371600] shadow-[0_10px_30px_-12px_rgba(251,191,36,0.95)] sm:h-14 sm:w-14">
+              <Award className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-amber-300/85 sm:text-[10px]">
+                <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                KhoPhim tuyển chọn
+              </div>
+              <h3 id="top-rated-title" className="text-xl font-black leading-tight tracking-[-0.025em] text-white sm:text-2xl lg:text-[1.85rem]">
+                Phim Được Đánh Giá Cao
+              </h3>
+              <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-white/48 sm:text-xs">
+                Tuyển chọn từ dữ liệu độ phổ biến thực và danh mục phim đang phát trên KhoPhim
+              </p>
+            </div>
+          </div>
+
+          <div className="flex w-fit flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-violet-300/20 bg-violet-300/[0.08] px-3 py-2 text-[9px] font-black uppercase tracking-[0.12em] text-violet-200 sm:text-[10px]">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Tuyển chọn định kỳ
+            </span>
+            <Link
+              to="/filter"
+              className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.045] px-3 py-2 text-[10px] font-bold text-white/65 transition hover:border-amber-300/30 hover:text-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+            >
+              Xem thêm
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[0.95fr_1.65fr] xl:gap-4">
-        {movies[0] && <RankedSpotlight movie={movies[0]} idx={0} />}
-
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          {movies.slice(1, 10).map((movie, idx) => (
-            <RankedMiniCard key={movie._id || movie.slug} movie={movie} idx={idx + 1} />
-          ))}
-        </div>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 lg:gap-4" aria-label={`${limit} phim được KhoPhim đánh giá cao`}>
+        {loading
+          ? Array.from({ length: limit }).map((_, index) => <RatedCardSkeleton key={index} />)
+          : movies.slice(0, limit).map((movie, index) => (
+              <RatedMovieCard key={movie._id || movie.slug} movie={movie} rank={index + 1} />
+            ))}
       </div>
     </section>
   );
 }
 
-interface RankedCardProps {
-  movie: MovieItem;
-  idx: number;
-}
-
-const RANK_STYLES = [
-  { num: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/25' },
-  { num: 'text-slate-200', bg: 'bg-slate-200/10', border: 'border-slate-200/20' },
-  { num: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-400/20' },
-];
-
-function RankedSpotlight({ movie, idx }: RankedCardProps) {
-  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.poster_url || movie.thumb_url,
-    movie.thumb_url || movie.poster_url,
-    false,
-    520,
-    88,
-  );
-  const rating = getTopRating(movie.name, idx);
-  const votes = getVoteCount(idx);
-  const genres = movie.category?.slice(0, 2).map((c: { name: string }) => c.name) ?? [];
-
+function TopRatedSkeleton({ limit = 10 }: { limit?: number }) {
   return (
-    <Link
-      to={`/phim/${encodeURIComponent(movie.slug)}`}
-      className="group relative flex min-h-[152px] overflow-hidden rounded-2xl border border-amber-300/16 bg-[linear-gradient(135deg,rgba(251,191,36,0.13),rgba(255,255,255,0.045)_42%,rgba(255,255,255,0.025))] p-3 shadow-[0_16px_44px_rgba(0,0,0,0.22)] transition-colors duration-200 hover:border-amber-300/28 hover:bg-white/[0.055] active:scale-[0.99] md:min-h-[174px] md:p-4 xl:h-full"
-    >
-      <div className="pointer-events-none absolute -right-12 -top-20 h-44 w-44 rounded-full bg-amber-300/10 blur-3xl" />
-      <div className="relative h-[126px] w-[88px] flex-shrink-0 overflow-hidden rounded-xl bg-[#171923] ring-1 ring-white/10 md:h-[142px] md:w-[100px]">
-        {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton" />}
-        {imgError && (
-          <div className="absolute inset-0 z-[1] flex items-center justify-center bg-[#1a1d27]">
-            <i className="ri-image-line text-xl text-white/20" />
-          </div>
-        )}
-        <img
-          src={currentSrc}
-          alt={movie.name}
-          loading="lazy"
-          className={`h-full w-full object-cover object-center transition-opacity duration-500 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-          style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-          onLoad={onLoad}
-          onError={onError}
-        />
-        <div className="absolute left-1.5 top-1.5 rounded-md bg-amber-400 px-1.5 py-0.5 text-[11px] font-black leading-none text-black">
-          #1
-        </div>
-      </div>
-
-      <div className="relative ml-3 flex min-w-0 flex-1 flex-col justify-center md:ml-4">
-        <div className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-200">
-          <i className="ri-fire-fill" />
-          Đáng xem nhất
-        </div>
-        <p className="line-clamp-2 text-base font-black leading-5 text-white transition-colors duration-200 group-hover:text-amber-300 md:text-xl md:leading-6">
-          {movie.name}
-        </p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-          {movie.year && (
-            <span className="text-xs font-semibold text-white/55">{movie.year}</span>
-          )}
-          {genres.map(g => (
-            <span key={g} className="text-xs text-white/40">{g}</span>
-          ))}
-          {movie.episode_current && (
-            <span className="rounded-md bg-red-500/14 px-2 py-0.5 text-[11px] font-bold text-red-100">{movie.episode_current}</span>
-          )}
-        </div>
-        <div className="mt-3 flex items-center gap-2">
-          <div className="inline-flex items-center gap-1 rounded-lg bg-black/24 px-2 py-1">
-            <i className="ri-star-fill text-xs text-amber-400" />
-            <span className="text-base font-black tabular-nums text-amber-300">{rating}</span>
-          </div>
-          <span className="text-[11px] font-semibold tabular-nums text-white/30">{votes} lượt đánh giá</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function RankedMiniCard({ movie, idx }: RankedCardProps) {
-  const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
-    movie.poster_url || movie.thumb_url,
-    movie.thumb_url || movie.poster_url,
-    false,
-    360,
-    86,
-  );
-  const rating = getTopRating(movie.name, idx);
-  const votes = getVoteCount(idx);
-  const genres = movie.category?.slice(0, 1).map((c: { name: string }) => c.name) ?? [];
-  const style = RANK_STYLES[idx] ?? null;
-
-  return (
-    <Link
-      to={`/phim/${encodeURIComponent(movie.slug)}`}
-      className="group relative flex min-h-[104px] overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.032] p-2.5 transition-colors duration-200 hover:border-amber-300/20 hover:bg-white/[0.052] active:scale-[0.98]"
-    >
-      <div className="absolute right-2 top-2 text-2xl font-black leading-none text-white/[0.035] md:text-3xl">
-        {idx + 1}
-      </div>
-
-      <div className="relative h-[84px] w-[60px] flex-shrink-0 overflow-hidden rounded-lg bg-[#171923] ring-1 ring-white/8 md:h-[92px] md:w-[66px]">
-        {!imgLoaded && !imgError && <div className="absolute inset-0 skeleton" />}
-        {imgError && (
-          <div className="absolute inset-0 z-[1] flex items-center justify-center bg-[#1a1d27]">
-            <i className="ri-image-line text-lg text-white/20" />
-          </div>
-        )}
-        <img
-          src={currentSrc}
-          alt={movie.name}
-          loading="lazy"
-          className={`h-full w-full object-cover object-center transition-opacity duration-500 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
-          style={{ filter: 'contrast(1.04) saturate(1.1)' }}
-          onLoad={onLoad}
-          onError={onError}
-        />
-        {style && (
-          <div className={`absolute left-1 top-1 rounded border px-1.5 py-0.5 text-[10px] font-black leading-none ${style.bg} ${style.num} ${style.border}`}>
-            #{idx + 1}
-          </div>
-        )}
-      </div>
-
-      <div className="relative ml-2.5 flex min-w-0 flex-1 flex-col justify-center">
-        <p className="line-clamp-2 text-sm font-bold leading-5 text-white/88 transition-colors duration-200 group-hover:text-amber-300 md:text-[15px]">
-          {movie.name}
-        </p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-          {movie.year && (
-            <span className="text-[11px] font-semibold text-white/38">{movie.year}</span>
-          )}
-          {genres.map(g => (
-            <span key={g} className="text-[11px] text-white/28">{g}</span>
-          ))}
-        </div>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          {movie.episode_current ? (
-            <span className="max-w-[118px] truncate rounded bg-red-500/12 px-1.5 py-0.5 text-[10px] font-bold text-red-100">
-              {movie.episode_current}
-            </span>
-          ) : <span />}
-          <span className="inline-flex items-center gap-1 text-xs font-black text-amber-400/90">
-            <i className="ri-star-fill text-[10px]" />
-            {rating}
-          </span>
-        </div>
-        <span className="mt-0.5 text-[10px] tabular-nums text-white/20">{votes} votes</span>
-      </div>
-    </Link>
-  );
-}
-
-function SectionSkeleton() {
-  return (
-    <div className="mb-7 md:mb-12">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="h-5 w-1 rounded-full bg-amber-400/20" />
-          <div className="h-4 w-48 rounded skeleton" />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[0.95fr_1.65fr] xl:gap-4">
-        <div className="flex min-h-[152px] rounded-2xl border border-white/[0.04] bg-white/[0.025] p-3 md:min-h-[174px] md:p-4">
-          <div className="h-[126px] w-[88px] flex-shrink-0 rounded-xl skeleton md:h-[142px] md:w-[100px]" />
-          <div className="ml-3 flex flex-1 flex-col justify-center space-y-3 md:ml-4">
-            <div className="h-5 w-28 rounded skeleton" />
-            <div className="h-5 w-4/5 rounded skeleton" />
-            <div className="h-3 w-3/5 rounded skeleton" />
-            <div className="h-8 w-24 rounded-lg skeleton" />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="flex min-h-[104px] rounded-xl border border-white/[0.04] bg-white/[0.02] p-2.5">
-              <div className="h-[84px] w-[60px] flex-shrink-0 rounded-lg skeleton md:h-[92px] md:w-[66px]" />
-              <div className="ml-2.5 flex flex-1 flex-col justify-center space-y-2">
-                <div className="h-4 w-3/4 rounded skeleton" />
-                <div className="h-3 w-2/5 rounded skeleton" />
-                <div className="h-4 w-2/3 rounded skeleton" />
-              </div>
-            </div>
-          ))}
-        </div>
+    <div className="mb-8 md:mb-12">
+      <div className="mb-4 h-[116px] rounded-2xl border border-white/[0.05] bg-white/[0.025] skeleton sm:h-[128px] lg:rounded-3xl" />
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 lg:gap-4">
+        {Array.from({ length: limit }).map((_, index) => <RatedCardSkeleton key={index} />)}
       </div>
     </div>
   );

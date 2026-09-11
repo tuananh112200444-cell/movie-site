@@ -153,7 +153,10 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
 
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
   const [sortBy, setSortBy] = useState<'new' | 'hot' | 'updated'>('new');
-  const sortField = sortBy === 'updated' ? 'modified.time' : 'year_stable';
+  // Query the requested page directly. The old pseudo "stable" mode fetched
+  // many pages then rebuilt the order in the browser, which made list pages
+  // look unrelated to their actual source order.
+  const sortField = sortBy === 'updated' ? 'modified.time' : 'year';
 
   /* ── Gọi API đúng page — không còn pool system ── */
   const { movies: rawMovies, loading, totalPages: hookTotalPages } = useMoviesByType(
@@ -386,8 +389,14 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
             <div className="w-16 h-16 flex items-center justify-center rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-4">
               <i className="ri-film-line text-3xl" />
             </div>
-            <p className="text-base font-medium text-white/30">Không có phim nào</p>
-            <p className="text-sm text-white/15 mt-1">Thử chọn danh mục khác</p>
+            <p className="text-base font-medium text-white/30">
+              {type === 'phim-sap-chieu' ? 'Chưa có phim sắp chiếu đã xác thực' : 'Không có phim nào'}
+            </p>
+            <p className="text-sm text-white/15 mt-1">
+              {type === 'phim-sap-chieu'
+                ? 'Trailer hoặc lịch phát hành sẽ xuất hiện tại đây khi nguồn cung cấp dữ liệu.'
+                : 'Thử chọn danh mục khác'}
+            </p>
           </div>
         ) : (
           <div className="grid movie-grid-desktop">

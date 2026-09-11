@@ -1,8 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { applyImageElementFallback, getOptimizedImageUrl, getPortraitImagePaths, searchMoviesInSupabase } from '../../services/movieApi';
+import {
+  applyImageElementFallback,
+  getOptimizedImageUrl,
+  getPortraitImagePaths,
+  searchMoviesMultiSource,
+  searchMoviesInStaticFallback,
+  searchMoviesInSupabase,
+} from '../../services/movieApi';
 import type { Movie } from '../../types/movie';
 import { mergeMoviesUnique, parseMovieYear, sortMoviesForSearch } from '../../utils/searchRanking';
+import { getMovieSearchText, movieMatchesSearchIntent, normalizeSearchText } from '../../utils/searchHelper';
 import { movieDetailUrl } from '../../utils/slugEncoder';
 import { setSmartSessionCache } from '../../utils/smartCache';
 import { getSearchReleaseMeta } from '../../utils/searchPresentation';
@@ -46,6 +54,15 @@ function addToHistory(term: string): void {
 
 function getMovieHref(movie: Movie): string {
   return movieDetailUrl(movie.slug);
+}
+
+function matchesSuggestionQuery(movie: Movie, query: string): boolean {
+  const normalizedQuery = normalizeSearchText(query);
+  const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
+  if (queryTokens.length < 2) return movieMatchesSearchIntent(movie, query);
+
+  const titleTokens = getMovieSearchText(movie).split(/\s+/).filter(Boolean);
+  return titleTokens.some((_, start) => queryTokens.every((token, index) => titleTokens[start + index] === token));
 }
 
 /* ── Trending searches (static only — no direct OPhim calls) ── */
@@ -105,11 +122,37 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
       }
     } catch { /* ignore cache */ }
 
+    let items = instantItems;
     try {
-      let items = instantItems;
-      const apiItems = await searchMoviesInSupabase(q.trim(), { limit: 16, timeoutMs: 7000, minLength: 2, signal: ctrl.signal });
+      // Keep navbar autocomplete on the same fail-open path as the full search
+      // page. The local snapshot can paint useful matches while the canonical
+      // edge index is cold or temporarily returns no rows.
+      const canonicalItemsPromise = searchMoviesInSupabase(q.trim(), {
+        limit: 16,
+        timeoutMs: 7000,
+        minLength: 2,
+        signal: ctrl.signal,
+      }).catch(() => []);
+      const providerItemsPromise = searchMoviesMultiSource(q.trim(), 1, ctrl.signal)
+        .then((result) => result.items ?? [])
+        .catch(() => []);
+      const staticItems = await searchMoviesInStaticFallback(q.trim(), 16).catch(() => []);
       if (ctrl.signal.aborted) return;
-      items = mergeMoviesUnique([...items, ...apiItems]);
+      items = sortMoviesForSearch(
+        mergeMoviesUnique([...items, ...staticItems]).filter((movie) => matchesSuggestionQuery(movie, q.trim())),
+        q.trim(),
+        'relevance',
+      ).slice(0, 8);
+      if (items.length > 0) {
+        setSuggestions(items);
+        setHighlightIndex(-1);
+        setLoading(false);
+      }
+
+      const [apiItems, providerItems] = await Promise.all([canonicalItemsPromise, providerItemsPromise]);
+      if (ctrl.signal.aborted) return;
+      items = mergeMoviesUnique([...items, ...apiItems, ...providerItems])
+        .filter((movie) => matchesSuggestionQuery(movie, q.trim()));
 
       // Dedupe cross-source results before ranking.
       items = sortMoviesForSearch(items, q.trim(), 'relevance');
@@ -127,7 +170,8 @@ export default function SearchSuggestions({ query, onSelect, className = '' }: P
 
     } catch {
       if (!ctrl.signal.aborted) {
-        setSuggestions([]);
+        // Preserve any snapshot matches already shown if the live index fails.
+        setSuggestions(items.slice(0, 8));
         setHighlightIndex(-1);
       }
     } finally {

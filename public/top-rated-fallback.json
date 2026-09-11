@@ -1,0 +1,282 @@
+{
+  "status": true,
+  "source": "supabase-top-rated-fallback",
+  "generated_at": "2026-09-11T03:06:02.226Z",
+  "movies": [
+    {
+      "id": "7b7662d6-7852-4735-becf-bcf34731afbb",
+      "slug": "vuon-sao-bang-ban-thai",
+      "name": "Vườn Sao Băng: Bản Thái",
+      "origin_name": "F4 Thailand: Boys Over Flowers",
+      "poster_url": "https://phimimg.com/upload/vod/20260525-1/573872a6cf0c5c83a69f80fd84c2d905.jpg",
+      "thumb_url": "https://phimimg.com/upload/vod/20260525-1/b0af95693d1a9e997fafdd86d86a65ad.jpg",
+      "hero_backdrop_url": null,
+      "hero_poster_url": null,
+      "episode_current": "Hoàn Tất (16/16)",
+      "episode_total": "16",
+      "current_episode": 16,
+      "total_episodes": 16,
+      "quality": "FHD",
+      "lang": "Vietsub",
+      "year": 2021,
+      "type": "series",
+      "category": [
+        {
+          "id": "ba6fd52e5a3aca80eaaf1a3b50a182db",
+          "name": "Hài Hước",
+          "slug": "hai-huoc"
+        },
+        {
+          "id": "37a7b38b6184a5ebd3c43015aa20709d",
+          "name": "Chính Kịch",
+          "slug": "chinh-kich"
+        },
+        {
+          "id": "a7b065b92ad356387ef2e075dee66529",
+          "name": "Tâm Lý",
+          "slug": "tam-ly"
+        },
+        {
+          "id": "bb2b4b030608ca5984c8dd0770f5b40b",
+          "name": "Tình Cảm",
+          "slug": "tinh-cam"
+        }
+      ],
+      "country": [
+        {
+          "id": "cefbf1640a17bad1e13c2f6f2a811a2d",
+          "name": "Thái Lan",
+          "slug": "thai-lan"
+        }
+      ],
+      "source_site": "phimapi",
+      "source_name": "KKPhim",
+      "is_published": true,
+      "seo_catalog_status": "published",
+      "superseded_by_movie_id": null,
+      "created_at": "2026-06-19T19:37:10.403325+00:00",
+      "published_at": "2026-07-22T12:51:15.721628+00:00",
+      "last_episode_change_at": "2026-07-23T09:09:00.050505+00:00",
+      "tmdb_id": 153378,
+      "tmdb_vote_average": 8.761,
+      "tmdb_vote_count": 117,
+      "tmdb_popularity": 8.6088,
+      "_id": "7b7662d6-7852-4735-becf-bcf34731afbb"
+    },
+    {
+      "id": "beb6896f-892f-4ebb-a7a1-fc8f09bb97ea",
+      "slug": "cat-roi-ky-uc-phan-2",
+      "name": "Cắt Rời Ký Ức (Phần 2)",
+      "origin_name": "Severance (Season 2)",
+      "poster_url": "https://phimimg.com/upload/vod/20250301-1/c89d01ef9dbf65a79e25db5494706cbf.jpg",
+      "thumb_url": "https://phimimg.com/upload/vod/20250301-1/154210ab542940ed348da46e14479100.jpg",
+      "hero_backdrop_url": null,
+      "hero_poster_url": null,
+      "episode_current": "Hoàn Tất (10/10)",
+      "episode_total": "10",
+      "current_episode": 10,
+      "total_episodes": 10,
+      "quality": "FHD",
+      "lang": "Vietsub",
+      "year": 2025,
+      "type": "series",
+      "category": [
+        {
+          "id": "37a7b38b6184a5ebd3c43015aa20709d",
+          "name": "Chính Kịch",
+          "slug": "chinh-kich"
+        },
+        {
+          "id": "2fb53017b3be83cd754a08adab3e916c",
+          "name": "Bí Ẩn",
+          "slug": "bi-an"
+        },
+        {
+          "id": "0bcf4077916678de9b48c89221fcf8ae",
+          "name": "Khoa Học",
+          "slug": "khoa-hoc"
+        },
+        {
+          "id": "68564911f00849030f9c9c144ea1b931",
+          "name": "Viễn Tưởng",
+          "slug": "vien-tuong"
+        }
+      ],
+      "country": [
+        {
+          "id": "74d9fa92f4dea9ecea8fc2233dc7921a",
+          "name": "Âu Mỹ",
+          "slug": "au-my"
+        }
+      ],
+      "source_site": "phimapi",
+      "source_name": "KKPhim",
+      "is_published": true,
+      "seo_catalog_status": "published",
+      "superseded_by_movie_id": null,
+      "created_at": "2026-06-23T00:55:07.482997+00:00",
+      "published_at": "2026-07-23T05:07:03.123503+00:00",
+      "last_episode_change_at": "2026-07-05T12:17:40.555108+00:00",
+      "tmdb_id": 95396,
+      "tmdb_vote_average": 8.386,
+      "tmdb_vote_count": 2834,
+      "tmdb_popularity": 45.3817,
+      "_id": "beb6896f-892f-4ebb-a7a1-fc8f09bb97ea"
+    },
+    {
+      "id": "1397889d-47d3-4a94-ba1a-15f4baf0492b",
+      "slug": "the-beatles-get-back",
+      "name": "The Beatles: Get Back",
+      "origin_name": "The Beatles: Get Back",
+      "poster_url": "https://image.tmdb.org/t/p/original/bCKlJ0yCpbKTT7BcMvlcVSofJwg.jpg",
+      "thumb_url": "https://image.tmdb.org/t/p/original/nxy9fg1rT853P7zP7ZQGqRimiCS.jpg",
+      "hero_backdrop_url": null,
+      "hero_poster_url": null,
+      "episode_current": "Hoàn Tất (3/3)",
+      "episode_total": "3",
+      "current_episode": 3,
+      "total_episodes": 3,
+      "quality": "HD",
+      "lang": "Vietsub",
+      "year": 2021,
+      "type": "series",
+      "category": [
+        {
+          "id": "99",
+          "name": "Phim Tài Liệu",
+          "slug": "phim-tai-lieu"
+        }
+      ],
+      "country": [
+        {
+          "id": "NZ",
+          "name": "New Zealand",
+          "slug": "new-zealand"
+        },
+        {
+          "id": "GB",
+          "name": "United Kingdom",
+          "slug": "united-kingdom"
+        }
+      ],
+      "source_site": "cobephim",
+      "source_name": "CobePhim / StreamVSMov",
+      "is_published": true,
+      "seo_catalog_status": "published",
+      "superseded_by_movie_id": null,
+      "created_at": "2026-07-11T08:34:09.102957+00:00",
+      "published_at": "2026-07-11T08:34:09.102957+00:00",
+      "last_episode_change_at": "2026-08-09T09:07:01.071898+00:00",
+      "tmdb_id": 128876,
+      "tmdb_vote_average": 8.386,
+      "tmdb_vote_count": 413,
+      "tmdb_popularity": 5.3285,
+      "_id": "1397889d-47d3-4a94-ba1a-15f4baf0492b"
+    },
+    {
+      "id": "6865f436-bf68-46bf-a04a-96e8bd29dcf5",
+      "slug": "bac-si-noi-tru-phan-4",
+      "name": "Bác Sĩ Nội Trú (Phần 4)",
+      "origin_name": "The Resident (Season 4)",
+      "poster_url": "https://phimimg.com/upload/vod/20260414-1/1f5f1ccb6b7486a798a9e1f40bf7b942.jpg",
+      "thumb_url": "https://phimimg.com/upload/vod/20260414-1/8a708ae020c6f7830f30860b8cd70165.jpg",
+      "hero_backdrop_url": null,
+      "hero_poster_url": null,
+      "episode_current": "Hoàn Tất (14/14)",
+      "episode_total": "14",
+      "current_episode": 14,
+      "total_episodes": 14,
+      "quality": "FHD",
+      "lang": "Vietsub",
+      "year": 2021,
+      "type": "series",
+      "category": [
+        {
+          "id": "37a7b38b6184a5ebd3c43015aa20709d",
+          "name": "Chính Kịch",
+          "slug": "chinh-kich"
+        },
+        {
+          "id": "a7b065b92ad356387ef2e075dee66529",
+          "name": "Tâm Lý",
+          "slug": "tam-ly"
+        }
+      ],
+      "country": [
+        {
+          "id": "74d9fa92f4dea9ecea8fc2233dc7921a",
+          "name": "Âu Mỹ",
+          "slug": "au-my"
+        }
+      ],
+      "source_site": "phimapi",
+      "source_name": "KKPhim",
+      "is_published": true,
+      "seo_catalog_status": "published",
+      "superseded_by_movie_id": null,
+      "created_at": "2026-06-20T00:22:19.593948+00:00",
+      "published_at": "2026-07-29T04:25:00.435102+00:00",
+      "last_episode_change_at": "2026-07-29T04:25:00.435102+00:00",
+      "tmdb_id": 74016,
+      "tmdb_vote_average": 8.372,
+      "tmdb_vote_count": 1326,
+      "tmdb_popularity": 45.2459,
+      "_id": "6865f436-bf68-46bf-a04a-96e8bd29dcf5"
+    },
+    {
+      "id": "3f7f06cf-c3b3-4947-a2eb-cc66f0d88bca",
+      "slug": "huan-luyen-vien-ted-lasso-phan-1",
+      "name": "Huấn Luyện Viên Ted Lasso (Phần 1)",
+      "origin_name": "Ted Lasso (Season 1)",
+      "poster_url": "https://phimimg.com/upload/vod/20250812-1/2c58a16a46085121a25b7431bd4d9355.jpg",
+      "thumb_url": "https://phimimg.com/upload/vod/20250812-1/5854021f914f00224905b22fa616e097.jpg",
+      "hero_backdrop_url": null,
+      "hero_poster_url": null,
+      "episode_current": "Hoàn Tất (10/10)",
+      "episode_total": "10",
+      "current_episode": 10,
+      "total_episodes": 10,
+      "quality": "FHD",
+      "lang": "Vietsub",
+      "year": 2020,
+      "type": "series",
+      "category": [
+        {
+          "id": "37a7b38b6184a5ebd3c43015aa20709d",
+          "name": "Chính Kịch",
+          "slug": "chinh-kich"
+        },
+        {
+          "id": "ba6fd52e5a3aca80eaaf1a3b50a182db",
+          "name": "Hài Hước",
+          "slug": "hai-huoc"
+        },
+        {
+          "id": "a7b065b92ad356387ef2e075dee66529",
+          "name": "Tâm Lý",
+          "slug": "tam-ly"
+        }
+      ],
+      "country": [
+        {
+          "id": "74d9fa92f4dea9ecea8fc2233dc7921a",
+          "name": "Âu Mỹ",
+          "slug": "au-my"
+        }
+      ],
+      "source_site": "phimapi",
+      "source_name": "KKPhim",
+      "is_published": true,
+      "seo_catalog_status": "published",
+      "superseded_by_movie_id": null,
+      "created_at": "2026-06-20T22:37:16.111606+00:00",
+      "published_at": "2026-07-24T11:22:00.719926+00:00",
+      "last_episode_change_at": "2026-07-24T11:22:00.719926+00:00",
+      "tmdb_id": 97546,
+      "tmdb_vote_average": 8.344,
+      "tmdb_vote_count": 2510,
+      "tmdb_popularity": 145.2921,
+      "_id": "3f7f06cf-c3b3-4947-a2eb-cc66f0d88bca"
+    }
+  ]
+}

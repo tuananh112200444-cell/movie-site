@@ -1,0 +1,46 @@
+[
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 8 Extra",
+    "episode_number": -2008,
+    "link_embed": "https://d0000d.com/e/qstv7fbwfddp009kx2re1t3vkyifktzb",
+    "link_m3u8": "",
+    "server_name": "BLVietsub DS 08 Extra",
+    "slug": "tap-extra-8",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 8 Extra",
+    "episode_number": -2008,
+    "link_embed": "https://dzen.ru/embed/vEW9zCc5K_BU?from_block=partner",
+    "link_m3u8": "",
+    "server_name": "BLVietsub DZ 08 Extra",
+    "slug": "tap-extra-8",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 8 Extra",
+    "episode_number": -2008,
+    "link_embed": "https://ok.ru/videoembed/8266901424657?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "BLVietsub OK 08 Extra",
+    "slug": "tap-extra-8",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập 8 Extra",
+    "episode_number": -2008,
+    "link_embed": "https://vk.com/video_ext.php?oid=458745691&id=456240117&autoplay=1",
+    "link_m3u8": "",
+    "server_name": "BLVietsub VK 08 Extra",
+    "slug": "tap-extra-8",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  }
+]

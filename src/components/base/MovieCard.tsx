@@ -14,6 +14,12 @@ interface MovieCardProps {
   rank?: number;
   variant?: 'default' | 'wide' | 'rank';
   priority?: boolean;
+  /** Label supplied by a filtered listing (genre/country/type), when present. */
+  contextLabel?: string;
+}
+
+function getContextLabel(movie: MovieItem, contextLabel?: string): string {
+  return contextLabel?.trim() || movie.category?.[0]?.name || '';
 }
 
 function isNewMovie(movie: MovieItem): boolean {
@@ -93,7 +99,7 @@ function getVerticalPosterPaths(movie: MovieItem): { primary?: string; fallback?
   return getPortraitImagePaths(movie);
 }
 
-function DefaultCard({ movie, priority }: MovieCardProps) {
+function DefaultCard({ movie, priority, contextLabel }: MovieCardProps) {
   // Use optimized image for homepage cards to reduce bandwidth
   const { primary: posterPath, fallback: fallbackPath } = getVerticalPosterPaths(movie);
   
@@ -111,6 +117,7 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
   const altText = buildAlt(movie);
   const isNew   = isNewMovie(movie);
   const displayTime = getDisplayTime(movie);
+  const displayContext = getContextLabel(movie, contextLabel);
 
   const epText = (() => {
     const ep = (movie.episode_current ?? '').toLowerCase().trim();
@@ -204,10 +211,10 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
                   {displayTime}
                 </span>
               )}
-              {movie.category && movie.category[0] && (
+              {displayContext && (
                 <>
                   <span className="text-white/20 text-[9px]">·</span>
-                  <span className="text-[10px] text-white/50 font-medium">{movie.category[0].name}</span>
+                  <span className="text-[10px] text-white/50 font-medium">{displayContext}</span>
                 </>
               )}
             </div>
@@ -260,7 +267,7 @@ function DefaultCard({ movie, priority }: MovieCardProps) {
 /* ─────────────────────────────────────────
    RANK CARD
 ───────────────────────────────────────── */
-function DefaultCardV2({ movie, priority }: MovieCardProps) {
+function DefaultCardV2({ movie, priority, contextLabel }: MovieCardProps) {
   const { primary: posterPath, fallback: fallbackPath } = getVerticalPosterPaths(movie);
 
   const { currentSrc, loaded: imgLoaded, hasError: imgError, onLoad, onError } = useImageFallback(
@@ -276,6 +283,7 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
   const altText = buildAlt(movie);
   const isNew = isNewMovie(movie);
   const displayTime = getDisplayTime(movie);
+  const displayContext = getContextLabel(movie, contextLabel);
   const origin = getDisplayOrigin(movie);
   const title = getDisplayTitle(movie);
   const ep = (movie.episode_current ?? '').toLowerCase().trim();
@@ -362,9 +370,9 @@ function DefaultCardV2({ movie, priority }: MovieCardProps) {
                   {displayTime}
                 </span>
               )}
-              {movie.category?.[0]?.name && (
+              {displayContext && (
                 <span className="max-w-[8.5rem] truncate rounded bg-black/38 px-2 py-1 text-[10.5px] font-semibold text-white/68 backdrop-blur-sm">
-                  {movie.category[0].name}
+                  {displayContext}
                 </span>
               )}
             </div>
@@ -555,10 +563,10 @@ function WideCard({ movie, priority }: MovieCardProps) {
 /* ─────────────────────────────────────────
    EXPORT
 ───────────────────────────────────────── */
-function MovieCard({ movie, rank, variant = 'default', priority = false }: MovieCardProps) {
-  if (variant === 'rank') return <RankCard  movie={movie} rank={rank} priority={priority} />;
-  if (variant === 'wide') return <WideCard  movie={movie} priority={priority} />;
-  return                         <DefaultCardV2 movie={movie} priority={priority} />;
+function MovieCard({ movie, rank, variant = 'default', priority = false, contextLabel }: MovieCardProps) {
+  if (variant === 'rank') return <RankCard  movie={movie} rank={rank} priority={priority} contextLabel={contextLabel} />;
+  if (variant === 'wide') return <WideCard  movie={movie} priority={priority} contextLabel={contextLabel} />;
+  return                         <DefaultCardV2 movie={movie} priority={priority} contextLabel={contextLabel} />;
 }
 
 export default memo(MovieCard);

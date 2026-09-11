@@ -163,6 +163,28 @@ function getHighestEpisodeFromServers(episodes) {
   }, 0);
 }
 
+function getPlayableEpisodeNumbers(episodes) {
+  const numbers = new Set();
+  for (const server of episodes) {
+    for (const episode of server.server_data ?? []) {
+      if (!hasPlayableUrl(episode) || episode.is_scheduled) continue;
+      const number = epSortKey(episode);
+      if (Number.isFinite(number) && number > 0) numbers.add(number);
+    }
+  }
+  return numbers;
+}
+
+function countMissingEpisodeNumbers(episodes, expected) {
+  if (expected <= 1 || expected > 300) return 0;
+  const present = getPlayableEpisodeNumbers(episodes);
+  let missing = 0;
+  for (let number = 1; number <= expected; number += 1) {
+    if (!present.has(number)) missing += 1;
+  }
+  return missing;
+}
+
 function getAdvertisedCurrentEpisode(detail) {
   return [detail.movie?.current_episode, detail.movie?.episode_current].reduce((max, value) => {
     if (value == null) return max;
@@ -176,7 +198,7 @@ function shouldRefreshEpisodeDetail(detail) {
   const displayedCurrent = getAdvertisedCurrentEpisode(detail);
   if (displayedCurrent < 2) return false;
   const playableCurrent = getHighestEpisodeFromServers(detail.episodes ?? []);
-  return playableCurrent < displayedCurrent;
+  return playableCurrent < displayedCurrent || countMissingEpisodeNumbers(detail.episodes ?? [], displayedCurrent) > 0;
 }
 
 function shouldRaceOphimAsQuickSource(slug, source) {
@@ -371,10 +393,32 @@ const staleTheAirLikeDetail = {
 };
 const freshTheAirLikeDetail = {
   movie: { name: 'Gio Thoang Tinh Theo', episode_current: 'Tap 6', current_episode: 6 },
-  episodes: servers,
+  episodes: [{
+    server_name: 'complete server',
+    server_data: [1, 2, 3, 4, 5, 6].map((number) => ({
+      name: String(number),
+      slug: String(number),
+      link_m3u8: `https://cdn.test/${number}.m3u8`,
+    })),
+  }],
 };
 assert(shouldRefreshEpisodeDetail(staleTheAirLikeDetail), 'Detail page must refresh when badge says episode 6 but only episode 1 is loaded');
 assert(!shouldRefreshEpisodeDetail(freshTheAirLikeDetail), 'Detail page must not refresh when playable episodes already match the badge');
+const missingOpeningEpisodes = {
+  movie: { name: 'My Bias My Boss', episode_current: 'Tap 6', current_episode: 6 },
+  episodes: [{
+    server_name: 'Vietsub',
+    server_data: [3, 4, 5, 6].map((number) => ({
+      name: `Tap ${number}`,
+      slug: `tap-${number}`,
+      link_m3u8: `https://v7.kkphimplayer7.com/demo/${number}.m3u8`,
+    })),
+  }],
+};
+assert(
+  shouldRefreshEpisodeDetail(missingOpeningEpisodes),
+  'A detail response containing episodes 3-6 must not be treated as a complete six-episode sequence',
+);
 assert(!shouldRaceOphimAsQuickSource('chasing-love', 'ophim'), 'ASCII source=ophim pages must not let stale OPhim detail beat stored/proxy data');
 assert(shouldRaceOphimAsQuickSource('长安的荔枝', 'ophim'), 'CJK/non-ASCII OPhim slugs may still use direct OPhim as a quick source');
 

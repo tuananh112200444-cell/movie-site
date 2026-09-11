@@ -10,8 +10,8 @@ type SafariDocument = Document & {
   webkitFullscreenElement?: Element | null;
 };
 
-const RELEASE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
-const RELEASE_CHECK_COOLDOWN_MS = 30 * 1000;
+const RELEASE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+const RELEASE_CHECK_COOLDOWN_MS = 2 * 60 * 1000;
 const RELEASE_FETCH_TIMEOUT_MS = 5000;
 const RELEASE_PREPARE_TIMEOUT_MS = 8000;
 const AUTO_RELOAD_DELAY_MS = 1200;
