@@ -70,7 +70,6 @@
     <!-- BUILD_REV: 2026-05-19-v1067-force-rebuild -->
     <title>KhoPhim – Tìm phim theo tên, thể loại và quốc gia</title>
     <meta name="description" content="Khám phá phim theo tên tiếng Việt, tên gốc, thể loại, quốc gia, năm phát hành và trạng thái tập trên KhoPhim." />
-    <link rel="canonical" href="https://khophim.org" />
     <link rel="alternate" type="application/rss+xml" title="KhoPhim – Phim mới" href="https://khophim.org/feed.xml" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
@@ -116,6 +115,7 @@
           "height": 1024
         },
         "sameAs": [
+          "https://www.facebook.com/share/19BH4GRjXq/?mibextid=wwXIfr",
           "https://www.tiktok.com/@khophim.org"
         ]
       }
@@ -133,12 +133,18 @@
 
     <!-- Preconnect - critical domains -->
     <link rel="preconnect" href="https://ceoxbhsdodllziyxmbqr.supabase.co" crossorigin="anonymous">
+    <link rel="preconnect" href="https://i0.wp.com" crossorigin="anonymous">
     <link rel="preconnect" href="https://img.ophim.live" crossorigin="anonymous">
     <link rel="preconnect" href="https://wsrv.nl" crossorigin="anonymous">
     <link rel="dns-prefetch" href="https://ceoxbhsdodllziyxmbqr.supabase.co">
+    <link rel="dns-prefetch" href="https://phimimg.com">
+    <link rel="dns-prefetch" href="https://i0.wp.com">
     <link rel="dns-prefetch" href="https://img.ophim.live">
     <link rel="dns-prefetch" href="https://wsrv.nl">
     <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+    <!-- Begin the compact home snapshot before React boots so the first hero
+         can be discovered without waiting for a second network round trip. -->
+    <link rel="preload" href="/home-fallback.json" as="fetch" crossorigin="anonymous">
     <link rel="preload" href="/fonts/remixicon-4.5.0.woff2?v=20260722" as="font" type="font/woff2" crossorigin>
 
     <!-- Inline critical CSS -->
@@ -170,7 +176,7 @@
     <!-- noscript: readable fallback for crawlers and browsers without JavaScript -->
     <noscript>
       <div style="font-family:sans-serif;max-width:900px;margin:0 auto;padding:24px;color:#333">
-        <p class="text-xl font-bold">KhoPhim – Khám phá và tìm kiếm phim</p>
+        <h1 class="text-xl font-bold">KhoPhim – Khám phá và tìm kiếm phim</h1>
         <p>
           KhoPhim (khophim.org) là website xem phim online miễn phí Vietsub HD, cập nhật phim lẻ, phim bộ, phim chiếu rạp,
           hoạt hình, anime, TV shows và phim mới mỗi ngày. Người xem có thể tìm phim theo tên tiếng Việt, tên tiếng Anh,
@@ -218,15 +224,21 @@
               : ((window.name || '') + ' ' + token);
           }
         }
-        function clearLocalState() {
+        function clearTransientState() {
           try {
-            Object.keys(localStorage).forEach(function (key) {
-              if (/^(kp_|khophim|detail_|search_v|movie_|home_)/i.test(key)) localStorage.removeItem(key);
-            });
             Object.keys(sessionStorage).forEach(function (key) {
-              if (key !== RECOVERY_KEY && /^(kp_|khophim|detail_|search_v|movie_|home_)/i.test(key)) sessionStorage.removeItem(key);
+              if (
+                key !== RECOVERY_KEY &&
+                /^(detail_|search_v|kp_suggest_|kp_home_proxy|kp_cinema|kp_trending|kp_new_movies)/i.test(key)
+              ) sessionStorage.removeItem(key);
             });
           } catch (e) {}
+        }
+        function reloadCurrentRoute(reason) {
+          var url = new URL(location.href);
+          url.searchParams.set('__kp_recover', String(Date.now()));
+          url.searchParams.set('__kp_recover_reason', reason);
+          location.replace(url.toString());
         }
         function clearCachesAndWorkers() {
           var tasks = [];
@@ -284,7 +296,12 @@
           document.body.appendChild(main);
           if (button) {
             button.onclick = function () {
-              location.replace(location.pathname + location.search + (location.search ? '&' : '?') + 'recover=' + Date.now());
+              button.disabled = true;
+              button.textContent = 'Đang mở lại phim...';
+              clearTransientState();
+              clearCachesAndWorkers().then(function () {
+                reloadCurrentRoute('manual');
+              });
             };
           }
         }
@@ -295,12 +312,13 @@
             return;
           }
           writeAttempts(attempts + 1);
-          clearLocalState();
+          // Never remove durable viewer data here. kp_watch_history,
+          // kp_resume_v1 and kp_favorites are what let a reopened phone tab
+          // return to the same title, episode and playback position.
+          clearTransientState();
           clearCachesAndWorkers().then(function () {
             setTimeout(function () {
-              var url = new URL(location.href);
-              url.searchParams.set('__kp_recover', String(Date.now()));
-              location.replace(url.toString());
+              reloadCurrentRoute(reason);
             }, 1500 * (attempts + 1));
           });
         }

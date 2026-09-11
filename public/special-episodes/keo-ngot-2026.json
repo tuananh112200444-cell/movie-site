@@ -1,0 +1,24 @@
+[
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Chiếu phát",
+    "episode_number": -1001,
+    "link_embed": "https://ok.ru/videoembed/11491621538392?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Chiếu phát",
+    "episode_number": -1001,
+    "link_embed": "https://abyssplayer.com/rtZxdsKIA",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 2",
+    "slug": "tap-dac-biet",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  }
+]

@@ -244,6 +244,26 @@ function sameMovieByStableProviderIdentity(existing: Record<string, unknown>, in
   return titles(incoming).some((title) => existingTitles.includes(title));
 }
 
+function resolvedCanonicalMatchesIncoming(
+  canonical: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  const canonicalType = normalizedMovieType(canonical.type);
+  const incomingType = normalizedMovieType(incoming.type);
+  if (canonicalType && incomingType && canonicalType !== incomingType) return false;
+
+  const canonicalYear = Number(canonical.year || 0);
+  const incomingYear = Number(incoming.year || 0);
+  if (canonicalYear > 0 && incomingYear > 0 && canonicalYear !== incomingYear) return false;
+
+  const canonicalTmdb = String(canonical.tmdb_id || '').trim();
+  const incomingTmdb = String(incoming.tmdb_id || '').trim();
+  if (canonicalTmdb && incomingTmdb && canonicalTmdb === incomingTmdb) return true;
+
+  return sameMovieByTitle(canonical, incoming)
+    || sameMovieByStableProviderIdentity(canonical, incoming);
+}
+
 function normalizedMovieType(value: unknown): 'single' | 'series' | '' {
   const type = normalizeText(String(value || ''));
   if (['single', 'movie', 'phim le', 'phim chieu rap'].includes(type)) return 'single';
@@ -1004,7 +1024,10 @@ async function findExistingMovie(
         .eq('id', resolvedId)
         .maybeSingle();
       if (canonicalError) throw new Error(`canonical movie lookup ${resolvedId}: ${canonicalError.message}`);
-      if (canonical?.id) return canonical as Record<string, unknown>;
+      if (canonical?.id && resolvedCanonicalMatchesIncoming(
+        canonical as Record<string, unknown>,
+        payload,
+      )) return canonical as Record<string, unknown>;
     }
   }
   const checks = [
@@ -1541,9 +1564,11 @@ async function insertEpisodes(
   movieId: string,
   detail: ParsedDetail,
   labelAsBackup = false,
+  verifiedCuratedBackup = false,
 ): Promise<number> {
   const rawSourceId = String(detail.movie._id || detail.movie.id || detail.movie.slug || '');
   const sourceId = provider.trackOphimIdentity ? rawSourceId : `${provider.sourceSite}:${rawSourceId}`.slice(0, 240);
+  const persistedSource = verifiedCuratedBackup ? `verified-${provider.sourceSite}` : provider.sourceSite;
   const parsedEpisodes: Array<{
     number: number;
     epName: string;
@@ -1559,7 +1584,11 @@ async function insertEpisodes(
     // movie_episodes and episodes historically use a server-name key that
     // does not include the provider. Give an independently verified backup a
     // distinct label so it can never overwrite the primary provider's row.
-    const serverName = labelAsBackup ? `${provider.sourceName} - ${sourceServerName}` : sourceServerName;
+    const serverName = verifiedCuratedBackup
+      ? `${provider.sourceName} verified - ${sourceServerName}`
+      : labelAsBackup
+        ? `${provider.sourceName} - ${sourceServerName}`
+        : sourceServerName;
     for (const ep of server.server_data || []) {
       if (isTrailerEpisode(ep)) continue;
       const number = episodeNumber(ep);
@@ -1635,7 +1664,7 @@ async function insertEpisodes(
       .from('streams')
       .select('server_name, episode_slug, source, stream_url, embed_url, is_active, health_status, failure_count, last_error, last_checked_at')
       .eq('movie_id', movieId)
-      .eq('source', provider.sourceSite),
+      .eq('source', persistedSource),
   ]);
 
   if (adminSelectError) throw new Error(`movie_episodes select ${detail.movie.slug}: ${adminSelectError.message}`);
@@ -1683,7 +1712,7 @@ async function insertEpisodes(
           link_embed: ep.linkEmbed,
           thumbnail_url: '',
           duration: '',
-          source: provider.sourceSite,
+          source: persistedSource,
           is_backup: labelAsBackup,
         });
       }
@@ -1710,7 +1739,7 @@ async function insertEpisodes(
       });
     }
 
-    const streamKey = `${ep.serverName.trim().toLowerCase()}|${ep.epSlug.trim().toLowerCase()}|${provider.sourceSite.toLowerCase()}`;
+    const streamKey = `${ep.serverName.trim().toLowerCase()}|${ep.epSlug.trim().toLowerCase()}|${persistedSource.toLowerCase()}`;
     const existingStreamRow = existingStreams.get(streamKey);
     const streamUrlChanged = Boolean(existingStreamRow) && (
       String(existingStreamRow.stream_url || '') !== ep.linkM3u8 ||
@@ -1730,7 +1759,7 @@ async function insertEpisodes(
         episode_slug: ep.epSlug,
         stream_url: ep.linkM3u8,
         embed_url: ep.linkEmbed,
-        source: provider.sourceSite,
+        source: persistedSource,
         is_active: true,
         health_status: 'unchecked',
         failure_count: 0,
@@ -2053,6 +2082,12 @@ serve(async (req) => {
         : 'provider must be one of: kkphim, vsmov, nguonc',
     }, requestedProvider === 'ophim' ? 410 : 400);
   }
+  const peakFreshnessSync =
+    url.searchParams.get('peak_freshness') === '1' &&
+    provider.sourceSite === 'phimapi' &&
+    pages === 1 &&
+    limit <= 4 &&
+    includeEpisodes;
   let submittedDetails = new Map<string, ParsedDetail>();
   let submittedPage = 0;
   if (req.method === 'POST') {
@@ -2097,7 +2132,7 @@ serve(async (req) => {
   if (!dryRun && !hasTarget) {
     const { data: capacity } = await supabase.from('runtime_capacity_state')
       .select('mode,last_reason').eq('singleton', true).maybeSingle();
-    if (capacity?.mode === 'protect' || isVietnamViewingPeak()) {
+    if (capacity?.mode === 'protect' || (isVietnamViewingPeak() && !peakFreshnessSync)) {
       return json({
         success: true,
         skipped: true,
@@ -2290,6 +2325,7 @@ serve(async (req) => {
                 provider.sourceSite === 'nguonc' ||
                 (targetMovie && isIndependentProvider)
               ),
+              Boolean(targetMovie && isCuratedCatalogMovie(targetMovie) && isIndependentProvider),
             );
             // Publication is a strict two-part gate: the provider detail must
             // contain a real playable URL and the movie must have usable artwork.

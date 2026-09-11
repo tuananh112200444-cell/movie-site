@@ -26,10 +26,26 @@ export function movieDetailUrl(
   slug: string,
   preference?: { source?: string; quality?: string },
 ): string {
-  const path = `/phim/${slug}`;
+  const path = `/phim/${canonicalMovieSlug(slug)}`;
   const params = new URLSearchParams();
   if (preference?.source) params.set('source', preference.source);
   if (preference?.quality) params.set('quality', preference.quality);
   const query = params.toString();
   return query ? `${path}?${query}` : path;
+}
+import movieCanonicalAliases from '../data/movieCanonicalAliases.json';
+
+const MOVIE_CANONICAL_ALIASES = movieCanonicalAliases as Record<string, string>;
+const MOVIE_SOURCE_SLUGS = Object.fromEntries(
+  Object.entries(MOVIE_CANONICAL_ALIASES).map(([sourceSlug, canonicalSlug]) => [canonicalSlug, sourceSlug]),
+) as Record<string, string>;
+
+export function canonicalMovieSlug(slug: string): string {
+  const clean = String(slug || '').trim();
+  return MOVIE_CANONICAL_ALIASES[clean] || clean;
+}
+
+export function movieDetailSourceSlug(slug: string): string {
+  const canonical = canonicalMovieSlug(slug);
+  return MOVIE_SOURCE_SLUGS[canonical] || canonical;
 }

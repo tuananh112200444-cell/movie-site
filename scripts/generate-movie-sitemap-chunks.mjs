@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 const FUNCTION_URL = 'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/sitemap-movies-xml';
 
 const targets = [
-  ['sitemap-movies-recent.xml', 'recent=1&page_size=2000&v=20260820-cohort-parity-v24'],
+  ['sitemap-movies-recent.xml', 'recent=1&page_size=2000&v=20260826-p0-index-v25'],
 ];
 
 async function fetchSitemap(fileName, query) {

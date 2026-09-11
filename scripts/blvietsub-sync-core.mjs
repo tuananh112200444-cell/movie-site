@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { resolveSourceTitleFields } from './source-title-localization.mjs';
 
 const DEFAULT_FEED_URL = 'https://blvietsub.com/sitemap_index.xml';
 const DEFAULT_DISCOVERY_URLS = [
@@ -451,6 +452,11 @@ async function fetchText(url, timeoutMs = 25000) {
   }
 }
 
+function validReleaseYear(value) {
+  const year = Number(value || 0);
+  return Number.isInteger(year) && year >= 1888 && year <= new Date().getFullYear() + 1 ? year : 0;
+}
+
 export function parseMoviePage(movieUrl, updatedAt, html, playerHtml = '') {
   const movieSlug = getMovieSlug(movieUrl);
   if (!movieSlug) return null;
@@ -470,7 +476,9 @@ export function parseMoviePage(movieUrl, updatedAt, html, playerHtml = '') {
     originName: getWordPressOriginName(title, content),
     content,
     image,
-    year: Number(html.match(/\b((?:19|20)\d{2})\b/)?.[1] || 0) || new Date(updatedAt || Date.now()).getFullYear(),
+    // Never derive a release year from the synchronization timestamp. A bad
+    // four-digit value previously created future-year catalogue pollution.
+    year: validReleaseYear(html.match(/\b((?:19|20)\d{2})\b/)?.[1]),
     category: [
       { id: 'bl-gl', name: 'BL / GL', slug: 'bl-gl' },
       { id: 'dam-my', name: 'Đam mỹ', slug: 'dam-my' },
@@ -567,7 +575,7 @@ async function fetchExistingMovies(supabase) {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('movies')
-      .select('id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year')
+      .select('id, slug, name, origin_name, title_vi, title_en, title_original, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year')
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,showtimes.ilike.%blvietsub.com%,source_url.ilike.%blvietsub.com%')
       .range(from, from + 999);
     if (error) throw new Error(`movies select: ${error.message}`);
@@ -626,13 +634,14 @@ function findMovie(entry, indexes) {
 async function createMovie(supabase, entry) {
   const episodeCount = Math.max(1, playableEpisodeCount(entry.episodes));
   const slug = `blvietsub-${entry.postId}-${slugify(entry.title)}`;
+  const localizedTitles = resolveSourceTitleFields(entry.title, entry.originName);
   const payload = {
     slug,
     name: entry.title,
-    origin_name: entry.originName,
-    title_vi: entry.title,
-    title_en: '',
-    title_original: entry.originName,
+    origin_name: localizedTitles.titleOriginal || entry.originName,
+    title_vi: localizedTitles.titleVi,
+    title_en: localizedTitles.titleEn,
+    title_original: localizedTitles.titleOriginal,
     normalized_name: slugify([entry.title, entry.originName].filter(Boolean).join(' ')),
     content: entry.content,
     type: entry.type,
@@ -646,7 +655,7 @@ async function createMovie(supabase, entry) {
     episode_total: '',
     current_episode: episodeCount,
     total_episodes: episodeCount,
-    year: entry.year || new Date().getFullYear(),
+    year: validReleaseYear(entry.year),
     actor: [],
     director: [],
     category: entry.category,
@@ -663,7 +672,7 @@ async function createMovie(supabase, entry) {
     schedule_timezone: 'Asia/Ho_Chi_Minh',
   };
 
-  const selectFields = 'id, slug, name, origin_name, title_vi, title_en, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year';
+  const selectFields = 'id, slug, name, origin_name, title_vi, title_en, title_original, source_site, source_name, showtimes, source_url, episode_current, current_episode, total_episodes, year';
   async function selectExistingMovieAfterDuplicate() {
     const directChecks = [
       ['slug', slug],
@@ -729,6 +738,8 @@ async function updateMovie(supabase, movie, entry) {
   const existingTotal = Number(movie.total_episodes || 0) || 0;
   const syncedEpisodeCount = Math.max(1, maxPlayableEpisodeNumber(entry.episodes), playableEpisodeCount(entry.episodes));
   const episodeCount = syncedEpisodeCount || Math.max(current, existingTotal);
+  const localizedTitles = resolveSourceTitleFields(entry.title, entry.originName);
+  const ownsBlvietsubIdentity = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase().includes('blvietsub');
   const payload = {
     showtimes: entry.sourceUrl,
     source_url: entry.sourceUrl,
@@ -738,6 +749,16 @@ async function updateMovie(supabase, movie, entry) {
     current_episode: episodeCount,
     total_episodes: episodeCount,
   };
+  if (ownsBlvietsubIdentity) {
+    const currentTitleVi = String(movie.title_vi || '').trim();
+    const currentTitleEn = String(movie.title_en || '').trim();
+    const currentOrigin = String(movie.origin_name || '').trim();
+    const sourceTitle = String(entry.title || '').trim();
+    if (localizedTitles.titleVi && (!currentTitleVi || currentTitleVi === sourceTitle)) payload.title_vi = localizedTitles.titleVi;
+    if (localizedTitles.titleEn && (!currentTitleEn || currentTitleEn === currentTitleVi || currentTitleEn === sourceTitle)) payload.title_en = localizedTitles.titleEn;
+    if (localizedTitles.titleOriginal && (!currentOrigin || currentOrigin === sourceTitle)) payload.origin_name = localizedTitles.titleOriginal;
+    if (!String(movie.title_original || '').trim() && localizedTitles.titleOriginal) payload.title_original = localizedTitles.titleOriginal;
+  }
   if (current === episodeCount && Number(movie.total_episodes || 0) === episodeCount) {
     delete payload.episode_current;
     delete payload.current_episode;

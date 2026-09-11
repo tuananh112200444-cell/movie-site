@@ -1,12 +1,14 @@
 ﻿import { Link } from 'react-router-dom';
 import { memo } from 'react';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import SocialBrandIcon, { type SocialBrandPlatform } from '@/components/base/SocialBrandIcon';
+import { SOCIAL_URLS } from '@/config/socialLinks';
 
 const STATS = [
   { value: 'Đa dạng', label: 'Thư Viện Phim' },
   { value: 'HD/4K', label: 'Chất Lượng' },
   { value: '100%', label: 'Miễn Phí' },
-  { value: '0', label: 'Quảng Cáo' },
+  { value: 'Hằng ngày', label: 'Cập Nhật' },
 ];
 
 const CAT_LINKS = [
@@ -70,10 +72,19 @@ const SEO_LANDING_LINKS = [
   { label: 'Phim Trailer', to: '/phim-trailer', icon: 'ri-time-line' },
 ];
 
-const SOCIAL_LINKS = [
-  { href: 'https://m.me/j/AbY6361ilp6YeUsu/?send_source=gc:copy_invite_link_c', icon: 'ri-messenger-fill', label: 'Messenger', color: 'hover:bg-[#00B2FF]/15 hover:text-[#00B2FF] hover:border-[#00B2FF]/30' },
-  { href: 'https://www.tiktok.com/@khophim.org?_r=1&_t=ZS-979Na9uVNWE', icon: 'ri-tiktok-fill', label: 'TikTok', color: 'hover:bg-white/10 hover:text-white hover:border-white/25' },
-  { href: 'https://t.me/davisjohn_1', icon: 'ri-telegram-fill', label: 'Telegram', color: 'hover:bg-[#29A8E8]/15 hover:text-[#29A8E8] hover:border-[#29A8E8]/30' },
+interface FooterSocialLink {
+  href: string;
+  brand?: SocialBrandPlatform;
+  icon?: string;
+  label: string;
+  color: string;
+}
+
+const SOCIAL_LINKS: FooterSocialLink[] = [
+  { href: SOCIAL_URLS.facebook, brand: 'facebook', label: 'Facebook', color: 'text-white border-white/15 bg-gradient-to-br from-[#2d8cff] to-[#1264d8] shadow-[0_7px_20px_rgba(24,119,242,0.2)] hover:brightness-110 hover:-translate-y-0.5' },
+  { href: SOCIAL_URLS.messenger, brand: 'messenger', label: 'Messenger', color: 'text-white border-white/15 bg-gradient-to-br from-[#00B2FF] via-[#686BFF] to-[#E944A1] shadow-[0_7px_20px_rgba(83,105,255,0.2)] hover:brightness-110 hover:-translate-y-0.5' },
+  { href: SOCIAL_URLS.tiktok, brand: 'tiktok', label: 'TikTok', color: 'text-white border-white/15 bg-[#111318] shadow-[4px_0_15px_rgba(254,44,85,0.18),-4px_0_15px_rgba(37,244,238,0.16)] hover:border-white/30 hover:-translate-y-0.5' },
+  { href: SOCIAL_URLS.telegram, icon: 'ri-telegram-fill', label: 'Telegram', color: 'text-white border-white/15 bg-gradient-to-br from-[#37b9f1] to-[#168ac1] shadow-[0_7px_20px_rgba(41,168,232,0.18)] hover:brightness-110 hover:-translate-y-0.5' },
 ];
 
 const MOBILE_FOOTER_LINKS = [
@@ -111,7 +122,23 @@ function Footer() {
             ))}
           </nav>
 
-          <div className="mt-4 border-t border-white/[0.05] pt-4 text-[11px] leading-5 text-white/45">
+          <div className="mt-4 flex items-center gap-2 border-t border-white/[0.05] pt-4" aria-label="Mạng xã hội KhoPhim">
+            {SOCIAL_LINKS.map(({ href, brand, icon, label, color }) => (
+              <a
+                key={href}
+                href={href}
+                target="_blank"
+                rel={label === 'TikTok' ? 'me noopener noreferrer' : 'noopener noreferrer nofollow'}
+                title={label}
+                aria-label={label}
+                className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-all active:scale-90 ${color}`}
+              >
+                {brand ? <SocialBrandIcon platform={brand} className="h-5 w-5" /> : <i className={`${icon} text-xl`} aria-hidden="true" />}
+              </a>
+            ))}
+          </div>
+
+          <div className="mt-4 text-[11px] leading-5 text-white/45">
             <p>Nội dung tổng hợp từ nguồn công khai; KhoPhim không lưu trữ tệp video.</p>
             <p className="mt-2">© 2026 KhoPhim · Hệ thống hoạt động bình thường</p>
           </div>
@@ -179,11 +206,12 @@ function Footer() {
 
             {/* Social */}
             <div className="flex items-center gap-2">
-              {SOCIAL_LINKS.map(({ href, icon, label, color }) => (
+              {SOCIAL_LINKS.map(({ href, brand, icon, label, color }) => (
                 <a key={href} href={href} target="_blank" rel={label === 'TikTok' ? 'me noopener noreferrer' : 'noopener noreferrer nofollow'}
                   title={label}
-                  className={`flex h-11 w-11 items-center justify-center bg-white/[0.04] text-white/60 border border-white/[0.06] rounded-xl transition-all cursor-pointer active:scale-90 active:opacity-70 touch-manipulation ${color}`}>
-                  <i className={`${icon} text-sm`} />
+                  aria-label={label}
+                  className={`flex h-11 w-11 items-center justify-center border rounded-xl transition-all cursor-pointer active:scale-90 active:opacity-80 touch-manipulation ${color}`}>
+                  {brand ? <SocialBrandIcon platform={brand} className="h-5 w-5" /> : <i className={`${icon} text-xl`} aria-hidden="true" />}
                   <span className="sr-only">{label}</span>
                 </a>
               ))}

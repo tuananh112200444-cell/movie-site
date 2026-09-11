@@ -37,6 +37,7 @@ interface MovieItem {
   current_episode?: number;
   content?: string;
   is_published?: boolean;
+  superseded_by_movie_id?: string | null;
   seo_catalog_status?: string;
   catalog_source?: string;
   release_at?: string;
@@ -188,15 +189,18 @@ function isHighValueCohortMovie(movie: MovieItem): boolean {
   const tmdbId = Number(movie.tmdb_id || 0);
   const hasBrokenText = /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(`${name} ${originName} ${description}`);
   return movie.seo_eligible_for_index === true
+    && movie.seo_index_tier !== 'upcoming'
+    && !movie.superseded_by_movie_id
     && Number(movie.seo_quality_score || 0) >= 85
     && name.length >= 2
     && originName.length >= 2
-    && description.length >= 160
+    && description.length >= 500
     && image.length > 0
     && year >= 1888
     && year <= currentYear + 2
     && tmdbId > 0
-    && Array.isArray(movie.actor) && movie.actor.some(Boolean)
+    && hasUsefulPerson(movie.actor)
+    && hasUsefulPerson(movie.director)
     && Array.isArray(movie.category) && movie.category.length > 0
     && Array.isArray(movie.country) && movie.country.length > 0
     && !hasBrokenText;
@@ -208,6 +212,14 @@ function contentFingerprint(movie: MovieItem): string {
     .toLocaleLowerCase('vi-VN')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function hasUsefulPerson(values?: unknown[]): boolean {
+  return Array.isArray(values) && values.some((value) => {
+    const normalized = normalizeSearchText(String(value || ''));
+    return normalized.length >= 2
+      && !/^(?:dang cap nhat|updating|unknown|n a|null)$/.test(normalized);
+  });
 }
 
 function isIndexableMovie(movie: MovieItem): boolean {
@@ -376,14 +388,16 @@ async function fetchEligibleUpcomingMovies(limit = 5000): Promise<MovieItem[]> {
       quality_score,
       movies!inner(
         id,slug,name,origin_name,thumb_url,poster_url,updated_at,episode_current,current_episode,
-        content,is_published,seo_catalog_status,catalog_source,release_at,
+        content,is_published,superseded_by_movie_id,seo_catalog_status,catalog_source,release_at,
         tmdb_popularity,trailer_url,status,year,tmdb_id,actor,director,category,country,source_site
       )
     `)
     .eq('eligible_for_index', true)
     .eq('index_tier', 'upcoming')
     .eq('movies.is_published', true)
+    .is('movies.superseded_by_movie_id', null)
     .gte('quality_score', 85)
+    .gte('content_length', 500)
     .not('movies.tmdb_id', 'is', null)
     .order('quality_score', { ascending: false })
     .order('checked_at', { ascending: false })
@@ -414,14 +428,16 @@ async function fetchEligibleOngoingMovies(limit = 5000): Promise<MovieItem[]> {
       last_episode_change_at,
       movies!inner(
         id,slug,name,origin_name,thumb_url,poster_url,updated_at,episode_current,current_episode,
-        total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,
+        total_episodes,next_episode_at,content,is_published,superseded_by_movie_id,seo_catalog_status,catalog_source,
         release_at,tmdb_popularity,trailer_url,status,year,tmdb_id,actor,director,category,country,source_site
       )
     `)
     .eq('eligible_for_index', true)
     .eq('index_tier', 'ongoing')
     .eq('movies.is_published', true)
+    .is('movies.superseded_by_movie_id', null)
     .gte('quality_score', 85)
+    .gte('content_length', 500)
     .not('movies.tmdb_id', 'is', null)
     .order('freshness_score', { ascending: false })
     .order('last_episode_change_at', { ascending: false, nullsFirst: false })
@@ -461,14 +477,16 @@ async function fetchEligibleRecentMovies(limit = 5000): Promise<MovieItem[]> {
       last_episode_change_at,
       movies!inner(
         id,slug,name,origin_name,thumb_url,poster_url,updated_at,episode_current,current_episode,
-        total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,
+        total_episodes,next_episode_at,content,is_published,superseded_by_movie_id,seo_catalog_status,catalog_source,
         release_at,tmdb_popularity,trailer_url,status,year,tmdb_id,actor,director,category,country,source_site
       )
     `)
     .eq('eligible_for_index', true)
     .in('index_tier', ['playable', 'ongoing', 'upcoming'])
     .eq('movies.is_published', true)
+    .is('movies.superseded_by_movie_id', null)
     .gte('quality_score', 85)
+    .gte('content_length', 500)
     .not('movies.tmdb_id', 'is', null)
     .order('last_episode_change_at', { ascending: false, nullsFirst: false })
     .order('freshness_score', { ascending: false })
@@ -488,16 +506,20 @@ async function fetchEligibleRecentMovies(limit = 5000): Promise<MovieItem[]> {
   });
 }
 
-async function fetchEligibleMovies(offset = 0, limit = 50000): Promise<MovieItem[]> {
+// Fetch the complete high-value candidate pool before applying final sitemap
+// ordering and pagination. Paginating the much larger eligible table first
+// caused strong movies near the end of that table to disappear from every
+// archive chunk.
+async function fetchEligibleMovies(limit = 5000): Promise<MovieItem[]> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
   const pageSize = 1000;
   const rows: MovieItem[] = [];
-  const endExclusive = offset + Math.min(50000, Math.max(1, limit));
+  const endExclusive = Math.min(5000, Math.max(1, limit));
 
-  for (let from = offset; from < endExclusive; from += pageSize) {
+  for (let from = 0; from < endExclusive; from += pageSize) {
     const { data, error } = await supabase
       .from('movie_seo_quality_status')
       .select(`
@@ -508,13 +530,17 @@ async function fetchEligibleMovies(offset = 0, limit = 50000): Promise<MovieItem
         last_episode_change_at,
         movies!inner(
           id,slug,name,origin_name,thumb_url,poster_url,updated_at,episode_current,current_episode,
-          total_episodes,next_episode_at,content,is_published,seo_catalog_status,catalog_source,
+          total_episodes,next_episode_at,content,is_published,superseded_by_movie_id,seo_catalog_status,catalog_source,
           release_at,tmdb_popularity,trailer_url,status,year,tmdb_id,actor,director,category,country,source_site
         )
       `)
       .eq('eligible_for_index', true)
       .in('index_tier', ['playable', 'ongoing', 'upcoming'])
+      .gte('quality_score', 85)
+      .gte('content_length', 500)
       .eq('movies.is_published', true)
+      .is('movies.superseded_by_movie_id', null)
+      .not('movies.tmdb_id', 'is', null)
       .order('movie_id', { ascending: true })
       .range(from, Math.min(from + pageSize - 1, endExclusive - 1));
     if (error) throw error;
@@ -572,9 +598,9 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       : options.mode === 'ongoing'
         ? fetchEligibleOngoingMovies(options.outputLimit)
         : options.mode === 'recent'
-          ? fetchEligibleRecentMovies(options.limit)
+          ? fetchEligibleRecentMovies(Math.max(2000, options.outputLimit * 10))
           : options.mode === 'all'
-          ? fetchEligibleMovies(options.offset, options.limit)
+          ? fetchEligibleMovies(5000)
           : fetchSupabaseMovies(options.offset, options.limit, options.mode),
     ...(options.includeOphim ? LIST_TYPES.flatMap((type) => pages.map((page) => fetchMoviePage(type, page))) : []),
   ]);
@@ -630,7 +656,9 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
     movies = movies.sort(compareMovieSeoOrder);
   }
 
-  movies = movies.slice(0, options.outputLimit);
+  movies = options.mode === 'all'
+    ? movies.slice(options.offset, options.offset + options.outputLimit)
+    : movies.slice(0, options.outputLimit);
 
   const urls = movies.map((movie) => {
     const slug = movie.slug ?? '';

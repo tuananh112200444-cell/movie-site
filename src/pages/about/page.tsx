@@ -2,6 +2,8 @@
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import SEO, { SITE_URL } from '@/components/base/SEO';
+import SocialBrandIcon from '@/components/base/SocialBrandIcon';
+import { SOCIAL_URLS } from '@/config/socialLinks';
 
 const aboutSchema = [
   {
@@ -42,7 +44,7 @@ const aboutSchema = [
       'KhoPhim là website khám phá và xem phim tiếng Việt với metadata phim, danh mục, tìm kiếm và trạng thái cập nhật được chuẩn hóa.',
     areaServed: 'VN',
     knowsLanguage: 'vi',
-    sameAs: ['https://www.tiktok.com/@khophim.org'],
+    sameAs: [SOCIAL_URLS.facebook, 'https://www.tiktok.com/@khophim.org'],
     publishingPrinciples: `${SITE_URL}/press/`,
     contactPoint: {
       '@type': 'ContactPoint',
@@ -341,15 +343,25 @@ export default function AboutPage() {
               Gặp vấn đề khi xem phim? Muốn yêu cầu thêm phim? Hãy liên hệ với chúng tôi qua các kênh bên dưới. Đội ngũ hỗ trợ KhoPhim luôn sẵn sàng giúp đỡ bạn.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <a href="https://t.me/davisjohn_1" target="_blank" rel="noopener noreferrer nofollow"
-                className="flex items-center gap-2 bg-[#29A8E8]/15 hover:bg-[#29A8E8]/25 border border-[#29A8E8]/25 text-[#29A8E8] font-semibold px-5 py-2.5 rounded-xl transition-all cursor-pointer whitespace-nowrap">
-                <i className="ri-telegram-fill" />
-                Telegram
-              </a>
-              <a href="https://facebook.com" target="_blank" rel="noopener noreferrer nofollow"
-                className="flex items-center gap-2 bg-[#1877F2]/15 hover:bg-[#1877F2]/25 border border-[#1877F2]/25 text-[#1877F2] font-semibold px-5 py-2.5 rounded-xl transition-all cursor-pointer whitespace-nowrap">
-                <i className="ri-facebook-fill" />
+              <a href={SOCIAL_URLS.facebook} target="_blank" rel="noopener noreferrer nofollow"
+                className="flex items-center gap-2.5 bg-gradient-to-r from-[#2d8cff] to-[#1264d8] hover:brightness-110 border border-white/15 text-white font-semibold px-5 py-2.5 rounded-xl shadow-[0_8px_24px_rgba(24,119,242,0.22)] transition-all cursor-pointer whitespace-nowrap">
+                <SocialBrandIcon platform="facebook" className="h-5 w-5" />
                 Facebook
+              </a>
+              <a href={SOCIAL_URLS.messenger} target="_blank" rel="noopener noreferrer nofollow"
+                className="flex items-center gap-2.5 bg-gradient-to-r from-[#00B2FF] via-[#686BFF] to-[#E944A1] hover:brightness-110 border border-white/15 text-white font-semibold px-5 py-2.5 rounded-xl shadow-[0_8px_24px_rgba(83,105,255,0.2)] transition-all cursor-pointer whitespace-nowrap">
+                <SocialBrandIcon platform="messenger" className="h-5 w-5" />
+                Messenger
+              </a>
+              <a href={SOCIAL_URLS.tiktok} target="_blank" rel="me noopener noreferrer"
+                className="flex items-center gap-2.5 bg-[#111318] hover:bg-[#191c23] border border-white/15 text-white font-semibold px-5 py-2.5 rounded-xl shadow-[5px_0_18px_rgba(254,44,85,0.16),-5px_0_18px_rgba(37,244,238,0.14)] transition-all cursor-pointer whitespace-nowrap">
+                <SocialBrandIcon platform="tiktok" className="h-5 w-5" />
+                TikTok
+              </a>
+              <a href={SOCIAL_URLS.telegram} target="_blank" rel="noopener noreferrer nofollow"
+                className="flex items-center gap-2.5 bg-gradient-to-r from-[#37b9f1] to-[#168ac1] hover:brightness-110 border border-white/15 text-white font-semibold px-5 py-2.5 rounded-xl transition-all cursor-pointer whitespace-nowrap">
+                <i className="ri-telegram-fill text-xl" aria-hidden="true" />
+                Telegram
               </a>
               <Link to="/"
                 className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white font-semibold px-5 py-2.5 rounded-xl transition-all cursor-pointer whitespace-nowrap">

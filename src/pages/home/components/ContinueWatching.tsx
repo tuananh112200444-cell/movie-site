@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useWatchHistory } from '../../../hooks/useWatchHistory';
 import { useResumeWatch, type ResumeInfo } from '../../../hooks/useResumeWatch';
-import { getThumbUrl, getSmallThumbUrl } from '../../../services/movieApi';
+import { applyImageElementFallback, getThumbUrl, getSmallThumbUrl } from '../../../services/movieApi';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
 
 type HistoryEntry = ReturnType<typeof useWatchHistory>['history'][number];
@@ -117,7 +117,11 @@ function HistoryCard({ entry, resume, onRemove }: HistoryCardProps) {
             decoding="async"
             className={`h-full w-full object-cover object-top transition-all duration-300 group-hover:scale-105 ${imgLoaded && !imgError ? 'opacity-100' : 'opacity-0'}`}
             onLoad={() => { setImgLoaded(true); markImagePreloaded(imgUrl); }}
-            onError={() => { setImgError(true); setImgLoaded(true); }}
+            onError={(event) => {
+              applyImageElementFallback(event.currentTarget);
+              setImgError(false);
+              setImgLoaded(false);
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
           <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">

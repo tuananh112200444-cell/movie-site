@@ -9,6 +9,7 @@ const connectorFiles = [
 ];
 
 const failures = [];
+const movieDetailProxy = fs.readFileSync('supabase/functions/movie-detail-proxy/index.ts', 'utf8');
 
 for (const file of connectorFiles) {
   const source = fs.readFileSync(file, 'utf8');
@@ -53,6 +54,7 @@ const ophimPriorityRestore = fs.readFileSync('supabase/migrations/20260812140000
 const episodeRepairPriority = fs.readFileSync('supabase/migrations/20260805170000_prioritize_public_episode_repairs.sql', 'utf8');
 const unifiedPlaybackHealth = fs.readFileSync('supabase/migrations/20260805205000_unify_public_playback_health.sql', 'utf8');
 const systemBrainMigration = fs.readFileSync('supabase/migrations/20260822070340_consolidate_system_brains.sql', 'utf8');
+const peakEpisodeFreshness = fs.readFileSync('supabase/migrations/20260825141500_add_peak_kkphim_episode_freshness.sql', 'utf8');
 if (!ophim.includes('isTrailerEpisode(episode)') || !ophim.includes('if (isTrailerEpisode(ep)) continue')) {
   failures.push('OPhim sync must not treat a trailer episode as playable movie coverage');
 }
@@ -118,6 +120,18 @@ if (
   failures.push('Bounded OPhim/KKPhim recent ingestion must be owned by the active Catalog Brain queue');
 }
 if (
+  !ophim.includes("url.searchParams.get('peak_freshness') === '1'")
+  || !ophim.includes("provider.sourceSite === 'phimapi'")
+  || !ophim.includes('pages === 1')
+  || !ophim.includes('limit <= 4')
+  || !ophim.includes('(isVietnamViewingPeak() && !peakFreshnessSync)')
+  || !peakEpisodeFreshness.includes("'catalog:kkphim-peak-freshness'")
+  || !peakEpisodeFreshness.includes('"peak_freshness":1')
+  || !peakEpisodeFreshness.includes("'2-59/15 4-6,11-16 * * *'")
+) {
+  failures.push('KKPhim episode freshness must continue at a tightly bounded rate during Vietnam viewing peaks');
+}
+if (
   ophim.includes('Targeted provider identity refresh; independent probe pending')
   || /if \(targetMovie\)[\s\S]{0,700}health_status:\s*'unchecked'[\s\S]{0,250}failure_count:\s*0/.test(ophim)
 ) {
@@ -131,9 +145,18 @@ if (
   failures.push('Cross-provider episode import must verify identity and keep its server rows separate from the primary source');
 }
 if (
+  !ophim.includes('verifiedCuratedBackup')
+  || !ophim.includes('`verified-${provider.sourceSite}`')
+  || !ophim.includes('`${provider.sourceName} verified - ${sourceServerName}`')
+  || !ophim.includes('targetMovie && isCuratedCatalogMovie(targetMovie) && isIndependentProvider')
+) {
+  failures.push('Strictly matched provider backups for curated BL titles must retain explicit verified provenance');
+}
+if (
   !ophim.includes('detailMatchesExpected(expected, fetchedDetail)')
   || !ophim.includes('provider list/detail identity mismatch')
   || !ophim.includes('sameMovieByTitle(exactMatch, payload) || sameMovieByStableProviderIdentity(exactMatch, payload)')
+  || !ophim.includes('resolvedCanonicalMatchesIncoming')
   || !ophim.includes('quarantineVerifiedForeignEpisodes')
 ) {
   failures.push('OPhim/KKPhim list, detail, existing movie and persisted episodes must pass one strict identity gate');
@@ -198,6 +221,12 @@ if (
 }
 if (!episodeRepairPriority.includes('select movie.current_episode from public.movies movie where movie.id = issue.movie_id')) {
   failures.push('Catalog repair must reconcile episode counts against live movie metadata instead of stale issue evidence');
+}
+if (
+  !movieDetailProxy.includes('isKkPhimFullCollision')
+  || !movieDetailProxy.includes("/\\b(phimapi|kkphim)\\b/")
+) {
+  failures.push('Episodic detail responses must suppress provider movie/Full slug collisions');
 }
 
 console.log(JSON.stringify({

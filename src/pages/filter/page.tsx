@@ -63,6 +63,10 @@ export default function FilterPage() {
   const selectedCountry = searchParams.get('country') ?? '';
   const selectedYear    = searchParams.get('year')    ?? '';
   const selectedSort    = searchParams.get('sort')    ?? 'modified.time:desc';
+  const cardContextLabel =
+    GENRES.find((item) => item.slug === selectedGenre)?.name
+    || COUNTRIES.find((item) => item.slug === selectedCountry)?.name
+    || (selectedType !== 'phim-moi-cap-nhat' ? TYPES.find((item) => item.slug === selectedType)?.name : '');
 
   const setFilter = useCallback((key: string, value: string) => {
     setSearchParams(prev => {
@@ -347,7 +351,7 @@ export default function FilterPage() {
                 {viewMode === 'grid' ? (
                   <div className="grid movie-grid-desktop">
                     {movies.map(m => (
-                      <MovieCard key={getMovieKey(m)} movie={m} />
+                      <MovieCard key={getMovieKey(m)} movie={m} contextLabel={cardContextLabel} />
                     ))}
                   </div>
                 ) : (

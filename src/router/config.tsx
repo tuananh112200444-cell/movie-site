@@ -54,6 +54,7 @@ const HTMLSitemapPage   = lazy(() => import('../pages/sitemap/HTMLSitemapPage'))
 const AdminReviewsPage  = lazy(() => import('../pages/admin-reviews/page'));
 const AdminPingPage     = lazy(() => import('../pages/admin-ping/page'));
 const AdminSEOPage      = lazy(() => import('../pages/admin-seo/page'));
+const AdminSeoStudioPage = lazy(() => import('../pages/admin-seo-studio/page'));
 const AdminAddMoviePage = lazy(() => import('../pages/admin-add-movie/page'));
 const AdminDiagnosticsPage = lazy(() => import('../pages/admin-diagnostics/page'));
 const AdminSyncHealthPage = lazy(() => import('../pages/admin-sync-health/page'));
@@ -100,6 +101,7 @@ function LazyHTMLSitemap()   { return <Suspense fallback={null}><HTMLSitemapPage
 function LazyAdminReviews()  { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminReviewsPage /></AdminGuard></Suspense>; }
 function LazyAdminPing()     { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminPingPage /></AdminGuard></Suspense>; }
 function LazyAdminSEO()      { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminSEOPage /></AdminGuard></Suspense>; }
+function LazyAdminSeoStudio(){ return <Suspense fallback={<PageLoader />}><AdminGuard><AdminSeoStudioPage /></AdminGuard></Suspense>; }
 function LazyAdminAddMovie() { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminAddMoviePage /></AdminGuard></Suspense>; }
 function LazyAdminDiagnostics() { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminDiagnosticsPage /></AdminGuard></Suspense>; }
 function LazyAdminSyncHealth() { return <Suspense fallback={<PageLoader />}><AdminGuard><AdminSyncHealthPage /></AdminGuard></Suspense>; }
@@ -242,6 +244,7 @@ const routes: RouteObject[] = [
   { path: '/admin/reviews', element: <LazyAdminReviews /> },
   { path: '/admin/ping',    element: <LazyAdminPing /> },
   { path: '/admin/seo',     element: <LazyAdminSEO /> },
+  { path: '/admin/seo-studio', element: <LazyAdminSeoStudio /> },
   { path: '/admin/banner',  element: <LazyAdminBanner /> },
   { path: '/admin/diagnostics', element: <LazyAdminDiagnostics /> },
   { path: '/admin/sync-health', element: <LazyAdminSyncHealth /> },

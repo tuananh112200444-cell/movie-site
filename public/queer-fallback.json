@@ -1,118 +1,1584 @@
 {
   "status": true,
   "source": "static-queer-fallback",
-  "generated_at": "2026-08-23T16:15:00.000Z",
+  "generated_at": "2026-09-03T17:22:03.887Z",
   "sections": {
     "newUpdates": [
       {
-        "_id": "loi-de-nghi-cua-cong-to-vien",
-        "slug": "loi-de-nghi-cua-cong-to-vien",
-        "name": "Lời Đề Nghị Của Công Tố Viên",
-        "origin_name": "The Prosecutor's Proposal",
-        "type": "series",
-        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/06/loi-de-nghi-cua-cong-to-vien-2026.png",
-        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/06/loi-de-nghi-cua-cong-to-vien-2026.png",
-        "quality": "HD",
+        "_id": "d0bef450-2dac-41ef-9b36-8e40c892fe21",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 8,
+        "episode_current": "Hoàn Tất (8/8)",
+        "episode_total": "",
         "lang": "Vietsub",
-        "year": 2026,
-        "episode_current": "Tập 4",
-        "episode_total": "10",
-        "current_episode": 4,
+        "modified": {
+          "time": "2026-09-03T17:07:00.015819+00:00"
+        },
+        "name": "Anh Hùng Yếu Ớt 1",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/73bB8D_4c.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-5909-anh-hung-yeu-ot-1",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "completed",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/73bB8D_4c.jpg",
+        "total_episodes": 8,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T17:07:00.015819+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "6e68aeab-1762-48fe-95a9-9372e52da995",
+        "category": [],
+        "country": [],
+        "current_episode": 5,
+        "episode_current": "Tập 5",
+        "episode_total": "5 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T15:17:11.87026+00:00"
+        },
+        "name": "Người Yêu Xui Xẻo - Unlucky Bae จุดจีบสายมู (2026)",
+        "origin_name": "Người Yêu Xui Xẻo",
+        "poster_url": "https://image.tmdb.org/t/p/original/opFWidR2ITRQv6fjukb7hJk7xsi.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-1741-nguoi-yeu-xui-xeo-unlucky-bae-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://image.tmdb.org/t/p/original/opFWidR2ITRQv6fjukb7hJk7xsi.jpg",
+        "total_episodes": 5,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T15:17:11.87026+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "0b8125c8-6ec3-4bac-8ae7-680a7ff002f0",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 8,
+        "episode_current": "Hoàn Tất (8/8)",
+        "episode_total": "8",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T10:22:00.046994+00:00"
+        },
+        "name": "4 Elements: The Earth The Series",
+        "origin_name": "4 Elements: The Earth The Series",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/The-Earth.jpg",
+        "quality": "HD",
+        "slug": "glvietsub-4-elements-the-earth",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "completed",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/The-Earth.jpg",
+        "total_episodes": 8,
+        "type": "series",
+        "updated_at": "2026-09-03T10:22:00.046994+00:00",
+        "year": 2025
+      },
+      {
+        "_id": "0115fbd1-e3ba-43fc-acfd-d3b067c9fc8e",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 8,
+        "episode_current": "Hoàn Tất (8/8)",
+        "episode_total": "8",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T09:22:00.03731+00:00"
+        },
+        "name": "Lover Merman The Series",
+        "origin_name": "Lover Merman The Series",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/Lover-Merman.jpg",
+        "quality": "HD",
+        "slug": "glvietsub-lover-merman-the-series",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "completed",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/Lover-Merman.jpg",
+        "total_episodes": 8,
+        "type": "series",
+        "updated_at": "2026-09-03T09:22:00.03731+00:00",
+        "year": 2025
+      },
+      {
+        "_id": "664bb77e-9335-44ba-a557-561ff5de6b6c",
+        "category": [
+          {
+            "id": "",
+            "name": "Drama",
+            "slug": "drama"
+          },
+          {
+            "id": "",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          },
+          {
+            "id": "",
+            "name": "Bách hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "id": "",
+            "name": "Thailand",
+            "slug": "thailand"
+          }
+        ],
+        "current_episode": 8,
+        "episode_current": "Hoàn Tất (8/8)",
+        "episode_total": "8",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T08:47:11.586075+00:00"
+        },
+        "name": "Moonlight Chicken",
+        "origin_name": "Midnight Series: Moonlight Chicken",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/com-ga-anh-trang-moonlight-chicken-2023.jpg",
+        "quality": "HD",
+        "slug": "moonlight-chicken",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "completed",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/com-ga-anh-trang-moonlight-chicken-2023.jpg",
+        "total_episodes": 8,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T08:47:11.586075+00:00",
+        "year": 2023
+      },
+      {
+        "_id": "e46f768a-b688-4df3-8ef6-d589a2c04c93",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          },
+          {
+            "id": "hoan-tat",
+            "name": "Hoàn Tất",
+            "slug": "hoan-tat"
+          },
+          {
+            "id": "n",
+            "name": "N",
+            "slug": "n"
+          },
+          {
+            "id": "reels",
+            "name": "REELS",
+            "slug": "reels"
+          },
+          {
+            "id": "tinh-cam",
+            "name": "Tình Cảm",
+            "slug": "tinh-cam"
+          }
+        ],
+        "country": [
+          {
+            "id": "thai-lan",
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 1,
+        "episode_current": "HoÃ n Táº¥t (1/1)",
+        "episode_total": "",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T08:45:04.945371+00:00"
+        },
+        "name": "Người Tình Nóng Bỏng",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/05/nguoi-tinh-nong-bong-2026.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-4570713870305734291-nguoi-tinh-nong-bong",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/05/nguoi-tinh-nong-bong-2026.jpg",
+        "total_episodes": 1,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T08:45:04.945371+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "3ad88b13-b364-42b7-9033-cba0f5bd216d",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 8,
+        "episode_current": "Hoàn Tất (8/8)",
+        "episode_total": "8",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T08:22:00.033686+00:00"
+        },
+        "name": "Affair The Series",
+        "origin_name": "Affair The Series",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/Affair-The-Series.jpg",
+        "quality": "HD",
+        "slug": "glvietsub-affair-the-series",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "completed",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/Affair-The-Series.jpg",
+        "total_episodes": 8,
+        "type": "series",
+        "updated_at": "2026-09-03T08:22:00.033686+00:00",
+        "year": 2024
+      },
+      {
+        "_id": "b020dab4-ee75-4cb8-b1dd-0b674892904b",
+        "category": [],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "1 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T08:18:28.350845+00:00"
+        },
+        "name": "Sau Khi Phá Sản Tôi Trở Thành Thư Ký Của Kẻ Thù",
+        "origin_name": "Sau Khi Phá Sản Tôi Trở Thành Thư Ký Của Kẻ Thù",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/O8on83_4c.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-976-sau-khi-pha-san-toi-tro-thanh-thu-ky-cua-ke-thu",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/O8on83_4c.jpg",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T08:18:28.350845+00:00",
+        "year": 2023
+      },
+      {
+        "_id": "7772f459-9ee0-47f4-8103-78cc1851f874",
+        "category": [],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "1 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T08:11:03.975519+00:00"
+        },
+        "name": "Anh Trai Kế Khiến Tôi Vừa Yêu Vừa Hận",
+        "origin_name": "Anh Trai Kế Khiến Tôi Vừa Yêu Vừa Hận",
+        "poster_url": "http://blvietsub.com/wp-content/uploads/2026/07/anh-trai-ke-khien-toi-vua-yeu-vua-han-2026.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-1667-anh-trai-ke-khien-toi-vua-yeu-vua-han",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "http://blvietsub.com/wp-content/uploads/2026/07/anh-trai-ke-khien-toi-vua-yeu-vua-han-2026.jpg",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T08:11:03.975519+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "d01a963f-58a3-4817-a219-5a9decdfd923",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 11,
+        "episode_current": "Tập 11",
+        "episode_total": "11 Tập",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T08:05:23.867164+00:00"
+        },
+        "name": "Rạng Đông",
+        "origin_name": "",
+        "poster_url": "http://blvietsub.com/wp-content/uploads/2026/06/rang-dong-2026.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-6592-rang-dong",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "http://blvietsub.com/wp-content/uploads/2026/06/rang-dong-2026.jpg",
+        "total_episodes": 11,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T08:05:23.867164+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "fadd1298-c34d-479f-b1c3-d55f6df43c2c",
+        "category": [],
+        "country": [],
+        "current_episode": 10,
+        "episode_current": "Tập 10",
+        "episode_total": "10 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T07:36:51.9863+00:00"
+        },
+        "name": "Đừng Xin Anh Jane - Don&#039;t Be Too Emotional อย่าขอพี่เจน (2026)",
+        "origin_name": "Đừng Xin Anh Jane - Don&#039;t Be Too Emotional อย่าขอพี่เจน (2026)",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/yWljYK_4c-213x300.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-1533-dung-xin-anh-jane-don-039-t-be-too-emotional-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/yWljYK_4c-213x300.jpg",
         "total_episodes": 10,
-        "category": [{ "id": "bl-gl", "name": "BL / GL", "slug": "bl-gl" }],
-        "country": [{ "id": "han-quoc", "name": "Hàn Quốc", "slug": "han-quoc" }],
-        "modified": { "time": "2026-07-03T12:35:31.000Z" },
-        "source_site": "blvietsub",
-        "source_name": "BLVietsub",
-        "status": "ongoing"
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T07:36:51.9863+00:00",
+        "year": 2026
       },
       {
-        "_id": "dung-xin-anh-jane",
-        "slug": "dung-xin-anh-jane",
-        "name": "Đừng Xin Anh Jane",
-        "origin_name": "Don't Be Too Emotional",
-        "type": "series",
-        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/06/dung-xin-anh-jane-2026.jpg",
-        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/06/dung-xin-anh-jane-2026.jpg",
-        "quality": "HD",
+        "_id": "693092f3-d2d6-4fe4-9ae5-89dbfcb50095",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "15",
         "lang": "Vietsub",
-        "year": 2026,
-        "episode_current": "Tập 2",
+        "modified": {
+          "time": "2026-09-03T07:22:00.141236+00:00"
+        },
+        "name": "Lovex3 The Series",
+        "origin_name": "Lovex3 The Series",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/Lovex3-The-Series.webp",
+        "quality": "HD",
+        "slug": "glvietsub-lovex3-the-series",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/Lovex3-The-Series.webp",
+        "total_episodes": 15,
+        "type": "series",
+        "updated_at": "2026-09-03T07:22:00.141236+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "ad4c5235-7bf0-4d51-84d5-ac527a525a35",
+        "category": [],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "1 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T07:12:56.99284+00:00"
+        },
+        "name": "Vị Kỷ",
+        "origin_name": "Vị Kỷ",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/vi-ky-egoist-2023.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-808-vi-ky",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/vi-ky-egoist-2023.jpg",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T07:12:56.99284+00:00",
+        "year": 2023
+      },
+      {
+        "_id": "ee4c9720-0e2f-4aea-a969-dede51e7e43b",
+        "category": [],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "1 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T06:17:11.333345+00:00"
+        },
+        "name": "Quan Chấp Chính Người Sói - Wolf&#039;s Oath (2026)",
+        "origin_name": "Quan Chấp Chính Người Sói - Wolf&#039;s Oath (2026)",
+        "poster_url": "https://pic5.iqiyipic.com/image/20260807/d4/fb/a_101300895_m_601_vi_1980_1108.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-1908-quan-chap-chinh-nguoi-soi-wolf-039-s-oath-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://pic5.iqiyipic.com/image/20260807/d4/fb/a_101300895_m_601_vi_1980_1108.jpg",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T06:17:11.333345+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "59df4c04-0b94-4153-9342-0fe9e826da41",
+        "category": [],
+        "country": [],
+        "current_episode": 4,
+        "episode_current": "Tập 4",
+        "episode_total": "4 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T06:17:10.848323+00:00"
+        },
+        "name": "Nour - นูร์ (2026)",
+        "origin_name": "Nour - นูร์ (2026)",
+        "poster_url": "https://pic5.iqiyipic.com/image/20260820/5d/d5/a_101353396_m_601_vi_900_1200.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-1809-nour-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://pic5.iqiyipic.com/image/20260820/5d/d5/a_101353396_m_601_vi_900_1200.jpg",
+        "total_episodes": 4,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T06:17:10.848323+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "e820809f-d70e-4d77-a2b1-5679fec957b3",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          },
+          {
+            "id": "t",
+            "name": "T",
+            "slug": "t"
+          },
+          {
+            "id": "tv",
+            "name": "TV",
+            "slug": "tv"
+          },
+          {
+            "id": "tinh-cam",
+            "name": "Tình Cảm",
+            "slug": "tinh-cam"
+          },
+          {
+            "id": "dang-chieu",
+            "name": "Đang Chiếu",
+            "slug": "dang-chieu"
+          }
+        ],
+        "country": [
+          {
+            "id": "thai-lan",
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 10,
+        "episode_current": "Tập 10",
+        "episode_total": "10 Tập",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T06:08:55.406032+00:00"
+        },
+        "name": "Tiên Tri Tình Yêu",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/tien-tri-tinh-yeu-2026.png",
+        "quality": "HD",
+        "slug": "blvietsub-502239922561626079-tien-tri-tinh-yeu",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/tien-tri-tinh-yeu-2026.png",
+        "total_episodes": 10,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T06:08:55.406032+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "7902706f-303f-42d3-ab10-e63aac9785f1",
+        "category": [
+          {
+            "id": "",
+            "name": "Phim Chính Kịch",
+            "slug": "phim-chinh-kich"
+          },
+          {
+            "id": "",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          },
+          {
+            "id": "",
+            "name": "Bách hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "id": "",
+            "name": "China",
+            "slug": "china"
+          },
+          {
+            "id": "",
+            "name": "Singapore",
+            "slug": "singapore"
+          }
+        ],
+        "current_episode": 12,
+        "episode_current": "Hoàn Tất (12/12)",
         "episode_total": "12",
-        "current_episode": 2,
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T05:48:54.566481+00:00"
+        },
+        "name": "Song Trình",
+        "origin_name": "Song Trình",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/song-trinh-2026.jpg",
+        "quality": "HD",
+        "slug": "double-helix",
+        "source_name": "Vũ trụ đam mỹ",
+        "source_site": "admin-queer",
+        "status": "completed",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/song-trinh-2026.jpg",
         "total_episodes": 12,
-        "category": [{ "id": "bl-gl", "name": "BL / GL", "slug": "bl-gl" }],
-        "country": [{ "id": "thai-lan", "name": "Thái Lan", "slug": "thai-lan" }],
-        "modified": { "time": "2026-07-03T13:50:31.000Z" },
-        "source_site": "blvietsub",
-        "source_name": "BLVietsub",
-        "status": "ongoing"
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T05:48:54.566481+00:00",
+        "year": 2026
       },
       {
-        "_id": "fix-the-error",
-        "slug": "fix-the-error",
-        "name": "Fix the Error!",
-        "origin_name": "Fix the Error!",
-        "type": "series",
-        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/06/fix-the-error-2026.png",
-        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/06/fix-the-error-2026.png",
-        "quality": "HD",
+        "_id": "937e3390-7ddc-49e6-95b9-5d4454f1a20d",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "HoÃ n Táº¥t (1/1)",
+        "episode_total": "",
         "lang": "Vietsub",
-        "year": 2026,
-        "episode_current": "Tập 2",
-        "episode_total": "6",
-        "current_episode": 2,
+        "modified": {
+          "time": "2026-09-03T05:26:48.527707+00:00"
+        },
+        "name": "Bình Minh Rực Rỡ",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/l0pjKE_4c.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-5826-binh-minh-ruc-ro",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/l0pjKE_4c.jpg",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T05:26:48.527707+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "8f27477e-d090-4fb8-a98f-468478bebd24",
+        "category": [],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "1 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T05:15:01.873234+00:00"
+        },
+        "name": "Bị Gã Điên Của Đội Bơi Nhắm Trúng Rồi! - Dive Into My Bad Rival 수영부 또라이에게 찍혀버렸다! (2026)",
+        "origin_name": "Bị Gã Điên Của Đội Bơi Nhắm Trúng Rồi! - Dive Into My Bad Rival 수영부 또라이에게 찍혀버렸다! (2026)",
+        "poster_url": "https://image.tmdb.org/t/p/original/rltaN3bdtTHWzMsAzoSGltnTZah.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-1863-bi-ga-dien-cua-doi-boi-nham-trung-roi-dive-into-my-bad-rival-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://image.tmdb.org/t/p/original/rltaN3bdtTHWzMsAzoSGltnTZah.jpg",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T05:15:01.873234+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "b67f5dc3-87a4-43d2-af6c-e64bf25d9379",
+        "category": [],
+        "country": [],
+        "current_episode": 6,
+        "episode_current": "Tập 6",
+        "episode_total": "6 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T04:17:48.152408+00:00"
+        },
+        "name": "Hội Chứng Mê Bạn Cùng Lớp - Class Crush Crisis เพื่อนสนิทระวังคิดไม่ซื่อ (2026)",
+        "origin_name": "Hội Chứng Mê Bạn Cùng Lớp - Class Crush Crisis เพื่อนสนิทระวังคิดไม่ซื่อ (2026)",
+        "poster_url": "https://image.tmdb.org/t/p/original/r8HQOxPBy9fwByVCRYov3xMeOBS.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-115-hoi-chung-me-ban-cung-lop-class-crush-crisis-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://image.tmdb.org/t/p/original/r8HQOxPBy9fwByVCRYov3xMeOBS.jpg",
         "total_episodes": 6,
-        "category": [{ "id": "bl-gl", "name": "BL / GL", "slug": "bl-gl" }],
-        "country": [{ "id": "han-quoc", "name": "Hàn Quốc", "slug": "han-quoc" }],
-        "modified": { "time": "2026-07-03T09:34:30.000Z" },
-        "source_site": "blvietsub",
-        "source_name": "BLVietsub",
-        "status": "ongoing"
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T04:17:48.152408+00:00",
+        "year": 2026
       },
       {
-        "_id": "chuyen-tinh-silom",
-        "slug": "chuyen-tinh-silom",
-        "name": "Chuyện Tình Silom",
-        "origin_name": "Love Of Silom",
-        "type": "series",
-        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/chuyen-tinh-silom-2026.png",
-        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/chuyen-tinh-silom-2026.png",
-        "quality": "FHD",
-        "lang": "Vietsub",
-        "year": 2026,
-        "episode_current": "Hoàn tất",
-        "episode_total": "12",
-        "current_episode": 12,
-        "total_episodes": 12,
-        "category": [{ "id": "bl-gl", "name": "BL / GL", "slug": "bl-gl" }],
-        "country": [{ "id": "thai-lan", "name": "Thái Lan", "slug": "thai-lan" }],
-        "modified": { "time": "2026-07-03T14:01:59.000Z" },
-        "source_site": "blvietsub",
-        "source_name": "BLVietsub",
-        "status": "completed"
-      },
-      {
-        "_id": "lost-to-you",
-        "slug": "lost-to-you",
-        "name": "Lost To You",
-        "origin_name": "Lost To You",
-        "type": "series",
-        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/05/lost-to-you-2026.jpg",
-        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/05/lost-to-you-2026.jpg",
+        "_id": "fc176ba2-0395-4954-8046-f21bc1f4ebe0",
+        "category": [],
+        "country": [],
+        "current_episode": 8,
+        "episode_current": "Tập 8",
+        "episode_total": "8 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T04:08:56.301041+00:00"
+        },
+        "name": "Cosmetic Playlover",
+        "origin_name": "Cosmetic Playlover",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/YYX7Ng_4c-1.jpg",
         "quality": "HD",
-        "lang": "Vietsub",
-        "year": 2026,
-        "episode_current": "Hoàn tất",
-        "episode_total": "12",
-        "current_episode": 12,
-        "total_episodes": 12,
-        "category": [{ "id": "bl-gl", "name": "BL / GL", "slug": "bl-gl" }],
-        "country": [{ "id": "trung-quoc", "name": "Trung Quốc", "slug": "trung-quoc" }],
-        "modified": { "time": "2026-07-03T08:14:20.000Z" },
-        "source_site": "blvietsub",
+        "slug": "blvietsub-1116-cosmetic-playlover",
         "source_name": "BLVietsub",
-        "status": "completed"
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/YYX7Ng_4c-1.jpg",
+        "total_episodes": 8,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T04:08:56.301041+00:00",
+        "year": 2024
+      },
+      {
+        "_id": "c6d269c0-eec6-475d-b63b-e93b17acaca9",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 12,
+        "episode_current": "HoÃ n Táº¥t (12/12)",
+        "episode_total": "12 Tập",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T03:50:02.251378+00:00"
+        },
+        "name": "Trái Tim Trong Gió",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/trai-tim-trong-gio-dangerous-romance-2023.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-5927-trai-tim-trong-gio",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/trai-tim-trong-gio-dangerous-romance-2023.jpg",
+        "total_episodes": 12,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T03:50:02.251378+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "aca45502-7ba4-4d1e-819b-c9331e35a2cf",
+        "category": [],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "1 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T03:25:25.377757+00:00"
+        },
+        "name": "Khemjira Phải Sống Sót Mãi Mãi",
+        "origin_name": "Khemjira Phải Sống Sót Mãi Mãi",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/06/khemjira-phai-song-sot-mai-mai-2026.png",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-1484-khemjira-phai-song-sot-mai-mai",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/06/khemjira-phai-song-sot-mai-mai-2026.png",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T03:25:25.377757+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "82e0122f-2a57-449f-9bb9-fc4095d80e2a",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 6,
+        "episode_current": "Hoàn Tất (6/6)",
+        "episode_total": "6",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T03:22:00.026696+00:00"
+        },
+        "name": "Hoại Cẩu",
+        "origin_name": "Moon And Dust",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/hoai-cau.jpg",
+        "quality": "HD",
+        "slug": "glvietsub-hoai-cau",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "completed",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/hoai-cau.jpg",
+        "total_episodes": 6,
+        "type": "series",
+        "updated_at": "2026-09-03T03:22:00.026696+00:00",
+        "year": 2025
+      },
+      {
+        "_id": "5bba8c65-88c6-4ed1-8c96-6a6d8668b4bf",
+        "category": [],
+        "country": [],
+        "current_episode": 7,
+        "episode_current": "Tập 7",
+        "episode_total": "7 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T03:08:35.247671+00:00"
+        },
+        "name": "Yêu Đi Đừng Ngại - Make It Right รักออกเดิน (2026)",
+        "origin_name": "Yêu Đi Đừng Ngại",
+        "poster_url": "https://image.tmdb.org/t/p/original/wRQgtkhrgeKL1kKTnq0qz98dknN.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-1679-yeu-di-dung-ngai-make-it-right-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://image.tmdb.org/t/p/original/wRQgtkhrgeKL1kKTnq0qz98dknN.jpg",
+        "total_episodes": 7,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T03:08:35.247671+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "8ce08122-7883-41d3-a507-e48f0203c7a6",
+        "category": [],
+        "country": [],
+        "current_episode": 10,
+        "episode_current": "Tập 10",
+        "episode_total": "10 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T02:40:47.757248+00:00"
+        },
+        "name": "Cổ Tích Ngàn Sao",
+        "origin_name": "Cổ Tích Ngàn Sao",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/co-tich-ngan-sao-2021.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-732-co-tich-ngan-sao",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/co-tich-ngan-sao-2021.jpg",
+        "total_episodes": 10,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T02:40:47.757248+00:00",
+        "year": 2021
+      },
+      {
+        "_id": "27d62a3d-aa3e-4ec1-a428-e0bcf47ad496",
+        "category": [
+          {
+            "id": "c51ce410c124a10e0db5e4b97fc2af39",
+            "name": "Chính Kịch",
+            "slug": "chinh-kich"
+          },
+          {
+            "id": "98f13708210194c475687be6106a3b84",
+            "name": "Lãng Mạn",
+            "slug": "lang-man"
+          },
+          {
+            "id": "2a79ea27c279e471f4d180b08d62b00a",
+            "name": "Tình Cảm",
+            "slug": "tinh-cam"
+          }
+        ],
+        "country": [
+          {
+            "id": "32bb90e8976aab5298d5da10fe66f21d",
+            "name": "Hàn Quốc",
+            "slug": "han-quoc"
+          }
+        ],
+        "current_episode": 8,
+        "episode_current": "Hoàn Tất (8/8)",
+        "episode_total": "8",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T02:25:03.130145+00:00"
+        },
+        "name": "Thủy Triều Tình Yêu (Phần 2)",
+        "origin_name": "Tide Of Love (Season 2)",
+        "poster_url": "https://phim.nguonc.com/public/images/Post/1/thuy-trieu-tinh-yeu-phan-2-1.jpg",
+        "quality": "HD",
+        "slug": "glvietsub-tide-of-love-season-2",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "completed",
+        "thumb_url": "https://phim.nguonc.com/public/images/Post/1/thuy-trieu-tinh-yeu-phan-2.jpg",
+        "total_episodes": 8,
+        "type": "series",
+        "updated_at": "2026-09-03T02:25:03.130145+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "87c29e93-319e-40c9-824e-88849b1675cf",
+        "category": [],
+        "country": [],
+        "current_episode": 6,
+        "episode_current": "Tập 6",
+        "episode_total": "6 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T02:01:44.910368+00:00"
+        },
+        "name": "Cú Giao Bóng Tình Yêu - Match Point รักนี้ต้องเสิร์ฟ (2026)",
+        "origin_name": "Cú Giao Bóng Tình Yêu",
+        "poster_url": "http://blvietsub.com/wp-content/uploads/2026/07/cu-giao-bong-tinh-yeu-2026-scaled.webp",
+        "quality": "HD",
+        "slug": "blvietsub-1722-cu-giao-bong-tinh-yeu-match-point-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "http://blvietsub.com/wp-content/uploads/2026/07/cu-giao-bong-tinh-yeu-2026-scaled.webp",
+        "total_episodes": 6,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T02:01:44.910368+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "9c4aa351-7805-4898-b9e3-ae4761ed994f",
+        "category": [],
+        "country": [],
+        "current_episode": 7,
+        "episode_current": "Tập 7",
+        "episode_total": "7 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T01:57:47.636321+00:00"
+        },
+        "name": "Mùa Hè Ấy Có Cậu - My Summer of You 君は夏のなか (2026)",
+        "origin_name": "Mùa Hè Ấy Có Cậu",
+        "poster_url": "http://blvietsub.com/wp-content/uploads/2026/06/mua-he-ay-co-cau-2026.png",
+        "quality": "HD",
+        "slug": "blvietsub-1512-mua-he-ay-co-cau-my-summer-of-you-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "http://blvietsub.com/wp-content/uploads/2026/06/mua-he-ay-co-cau-2026.png",
+        "total_episodes": 7,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T01:57:47.636321+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "58a0f91d-6ab2-418d-b074-0af631b1bd74",
+        "category": [],
+        "country": [],
+        "current_episode": 8,
+        "episode_current": "Tập 8",
+        "episode_total": "8 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T01:47:11.8771+00:00"
+        },
+        "name": "Mánh Khóe Tình Yêu",
+        "origin_name": "Mánh Khóe Tình Yêu",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/XdOP4w_4c.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-1206-manh-khoe-tinh-yeu",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/XdOP4w_4c.jpg",
+        "total_episodes": 8,
+        "type": "phim-bo",
+        "updated_at": "2026-09-03T01:47:11.8771+00:00",
+        "year": 2024
+      },
+      {
+        "_id": "a389ba36-e64b-43c1-be13-83afae42e99b",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 4,
+        "episode_current": "Hoàn Tất (4/4)",
+        "episode_total": "4",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T01:22:00.023699+00:00"
+        },
+        "name": "MuTeLuv: Fist Foot Fusion",
+        "origin_name": "MuTeLuv: Fist Foot Fusion",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/MuTeLuv-Fist-Foot-Fusion.jpg",
+        "quality": "HD",
+        "slug": "glvietsub-muteluv-fist-foot-fusion",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "completed",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/MuTeLuv-Fist-Foot-Fusion.jpg",
+        "total_episodes": 4,
+        "type": "series",
+        "updated_at": "2026-09-03T01:22:00.023699+00:00",
+        "year": 2025
+      },
+      {
+        "_id": "6d01ee93-3afd-4540-be45-0af66c6253ad",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 8,
+        "episode_current": "Tập 8",
+        "episode_total": "8 Tập",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T01:10:32.118052+00:00"
+        },
+        "name": "Biển Tình",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/bien-tinh-ocean-like-me-2022.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-6230-bien-tinh",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/bien-tinh-ocean-like-me-2022.jpg",
+        "total_episodes": 8,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T01:10:32.118052+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "7d10d8c8-d7e0-46f3-8a1e-68b5277f95c0",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 12,
+        "episode_current": "HoÃ n Táº¥t (12/12)",
+        "episode_total": "12 Tập",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T00:53:13.209725+00:00"
+        },
+        "name": "Đếm Đến 10 Là Hôn",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/dem-den-10-la-hon-lovely-writer-2021.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-5809-dem-den-10-la-hon",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/dem-den-10-la-hon-lovely-writer-2021.jpg",
+        "total_episodes": 12,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T00:53:13.209725+00:00",
+        "year": 2021
+      },
+      {
+        "_id": "20bfbac0-7e42-4c9b-916d-5df1dde88fdb",
+        "category": [],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "1 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T00:50:13.973812+00:00"
+        },
+        "name": "Người Anh Kế Mafia Tỷ Phú Của Tôi",
+        "origin_name": "Người Anh Kế Mafia Tỷ Phú Của Tôi",
+        "poster_url": "http://blvietsub.com/wp-content/uploads/2026/07/nguoi-anh-ke-mafia-ty-phu-cua-toi-2026.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-1656-nguoi-anh-ke-mafia-ty-phu-cua-toi",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "http://blvietsub.com/wp-content/uploads/2026/07/nguoi-anh-ke-mafia-ty-phu-cua-toi-2026.jpg",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T00:50:13.973812+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "c8830500-770e-4678-a996-78d90533fa85",
+        "category": [],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "1 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-03T00:41:03.784251+00:00"
+        },
+        "name": "Dew Đi Cùng Nhau Nhé",
+        "origin_name": "Dew Đi Cùng Nhau Nhé",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/dew-di-cung-nhau-nhe-dew-lets-go-together-2019.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-643-dew-di-cung-nhau-nhe",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/dew-di-cung-nhau-nhe-dew-lets-go-together-2019.jpg",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-03T00:41:03.784251+00:00",
+        "year": 2019
+      },
+      {
+        "_id": "c10dc924-c771-4077-bff2-6a45289b8ffa",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 2,
+        "episode_current": "Tập 2",
+        "episode_total": "50",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-03T00:22:00.023698+00:00"
+        },
+        "name": "Falling For My Hater",
+        "origin_name": "Falling For My Hater",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/Falling-for-My-Hater.webp",
+        "quality": "HD",
+        "slug": "glvietsub-falling-for-my-hater",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/Falling-for-My-Hater.webp",
+        "total_episodes": 50,
+        "type": "series",
+        "updated_at": "2026-09-03T00:22:00.023698+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "15f53d5a-0e50-46ac-a99b-28467632078f",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 1,
+        "episode_current": "Tập 1 RAW",
+        "episode_total": "10",
+        "lang": "RAW · Chưa phụ đề",
+        "modified": {
+          "time": "2026-09-02T23:22:00.022368+00:00"
+        },
+        "name": "Crush The Series",
+        "origin_name": "Crush The Series",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/Crush-The-Series.jpg",
+        "quality": "HD",
+        "slug": "glvietsub-crush-the-series",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/Crush-The-Series.jpg",
+        "total_episodes": 10,
+        "type": "series",
+        "updated_at": "2026-09-02T23:22:00.022368+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "40672c8e-ddfc-47fc-a206-a790be2a0620",
+        "category": [],
+        "country": [],
+        "current_episode": 6,
+        "episode_current": "Tập 6",
+        "episode_total": "6 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-02T23:11:03.917128+00:00"
+        },
+        "name": "Hội Chứng Mê Bạn Cùng Lớp",
+        "origin_name": "Hội Chứng Mê Bạn Cùng Lớp",
+        "poster_url": "https://image.tmdb.org/t/p/original/r8HQOxPBy9fwByVCRYov3xMeOBS.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-115-hoi-chung-me-ban-cung-lop",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://image.tmdb.org/t/p/original/r8HQOxPBy9fwByVCRYov3xMeOBS.jpg",
+        "total_episodes": 6,
+        "type": "phim-bo",
+        "updated_at": "2026-09-02T23:11:03.917128+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "947c2b02-9724-410d-beb6-9061b9892d05",
+        "category": [],
+        "country": [],
+        "current_episode": 1,
+        "episode_current": "Tập 1",
+        "episode_total": "1 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-02T23:11:03.831609+00:00"
+        },
+        "name": "Trái Tim Và Những Vì Sao",
+        "origin_name": "Trái Tim Và Những Vì Sao",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/trrai-tim-va-nhung-vi-sao-you-and-my-stars-2023.png",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-757-trai-tim-va-nhung-vi-sao",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/trrai-tim-va-nhung-vi-sao-you-and-my-stars-2023.png",
+        "total_episodes": 1,
+        "type": "phim-le",
+        "updated_at": "2026-09-02T23:11:03.831609+00:00",
+        "year": 2023
+      },
+      {
+        "_id": "c3861b13-ddde-47eb-91e5-51c05a0f09fc",
+        "category": [],
+        "country": [],
+        "current_episode": 5,
+        "episode_current": "Tập 5",
+        "episode_total": "5 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-02T22:53:09.306613+00:00"
+        },
+        "name": "Bạn Trai Mới Ở Gần Tôi - New Boyfriend แฟนใหม่ใกล้ฉัน (2026)",
+        "origin_name": "Bạn Trai Mới Ở Gần Tôi - New Boyfriend แฟนใหม่ใกล้ฉัน (2026)",
+        "poster_url": "https://image.tmdb.org/t/p/original/nSi2UYlKcBf972X95AIpoMdxJLt.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-1906-ban-trai-moi-o-gan-toi-new-boyfriend-2026",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://image.tmdb.org/t/p/original/nSi2UYlKcBf972X95AIpoMdxJLt.jpg",
+        "total_episodes": 5,
+        "type": "phim-bo",
+        "updated_at": "2026-09-02T22:53:09.306613+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "ae21947c-7249-4d67-80b9-682a14fa6fbf",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 9,
+        "episode_current": "Tập 9",
+        "episode_total": "",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-02T22:11:03.795617+00:00"
+        },
+        "name": "Ấn Tượng Thanh Xuân",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/5vRO3w_4c.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-5774-an-tuong-thanh-xuan",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/5vRO3w_4c.jpg",
+        "total_episodes": 9,
+        "type": "phim-le",
+        "updated_at": "2026-09-02T22:11:03.795617+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "eed14cb7-7ecf-4872-a794-b5600630e292",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 10,
+        "episode_current": "Tập 10",
+        "episode_total": "",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-02T22:11:03.656255+00:00"
+        },
+        "name": "Trải Bài Nói Đó Là Anh",
+        "origin_name": "My Magic Prophecy",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/trai-bai-noi-do-la-anh-mymagic-prophecy-2025.jpeg",
+        "quality": "HD",
+        "slug": "blvietsub-6136-trai-bai-noi-do-la-anh",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/trai-bai-noi-do-la-anh-mymagic-prophecy-2025.jpeg",
+        "total_episodes": 10,
+        "type": "phim-le",
+        "updated_at": "2026-09-02T22:11:03.656255+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "9451dde0-f1f9-4a46-b3f9-6632de8886bb",
+        "category": [],
+        "country": [],
+        "current_episode": 5,
+        "episode_current": "Tập 5",
+        "episode_total": "5 Tập",
+        "lang": "",
+        "modified": {
+          "time": "2026-09-02T22:11:03.287519+00:00"
+        },
+        "name": "Trường Nội Trú Cấm Yêu",
+        "origin_name": "Trường Nội Trú Cấm Yêu",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/sep-va-be-a-boss-and-a-babe-2023-240x300.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-blvietsub-439-truong-noi-tru-cam-yeu",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/sep-va-be-a-boss-and-a-babe-2023-240x300.jpg",
+        "total_episodes": 5,
+        "type": "phim-bo",
+        "updated_at": "2026-09-02T22:11:03.287519+00:00",
+        "year": 2025
+      },
+      {
+        "_id": "bb76afa2-a2cc-4a8a-9de9-e725313020d4",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 1,
+        "episode_current": "Tập 1 RAW",
+        "episode_total": "10",
+        "lang": "RAW · Chưa phụ đề",
+        "modified": {
+          "time": "2026-09-02T22:07:00.016337+00:00"
+        },
+        "name": "Lust The Series",
+        "origin_name": "Lust The Series",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/Lust-The-Series.jpg",
+        "quality": "HD",
+        "slug": "glvietsub-lust-the-series",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/Lust-The-Series.jpg",
+        "total_episodes": 10,
+        "type": "series",
+        "updated_at": "2026-09-02T22:07:00.016337+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "e352abb1-f9b9-4c6d-86e0-feb9d509ab58",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 9,
+        "episode_current": "Tập 9",
+        "episode_total": "",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-02T21:11:05.093008+00:00"
+        },
+        "name": "Trò Chơi Chữa Lành",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/k6aQcDP4hrsm4euvgs1rpJ5875m-scaled.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-5894-tro-choi-chua-lanh",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/k6aQcDP4hrsm4euvgs1rpJ5875m-scaled.jpg",
+        "total_episodes": 9,
+        "type": "phim-le",
+        "updated_at": "2026-09-02T21:11:05.093008+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "50e00db7-5f44-4a6a-a858-48270d309ffe",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 10,
+        "episode_current": "Tập 10",
+        "episode_total": "10 Tập",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-02T21:11:03.834794+00:00"
+        },
+        "name": "Em Thích Anh Rồi Đấy, Anh Thì Sao?",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/em-thich-anh-roi-day-anh-thi-sao-sukiyanen-kedo-do-yaro-ka-2024.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-6363-em-thich-anh-roi-day-anh-thi-sao",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/em-thich-anh-roi-day-anh-thi-sao-sukiyanen-kedo-do-yaro-ka-2024.jpg",
+        "total_episodes": 10,
+        "type": "phim-le",
+        "updated_at": "2026-09-02T21:11:03.834794+00:00",
+        "year": 2024
+      },
+      {
+        "_id": "653cee68-7a33-44a7-b980-b0dcbe793dc9",
+        "category": [
+          {
+            "id": "bl-gl",
+            "name": "BL / GL",
+            "slug": "bl-gl"
+          },
+          {
+            "id": "dam-my",
+            "name": "Đam mỹ",
+            "slug": "dam-my"
+          }
+        ],
+        "country": [],
+        "current_episode": 10,
+        "episode_current": "Tập 10",
+        "episode_total": "10 Tập",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-02T21:11:03.668241+00:00"
+        },
+        "name": "Sự Tái Sinh Của Ngôi Sao",
+        "origin_name": "",
+        "poster_url": "https://blvietsub.com/wp-content/uploads/2026/04/YY5rVK_4c.jpg",
+        "quality": "HD",
+        "slug": "blvietsub-6256-su-tai-sinh-cua-ngoi-sao",
+        "source_name": "BLVietsub",
+        "source_site": "blvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://blvietsub.com/wp-content/uploads/2026/04/YY5rVK_4c.jpg",
+        "total_episodes": 10,
+        "type": "phim-le",
+        "updated_at": "2026-09-02T21:11:03.668241+00:00",
+        "year": 2026
+      },
+      {
+        "_id": "321be19d-c089-46d3-b1c0-d286e3cb18a3",
+        "category": [
+          {
+            "name": "Bách Hợp",
+            "slug": "bach-hop"
+          }
+        ],
+        "country": [
+          {
+            "name": "Thái Lan",
+            "slug": "thai-lan"
+          }
+        ],
+        "current_episode": 4,
+        "episode_current": "Tập 4",
+        "episode_total": "12",
+        "lang": "Vietsub",
+        "modified": {
+          "time": "2026-09-02T21:07:00.01614+00:00"
+        },
+        "name": "Your Third The Series",
+        "origin_name": "Your Third The Series",
+        "poster_url": "https://www.glvietsub.net/wp-content/uploads/Your-Third-The-Series.webp",
+        "quality": "HD",
+        "slug": "glvietsub-glvietsub-your-third-the-series",
+        "source_name": "GLVietsub",
+        "source_site": "glvietsub",
+        "status": "ongoing",
+        "thumb_url": "https://www.glvietsub.net/wp-content/uploads/Your-Third-The-Series.webp",
+        "total_episodes": 12,
+        "type": "series",
+        "updated_at": "2026-09-02T21:07:00.01614+00:00",
+        "year": 2026
       }
     ]
   }

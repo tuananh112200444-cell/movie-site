@@ -1,0 +1,139 @@
+import { readFile } from 'node:fs/promises';
+
+const files = Object.fromEntries(await Promise.all([
+  'src/pages/admin-seo-studio/page.tsx',
+  'src/components/base/SEO.tsx',
+  'src/services/seoStudioService.ts',
+  'src/components/feature/MovieSeoProfileContent.tsx',
+  'src/pages/movie-detail/page.tsx',
+  'src/router/config.tsx',
+  'supabase/functions/admin-seo-studio/index.ts',
+  'supabase/functions/static-seo-catalog/index.ts',
+  'supabase/functions/sitemap-seo-studio/index.ts',
+  'supabase/migrations/20260828170000_complete_movie_seo_studio.sql',
+  'supabase/migrations/20260828103000_add_movie_seo_studio.sql',
+  'supabase/migrations/20260905030000_add_safe_seo_studio_editing.sql',
+  'scripts/generate-static-movie-pages.mjs',
+  'functions/[[path]].js',
+].map(async (file) => [file, await readFile(file, 'utf8')])));
+
+function expect(file, patterns) {
+  const source = files[file];
+  for (const [pattern, message] of patterns) {
+    if (!source.includes(pattern)) throw new Error(`${file}: ${message}`);
+  }
+}
+
+expect('src/router/config.tsx', [
+  ["path: '/admin/seo-studio'", 'missing protected SEO Studio route'],
+  ['<AdminGuard><AdminSeoStudioPage /></AdminGuard>', 'SEO Studio is not protected by AdminGuard'],
+]);
+expect('src/pages/admin-seo-studio/page.tsx', [
+  ['Dữ liệu phim', 'missing movie step'],
+  ['Hiển thị Google', 'missing SERP step'],
+  ['Nội dung hữu ích', 'missing content step'],
+  ['Cụm chủ đề', 'missing internal-link step'],
+  ['Kiểm tra & xuất bản', 'missing publish step'],
+  ['Xuất bản toàn bộ SEO', 'missing atomic publish action'],
+  ['Kiểm tra trang thật', 'missing live page inspection workflow'],
+  ['tự giữ trang ở noindex', 'missing fail-closed publish explanation'],
+  ['LOCAL_DRAFT_PREFIX', 'SEO Studio does not persist an automatic local draft'],
+  ['readNewerLocalDraft', 'SEO Studio cannot restore interrupted edits'],
+  ['Bản nháp đã tự lưu trên máy này', 'SEO Studio does not show draft persistence status'],
+  ["refreshed.profile?.status !== 'published'", 'SEO Studio does not confirm the server publish state'],
+  ['data-kp-safe-edit="true"', 'SEO Studio has no visible safe-edit mode'],
+  ['Chế độ chỉnh sửa an toàn đang bật', 'SEO Studio does not explain protected editing'],
+  ['isFieldLocked', 'good SEO fields are not locked by default'],
+  ['Khôi phục bản đang chạy', 'SEO Studio cannot discard risky changes'],
+  ['hasScoreRegression', 'SEO Studio does not warn when the new draft scores worse'],
+]);
+expect('src/services/seoStudioService.ts', [
+  ["callAdmin('publish'", 'missing authenticated publish call'],
+  [".eq('status', 'published')", 'public reader may expose drafts'],
+]);
+expect('supabase/functions/admin-seo-studio/index.ts', [
+  ['verifyAdminRequest(req)', 'admin endpoint is not authenticated'],
+  ["action === 'save' || action === 'publish'", 'missing save/publish workflow'],
+  ["from('movie_seo_profile_drafts')", 'saving a draft can still mutate the published profile'],
+  ['regressionIssues(', 'server does not compare the draft with the live baseline'],
+  ['protected_field_changed_', 'server does not protect verified fields'],
+  ['valuable_list_shrunk_', 'server does not block destructive list reductions'],
+  ['valuable_intro_shrunk', 'server does not block destructive content shortening'],
+  ['unsupported_rating_claim', 'unverified editorial ratings are not blocked'],
+  ["db.rpc('rollback_movie_seo_profile'", 'failed publishing cannot restore the previous good version'],
+  ["status: 'completed'", 'successful publishing does not complete the current SEO brain task'],
+  ["from('seo_static_release_requests')", 'successful publishing does not request a static artifact refresh'],
+  ["db.rpc('publish_movie_seo_profile'", 'publish is not delegated to atomic database RPC'],
+  ["payload.index_mode === 'index'", 'validation/index contract unexpectedly changed'],
+  ["action === 'inspect'", 'missing authenticated live inspection action'],
+  ["inspectLivePage(payload, publishedVersion, 'pending')", 'publish does not verify the pending noindex Googlebot document'],
+  ["inspectLivePage(payload, verifiedVersion, 'final')", 'publish does not verify the final Googlebot document'],
+  ["phase === 'pending'", 'publish verification is not fail-closed before index'],
+  ['X-KhoPhim-SEO-Inspect-Secret', 'live inspection does not use the authenticated edge renderer'],
+  ["status === 403", 'live inspection does not distinguish an anti-bot block from an SEO content error'],
+  ["index_mode: 'noindex'", 'failed live publish does not fail closed'],
+  ['remoteValidationIssues', 'publish does not verify duplicate metadata and public resources'],
+]);
+expect('supabase/migrations/20260828103000_add_movie_seo_studio.sql', [
+  ['enable row level security', 'SEO profile table has no RLS'],
+  ["using (status = 'published')", 'drafts are publicly readable'],
+  ['publish_movie_seo_profile', 'missing atomic publish function'],
+  ['refresh_movie_seo_quality', 'publish does not refresh SEO quality'],
+]);
+expect('src/components/feature/MovieSeoProfileContent.tsx', [
+  ['profile.seo_title', 'published title override is not used'],
+  ["'@type': 'FAQPage'", 'FAQ schema is missing'],
+  ['profile?.topic_links.map', 'topic cluster is not rendered'],
+  ['preserveSchema', 'manual profile can remove the movie schema'],
+  ['getIncomingSeoTopicLinks', 'movie topic links are not reciprocal'],
+  ['profile.intro_content.trim()', 'published editorial introduction is not visible after hydration'],
+  ['profile.review_content.trim()', 'published editorial review is not visible after hydration'],
+]);
+expect('src/components/base/SEO.tsx', [
+  ['if (!schemaJson && !preserveSchema)', 'schema preservation contract is missing'],
+]);
+expect('src/pages/movie-detail/page.tsx', [
+  ['<MovieSeoProfileContent', 'movie page is not connected to the published profile'],
+]);
+expect('supabase/functions/static-seo-catalog/index.ts', [
+  [".from('movie_seo_profiles')", 'static crawler catalogue ignores manual profiles'],
+  ["profile?.index_mode === 'index'", 'manual index approval is not gated'],
+  [".eq('live_audit->>passed', 'true')", 'static catalogue accepts profiles that failed the live audit'],
+]);
+expect('scripts/generate-static-movie-pages.mjs', [
+  ['profile?.seo_title', 'static HTML ignores custom SEO title'],
+  ["'@type': 'FAQPage'", 'static HTML lacks FAQ schema'],
+  ['sitemap-seo-studio.xml', 'static root sitemap omits SEO Studio sitemap'],
+  ['data-kp-seo-profile-version', 'static fail-open HTML lacks the SEO profile version marker'],
+  ['profile?.review_content', 'static fail-open HTML omits the editorial review'],
+  ['kp-static-movie-data', 'static movie HTML does not embed the fast information bootstrap'],
+]);
+expect('supabase/functions/sitemap-seo-studio/index.ts', [
+  [".eq('index_mode', 'index')", 'manual sitemap includes non-approved URLs'],
+  [".gte('validation_score', 85)", 'manual sitemap lacks quality threshold'],
+  [".eq('live_audit->>passed', 'true')", 'manual sitemap accepts profiles that failed the live audit'],
+]);
+expect('functions/[[path]].js', [
+  ["pathname === '/sitemap-seo-studio.xml'", 'Cloudflare does not route the SEO Studio sitemap'],
+  ['fetchPublishedMovieSeoProfile(slug)', 'Googlebot prerender does not read the live published profile'],
+  ['__seo-studio-prerender/${profileVersion}', 'published profile version is not part of the edge cache key'],
+  ['data-kp-seo-profile-version', 'Googlebot HTML has no published profile marker'],
+  ['profileAuditPassed', 'Googlebot can index a manual profile before its live audit passes'],
+  ['Number(seoProfile.validation_score || 0) >= 85', 'Googlebot manual-index threshold is inconsistent'],
+  ["pathname === '/internal/seo-studio-inspect'", 'Cloudflare is missing the authenticated SEO inspection route'],
+  ['renderSeoStudioInspection(request, context)', 'SEO inspection route is not connected'],
+]);
+expect('supabase/migrations/20260828170000_complete_movie_seo_studio.sql', [
+  ['movie_seo_topic_links', 'missing reciprocal topic edge table'],
+  ['live_audit', 'missing persistent post-publish audit state'],
+  ['validation score must be at least 80', 'database publish gate is too weak'],
+]);
+expect('supabase/migrations/20260905030000_add_safe_seo_studio_editing.sql', [
+  ['movie_seo_profile_drafts', 'missing private draft table'],
+  ['movie_seo_profile_versions', 'missing recoverable SEO version history'],
+  ['draft.baseline_version <> current_version', 'database publish does not reject stale drafts'],
+  ['Canonical movie identity cannot be changed', 'database does not protect canonical identity'],
+  ['rollback_movie_seo_profile', 'missing atomic recovery function'],
+]);
+
+console.log('SEO Studio regression checks passed.');

@@ -3,7 +3,10 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { prefetchRoute } from '../../utils/prefetchRoute';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import StickyBanner from './StickyBanner';
+import { CampaignTopBanner } from './CampaignBannerDemo';
 import SearchSuggestions from './SearchSuggestions';
+import SocialBrandIcon, { type SocialBrandPlatform } from '@/components/base/SocialBrandIcon';
+import { SOCIAL_URLS } from '@/config/socialLinks';
 
 const GENRES = [
   { name: 'Hành Động', slug: 'hanh-dong', icon: 'ri-sword-line' },
@@ -53,11 +56,20 @@ const NAV_LINKS = [
   { label: 'Phim Bộ', to: '/phim-bo' },
   { label: 'Chiếu Rạp', to: '/phim-chieu-rap' },
 ];
-const SOCIAL_LINKS = [
-  { href: 'https://www.facebook.com/', icon: 'ri-facebook-circle-fill', desktopColor: 'text-[#4799ff] border-[#1877F2]/35 bg-[#1877F2]/15 shadow-[0_0_16px_rgba(24,119,242,0.22)] hover:bg-[#1877F2]/28 hover:border-[#4799ff]/65 hover:shadow-[0_0_22px_rgba(24,119,242,0.42)]', mobileColor: 'text-[#1877F2]', title: 'Facebook KhoPhim' },
-  { href: 'https://m.me/j/AbY6361ilp6YeUsu/?send_source=gc:copy_invite_link_c', icon: 'ri-messenger-fill', desktopColor: 'text-[#35c8ff] border-[#00B2FF]/35 bg-[#00B2FF]/15 shadow-[0_0_16px_rgba(0,178,255,0.22)] hover:bg-[#00B2FF]/28 hover:border-[#56d3ff]/65 hover:shadow-[0_0_22px_rgba(0,178,255,0.42)]', mobileColor: 'text-[#00B2FF]', title: 'Messenger KhoPhim' },
-  { href: 'https://www.tiktok.com/@khophim.org?_r=1&_t=ZS-979Na9uVNWE', icon: 'ri-tiktok-fill', desktopColor: 'text-white border-[#25F4EE]/30 bg-gradient-to-br from-[#25F4EE]/15 via-white/[0.08] to-[#FE2C55]/15 shadow-[4px_0_16px_rgba(254,44,85,0.18),-4px_0_16px_rgba(37,244,238,0.18)] hover:border-[#FE2C55]/55 hover:from-[#25F4EE]/25 hover:to-[#FE2C55]/25 hover:shadow-[5px_0_22px_rgba(254,44,85,0.32),-5px_0_22px_rgba(37,244,238,0.32)]', mobileColor: 'text-white', title: 'TikTok KhoPhim' },
-  { href: 'https://t.me/davisjohn_1', icon: 'ri-telegram-fill', desktopColor: 'text-[#54c8ff] border-[#29A8E8]/35 bg-[#29A8E8]/15 shadow-[0_0_16px_rgba(41,168,232,0.22)] hover:bg-[#29A8E8]/28 hover:border-[#69d0ff]/65 hover:shadow-[0_0_22px_rgba(41,168,232,0.42)]', mobileColor: 'text-[#29A8E8]', title: 'Telegram KhoPhim' },
+interface NavbarSocialLink {
+  href: string;
+  brand?: SocialBrandPlatform;
+  icon?: string;
+  desktopColor: string;
+  mobileColor: string;
+  title: string;
+}
+
+const SOCIAL_LINKS: NavbarSocialLink[] = [
+  { href: SOCIAL_URLS.facebook, brand: 'facebook', desktopColor: 'text-white border-white/20 bg-gradient-to-br from-[#2d8cff] to-[#1264d8] shadow-[0_6px_18px_rgba(24,119,242,0.28)] hover:brightness-110 hover:shadow-[0_8px_24px_rgba(24,119,242,0.42)]', mobileColor: 'text-white bg-gradient-to-br from-[#2d8cff] to-[#1264d8] border-white/15', title: 'Facebook KhoPhim' },
+  { href: SOCIAL_URLS.messenger, brand: 'messenger', desktopColor: 'text-white border-white/20 bg-gradient-to-br from-[#00B2FF] via-[#686BFF] to-[#E944A1] shadow-[0_6px_18px_rgba(83,105,255,0.28)] hover:brightness-110 hover:shadow-[0_8px_24px_rgba(83,105,255,0.42)]', mobileColor: 'text-white bg-gradient-to-br from-[#00B2FF] via-[#686BFF] to-[#E944A1] border-white/15', title: 'Messenger KhoPhim' },
+  { href: SOCIAL_URLS.tiktok, brand: 'tiktok', desktopColor: 'text-white border-white/20 bg-[#111318] shadow-[5px_0_16px_rgba(254,44,85,0.22),-5px_0_16px_rgba(37,244,238,0.2)] hover:border-white/35 hover:shadow-[6px_0_22px_rgba(254,44,85,0.34),-6px_0_22px_rgba(37,244,238,0.32)]', mobileColor: 'text-white bg-[#111318] border-white/15', title: 'TikTok KhoPhim' },
+  { href: SOCIAL_URLS.telegram, icon: 'ri-telegram-fill', desktopColor: 'text-white border-white/20 bg-gradient-to-br from-[#37b9f1] to-[#168ac1] shadow-[0_6px_18px_rgba(41,168,232,0.25)] hover:brightness-110', mobileColor: 'text-white bg-gradient-to-br from-[#37b9f1] to-[#168ac1] border-white/15', title: 'Telegram KhoPhim' },
 ];
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -394,10 +406,10 @@ export default function Navbar() {
           <div className="navbar-actions flex items-center gap-1">
             {/* Social links */}
             <div className="hidden 2xl:flex items-center gap-0.5 mr-1">
-              {SOCIAL_LINKS.map(({ href, icon, desktopColor, title }) => (
+              {SOCIAL_LINKS.map(({ href, brand, icon, desktopColor, title }) => (
                 <a key={href} href={href} target="_blank" rel="noopener noreferrer nofollow" title={title} aria-label={title}
                   className={`w-8 h-8 flex items-center justify-center border ${desktopColor} transition-all duration-200 cursor-pointer rounded-lg hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}>
-                  <i className={`${icon} text-base drop-shadow-[0_0_5px_currentColor]`} aria-hidden="true" />
+                  {brand ? <SocialBrandIcon platform={brand} className="h-[18px] w-[18px]" /> : <i className={`${icon} text-[17px]`} aria-hidden="true" />}
                   <span className="sr-only">{title}</span>
                 </a>
               ))}
@@ -405,7 +417,7 @@ export default function Navbar() {
             </div>
 
             <div className="hidden min-[640px]:flex lg:hidden items-center gap-0.5">
-              {SOCIAL_LINKS.map(({ href, icon, title, mobileColor }) => {
+              {SOCIAL_LINKS.map(({ href, brand, icon, title, mobileColor }) => {
                 return (
                 <a
                   key={href}
@@ -414,9 +426,9 @@ export default function Navbar() {
                   rel="noopener noreferrer nofollow"
                   title={title}
                   aria-label={title}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04] ${mobileColor} active:scale-95`}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg border shadow-sm ${mobileColor} active:scale-95`}
                 >
-                  <i className={`${icon} text-base`} aria-hidden="true" />
+                  {brand ? <SocialBrandIcon platform={brand} className="h-[18px] w-[18px]" /> : <i className={`${icon} text-[17px]`} aria-hidden="true" />}
                   <span className="sr-only">{title}</span>
                 </a>
               );})}
@@ -516,7 +528,11 @@ export default function Navbar() {
           </div>
         </div>
 
-        {pathname !== '/' && !/^\/(?:phim|xem-phim)\//.test(pathname) && <StickyBanner />}
+        {pathname === '/' ? (
+          <CampaignTopBanner />
+        ) : (
+          !/^\/(?:phim|xem-phim)\//.test(pathname) && <StickyBanner />
+        )}
         
         {/* Mobile Search Overlay */}
         {searchOpen && (

@@ -8,6 +8,7 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import type { Movie } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
 import { Flame } from 'lucide-react';
+import MobileSwipeHint from './MobileSwipeHint';
 
 /* â”€â”€ Helpers â”€â”€ */
 function timeAgo(dateStr: string): string {
@@ -41,6 +42,29 @@ function isRecentlyUpdated(m: Movie): boolean {
   const days = (Date.now() - new Date(t).getTime()) / 86400000;
   return days <= 7;
 }
+
+function isHomepageTrendingEligible(m: Movie): boolean {
+  const currentYear = new Date().getFullYear();
+  const year = Number(m.year || 0);
+  if (year >= currentYear - 1 && year <= currentYear + 1) return true;
+  if (year < currentYear - 2 || year > currentYear + 1) return false;
+  const currentEpisode = Math.max(Number(m.current_episode || 0), Number((m.episode_current || '').match(/\d+/)?.[0] || 0));
+  const totalEpisodes = Math.max(Number(m.total_episodes || 0), Number((m.episode_total || '').match(/\d+/)?.[0] || 0));
+  const ongoing = currentEpisode > 0 && (!totalEpisodes || currentEpisode < totalEpisodes)
+    && !/(hoàn tất|hoan tat|full|end)/i.test(m.episode_current || '');
+  const changedAt = Date.parse(String(m.last_episode_change_at || ''));
+  return ongoing && Number.isFinite(changedAt) && Date.now() - changedAt <= 14 * 86400000;
+}
+
+function factualUpdateLabel(movie: Movie): string {
+  const createdAt = Date.parse(String(movie.created_at || ''));
+  const episodeAt = Date.parse(String(movie.last_episode_change_at || ''));
+  if (Number.isFinite(episodeAt) && (!Number.isFinite(createdAt) || episodeAt - createdAt > 6 * 3600000)) {
+    return timeAgo(new Date(episodeAt).toISOString());
+  }
+  if (Number.isFinite(createdAt) && Date.now() - createdAt <= 7 * 86400000) return 'Mới thêm';
+  return '';
+}
 function isSingleMovie(m: Movie): boolean {
   const ep = (m.episode_current ?? '').toLowerCase();
   return ep === 'full' || ep === 'full hd' || m.type === 'single';
@@ -72,12 +96,16 @@ interface TrendingSectionProps {
 export default function TrendingSection({ movies: propMovies, loading: propLoading }: TrendingSectionProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const sliderRef = useRef<HTMLDivElement>(null);
+  const scrollFrameRef = useRef<number | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   // â”€â”€ CHá»ˆ dÃ¹ng props tá»« home-proxy, KHÃ”NG auto-fetch â”€â”€
-  const movies = propMovies ?? [];
+  const movies = useMemo(
+    () => (propMovies ?? []).filter(isHomepageTrendingEligible),
+    [propMovies],
+  );
   const loading = propLoading ?? false;
 
   const filtered = useMemo(() => {
@@ -96,15 +124,34 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
   );
 
   const checkScroll = useCallback(() => {
-    const el = sliderRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 4);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const el = sliderRef.current;
+      if (!el) return;
+      const nextCanScrollLeft = el.scrollLeft > 4;
+      const nextCanScrollRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      setCanScrollLeft((current) => current === nextCanScrollLeft ? current : nextCanScrollLeft);
+      setCanScrollRight((current) => current === nextCanScrollRight ? current : nextCanScrollRight);
+    });
   }, []);
 
   useEffect(() => {
+    const el = sliderRef.current;
+    if (!el) return;
     checkScroll();
-  }, [filtered, checkScroll]);
+    el.addEventListener('scroll', checkScroll, { passive: true });
+    const observer = new ResizeObserver(checkScroll);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener('scroll', checkScroll);
+      observer.disconnect();
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    };
+  }, [visibleMovies, checkScroll]);
 
   const scroll = useCallback((dir: 'left' | 'right') => {
     const el = sliderRef.current;
@@ -169,6 +216,7 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
 
       {/* â”€â”€ Slider â”€â”€ */}
       <div className="home-rail-frame relative group/slider">
+        <MobileSwipeHint visible={canScrollRight} />
         {/* Prev */}
         <button
           onClick={() => scroll('left')}
@@ -211,7 +259,8 @@ export default function TrendingSection({ movies: propMovies, loading: propLoadi
 
         <div
           ref={sliderRef}
-          className="home-rail-scroll flex gap-2.5 overflow-x-auto scroll-smooth pb-8 pt-2 px-0.5 lg:gap-4 xl:gap-5"
+          aria-label="Danh sách phim đang hot, vuốt ngang để xem thêm"
+          className="home-rail-scroll flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-smooth pb-8 pt-2 px-0.5 lg:gap-4 xl:gap-5"
           style={{ scrollbarWidth: 'none' }}
         >
           {visibleMovies.map((movie, idx) => (
@@ -249,7 +298,7 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
     { preferredAspect: 'portrait' },
   );
   const ep = getEpInfo(movie.episode_current);
-  const mTime = movie.modified?.time ?? '';
+  const updateLabel = factualUpdateLabel(movie);
   const originName = movie.origin_name ?? '';
 
   const isTop3 = rank <= 3;
@@ -364,9 +413,9 @@ function TrendingCard({ movie, rank }: TrendingCardProps) {
 
             {/* Freshness is factual; never present generated viewer counts as analytics. */}
             <div className="absolute bottom-2 right-2 z-[12] flex flex-col items-end gap-0.5">
-              {mTime && (
+              {updateLabel && (
                 <span className="rounded-md bg-black/55 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300/85">
-                  {timeAgo(mTime)}
+                  {updateLabel}
                 </span>
               )}
             </div>

@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type SyntheticEvent, type TouchEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { useImageFallback } from '../../../hooks/useImageFallback';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { getOptimizedImageUrl } from '../../../services/movieApi';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
@@ -9,6 +8,8 @@ import type { MovieItem } from '../../../types/movie';
 interface EditorialHeroProps {
   movies: MovieItem[];
   loading?: boolean;
+  onReady?: () => void;
+  variant?: 'editorial' | 'midnight';
 }
 
 function plainText(value?: string) {
@@ -19,85 +20,259 @@ function plainText(value?: string) {
     .trim();
 }
 
-export default function EditorialHero({ movies, loading = false }: EditorialHeroProps) {
-  const compactHero = useMediaQuery('(max-width: 639px)');
-  const mediumHero = useMediaQuery('(min-width: 640px) and (max-width: 1023px)');
-  const imageWidth = compactHero ? 560 : mediumHero ? 960 : 1280;
-  const imageQuality = compactHero ? 78 : mediumHero ? 80 : 82;
-  const imageRef = useRef<HTMLImageElement>(null);
-  const featured = movies.slice(0, 5);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const safeIndex = featured.length > 0 ? activeIndex % featured.length : 0;
-  const movie = featured[safeIndex];
-  const nextMovie = featured.length > 1
-    ? featured[(safeIndex + 1) % featured.length]
-    : undefined;
-  const nextImagePath = featured.length > 1
-    ? (compactHero
-        ? (nextMovie?.poster_url || nextMovie?.thumb_url)
-        : (nextMovie?.thumb_url || nextMovie?.poster_url))
-    : '';
-  const nextMovies = featured.length > 1
-    ? Array.from({ length: Math.min(3, featured.length - 1) }, (_, offset) => {
-        const index = (safeIndex + offset + 1) % featured.length;
-        return { movie: featured[index], index };
-      })
-    : [];
-  const primaryImage = compactHero
-    ? (movie?.poster_url || movie?.thumb_url)
-    : (movie?.thumb_url || movie?.poster_url);
-  const fallbackImage = compactHero
-    ? (movie?.thumb_url || movie?.poster_url)
-    : (movie?.poster_url || movie?.thumb_url);
-  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
-    primaryImage,
-    fallbackImage,
-    false,
-    imageWidth,
-    imageQuality,
-    { preferredAspect: compactHero ? 'portrait' : 'landscape' },
-  );
+function resolveHeroImage(path: string | undefined, movie: MovieItem | undefined): string {
+  const raw = String(path || '').trim();
+  if (!raw || /^(?:https?:|data:|blob:)/i.test(raw)) return raw;
+  const clean = raw.replace(/^\/+/, '');
+  const source = String(movie?.source_site || movie?.source_name || '').toLowerCase();
+  if (/phimapi|kkphim/.test(source)) return `https://phimimg.com/${clean}`;
+  if (/ophim/.test(source)) return `https://img.ophim.live/${clean.startsWith('uploads/') ? clean : `uploads/movies/${clean}`}`;
+  if (/vsmov/.test(source)) return `https://vsmov.com/${clean}`;
+  return raw.startsWith('/') ? raw : `/${clean}`;
+}
 
-  // A memory-cached image can complete before the fallback hook's reset
-  // effect runs. Reconcile that state so a sharp, already-downloaded hero is
-  // never left at opacity: 0 after a warm navigation.
+function getResponsiveHeroImage(url: string, compact: boolean): string {
+  if (!url || !/^https?:/i.test(url)) return url;
+  if (/^https?:\/\/image\.tmdb\.org\/t\/p\//i.test(url)) {
+    return url.replace(/\/t\/p\/[^/]+\//i, `/t/p/${compact ? 'w780' : 'w1280'}/`);
+  }
+  const phimimg = url.match(/^https?:\/\/(phimimg\.com)(\/[^?#]+)(?:[?#].*)?$/i);
+  if (phimimg) {
+    return `https://i0.wp.com/${phimimg[1]}${phimimg[2]}?w=${compact ? 900 : 1440}&quality=${compact ? 82 : 84}&strip=all`;
+  }
+  if (/^https?:\/\/icdn\.darkbytes\.xyz\//i.test(url)) return url;
+  return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${compact ? 900 : 1440}&q=${compact ? 82 : 84}&output=webp&fit=cover&we&default=1`;
+}
+
+function buildHeroImageSources(
+  paths: Array<string | undefined>,
+  movie: MovieItem | undefined,
+  compact: boolean,
+): string[] {
+  const originals = [...new Set(
+    paths
+      .map((path) => resolveHeroImage(path, movie))
+      .filter(Boolean),
+  )];
+  const optimized = originals.map((url) => getResponsiveHeroImage(url, compact));
+  return [...new Set([...optimized, ...originals])];
+}
+
+function getHeroThumbnail(movie: MovieItem): string {
+  const original = resolveHeroImage(
+    movie.hero_backdrop_url || movie.thumb_url || movie.hero_poster_url || movie.poster_url,
+    movie,
+  );
+  return getOptimizedImageUrl(original, 96, 78, 96);
+}
+
+interface HeroArtworkProps {
+  movie: MovieItem;
+  compact: boolean;
+  active: boolean;
+  shouldLoad: boolean;
+  priority: boolean;
+  preferLandscape?: boolean;
+  onSettled: () => void;
+}
+
+function HeroArtwork({ movie, compact, active, shouldLoad, priority, preferLandscape = false, onSettled }: HeroArtworkProps) {
+  const imageRef = useRef<HTMLImageElement>(null);
+  const reportedRef = useRef(false);
+  const portraitMode = compact && !preferLandscape;
+  const primaryImage = portraitMode
+    ? (movie.hero_poster_url || movie.poster_url || movie.hero_backdrop_url || movie.thumb_url)
+    : (movie.hero_backdrop_url || movie.thumb_url || movie.hero_poster_url || movie.poster_url);
+  const fallbackImage = portraitMode
+    ? (movie.poster_url || movie.hero_poster_url || movie.thumb_url || movie.hero_backdrop_url)
+    : (movie.thumb_url || movie.hero_backdrop_url || movie.poster_url || movie.hero_poster_url);
+  const imageSources = useMemo(
+    () => buildHeroImageSources([primaryImage, fallbackImage], movie, compact),
+    [compact, fallbackImage, movie, primaryImage],
+  );
+  const [imageIndex, setImageIndex] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const currentSrc = imageSources[Math.min(imageIndex, Math.max(0, imageSources.length - 1))] || '';
+
+  useLayoutEffect(() => {
+    reportedRef.current = false;
+    setImageIndex(0);
+    setLoaded(false);
+    setHasError(false);
+  }, [imageSources]);
+
+  const tryNextImage = useCallback(() => {
+    if (imageIndex < imageSources.length - 1) {
+      setLoaded(false);
+      setImageIndex((current) => current + 1);
+      return;
+    }
+    setLoaded(true);
+    setHasError(true);
+  }, [imageIndex, imageSources.length]);
+
+  const handleLoad = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+      tryNextImage();
+      return;
+    }
+    const ratio = image.naturalWidth / image.naturalHeight;
+    if ((portraitMode ? ratio > 1.05 : ratio < 1.2) && imageIndex < imageSources.length - 1) {
+      tryNextImage();
+      return;
+    }
+    setLoaded(true);
+    setHasError(false);
+  }, [imageIndex, imageSources.length, portraitMode, tryNextImage]);
+
   useEffect(() => {
+    if (!shouldLoad || reportedRef.current || (!loaded && !hasError)) return;
+    reportedRef.current = true;
+    onSettled();
+  }, [hasError, loaded, onSettled, shouldLoad]);
+
+  useEffect(() => {
+    if (!shouldLoad) return;
     const image = imageRef.current;
     if (!image?.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) return;
     const ratio = image.naturalWidth / image.naturalHeight;
-    if (compactHero ? ratio <= 1.05 : ratio >= 1.2) onLoad();
-    else onError();
-  }, [compactHero, currentSrc, onError, onLoad]);
+    if (portraitMode ? ratio <= 1.05 : ratio >= 1.2) {
+      setLoaded(true);
+      setHasError(false);
+    } else {
+      tryNextImage();
+    }
+  }, [currentSrc, portraitMode, shouldLoad, tryNextImage]);
+
+  return (
+    <Link
+      to={movieDetailUrl(movie.slug)}
+      className={`editorial-hero-slide${active ? ' is-active' : ''}`}
+      aria-label={active ? `Mở phim ${movie.name}` : undefined}
+      aria-hidden={!active}
+      tabIndex={active ? 0 : -1}
+    >
+      <div className="editorial-hero-slide-media">
+        {shouldLoad && !loaded && !hasError && <div className="editorial-hero-slide-skeleton skeleton" />}
+        {shouldLoad && !hasError && currentSrc && (
+          <img
+            ref={imageRef}
+            src={currentSrc}
+            alt={active ? movie.name : ''}
+            width={portraitMode ? 1080 : 1600}
+            height={portraitMode ? 1620 : 900}
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'low'}
+            decoding="async"
+            draggable={false}
+            onLoad={handleLoad}
+            onError={tryNextImage}
+            className={loaded ? 'is-loaded' : ''}
+          />
+        )}
+        {shouldLoad && hasError && (
+          <div className="editorial-image-fallback"><i className="ri-film-line" aria-hidden="true" /></div>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+export default function EditorialHero({ movies, loading = false, onReady, variant = 'editorial' }: EditorialHeroProps) {
+  const compactHero = useMediaQuery('(max-width: 639px)');
+  const featured = movies.slice(0, 5);
+  const featuredKey = featured.map((movie) => movie._id || movie.slug).join('|');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [firstArtworkReady, setFirstArtworkReady] = useState(false);
+  const [requestedIndexes, setRequestedIndexes] = useState<Set<number>>(() => new Set([0]));
+  const [settledIndexes, setSettledIndexes] = useState<Set<number>>(() => new Set());
+  const pendingIndexRef = useRef<number | null>(null);
+  const parentReadyNotifiedRef = useRef(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const safeIndex = featured.length > 0 ? activeIndex % featured.length : 0;
+  const movie = featured[safeIndex];
+
+  useLayoutEffect(() => {
+    setActiveIndex(0);
+    setFirstArtworkReady(false);
+    setRequestedIndexes(new Set([0]));
+    setSettledIndexes(new Set());
+    pendingIndexRef.current = null;
+  }, [featured.length, featuredKey]);
+
+  const requestSlide = useCallback((requestedIndex: number) => {
+    if (featured.length < 2) return;
+    const index = (requestedIndex + featured.length) % featured.length;
+    setRequestedIndexes((current) => {
+      const next = new Set(current);
+      next.add(index);
+      return next;
+    });
+    if (settledIndexes.has(index)) {
+      pendingIndexRef.current = null;
+      setActiveIndex(index);
+    } else {
+      pendingIndexRef.current = index;
+    }
+  }, [featured.length, settledIndexes]);
+
+  const handleArtworkSettled = useCallback((index: number) => {
+    setSettledIndexes((current) => {
+      if (current.has(index)) return current;
+      const next = new Set(current);
+      next.add(index);
+      return next;
+    });
+    if (index === 0) {
+      setFirstArtworkReady(true);
+      if (!parentReadyNotifiedRef.current) {
+        parentReadyNotifiedRef.current = true;
+        onReady?.();
+      }
+    }
+    if (pendingIndexRef.current === index) {
+      pendingIndexRef.current = null;
+      setActiveIndex(index);
+    }
+  }, [onReady]);
 
   useEffect(() => {
-    if (featured.length === 0 || activeIndex < featured.length) return;
-    setActiveIndex(0);
-  }, [activeIndex, featured.length]);
+    if (!firstArtworkReady || compactHero || featured.length < 2) return;
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (connection?.saveData || /(?:^|-)2g$|3g$/i.test(connection?.effectiveType || '')) return;
+    const timer = window.setTimeout(() => {
+      const nextIndex = (safeIndex + 1) % featured.length;
+      setRequestedIndexes((current) => new Set(current).add(nextIndex));
+    }, 3600);
+    return () => window.clearTimeout(timer);
+  }, [compactHero, featured.length, featuredKey, firstArtworkReady, safeIndex]);
 
   useEffect(() => {
     if (featured.length < 2 || paused) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
     const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        setActiveIndex((current) => (current + 1) % featured.length);
-      }
+      if (document.visibilityState === 'visible') requestSlide(safeIndex + 1);
     }, 7200);
     return () => window.clearInterval(timer);
-  }, [featured.length, paused]);
+  }, [featured.length, paused, requestSlide, safeIndex]);
 
-  useEffect(() => {
-    if (featured.length < 2) return;
-    if (!nextImagePath) return;
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    touchStartXRef.current = event.touches[0]?.clientX ?? null;
+  };
 
-    const timer = window.setTimeout(() => {
-      const image = new Image();
-      image.decoding = 'async';
-      image.src = getOptimizedImageUrl(nextImagePath, imageWidth, imageQuality);
-    }, 1800);
-    return () => window.clearTimeout(timer);
-  }, [featured.length, imageQuality, imageWidth, nextImagePath]);
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    const startX = touchStartXRef.current;
+    touchStartXRef.current = null;
+    if (startX === null) return;
+    const delta = (event.changedTouches[0]?.clientX ?? startX) - startX;
+    if (Math.abs(delta) < 45) return;
+    requestSlide(safeIndex + (delta < 0 ? 1 : -1));
+  };
 
   if (loading && !movie) {
     return (
@@ -117,48 +292,48 @@ export default function EditorialHero({ movies, loading = false }: EditorialHero
 
   const synopsis = plainText(movie.content);
   const genres = movie.category?.slice(0, 2) ?? [];
+  const rating = Number(movie.tmdb_vote_average || 0);
 
   return (
     <section
       className={`editorial-hero${paused ? ' is-paused' : ''}`}
       aria-labelledby="editorial-hero-title"
+      aria-label="5 phim được đánh giá cao nhất"
       onPointerEnter={(event) => { if (event.pointerType === 'mouse') setPaused(true); }}
       onPointerLeave={(event) => { if (event.pointerType === 'mouse') setPaused(false); }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
-      <Link key={`visual-${movie._id || movie.slug}`} to={movieDetailUrl(movie.slug)} className="editorial-hero-visual" aria-label={`Mở phim ${movie.name}`}>
-        {!loaded && !hasError && <div className="absolute inset-0 skeleton" />}
-        {!hasError && (
-          <img
-            ref={imageRef}
-            src={currentSrc}
-            alt={movie.name}
-            width={compactHero ? 720 : 1280}
-            height={compactHero ? 1080 : 720}
-            loading="eager"
-            fetchPriority="high"
-            decoding="async"
-            onLoad={onLoad}
-            onError={onError}
-            className={loaded ? 'is-loaded' : ''}
+      <div className="editorial-hero-visual" aria-live="off">
+        {featured.map((featuredMovie, index) => (
+          <HeroArtwork
+            key={featuredMovie._id || featuredMovie.slug}
+            movie={featuredMovie}
+            compact={compactHero}
+            active={index === safeIndex}
+            shouldLoad={requestedIndexes.has(index)}
+            priority={index === 0}
+            preferLandscape={variant === 'midnight'}
+            onSettled={() => handleArtworkSettled(index)}
           />
-        )}
-        {hasError && <div className="editorial-image-fallback"><i className="ri-film-line" aria-hidden="true" /></div>}
-      </Link>
+        ))}
+      </div>
 
       <div className="editorial-hero-wash" aria-hidden="true" />
 
       <div className="editorial-hero-number" aria-hidden="true">
-        <span>Now showing</span>
+        <span>Top rating</span>
         <strong>{String(safeIndex + 1).padStart(2, '0')}</strong>
       </div>
 
       <div key={`copy-${movie._id || movie.slug}`} className="editorial-hero-copy">
         <p className="editorial-hero-kicker">
           <span aria-hidden="true" />
-          KhoPhim tuyển chọn hôm nay
+          5 phim được đánh giá cao nhất
         </p>
 
         <div className="editorial-hero-meta">
+          {rating > 0 && <span className="editorial-rating-pill">★ {rating.toFixed(1)} TMDb</span>}
           {movie.year && <span>{movie.year}</span>}
           {genres.map((genre) => (
             <Link key={genre.slug} to={`/the-loai/${genre.slug}`}>{genre.name}</Link>
@@ -181,27 +356,34 @@ export default function EditorialHero({ movies, loading = false }: EditorialHero
         </div>
       </div>
 
-      {nextMovies.length > 0 && (
-        <aside className="editorial-hero-queue" aria-label="Phim tiếp theo">
-          <p>Tiếp theo</p>
-          {nextMovies.map(({ movie: nextMovie, index }) => (
-            <button key={nextMovie.slug} type="button" onClick={() => setActiveIndex(index)}>
+      {featured.length > 1 && (
+        <div className="editorial-hero-thumbnails" aria-label="Chọn một trong 5 phim điểm cao">
+          {featured.map((thumbnailMovie, index) => (
+            <button
+              key={thumbnailMovie._id || thumbnailMovie.slug}
+              type="button"
+              className={index === safeIndex ? 'is-active' : ''}
+              aria-label={`Chuyển đến ${thumbnailMovie.name}`}
+              aria-current={index === safeIndex ? 'true' : undefined}
+              onPointerEnter={() => setRequestedIndexes((current) => new Set(current).add(index))}
+              onFocus={() => setRequestedIndexes((current) => new Set(current).add(index))}
+              onClick={() => requestSlide(index)}
+            >
               <span>{String(index + 1).padStart(2, '0')}</span>
-              <strong>{nextMovie.name}</strong>
-              <i className="ri-arrow-right-up-line" aria-hidden="true" />
+              <img src={getHeroThumbnail(thumbnailMovie)} alt="" loading={index < 2 ? 'eager' : 'lazy'} decoding="async" draggable={false} />
             </button>
           ))}
-        </aside>
+        </div>
       )}
 
       <div className="editorial-hero-footer">
         <span>{movie.lang || 'Vietsub'}{movie.episode_current ? ` · ${movie.episode_current}` : ''}</span>
         <div className="editorial-hero-controls" aria-label="Điều khiển phim nổi bật">
-          <button type="button" onClick={() => setActiveIndex((safeIndex - 1 + featured.length) % featured.length)} aria-label="Phim nổi bật trước">
+          <button type="button" onClick={() => requestSlide(safeIndex - 1)} aria-label="Phim điểm cao trước">
             <i className="ri-arrow-left-line" aria-hidden="true" />
           </button>
           <span>{String(safeIndex + 1).padStart(2, '0')} / {String(featured.length).padStart(2, '0')}</span>
-          <button type="button" onClick={() => setActiveIndex((safeIndex + 1) % featured.length)} aria-label="Phim nổi bật tiếp theo">
+          <button type="button" onClick={() => requestSlide(safeIndex + 1)} aria-label="Phim điểm cao tiếp theo">
             <i className="ri-arrow-right-line" aria-hidden="true" />
           </button>
         </div>

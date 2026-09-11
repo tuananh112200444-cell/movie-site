@@ -684,7 +684,7 @@ export default function PhimMaPage() {
               <div className="grid movie-grid-desktop">
                 {filteredMovies.map((m, idx) => (
                   <div key={getMovieKey(m)} className="relative group">
-                    <MovieCard movie={m} priority={idx < 2} />
+                    <MovieCard movie={m} priority={idx < 2} contextLabel="Kinh Dị" />
                     <div className="absolute top-1.5 left-1.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                       <StatusBadge episode={m.episode_current} />
                     </div>

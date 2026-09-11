@@ -3,6 +3,8 @@ import fs from 'node:fs';
 const source = fs.readFileSync('supabase/functions/sync-blvietsub-feed/index.ts', 'utf8');
 const detailProxy = fs.readFileSync('supabase/functions/movie-detail-proxy/index.ts', 'utf8');
 const movieApi = fs.readFileSync('src/services/movieApi.ts', 'utf8');
+const detailPage = fs.readFileSync('src/pages/movie-detail/page.tsx', 'utf8');
+const playerSection = fs.readFileSync('src/pages/movie-detail/components/MovieDetailPlayerSection.tsx', 'utf8');
 const playerBox = fs.readFileSync('src/pages/movie-detail/components/PlayerBox.tsx', 'utf8');
 const checks = [
   ['completed 1/1 is eligible for recheck', /current <= 1 && total <= 1[\s\S]{0,40}return true/],
@@ -15,23 +17,34 @@ const checks = [
   ['repair updates numeric total and display total together', /update\.episode_total = `\$\{mergedTotal\} Tập`[\s\S]{0,160}update\.total_episodes = mergedTotal/],
   ['WordPress root movie URLs are supported', /parts\[0\]\?\.toLowerCase\(\) === 'phim' \? parts\[1\] : parts\.length === 1 \? parts\[0\]/],
   ['current BLVietsub multi-server buttons map data-server-url to numbered episodes', source.includes('blv-server-button') && source.includes("extractAttr(tag, 'data-server-url')") && source.includes('BLVietsub ${groupLabel')],
+  ['BLVietsub Pilot, Extra and special labels use non-colliding negative episode identities', source.includes("isExtra = /(?:^|-)(?:extra|ngoai-truyen|bonus)") && source.includes('-(3000 + Math.max(explicitNumber, 1))') && source.includes('-(2000 + Math.max(explicitNumber, 1))') && source.includes('-(1000 + Math.max(explicitNumber, 1))')],
+  ['Blogger and WordPress parsers preserve special labels and slugs', source.includes('const info = parseEpisodeInfo(label);') && source.includes('episode_name: info.label') && source.includes('slug: info.slug')],
   ['original title is recovered from WordPress metadata', /originName: getWordPressOriginName\(title, content\)/],
-  ['WordPress release year comes from movie metadata instead of image or publish-date noise', source.includes('function getWordPressReleaseYear') && source.includes('/"keywords"\\s*:\\s*\\[') && source.includes('const year = getWordPressReleaseYear(html, updatedAt)')],
+  ['WordPress release year comes from movie metadata instead of image or publish-date noise', source.includes('function getWordPressReleaseYear') && source.includes('/"keywords"\\s*:\\s*\\[') && source.includes('void updatedAt;') && source.includes('const year = getWordPressReleaseYear(html, updatedAt)')],
   ['repair batches use bounded concurrency', /rows\.slice\(index, index \+ 4\)\.map/],
   ['repair queue retains movie and source URL', /\.slice\(0, cappedLimit\);[\s\S]{0,500}\{ movie, sourceUrl \}/],
   ['one-video sources cannot pollute healthy series', /dbBeforeEpisode >= 4 && sourceMaxEpisode <= 1[\s\S]{0,700}backward_guarded: true/],
   ['guarded titles rotate behind the repair queue', /Mark the check as completed[\s\S]{0,220}last_synced_at/],
   ['removed source pages rotate without poisoning sync health', /isPermanentExternalFetchError[\s\S]{0,1800}permanentSkipped[\s\S]{0,800}last_synced_at/],
-  ['source-specific duplicates still compete with global canonical movies', /findBestMovieForEntry[\s\S]{0,420}selectPreferredMovie\(\[localMatch, globalMatch\]/],
+  ['source-specific duplicates still compete with global canonical movies', /findBestMovieForEntry[\s\S]{0,1200}selectPreferredMovie\(\[localMatch, globalMatch\]/],
+  ['legacy source aliases bridge current localized pages to the global canonical movie', /const identityEntry = localMatch[\s\S]{0,500}localMatch\.title_original[\s\S]{0,260}findGlobalMovieForEntry\(supabase, identityEntry\)/],
   ['verified BL source duplicates retire only after canonical sync succeeds', /const syncResult = await syncEntryToMovie[\s\S]{0,500}retireSourceMovieDuplicate/],
+  ['all exact BL source siblings retire after canonical sync succeeds', /findBlvietsubSourceDuplicates[\s\S]{0,1400}exactTitleIdentity[\s\S]{0,400}invalidFutureYear/],
+  ['previously merged BL-prefixed siblings remain repairable', /isBlvietsubSibling[\s\S]{0,180}candidate\.slug\.startsWith\('blvietsub-'\)/],
+  ['previously merged BL rows remain in the reconciliation pool', source.includes('showtimes.ilike.%blvietsub%') && source.includes('slug.ilike.blvietsub-%')],
   ['BL episodes cannot overwrite another canonical provider identity', /movieOwnsBlvietsubIdentity[\s\S]{0,320}!String\(movie\.showtimes[\s\S]{0,260}assignChanged\('source_url'/],
   ['sync only rejects BLVietsub content-page hosts', source.includes("return /^(?:www\\.)?blvietsub\\.com$/i.test(url.hostname)")],
   ['detail proxy preserves player.blvietsub.com embeds', detailProxy.includes("return /^(?:www\\.)?blvietsub\\.com$/i.test(parsed.hostname)")],
+  ['detail proxy reuses the verified canonical row for retired source slugs', detailProxy.includes('let exactMergeCanonical') && /select\(MOVIE_DETAIL_SELECT\)[\s\S]{0,260}exactMergeCanonical = publishedCanonical/.test(detailProxy) && /: exactMergeCanonical;/.test(detailProxy)],
   ['detail refresh normalizes BLVietsub root canonical URLs back to source pages', detailProxy.includes("return `https://blvietsub.com/phim/${encodeURIComponent(decodeURIComponent(parts[0]))}/`")],
   ['manual refresh targets the known BLVietsub page even for completed movies', detailProxy.includes('shouldForceKnownBlvietsubSync') && detailProxy.includes("'movie_detail_force_refresh'")],
   ['frontend source brain treats BLVietsub player as a stable embed', movieApi.includes("host === 'player.blvietsub.com') return 'stable_embed'")],
   ['frontend content-page guard does not match BLVietsub player subdomains', movieApi.includes("return /^(?:www\\.)?blvietsub\\.com$/i.test(parsed.hostname);")],
   ['player guard does not match BLVietsub player subdomains', playerBox.includes("return /^(?:www\\.)?blvietsub\\.com$/i.test(parsed.hostname);")],
+  ['detail proxy preserves signed special episode identities', detailProxy.includes('episode_number: num')],
+  ['frontend recognizes signed, Pilot and Extra special episodes', movieApi.includes("Number(ep?.episode_number || 0) < 0") && movieApi.includes('(?:pilot|extra|bonus)')],
+  ['default watch action does not mistake a special for the latest regular episode', detailPage.includes('preferredPool.filter((ep) => !isSpecialEpisode(ep))')],
+  ['episode picker reports and merges special episodes separately', playerSection.includes('specialCount') && playerSection.includes('tập đặc biệt') && playerSection.includes('special:${Math.abs(specialNumber)}')],
 ];
 
 const failures = checks.filter(([, expectation]) =>

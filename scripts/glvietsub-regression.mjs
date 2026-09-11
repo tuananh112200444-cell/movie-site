@@ -15,6 +15,7 @@ const detailPage = fs.readFileSync('src/pages/movie-detail/page.tsx', 'utf8');
 const player = fs.readFileSync('src/pages/movie-detail/components/MovieDetailPlayerSection.tsx', 'utf8');
 const queerHome = fs.readFileSync('src/pages/home/components/QueerUniverseHome.tsx', 'utf8');
 const queerHero = fs.readFileSync('src/pages/home/components/QueerUniverseHero.tsx', 'utf8');
+const home = fs.readFileSync('src/pages/home/page.tsx', 'utf8');
 const checks = [
   [source.includes("const SOURCE = 'glvietsub'"), 'GLVietsub source identity is missing'],
   [source.includes("action: 'doo_player_ajax'"), 'Dooplay player resolver is missing'],
@@ -34,6 +35,10 @@ const checks = [
   [source.includes('existing.raw = existing.raw || raw'), 'Duplicate play CTA must not hide the RAW episode label'],
   [source.includes('-tap-dac-biet') && source.includes('specialNumber'), 'Special-episode URLs must be discovered'],
   [source.includes('episode.special') && source.includes('regularEpisodes'), 'Special episodes must not inflate the regular episode counters'],
+  [movieApi.includes("Number(ep?.episode_number || 0) < 0") && player.includes('special:${Math.abs(specialNumber)}'), 'Stored GL special identities must survive frontend merging even when a fallback label is malformed'],
+  [movieApi.includes(".rpc('get_public_special_episodes'") && movieApi.includes('storedSpecialEpisodesPromise'), 'Production detail fallback must hydrate stored special episodes through the bounded public snapshot RPC'],
+  [detailPage.includes('preferredPool.filter((ep) => !isSpecialEpisode(ep))'), 'The default GL watch action must prefer the latest regular episode over a special'],
+  [movieApi.includes('100_000 + Math.abs(storedIdentity)') && detailPage.includes('tập chính · ${specialCount} tập đặc biệt'), 'Special episodes must sort after regular episodes in ordinal order and use a truthful detail summary'],
   [source.includes("eq('audio_type', 'raw')") && source.includes("in('episode_number', translatedEpisodeNumbers)") && source.includes("in('episode_slug', translatedEpisodeSlugs)"), 'Translated releases must remove stale GLVietsub RAW episode and stream rows'],
   [source.includes('verifiedTranslatedEpisode') && source.includes('movie.source_site === SOURCE'), 'GL movie metadata must track the highest localized episode instead of stale RAW progress'],
   [source.includes('no-video') && source.includes('directRawEmbed'), 'Direct RAW iframe fallback is missing'],
@@ -56,6 +61,8 @@ const checks = [
   [detailProxy.includes("String(ep.audio_type || '').toLowerCase() === 'raw'"), 'RAW must not inflate the translated current-episode number'],
   [detailProxy.includes('exactMergeAlias') && detailProxy.includes(".eq('alias_slug', slug)") && detailProxy.includes(".eq('is_published', true)"), 'A retired duplicate slug must resolve only through an explicit alias to a published canonical movie'],
   [detailProxy.includes('suppressRepeatedGlvietsubPlaybackUrls'), 'Stored duplicate GL playback URLs must be hidden from viewers'],
+  [detailProxy.includes('parseStoredSpecialEpisodeIdentity') && detailProxy.includes('episode_number: num'), 'Canonical GL stream rows must preserve negative special identities in detail responses'],
+  [detailProxy.includes("identity.includes('glvietsub')") && detailProxy.includes('let isQueerSourceMovie'), 'Merged canonical movies must retain GL episode behavior through their playback identities'],
   [detailProxy.includes("callInternalFunction('sync-glvietsub-feed'") && detailProxy.includes('shouldRefreshStaleGlvietsubRaw'), 'GL detail self-repair must call the GL sync and revisit stale RAW rows'],
   [detailProxy.includes("from('provider_movie_identities')") && detailProxy.includes('localizedEpisodeNumbers'), 'Verified localized auxiliary episodes must suppress stale RAW playback choices'],
   [gapProviderSync.includes("from('provider_movie_identities').upsert") && gapProviderSync.includes("audio_type: 'vietsub'"), 'Strict provider matches must persist a durable identity and localized audio type'],
@@ -66,6 +73,11 @@ const checks = [
   [playerBox.includes('YouTube error 153') && playerBox.includes("'strict-origin-when-cross-origin'"), 'YouTube embeds must retain an HTTP origin referrer'],
   [movieApi.includes("'glvietsub', 'gl vietsub'") && movieApi.includes('getQueerSourceFitScore'), 'BL/GL source-role deduplication is missing'],
   [movieApi.includes("haystack.includes('glvietsub')"), 'GLVietsub details must participate in queer source merging'],
+  [movieApi.includes('fetchGlvietsubHomeMovies') && movieApi.includes(".or('source_site.ilike.%glvietsub%,source_name.ilike.%glvietsub%')"), 'Homepage GLVietsub rail must query only GLVietsub catalogue rows'],
+  [movieApi.includes('if (glvietsubMovies.length > 0) return glvietsubMovies;')
+    && movieApi.includes('loadStaticQueerFallback(options.signal)')
+    && movieApi.includes('return prepareQueerHomeRail(fallbackMovies, limit, true);'), 'Homepage GL shelf must keep the fallback restricted to GLVietsub rows'],
+  [home.includes('fetchGlvietsubHomeMovies') && home.includes('limit: 12') && home.includes('fetchKey="queer-universe" limit={compactMobile ? 6 : 12}'), 'Homepage queer shelf must render 12 GLVietsub movies on desktop and a bounded 6 on compact mobile'],
   [queerHome.includes('priority={false}') && !queerHome.includes('priority={index < 6}'), 'Queer grids must not compete with the hero using high-priority images'],
   [queerHero.includes('heroRequestWidth') && queerHero.includes('fetchPriority="low"'), 'Responsive queer hero image policy is missing'],
   [healthMigration.includes("auto-repair-player-issues-every-30-minutes") && healthMigration.includes("cron.unschedule('sync-blvietsub-smart-repair-every-30-minutes')"), 'Redundant/stuck repair cron cleanup is missing'],

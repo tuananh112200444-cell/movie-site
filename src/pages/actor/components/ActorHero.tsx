@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { ActorInfo } from '@/mocks/actors';
+import SocialBrandIcon, { type SocialBrandPlatform } from '@/components/base/SocialBrandIcon';
 
 interface ActorHeroProps {
   actor: ActorInfo;
@@ -8,10 +9,15 @@ interface ActorHeroProps {
 const PLATFORM_ICONS: Record<string, string> = {
   instagram: 'ri-instagram-line',
   twitter: 'ri-twitter-x-line',
-  facebook: 'ri-facebook-circle-line',
   youtube: 'ri-youtube-line',
-  tiktok: 'ri-tiktok-line',
 };
+
+function getBrandPlatform(platform: string): SocialBrandPlatform | null {
+  const normalized = platform.toLowerCase();
+  return normalized === 'facebook' || normalized === 'messenger' || normalized === 'tiktok'
+    ? normalized
+    : null;
+}
 
 export default function ActorHero({ actor }: ActorHeroProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -165,6 +171,7 @@ export default function ActorHero({ actor }: ActorHeroProps) {
               {actor.socialLinks.map((s) => {
                 const key = s.platform.toLowerCase();
                 const icon = PLATFORM_ICONS[key] ?? 'ri-global-line';
+                const brand = getBrandPlatform(key);
                 return (
                   <a
                     key={s.platform}
@@ -172,9 +179,17 @@ export default function ActorHero({ actor }: ActorHeroProps) {
                     target="_blank"
                     rel="noopener noreferrer nofollow"
                     title={s.platform}
-                    className="w-10 h-10 flex items-center justify-center bg-white/[0.07] hover:bg-white/[0.14] border border-white/10 hover:border-white/20 rounded-xl text-white/45 hover:text-white transition-all cursor-pointer"
+                    className={`w-10 h-10 flex items-center justify-center border rounded-xl text-white transition-all cursor-pointer hover:-translate-y-0.5 ${
+                      key === 'facebook'
+                        ? 'border-white/15 bg-gradient-to-br from-[#2d8cff] to-[#1264d8] shadow-[0_7px_18px_rgba(24,119,242,0.2)]'
+                        : key === 'messenger'
+                          ? 'border-white/15 bg-gradient-to-br from-[#00B2FF] via-[#686BFF] to-[#E944A1]'
+                          : key === 'tiktok'
+                            ? 'border-white/15 bg-[#111318] shadow-[4px_0_14px_rgba(254,44,85,0.16),-4px_0_14px_rgba(37,244,238,0.14)]'
+                            : 'bg-white/[0.07] hover:bg-white/[0.14] border-white/10 hover:border-white/20 text-white/45 hover:text-white'
+                    }`}
                   >
-                    <i className={`${icon} text-base`} />
+                    {brand ? <SocialBrandIcon platform={brand} className="h-5 w-5" /> : <i className={`${icon} text-base`} aria-hidden="true" />}
                   </a>
                 );
               })}

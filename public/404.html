@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="robots" content="noindex, follow">
+    <meta name="googlebot" content="noindex, follow">
+    <title>404 – Trang Không Tìm Thấy | KhoPhim</title>
+    <style>
+      html,body{margin:0;min-height:100%;background:#080a10;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+      body{display:grid;place-items:center;min-height:100vh;padding:24px;box-sizing:border-box;text-align:center}
+      main{max-width:560px}p{color:#aeb4c0;line-height:1.65}a{color:#f87171;font-weight:700}
+      button{display:none;margin:18px auto 0;border:1px solid rgba(248,113,113,.28);border-radius:12px;background:#dc2626;color:#fff;padding:12px 18px;font:inherit;font-weight:750;cursor:pointer}
+      button[data-visible="true"]{display:inline-flex;align-items:center;justify-content:center}button:disabled{cursor:wait;opacity:.72}
+      #restore-status{min-height:24px;margin-top:10px;color:#8e99aa;font-size:13px}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Trang này không tồn tại</h1>
+      <p>URL bạn mở đã bị xóa, di chuyển hoặc chưa từng tồn tại.</p>
+      <button id="restore-route" type="button">Mở lại đúng trang này</button>
+      <p id="restore-status" role="status" aria-live="polite"></p>
+      <p><a href="/">Về trang chủ KhoPhim</a> · <a href="/phim-moi-cap-nhat">Xem phim mới cập nhật</a></p>
+    </main>
+    <script>
+      (function () {
+        var path = location.pathname.replace(/\/+$/, '') || '/';
+        var knownExactPaths = new Set([
+          '/about','/admin','/anime','/blog','/dien-vien','/filter','/hoat-hinh',
+          '/kho-phim-online','/my-nam','/phim-2024','/phim-2025','/phim-2026',
+          '/phim-4k','/phim-au-my','/phim-bo','/phim-chieu-rap','/phim-dang-chieu',
+          '/phim-full-hd','/phim-han-quoc','/phim-hay','/phim-hoan-tat','/phim-hot-2026',
+          '/phim-le','/phim-long-tieng','/phim-ma','/phim-moi-cap-nhat','/phim-moi-nhat',
+          '/phim-nhat-ban','/phim-sap-chieu','/phim-thai-lan','/phim-thuyet-minh',
+          '/phim-trailer','/phim-trung-quoc','/phim-viet-nam','/phim-vietsub','/policy',
+          '/search','/sitemap','/tv-shows','/vu-tru-dam-my','/web-xem-phim',
+          '/xem-anime-vietsub','/xem-phim','/xem-phim-au-my','/xem-phim-bo',
+          '/xem-phim-chieu-rap','/xem-phim-han-quoc','/xem-phim-hd','/xem-phim-le',
+          '/xem-phim-mien-phi','/xem-phim-moi','/xem-phim-online','/xem-phim-trung-quoc',
+          '/xem-phim-viet-nam','/xem-phim-vietsub','/yeu-thich'
+        ]);
+        var knownDynamicPath = /^(?:\/(?:phim|xem-phim|the-loai|dien-vien|blog|admin|xem|review-phim|noi-dung-phim|download-phim|phim-thuyet-minh))(?:\/[^/?#]+)+(?:\/)?$/i.test(path);
+        if (!knownExactPaths.has(path) && !knownDynamicPath) return;
+
+        var button = document.getElementById('restore-route');
+        var status = document.getElementById('restore-status');
+        var recoveryKey = 'kp_static_404_route_recovery_v1';
+        var recovering = false;
+        if (button) button.dataset.visible = 'true';
+
+        function setMessage(message) {
+          if (status) status.textContent = message;
+        }
+
+        function restoreCurrentRoute(manual) {
+          if (recovering) return;
+          recovering = true;
+          if (button) {
+            button.disabled = true;
+            button.textContent = 'Đang mở lại trang...';
+          }
+          setMessage('KhoPhim đang khôi phục đúng URL bạn vừa mở.');
+          fetch('/index.html?__kp_route_restore=' + Date.now(), {
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: { Accept: 'text/html' }
+          }).then(function (response) {
+            var contentType = response.headers.get('content-type') || '';
+            if (!response.ok || !/text\/html/i.test(contentType)) throw new Error('shell_unavailable');
+            return response.text();
+          }).then(function (html) {
+            if (html.indexOf('id="root"') === -1 || html.indexOf('type="module"') === -1) {
+              throw new Error('invalid_shell');
+            }
+            document.open();
+            document.write(html);
+            document.close();
+          }).catch(function () {
+            recovering = false;
+            if (button) {
+              button.disabled = false;
+              button.textContent = 'Thử mở lại đúng trang này';
+              button.dataset.visible = 'true';
+            }
+            setMessage(manual
+              ? 'Chưa thể kết nối lại. URL phim/tập của bạn vẫn được giữ nguyên, vui lòng thử lại.'
+              : 'Không thể tự khôi phục. Bạn có thể bấm nút phía trên để thử lại.');
+          });
+        }
+
+        if (button) button.addEventListener('click', function () { restoreCurrentRoute(true); });
+        var lastAttempt = 0;
+        try { lastAttempt = Number(sessionStorage.getItem(recoveryKey) || 0) || 0; } catch (e) {}
+        if (Date.now() - lastAttempt > 15000) {
+          try { sessionStorage.setItem(recoveryKey, String(Date.now())); } catch (e) {}
+          window.setTimeout(function () { restoreCurrentRoute(false); }, 80);
+        }
+      })();
+    </script>
+  </body>
+</html>

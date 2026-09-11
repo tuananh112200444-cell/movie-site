@@ -10,6 +10,8 @@ const worker = read('functions/[[path]].js');
 const gsc = read('supabase/functions/gsc-seo-feedback/index.ts');
 const tmdb = read('supabase/functions/sync-tmdb-catalog/index.ts');
 const sitemapGenerator = read('scripts/generate-sitemap-index.mjs');
+const staticCatalog = read('supabase/functions/static-seo-catalog/index.ts');
+const staticPages = read('scripts/generate-static-movie-pages.mjs');
 
 const requireText = (source, text, message) => {
   if (!source.includes(text)) failures.push(message);
@@ -36,17 +38,26 @@ if (sitemap.includes('xmlns:video=') || sitemap.includes('<video:video>')) {
 requireText(prerenderData, 'seo_eligible_for_index', 'prerender API does not expose the database quality decision');
 requireText(prerenderData, ": 'unreviewed'", 'legacy playable pages have no safe compatibility state while quality coverage expands');
 requireText(prerenderData, 'seo_index_tier', 'prerender API does not expose lifecycle tier');
-requireText(worker, "if (tier === 'upcoming') return Boolean(getTrailerEmbedUrl(movie.trailer_url));", 'upcoming cohort pages do not require a real embeddable trailer');
-requireText(worker, 'const isIndexable = isHighValueIndexCandidate(movie)', 'Cloudflare prerender does not honor the strict public cohort gate');
+requireText(worker, "const upcoming = tier === 'upcoming';", 'Cloudflare has no explicit, bounded upcoming index cohort');
+requireText(worker, "(upcoming ? 88 : 85)", 'upcoming pages do not use a stricter quality threshold');
+requireText(worker, "(upcoming ? 350 : 500)", 'upcoming pages do not require a substantial synopsis');
+requireText(worker, "!hasPlayableMovieEvidence(movie)", 'upcoming pages are not kept separate from playable pages');
+requireText(worker, 'const automaticIndexable = isHighValueIndexCandidate(movie)', 'Cloudflare prerender does not honor the strict public cohort gate');
 if (worker.includes("'@type': 'VideoObject'") || worker.includes('embedUrl: trailerEmbedUrl')) {
   failures.push('movie information pages must not expose complementary trailers as VideoObject watch pages');
 }
 requireText(worker, '<h2>Trailer ${escapeHtml(name)}</h2>', 'eligible trailer pages must keep a visible trailer for users');
-requireText(worker, "'sitemap-movies-upcoming.xml'", 'root sitemap index omits upcoming movies');
+requireText(worker, "'sitemap-movies-upcoming.xml'", 'root sitemap index does not submit the static upcoming cohort');
 if (worker.includes("|| pathname === '/sitemap-movies-upcoming.xml'")) {
   throw new Error('upcoming sitemap is incorrectly retired by the legacy chunk cleanup route');
 }
-requireText(sitemapGenerator, "'sitemap-movies-upcoming.xml'", 'generated sitemap index omits upcoming movies');
+requireText(sitemapGenerator, "'sitemap-movies-upcoming.xml'", 'generated root sitemap omits the static upcoming cohort');
+requireText(staticCatalog, 'UPCOMING_COHORT_LIMIT = 20', 'static upcoming cohort is not capped at 20 movies');
+requireText(staticCatalog, "url.searchParams.get('cohort') === 'upcoming'", 'static catalogue has no dedicated upcoming mode');
+requireText(staticCatalog, 'hasOfficialTrailerUrl(movie.trailer_url)', 'static upcoming cohort accepts untrusted trailer URLs');
+requireText(staticPages, "const upcomingSitemapFile = 'sitemap-movies-upcoming.xml'", 'build does not generate a static upcoming sitemap');
+requireText(staticPages, "potentialAction: isUpcoming ? undefined", 'upcoming static pages incorrectly advertise a WatchAction');
+requireText(staticPages, 'data-kp-upcoming=', 'upcoming static HTML has no lifecycle marker');
 
 requireText(gsc, 'Promise.allSettled', 'one Search Console subsystem failure still aborts all SEO feedback');
 requireText(gsc, "tier === 'upcoming'", 'GSC inspection does not prioritize newly indexable upcoming pages');

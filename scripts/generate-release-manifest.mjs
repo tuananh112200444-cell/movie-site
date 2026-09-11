@@ -1,6 +1,18 @@
 import { execFileSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 
+async function writeFileWithRetry(filePath, contents, attempts = 6) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await writeFile(filePath, contents, 'utf8');
+      return;
+    } catch (error) {
+      if (!['EPERM', 'EBUSY', 'UNKNOWN'].includes(error?.code) || attempt === attempts) throw error;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, attempt * 100));
+    }
+  }
+}
+
 function git(args, fallback = 'unknown') {
   try { return execFileSync('git', args, { encoding: 'utf8' }).trim() || fallback; } catch { return fallback; }
 }
@@ -17,5 +29,5 @@ const manifest = {
   schema_contract: '20260719-ops-seo-v1',
   components: { frontend: 'cloudflare-pages', worker: 'cloudflare-pages-functions', backend: 'supabase-edge-functions', database: 'supabase-postgres' },
 };
-await writeFile(new URL('../public/release.json', import.meta.url), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+await writeFileWithRetry(new URL('../public/release.json', import.meta.url), `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(`Generated public/release.json (${releaseId}).`);

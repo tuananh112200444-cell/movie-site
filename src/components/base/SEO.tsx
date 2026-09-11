@@ -13,6 +13,8 @@ interface SEOProps {
   ogType?: 'website' | 'video.movie' | 'video.tv_show' | 'article';
   noIndex?: boolean;
   schema?: object | object[];
+  /** Keep the page schema already installed by another SEO component. */
+  preserveSchema?: boolean;
   /** For movie pages: release year. */
   publishedYear?: number;
   /** For movie pages: genre. */
@@ -34,6 +36,7 @@ const SEO = memo(function SEO({
   ogType = 'website',
   noIndex = false,
   schema,
+  preserveSchema = false,
   publishedYear,
   genre,
   updatedAt,
@@ -183,9 +186,9 @@ const SEO = memo(function SEO({
     ensureMeta('name', 'twitter:url', canonicalUrl);
 
     let schemaScript = document.head.querySelector<HTMLScriptElement>('script[data-kp-seo-managed="true"][data-kp-route-schema="true"]');
-    if (!schemaJson) {
+    if (!schemaJson && !preserveSchema) {
       schemaScript?.remove();
-    } else {
+    } else if (schemaJson) {
       if (!schemaScript) {
         schemaScript = document.createElement('script');
         schemaScript.type = 'application/ld+json';
@@ -204,6 +207,7 @@ const SEO = memo(function SEO({
     next,
     ogType,
     prev,
+    preserveSchema,
     publishedYear,
     robotsContent,
     schemaJson,

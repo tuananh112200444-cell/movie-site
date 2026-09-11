@@ -2,8 +2,9 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const requiredSource = [
-  ['src/pages/home/page.tsx', ['home-angular-index', 'EditorialSectionFrame', 'EditorialHero']],
-  ['src/index.css', ['HOME — ANGULAR CINEMA V7', '.home-angular-index', '.editorial-section-frame', '.home-poster-item', '1760px']],
+  ['src/pages/home/page.tsx', ['DailyUpdateDemoSection', 'GenreSEOSection', 'EditorialSectionFrame', 'EditorialHero']],
+  ['src/pages/home/components/GenreSEOSection.tsx', ['primaryLinks', 'Thể loại và quốc gia khác', 'grid-cols-2', 'lg:grid-cols-8']],
+  ['src/index.css', ['HOME — ANGULAR CINEMA V7', '.editorial-section-frame', '.home-poster-item', '1760px']],
   ['src/pages/home/components/MovieSection.tsx', ['movie-section-mobile-grid', 'grid-cols-2', 'sm:grid-cols-3', 'carouselItemClass']],
 ];
 
@@ -58,11 +59,14 @@ const jsFiles = artifactFiles.filter((file) => file.endsWith('.js'));
 const cssBundle = (await Promise.all(cssFiles.map((file) => readFile(file, 'utf8')))).join('\n');
 const jsBundle = (await Promise.all(jsFiles.map((file) => readFile(file, 'utf8')))).join('\n');
 
-for (const marker of ['.home-angular-index', '.editorial-section-frame', '.movie-player-box']) {
+for (const marker of ['.editorial-section-frame', '.movie-player-box']) {
   if (!cssBundle.includes(marker)) failures.push(`Built CSS is missing ${marker}`);
 }
-for (const marker of ['home-angular-index', 'editorial-section-frame']) {
+for (const marker of ['daily-update-demo', 'genre-seo-heading', 'editorial-section-frame']) {
   if (!jsBundle.includes(marker)) failures.push(`Built JavaScript is missing ${marker}`);
+}
+if (cssBundle.includes('.home-angular-index') || jsBundle.includes('home-angular-index')) {
+  failures.push('The retired duplicate home-angular-index must not remain in production assets');
 }
 
 if (failures.length) {

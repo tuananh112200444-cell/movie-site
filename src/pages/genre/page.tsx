@@ -440,26 +440,14 @@ export default function GenrePage() {
     try {
       const sortParams = getSortParams(sort);
       const virtualKeywords = VIRTUAL_GENRE_KEYWORDS[slug];
-      const sourcePage = pg * 2 - 1;
       const responses = virtualKeywords
-        ? await Promise.all(virtualKeywords.flatMap((keyword) => [
-            searchMovies(keyword, sourcePage),
-            searchMovies(keyword, sourcePage + 1),
-          ]))
-        : await Promise.all([
-            fetchMoviesByCategory({
-              type: 'phim-moi-cap-nhat',
-              category: slug,
-              page: sourcePage,
-              ...sortParams,
-            }),
-            fetchMoviesByCategory({
-              type: 'phim-moi-cap-nhat',
-              category: slug,
-              page: sourcePage + 1,
-              ...sortParams,
-            }),
-          ]);
+        ? await Promise.all(virtualKeywords.map((keyword) => searchMovies(keyword, pg)))
+        : [await fetchMoviesByCategory({
+            type: 'phim-moi-cap-nhat',
+            category: slug,
+            page: pg,
+            ...sortParams,
+          })];
       const items = mergeUniqueMovies(responses.flatMap((data) => data.items ?? []));
       if (reset) {
         setMovies(items.slice(0, PAGE_SIZE));
@@ -468,9 +456,12 @@ export default function GenrePage() {
       }
       const ti = Math.max(...responses.map((data) => data.pagination?.totalItems ?? 0), items.length);
       const sourcePageTotal = Math.max(...responses.map((data) => data.pagination?.totalPages ?? 1));
+      const sourcePageSize = responses[0]?.pagination?.totalItemsPerPage || PAGE_SIZE;
       const tp = ti > 0
-        ? Math.max(1, Math.ceil(ti / PAGE_SIZE))
-        : inferTotalPages(Math.ceil(sourcePageTotal / 2), items.length, pg);
+        ? (sourcePageSize === PAGE_SIZE
+            ? Math.max(1, Math.ceil(ti / PAGE_SIZE))
+            : sourcePageTotal)
+        : inferTotalPages(sourcePageTotal, items.length, pg);
       setTotalPages(tp);
       setTotalItems(ti);
     } catch {
@@ -718,7 +709,7 @@ export default function GenrePage() {
             <>
               <div className="grid movie-grid-desktop">
                 {movies.map((m, idx) => (
-                  <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 12} />
+                  <MovieCard key={getMovieKey(m)} movie={m} priority={idx < 4} contextLabel={meta?.name} />
                 ))}
               </div>
 

@@ -44,7 +44,7 @@ interface TmdbDetail extends TmdbListItem {
     crew?: Array<{ job: string; name: string }>;
   };
   videos?: {
-    results?: Array<{ site: string; type: string; key: string }>;
+    results?: Array<{ site: string; type: string; key: string; official?: boolean; published_at?: string }>;
   };
   imdb_id?: string;
 }
@@ -131,7 +131,8 @@ function addMonths(date: Date, months: number): Date {
 
 function youtubeTrailerUrl(detail: TmdbDetail): string {
   const videos = detail.videos?.results ?? [];
-  const trailer = videos.find((item) => item.site === 'YouTube' && item.type === 'Trailer') ??
+  const trailer = videos.find((item) => item.site === 'YouTube' && item.type === 'Trailer' && item.official === true) ??
+    videos.find((item) => item.site === 'YouTube' && item.type === 'Trailer') ??
     videos.find((item) => item.site === 'YouTube');
   return trailer?.key ? `https://www.youtube.com/watch?v=${trailer.key}` : '';
 }

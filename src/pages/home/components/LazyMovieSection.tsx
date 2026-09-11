@@ -8,7 +8,7 @@ import { Film } from 'lucide-react';
 
 const carouselItemClass = HOME_POSTER_ITEM_CLASS;
 const HOME_FALLBACK_URL = '/home-fallback.json';
-const MAX_STATIC_HOME_FALLBACK_AGE_MS = 48 * 60 * 60 * 1000;
+const MAX_STATIC_HOME_FALLBACK_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 let staticHomeFallbackPromise: Promise<Record<string, Movie[]>> | null = null;
 
 function isMobileViewport() {
@@ -21,12 +21,9 @@ function parseRootMarginPx(rootMargin: string): number {
 }
 
 function shouldTriggerImmediately(sectionIndex: number, hasData: boolean) {
-  // The discovery, quick-picks and trending blocks already fill the initial
-  // mobile viewport. Rendering category shelves immediately made dozens of
-  // offscreen posters compete with the hero LCP.
-  // Only the first desktop shelf renders eagerly. Mobile and later shelves use
-  // the progressive observer so offscreen posters never compete with the hero,
-  // detail or player route for bandwidth.
+  // Only the first desktop shelf renders before intersection. Keeping every
+  // offscreen shelf deferred reduces initial DOM work and prevents its layout
+  // from competing with the hero; mobile always waits for proximity.
   return !isMobileViewport() && hasData && sectionIndex === 0;
 }
 
@@ -39,7 +36,7 @@ function withSectionTimeout<T>(promise: Promise<T>, timeoutMs = 8000): Promise<T
 
 async function loadStaticHomeFallback(): Promise<Record<string, Movie[]>> {
   if (!staticHomeFallbackPromise) {
-    staticHomeFallbackPromise = withSectionTimeout(fetch(HOME_FALLBACK_URL, { cache: 'no-store' }), 3000)
+    staticHomeFallbackPromise = withSectionTimeout(fetch(HOME_FALLBACK_URL, { cache: 'default' }), 3000)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('home fallback unavailable'))))
       .then((data: { generated_at?: string; sections?: Record<string, unknown[]> }) => {
         const generatedAt = Date.parse(data.generated_at ?? '');
@@ -72,6 +69,7 @@ interface LazyMovieSectionProps extends SectionProps {
   theme?: ComponentProps<typeof MovieSection>['theme'];
   movies?: Movie[];
   loading?: boolean;
+  eager?: boolean;
 }
 
 export default function LazyMovieSection({
@@ -84,20 +82,21 @@ export default function LazyMovieSection({
   theme,
   movies: propMovies,
   loading: propLoading,
+  eager = false,
   ...sectionProps
 }: LazyMovieSectionProps) {
   const ref = useRef<HTMLDivElement>(null);
   const hasData = Boolean(propMovies?.length);
-  const [triggered, setTriggered] = useState(() => shouldTriggerImmediately(sectionIndex, hasData));
+  const [triggered, setTriggered] = useState(() => eager || shouldTriggerImmediately(sectionIndex, hasData));
   const [fallbackMovies, setFallbackMovies] = useState<Movie[]>([]);
   const [fallbackLoading, setFallbackLoading] = useState(false);
   const [fallbackAttempted, setFallbackAttempted] = useState(false);
 
   useEffect(() => {
-    if (shouldTriggerImmediately(sectionIndex, hasData)) {
+    if (eager || shouldTriggerImmediately(sectionIndex, hasData)) {
       setTriggered(true);
     }
-  }, [hasData, sectionIndex]);
+  }, [eager, hasData, sectionIndex]);
 
   useEffect(() => {
     const el = ref.current;
@@ -229,7 +228,10 @@ export default function LazyMovieSection({
   const prioritizeFirstRow = sectionIndex === 0 && !isMobileViewport();
   const rawSectionMovies = hasData ? (propMovies ?? []) : fallbackMovies;
   const sectionMovies = fetchKey === 'vsmov-4k'
-    ? rawSectionMovies.map((movie) => ({ ...movie, source_site: 'vsmov', quality: '4K' }))
+    ? rawSectionMovies.filter((movie) => (
+        /vsmov/i.test(`${movie.source_site || ''} ${movie.source_name || ''}`)
+        && /(?:4k|2160p|uhd)/i.test(String(movie.quality || ''))
+      ))
     : rawSectionMovies;
   // Keep the full skeleton height until the parent request settles. Rendering
   // the compact empty state before parent data arrives shifts every shelf below.
@@ -292,14 +294,8 @@ function SectionPlaceholder({
           <div className="h-8 w-20 flex-shrink-0 rounded-md skeleton" />
         </div>
 
-        <div className="grid grid-cols-3 gap-x-2 gap-y-4 pb-3 md:hidden">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i}>
-              <div className="aspect-[2/3] rounded-lg skeleton" />
-              <div className="mt-2 h-3 w-3/4 rounded skeleton" />
-              <div className="mt-1 h-2.5 w-1/2 rounded skeleton" />
-            </div>
-          ))}
+        <div className="pb-3 md:hidden" aria-hidden="true">
+          <div className="h-24 rounded-xl border border-white/[0.05] bg-white/[0.025] skeleton" />
         </div>
 
         <div className="hidden snap-x snap-mandatory gap-3 overflow-hidden pb-2 md:flex md:gap-4">

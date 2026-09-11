@@ -39,7 +39,6 @@ function hasMojibake(value) {
 function isDynamicMovieSitemap(fileName) {
   return fileName === 'sitemap-movies.xml'
     || fileName === 'sitemap-movies-recent.xml'
-    || fileName === 'sitemap-movies-upcoming.xml'
     || fileName === 'sitemap-movies-ongoing.xml'
     || /^sitemap-movies-\d+\.xml$/.test(fileName);
 }
@@ -64,11 +63,30 @@ if (/^\s*https?:\/\//im.test(redirects)) {
   addError('public/_redirects must not use domain-level sources; Cloudflare Pages only supports path-based sources here.');
 }
 const routesConfig = await read('public/_routes.json');
-if (routesConfig.includes('"/sitemap*.xml"')) {
-  addError('Cloudflare routes must let sitemap requests reach the SEO worker so retired chunks can return HTTP 410.');
+for (const requiredRoute of [
+  '"/api/*"', '"/internal/*"', '"/feed.xml"', '"/search"',
+  '"/kho-phim/trang/*"', '"/phim/*"', '"/filter"', '"/xem-phim/*"', '"/blog/*"',
+]) {
+  if (!routesConfig.includes(requiredRoute)) {
+    addError(`Cloudflare routes are missing the SEO route: ${requiredRoute}.`);
+  }
 }
-if (!redirects.includes('/* /index.html 200')) {
-  addError('public/_redirects must keep the SPA fallback after canonical redirects.');
+for (const staticSeoRoute of ['"/sitemap*"', '"/phim-*"', '"/the-loai/*"', '"/kho-phim*"']) {
+  if (routesConfig.includes(staticSeoRoute)) {
+    addError(`Quota-safe public SEO route must remain static: ${staticSeoRoute}.`);
+  }
+}
+if (/"include"\s*:\s*\[[\s\S]*?"\/"/.test(routesConfig)) {
+  addError('The static homepage must not consume a Pages Function invocation on every visit.');
+}
+if (/^\/\*\s+\/index\.html\s+200\s*$/m.test(redirects)) {
+  addError('public/_redirects must not turn every unknown URL into an HTTP 200 SPA soft 404.');
+}
+for (const requiredFallback of ['/xem-phim/* / 200', '/admin/* / 200', '/blog/* / 200']) {
+  if (!redirects.includes(requiredFallback)) addError(`public/_redirects is missing explicit SPA fallback: ${requiredFallback}`);
+}
+if (!(await exists(resolve('public', '404.html')))) {
+  addError('public/404.html is required so unknown Cloudflare Pages URLs return a real 404.');
 }
 if (/^\/sitemap[^\s]*\s+https:\/\//m.test(redirects) || /^\/feed\.xml\s+https:\/\//m.test(redirects)) {
   addError('public/_redirects must not bypass the single sitemap handler in functions/[[path]].js.');
@@ -166,6 +184,19 @@ if (!cloudflareFunction.includes("pathname === '/sitemap-movies-recent.xml'")
   || !cloudflareFunction.includes('cloudflare-pages-static-recent-fallback')) {
   addError('Recent movie sitemap must retain a validated static fallback during a data outage.');
 }
+if (!cloudflareFunction.includes('cloudflare-pages-empty-quality-fallback')
+  || !cloudflareFunction.includes('renderEmptySitemapXml')) {
+  addError('Upcoming and ongoing sitemaps must return valid XML during a data outage.');
+}
+for (const legacySeoPath of [
+  '/phim/tham-tu-lung-danh-conan-25-nang-dau-halloween',
+  '/phim/kisskh-goblin',
+  '/phim/toi-yeu-los-angeles',
+]) {
+  if (!cloudflareFunction.includes(legacySeoPath)) {
+    addError(`Cloudflare is missing the Search Console legacy URL repair: ${legacySeoPath}.`);
+  }
+}
 
 const llms = await read('public/llms.txt').catch(() => '');
 if (!/^#\s+\S+/m.test(llms)) {
@@ -200,8 +231,12 @@ const indexHtml = await read('index.html');
 if (SECONDARY_DOMAIN_PATTERN.test(indexHtml)) {
   addError('index.html must not contain mhophim.com; all SEO signals must point to khophim.org.');
 }
-if (!indexHtml.includes('rel="canonical"') || !indexHtml.includes('https://khophim.org')) {
-  addError('index.html must declare khophim.org as the canonical homepage.');
+if (indexHtml.includes('rel="canonical"')) {
+  addError('Shared index.html must not canonicalize every SPA deep route to the homepage.');
+}
+const homePageSource = await read('src/pages/home/page.tsx').catch(() => '');
+if (!homePageSource.includes('canonical="/"')) {
+  addError('The hydrated homepage must own its explicit homepage canonical.');
 }
 if (indexHtml.includes("gtag('config', 'G-6B5GLB9W6H');")) {
   addError('index.html sends an automatic GA page_view before SPA tracking.');
@@ -247,28 +282,29 @@ const recentMovieSitemap = `${SITE_URL}/sitemap-movies-recent.xml`;
 if (!childSitemaps.includes(recentMovieSitemap)) {
   addError(`sitemap.xml is missing the curated recent movie sitemap: ${recentMovieSitemap}`);
 }
-const upcomingMovieSitemap = `${SITE_URL}/sitemap-movies-upcoming.xml`;
-if (!childSitemaps.includes(upcomingMovieSitemap)) {
-  addError(`sitemap.xml is missing the quality-gated upcoming movie sitemap: ${upcomingMovieSitemap}`);
+if (!childSitemaps.includes(`${SITE_URL}/sitemap-movies-upcoming.xml`)) {
+  addError('Root sitemap is missing the bounded static upcoming trailer cohort.');
 }
-const ongoingMovieSitemap = `${SITE_URL}/sitemap-movies-ongoing.xml`;
-if (!childSitemaps.includes(ongoingMovieSitemap)) {
-  addError(`sitemap.xml is missing the freshness-ranked ongoing movie sitemap: ${ongoingMovieSitemap}`);
+for (const runtimeOnlyEndpoint of ['sitemap-movies-ongoing.xml', 'feed.xml']) {
+  if (childSitemaps.includes(`${SITE_URL}/${runtimeOnlyEndpoint}`)) {
+    addError(`Root sitemap must not depend on runtime-only endpoint: ${runtimeOnlyEndpoint}.`);
+  }
 }
 const movieChunks = childSitemaps.filter((loc) => /\/sitemap-movies-\d+\.xml$/.test(loc));
-if (movieChunks.length !== 0) {
-  addError(`Recovery sitemap.xml must focus crawl on priority URLs; found ${movieChunks.length} archive chunks.`);
-}
-if (!childSitemaps.includes(`${SITE_URL}/feed.xml`)) {
-  addError('sitemap.xml is missing the curated recent-movie RSS feed.');
+const expectedMovieChunks = [1].map((page) => `${SITE_URL}/sitemap-movies-${page}.xml`);
+if (movieChunks.length !== expectedMovieChunks.length || expectedMovieChunks.some((loc) => !movieChunks.includes(loc))) {
+  addError(`sitemap.xml must submit the single current editorial-quality movie chunk; found ${movieChunks.length}.`);
 }
 const archiveSitemapIndex = await read('public/sitemap-movies-archive.xml');
 const archiveMovieChunks = extractLocs(archiveSitemapIndex);
-for (let page = 1; page <= 18; page += 1) {
+for (let page = 1; page <= 1; page += 1) {
   const chunkLoc = `${SITE_URL}/sitemap-movies-${page}.xml`;
   if (!archiveMovieChunks.includes(chunkLoc)) {
     addError(`Archive sitemap index is missing bounded movie chunk: ${chunkLoc}`);
   }
+}
+if (archiveMovieChunks.length !== 1) {
+  addError(`Archive sitemap index should expose exactly 1 editorial-quality chunk; found ${archiveMovieChunks.length}.`);
 }
 
 const curatedMovieXml = await read('public/sitemap-movies-recent.xml');
@@ -406,7 +442,7 @@ if (!adminSeoPage.includes('gsc-seo-feedback')) {
 }
 
 const hotMoviesPage = await read('src/pages/hot-movies-2026/page.tsx').catch(() => '');
-for (const requiredSnippet of ['fetchTrendingMovies', 'Cập nhật tự động', 'Đây không phải bảng xếp hạng quảng cáo']) {
+for (const requiredSnippet of ['fetchLatestReleaseMovies', 'Cập nhật tự động', 'Đây không phải bảng xếp hạng quảng cáo']) {
   if (!hotMoviesPage.includes(requiredSnippet)) {
     addError(`The hot-movies page is missing its evidence-based contract: ${requiredSnippet}`);
   }
@@ -498,8 +534,8 @@ if (/\bkeywords="[^"]{250,}"/i.test(homePage)) {
 if (/reviewRating|itemType="https:\/\/schema\.org\/Rating"|ratingValue.*8/.test(movieReview)) {
   addError('Movie editorial content must not publish a fabricated fixed rating.');
 }
-if (!cloudflareFunction.includes("SEO_PRERENDER_VERSION = '20260820-cohort-parity-v24'")) {
-  addError('SEO prerender cache must use the cohort parity release.');
+if (!cloudflareFunction.includes("SEO_PRERENDER_VERSION = '20260903-editorial-cohort-v1'")) {
+  addError('SEO prerender cache must use the editorial-quality release.');
 }
 if (!cloudflareFunction.includes("includes('noindex')) return;")) {
   addError('Transient noindex movie prerenders must never be stored in the shared edge cache.');
@@ -508,7 +544,7 @@ if (!cloudflareFunction.includes("if (ep === 'trailer' || ep.includes('trailer')
   addError('An explicit trailer episode label must remain authoritative during movie lifecycle transitions.');
 }
 if (!cloudflareFunction.includes('function isHighValueIndexCandidate(movie)')
-  || !cloudflareFunction.includes('Number(movie.seo_quality_score || 0) < 85')
+  || !cloudflareFunction.includes('(upcoming ? 88 : 85)')
   || !cloudflareFunction.includes('tmdbId <= 0')) {
   addError('Movie indexability must use the strict, identity-backed public cohort gate.');
 }

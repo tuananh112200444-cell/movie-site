@@ -4,6 +4,9 @@ dist/
 .env
 .env.local
 .wrangler/
+work/
+test-results/
+.tmp-workers-types/
 tmp_*
 motchill_page.html
 tools/video-pipeline/config.json

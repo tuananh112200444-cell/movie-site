@@ -4,6 +4,101 @@
 # Dynamic XML endpoints are handled once in functions/[[path]].js. Keeping a
 # second rewrite layer here bypasses timeout, fallback and cache safeguards.
 
-# React Router SPA fallback. Do not add a top-level 404.html: Cloudflare Pages
-# uses its absence as the signal to serve index.html for deep SPA routes.
-/* /index.html 200
+# Retired provider slug. Keep one canonical movie URL even when Pages
+# Functions are unavailable and Cloudflare falls through to static assets.
+/phim/nguoi-nhen-khoi-dau-moi /phim/spider-man-brand-new-day-2026 301
+
+# React Router fallbacks are explicit so unknown URLs keep a real HTTP 404 via
+# public/404.html instead of becoming indexable soft-404 SPA documents.
+# Known catalogue routes must remain usable when Pages Functions temporarily
+# fail open (for example after a quota or deployment transition). Keep these
+# exact instead of adding a catch-all so genuinely unknown URLs still use the
+# real static 404 above.
+/phim-moi-nhat / 200
+/phim-moi-cap-nhat / 200
+/phim-hot-2026 / 200
+/phim-sap-chieu / 200
+/phim-ma / 200
+/phim-le / 200
+/phim-bo / 200
+/phim-chieu-rap / 200
+/tv-shows / 200
+/hoat-hinh / 200
+/anime / 200
+/my-nam / 200
+/phim-han-quoc / 200
+/phim-trung-quoc / 200
+/phim-au-my / 200
+/phim-nhat-ban / 200
+/phim-thai-lan / 200
+/phim-viet-nam / 200
+/xem-phim / 200
+/xem-phim-online / 200
+/xem-phim-mien-phi / 200
+/xem-phim-hd / 200
+/xem-phim-vietsub / 200
+/xem-phim-moi / 200
+/xem-phim-le / 200
+/xem-phim-bo / 200
+/xem-phim-chieu-rap / 200
+/xem-phim-viet-nam / 200
+/xem-phim-han-quoc / 200
+/xem-phim-trung-quoc / 200
+/xem-phim-au-my / 200
+/xem-anime-vietsub / 200
+/web-xem-phim / 200
+/kho-phim-online / 200
+/phim-vietsub / 200
+/phim-thuyet-minh / 200
+/phim-long-tieng / 200
+/phim-full-hd / 200
+/phim-hay / 200
+/phim-2026 / 200
+/phim-2025 / 200
+/phim-2024 / 200
+/phim-4k / 200
+/phim-hoan-tat / 200
+/phim-dang-chieu / 200
+/phim-trailer / 200
+/the-loai/hanh-dong / 200
+/the-loai/tinh-cam / 200
+/the-loai/hai-huoc / 200
+/the-loai/kinh-di / 200
+/the-loai/co-trang / 200
+/the-loai/vien-tuong / 200
+/the-loai/tam-ly / 200
+/the-loai/phieu-luu / 200
+/the-loai/hinh-su / 200
+/the-loai/chien-tranh / 200
+/the-loai/gia-dinh / 200
+/the-loai/bi-an / 200
+/the-loai/vo-thuat / 200
+/the-loai/than-thoai / 200
+/the-loai/hoc-duong / 200
+/the-loai/am-nhac / 200
+/the-loai/kinh-dien / 200
+/the-loai/tai-lieu / 200
+/the-loai/the-thao / 200
+/the-loai/khoa-hoc / 200
+/the-loai/chinh-kich / 200
+/the-loai/lich-su / 200
+/the-loai/hoat-hinh / 200
+/the-loai/phim-viet-nam / 200
+/vu-tru-dam-my / 200
+/about / 200
+/policy / 200
+/blog / 200
+/sitemap / 200
+/filter / 200
+/search / 200
+/dien-vien / 200
+/yeu-thich / 200
+/xem-phim/* / 200
+/dien-vien/* / 200
+/blog/* / 200
+/admin/* / 200
+/xem/* / 200
+/review-phim/* / 200
+/noi-dung-phim/* / 200
+/download-phim/* / 200
+/phim-thuyet-minh/* / 200

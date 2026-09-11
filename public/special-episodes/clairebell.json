@@ -1,0 +1,68 @@
+[
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 3",
+    "episode_number": -1003,
+    "link_embed": "https://ok.ru/videoembed/11640177166936?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet-3",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 2",
+    "episode_number": -1002,
+    "link_embed": "https://ok.ru/videoembed/11486706207320?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet-2",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 1",
+    "episode_number": -1001,
+    "link_embed": "https://ok.ru/videoembed/11339818207832?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 3",
+    "episode_number": -1003,
+    "link_embed": "https://abyssplayer.com/TIFYITCJa",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 2",
+    "slug": "tap-dac-biet-3",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 2",
+    "episode_number": -1002,
+    "link_embed": "https://abyssplayer.com/UgaiU3gZJ",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 2",
+    "slug": "tap-dac-biet-2",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 1",
+    "episode_number": -1001,
+    "link_embed": "https://abyssplayer.com/ebixbSQGu",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 2",
+    "slug": "tap-dac-biet",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  }
+]

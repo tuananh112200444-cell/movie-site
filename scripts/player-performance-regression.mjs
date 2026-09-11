@@ -29,6 +29,9 @@ const diagnostics = fs.readFileSync('src/services/playerDiagnostics.ts', 'utf8')
 const sourceHealthBrain = fs.readFileSync('supabase/functions/player-source-health/index.ts', 'utf8');
 const asyncViewerBrainMigration = fs.readFileSync('supabase/migrations/20260821170304_stabilize_viewer_brain_and_source_sync_capacity.sql', 'utf8');
 const appErrorBoundary = fs.readFileSync('src/components/base/AppErrorBoundary.tsx', 'utf8');
+const viewerRegion = fs.readFileSync('src/services/viewerRegion.ts', 'utf8');
+const packageJson = fs.readFileSync('package.json', 'utf8');
+const installPagesWorker = fs.readFileSync('scripts/install-pages-worker.mjs', 'utf8');
 
 const checks = [
   [imageFallback.includes('useLayoutEffect(() => {') && imageFallback.includes('memory-cache `load` event'), 'Cached movie artwork must reset before load events so SPA logo navigation cannot leave decoded images at opacity zero'],
@@ -57,7 +60,9 @@ const checks = [
       && playerSection.includes('const pendingRelease = Boolean(movie.release_at) && !isCompleted;'),
     'A completed movie with historical release_at metadata must not keep a one-second schedule clock alive',
   ],
-  [lightweightPlayer.includes('const STALL_RECOVERY_DELAY_MS = 10_000') && lightweightPlayer.includes('const MIN_FATAL_STALL_MS = 45_000') && lightweightPlayer.includes('const isNewStall = !stallStartedAtRef.current') && lightweightPlayer.includes('if (!hls.loadingEnabled) hls.startLoad(finitePlaybackTime(video.currentTime) || -1, true)') && !lightweightPlayer.includes('hls.stopLoad();'), 'Slow HLS fragments must keep their active request and deduplicate waiting/stalled events before failover'],
+  [lightweightPlayer.includes('const STALL_RECOVERY_DELAY_MS = 10_000') && lightweightPlayer.includes('const MIN_FATAL_STALL_MS = 45_000') && lightweightPlayer.includes('const isNewStall = !stallStartedAtRef.current') && lightweightPlayer.includes('if (!hls.loadingEnabled) hls.startLoad(finitePlaybackTime(video.currentTime) || -1, true)'), 'Slow HLS fragments must keep their active request and deduplicate waiting/stalled events before failover'],
+  [lightweightPlayer.includes('const LONG_SEEK_DISTANCE_SECONDS = 20') && lightweightPlayer.includes('if (hls && isLongSeek) hls.stopLoad();') && lightweightPlayer.includes('hls.startLoad(target, true);') && lightweightPlayer.includes("setErrorMsg(outsideBuffer ? 'Đang tải đoạn vừa chọn...' : '');"), 'A deliberate long seek must update immediately, abort obsolete fragments and restart HLS at the requested position'],
+  [lightweightPlayer.includes('if (userSeekActiveRef.current)') && lightweightPlayer.includes('Do not') && lightweightPlayer.includes('classify that wait as a source stall'), 'Expected buffering after a user seek must not poison source health or trigger ordinary stall recovery'],
   [lightweightPlayer.includes('finitePlaybackTime(lastPlaybackSecondRef.current)') && lightweightPlayer.includes('setHasError(false);') && lightweightPlayer.includes('onClick={retryStream}') && playerBox.includes('setManualReloadTime(resumeAt)') && playerBox.includes('initialTime={manualReloadTime ?? effectiveInitialTime}'), 'Manual player and stream retries must remount the video and preserve the active playback position'],
   [lightweightPlayer.includes('maxBufferLength: slowNetwork ? 18 : 24') && lightweightPlayer.includes('maxBufferLength: 36') && lightweightPlayer.includes('maxMaxBufferLength: 72') && lightweightPlayer.includes('abrBandWidthFactor: 0.8') && lightweightPlayer.includes('fragLoadingTimeOut: 25_000'), 'HLS must keep a bounded device-aware buffer, conservative ABR and enough time to finish each fragment'],
   [lightweightPlayer.includes('const baseline = current >= 0 ? current : hls.levels.length - 1') && lightweightPlayer.includes('if (baseline <= 0)') && lightweightPlayer.includes('const next = baseline - 1'), 'Stall recovery at the lowest rendition must never increase video bitrate'],
@@ -74,7 +79,7 @@ const checks = [
   [hero.includes('hidden sm:block') && hero.includes('loading="eager"') && hero.includes('fetchPriority="high"') && !hero.includes('backdropFallback'), 'Desktop LCP backdrop must load eagerly while remaining hidden on mobile'],
   [navbar.includes('/brand/khophim-favicon-v2-96.png'), 'Navigation must use the compact brand asset'],
   [movieApi.includes("new URL('/api/movie-detail'"), 'Movie detail must use the same-origin edge cache'],
-  [movieApi.includes('delayMs: 150') && movieApi.includes('timeoutMs: 18_000') && movieApi.includes('raceFirstValidWithTimeout(requests, 18_250)'), 'Movie detail must hedge the public Singapore read and tolerate a cold multi-provider response without producing a false 404'],
+  [movieApi.includes('delayMs: 1_200') && movieApi.includes('let winnerFound = false') && movieApi.indexOf("new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`)") < movieApi.indexOf("new URL('/api/movie-detail'"), 'Movie detail must prefer the public Singapore read and avoid spending a Pages Function request when it succeeds'],
   [movieApi.includes('withNullTimeout(proxyPlayablePromise, 4_100)') && movieApi.includes('raceFirstValidWithTimeout(playablePromises, 900)'), 'The complete provider/audio union must own most of the bounded quick-path budget before a single-provider response may win'],
   [movieApi.includes('External enrichment must never delay first render/player startup') && movieApi.includes('void mergeExternalDetailIfFast'), 'External detail enrichment must remain outside the critical render path'],
   [movieApi.includes('BLVIETSUB_DETAIL_DEDUPE_MS') && movieApi.includes('blvietsubDetailInflight'), 'Repeated BLVietsub detail failures must be deduplicated on the client'],
@@ -92,7 +97,7 @@ const checks = [
   [detailProxy.includes('if (shouldSuppressUnhealthyStream(sm)) continue;') && movieApi.includes('if (shouldSuppressStoredStream(sm)) continue;'), 'Pending or unhealthy rows must also be excluded from the direct streams-table playback path'],
   [detailProxy.includes('const shouldRepairInBackground =') && detailProxy.includes('const shouldFetchExternal =') && detailProxy.includes('serverMap.size === 0 || !useSupabase || shouldRepairPlaceholderSeries'), 'Third-party source repair must not block a usable database-backed player; only structurally invalid series placeholders may synchronously resolve a verified catalogue'],
   [detailProxy.includes('edgeWaitUntil(Promise.allSettled(cacheWrites))') && !detailProxy.includes('await writeCachedDetail(supabase, slug, response)'), 'Best-effort detail-cache writes must not delay a ready player response'],
-  [detailProxy.includes('exact private catalogue row is an authoritative quarantine/tombstone') && detailProxy.includes("'X-Catalog-Quarantine': '1'") && /\?rev=canonical-v\d+(?:-[a-z0-9-]+)?/i.test(worker), 'A provider response or stale edge cache must not resurrect an explicitly quarantined movie'],
+  [detailProxy.includes('exact private catalogue row is an authoritative quarantine/tombstone') && detailProxy.includes("'X-Catalog-Quarantine': '1'") && worker.includes("'canonical-v12-hot-movie-radar'") && worker.includes('detailCacheRevision'), 'A provider response or stale edge cache must not resurrect an explicitly quarantined movie'],
   [detailProxy.includes('is_published: false') && detailProxy.includes('persistedPlayableCoverage') && detailProxy.includes('hasExternalPlayable && hasUsableImage'), 'Lazy detail persistence must keep metadata-only movies private until playback and artwork are stored'],
   [autoRepair.includes('host_counts') && autoRepair.includes('>= threshold'), 'A hostname must independently reach the evidence threshold before persistent penalty'],
   [autoRepair.includes("'unified-provider-brain'") && autoRepair.includes('slug: movie.slug'), 'A repeatedly dead primary source must use identity-guarded unified failover'],
@@ -114,6 +119,23 @@ const checks = [
   [streamHealth.includes("url.searchParams.get('episode')") && streamHealth.includes(".eq('movie_id', targetMovie.id)") && streamHealth.includes("query.eq('episode_slug', episodeSlug)"), 'Targeted source recovery must resolve indexed movie identity and independently probe only the reported episode'],
   [detailProxy.includes("healthStatus === 'failed' && failureCount >= 3"), 'The detail API and frontend must suppress a telemetry-failed stream at the same threshold'],
   [sourceHealth.includes('SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000') && sourceHealth.includes('SOURCE_HEALTH_UPDATED_EVENT') && sourceHealth.includes('function getSourceCluster') && sourceHealth.includes('map[`cluster:${cluster}`]'), 'Cross-viewer host and independently-confirmed cluster penalties must remain active for the advertised window and notify an open player'],
+  [
+    sourceHealth.includes('This is a local player failure, not a new cross-viewer health snapshot')
+      && !sourceHealth.slice(sourceHealth.indexOf('export function markSourcePlaybackFailed'), sourceHealth.indexOf('export function markSourcePlaybackHealthy')).includes('dispatchEvent'),
+    'A local fatal callback must not broadcast a second competing global source handoff',
+  ],
+  [
+    page.includes('sourceSelectionLockUntilRef')
+      && page.includes('automaticStartupHandoffKeyRef')
+      && page.includes('Date.now() + 15_000'),
+    'Region, health and PlayerBox failover must share a source-selection cooldown',
+  ],
+  [
+    page.includes('sourceRepairStateRef')
+      && page.includes('Preserve the mounted player while the repair request runs')
+      && page.includes('Date.now() - repairState.startedAt < 30_000'),
+    'Terminal repair must remain in the background and be deduplicated per failed source',
+  ],
   [main.indexOf("import './polyfills'") >= 0 && main.indexOf("import './polyfills'") < main.indexOf("react-dom/client") && polyfills.includes('Array.prototype.at'), 'The player compatibility shim must run before React and lazy HLS chunks on Safari 14'],
   [main.includes("ASSET_RECOVERY_REVISION = '20260824-v2'") && main.includes('rootElement.dataset.kpAssetRevision = ASSET_RECOVERY_REVISION'), 'The post-header recovery release must use a fresh entry-module URL for browsers exposed to the transient asset miss'],
   [
@@ -137,12 +159,14 @@ const checks = [
   [asyncViewerBrainMigration.includes("where jobname = 'backfill-playback-score-v2-every-minute'") && asyncViewerBrainMigration.includes('cron.unschedule(jobid)'), 'The completed playback-score backfill must not keep scanning streams every minute'],
   [sourceHealthBrain.includes('deduplicatePlaybackEvents') && sourceHealthBrain.includes("playbackIdentity}|${normalizeHost(event.source_host)}|${eventClass}") && sourceHealthBrain.includes('balanced_events'), 'Global source health must deduplicate retries by playback session, host and event class'],
   [sourceHealthBrain.includes('summarizeClusterOutages') && sourceHealthBrain.includes('item.affected_hosts >= 3') && sourceHealth.includes('cluster_outages') && sourceHealth.includes('map[`cluster:${cluster}`] = now'), 'A provider cluster may be demoted only after failures span at least three independent hosts'],
-  [sourceHealth.includes('SOURCE_HEALTH_FETCH_TTL_MS = 5 * 60 * 1000') && sourceHealth.includes('SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000'), 'Source health must refresh promptly while retaining a bounded anti-flapping penalty'],
+  [sourceHealth.includes('SOURCE_HEALTH_FETCH_TTL_MS = 30 * 60 * 1000') && sourceHealth.includes('SOURCE_HEALTH_PENALTY_TTL_MS = 30 * 60 * 1000'), 'Source health must share one bounded refresh and anti-flapping window without exhausting Pages quota'],
   [page.includes('if (!currentUrl || !isRecentlyBadSourceHost(currentUrl)) return;') && page.includes('currentPlaybackTime >= 8 || Date.now() - activeSourceSelectedAtRef.current >= 8_000') && page.includes('const allAlternativeServers = filteredEpisodes') && page.includes('const alternativeServers = healthyAlternativeServers.length > 0'), 'A late health response must replace a bad startup URL with an independent same-episode source before meaningful viewing begins'],
-  [page.includes('warmSourceHealthWithinStartupBudget') && page.includes('Promise.all([detailRequest, initialSourceHealth])') && page.includes('window.setTimeout(resolve, 250)'), 'Initial watch-source selection must honor cached provider outages within a 250ms startup budget'],
+  [page.includes('warmSourceHealthWithinStartupBudget') && page.includes('Promise.all([detailRequest, bootstrapPromise, initialSourceHealth, initialViewerRegion])') && page.includes('window.setTimeout(resolve, 250)'), 'Initial watch-source selection must honor the static bootstrap, cached provider outages and viewer region within bounded startup budgets'],
+  [viewerRegion.includes("fetch('/cdn-cgi/trace'") && viewerRegion.includes("text.match(/^loc=([A-Z]{2})$/m)") && !viewerRegion.includes('ip='), 'International source selection must use Cloudflare country detection without storing the viewer IP'],
+  [movieApi.includes('getInternationalPlaybackBonus') && movieApi.includes('kkphimplayer') && playerBox.includes('isInternationalViewer()'), 'International viewers must prefer globally reachable direct HLS over geo-sensitive provider iframes'],
   [playerBox.includes('isBrowserManagedPhimApiEmbed(ep.link_embed)') && playerBox.includes('reserve the iframe as a same-provider fallback'), 'CORS-capable PhimAPI manifests must prefer the first-party HLS player over a tracker-heavy iframe'],
   [playerBox.includes('const [iframeRevealed, setIframeRevealed]') && playerBox.includes('const EMBED_SOFT_REVEAL_MS = 2_500') && playerBox.includes('{!iframeRevealed && (') && !playerBox.includes('setIframeKey((k) => k + 1);\n      setSsplayVariant'), 'Embed loading UI must reveal promptly without remounting the initial iframe'],
-  [page.includes("document.addEventListener('visibilitychange', refreshHealth)") && page.includes('window.setInterval(refreshHealth, 5 * 60 * 1000)') && page.includes("document.visibilityState === 'visible'"), 'Long watch sessions must refresh source health without polling in background tabs'],
+  [page.includes("document.addEventListener('visibilitychange', refreshHealth)") && page.includes('window.setInterval(refreshHealth, 30 * 60 * 1000)') && page.includes("document.visibilityState === 'visible'"), 'Long watch sessions must refresh source health sparingly and never poll in background tabs'],
   [movieApi.includes('isRecentlyBadSourceCluster') && movieApi.includes('isRecentlyBadExactSourceHost') && !movieApi.includes("khophim.bad-source-hosts.v1"), 'Source selection must consume the same global health state written by the telemetry brain'],
   [movieApi.includes('isAuthoritativeNoPlaybackDetail(proxy)') && movieApi.includes('a direct provider fallback must not reintroduce'), 'A provider fallback must not resurrect a URL that the authoritative health proxy quarantined'],
   [movieApi.includes('buildStoredStreamHealthIndex') && movieApi.includes('getStoredEpisodeHealthRow') && movieApi.includes('shouldSuppressStoredStream(healthRow)'), 'Direct Supabase fallback must not resurrect legacy episode rows already suppressed by stream health'],
@@ -163,7 +187,11 @@ const checks = [
   [playerBox.includes('const requestTerminalSourceRepair = useCallback') && playerBox.includes('terminalRepairKeyRef.current === repairKey') && playerBox.includes('window.setTimeout(() =>') && playerBox.includes('onRefetchMovie();'), 'A terminal source failure must request one bounded fresh repair without entering a refetch loop'],
   [playerBox.includes("video.addEventListener('loadedmetadata', restorePlayback, { once: true })") && playerBox.includes('reloadDirectVideoAt(resumeAt, true)'), 'Direct-video recovery must wait for metadata before restoring playback time'],
   [movieApi.includes('badPaths.length < hosts.length') && page.includes('if (!currentUrl || !isRecentlyBadSourceHost(currentUrl)) return;') && playerBox.includes('getEpisodeSourceKeys(candidate)'), 'An episode with iframe and direct media must remain eligible until every playback path fails, while fallback avoids the exact failed path'],
-  [page.includes('Keep the complete playable catalogue visible') && !page.includes('server_data: (server.server_data ?? []).filter((episode)'), 'Global source health must rank and fail over sources without deleting requested episodes from the visible catalogue'],
+  [
+    page.includes('Keep the complete playable catalogue visible')
+      && !page.slice(page.indexOf('const filteredEpisodes = useMemo'), page.indexOf('const displayMovieBase')).includes('.filter((episode)'),
+    'Global source health must rank and fail over sources without deleting requested episodes from the visible catalogue',
+  ],
   [sourceHealth.includes('markSourcePlaybackFailed') && playerBox.includes('rememberActiveSourceFailure') && playerBox.includes('!isRecentlyBadExactSourceHost(episode.link_m3u8)') && !playerBox.includes("khophim.bad-source-hosts.v1"), 'Fatal HLS, direct-video and iframe paths must share one v2 failure state and never cycle back to an exact path already failed in the session'],
   [worker.includes("pathname === '/api/movie-detail'") && worker.includes('X-KhoPhim-Detail-Cache'), 'Cloudflare must cache complete movie-detail JSON'],
   [worker.includes('Large catalogues can finish just after four seconds') && worker.includes('signal: AbortSignal.timeout(7000)'), 'Cloudflare must not abort a valid large-catalogue detail response immediately before completion'],
@@ -176,12 +204,16 @@ const checks = [
   [page.includes("window.addEventListener('pagehide', flushBeforePageLeaves)") && page.includes('pendingProgressRef.current'), 'Playback progress must flush periodically and when the mobile tab leaves'],
   [page.includes('const playbackTimeRef = useRef(0)') && page.includes('setInitialSeekTime(resumeAt)') && page.includes('playbackTimeRef.current = Math.max(0, time)'), 'Every player rebuild and source switch must carry the live playback position instead of restarting at zero'],
   [!/late cross-viewer health update[\s\S]{0,1400}setInitialSeekTime\(0\)/.test(page), 'A late global source-health update must never reset an active viewer to the beginning'],
-  [page.includes('const targetEpisode = activeEpRef.current') && page.includes('pickBestEpisodeByScore(deduped, targetEpisode, preferredSource)') && page.includes('setActiveEp(recovered.episode)'), 'Refreshing failed sources must restore the same episode and playback position'],
+  [page.includes('const targetEpisode = activeEpRef.current') && page.includes('pickBestEpisodeByScore(repairCandidates, targetEpisode, preferredSource)') && page.includes('setActiveEp(recovered.episode)'), 'Refreshing failed sources must restore the same episode and playback position'],
   [page.includes('if (requestedEpisode && !requested)') && page.includes('setActiveEp(null)') && page.indexOf('if (requestedEpisode && !requested)') < page.indexOf('const best = requested ??'), 'An unavailable episode route must never silently fall back to a different episode'],
   [page.includes("requestedEpisode !== 'full'") && page.includes('numberedEpisodes.length < 2') && page.includes('withPlaybackPreference(`/xem-phim/${slug}/${episodePath}`'), 'A legacy `/full` TV-series link must move to a verified numbered episode only after multiple numbered episodes exist'],
   [detailProxy.includes('hasOnlyFullPlaceholderCoverage') && detailProxy.includes("movie?.tmdb_id") && detailProxy.includes('shouldRepairPlaceholderSeries') && detailProxy.includes('isSafeAuxiliaryExternalMatch'), 'A multi-episode series with only a `full` placeholder must resolve a safely matched numbered catalogue only from stable identity evidence'],
   [detailProxy.includes('removeLegacyUncheckedFullPlaceholders') && detailProxy.includes("provider === 'ophim' && health === 'unchecked'"), 'A verified numbered series catalogue must hide only the legacy unchecked OPhim `full` placeholder, not manual specials'],
   [playerSection.includes('requestedEpisodeUnavailable') && playerSection.includes('KhoPhim sẽ không tự phát nhầm sang tập khác'), 'An unavailable requested episode must show an explicit recovery state instead of a misleading ready-to-play player'],
+  [page.includes('forcePlaybackRefresh') && page.includes('existingPlayableDetail') && page.includes('}, [isWatchPage, preferredSource, slug]);'), 'SPA navigation to a released watch page must retain existing sources or automatically request fresh playback data'],
+  [playerSection.includes('episodeDataLoading') && playerSection.includes('Đang tải nguồn phim…') && playerSection.includes('Hệ thống đang tự lấy danh sách tập'), 'The watch page must show an automatic loading state instead of falsely claiming a released movie is still updating'],
+  [packageJson.includes('npm run pages:worker:build') && installPagesWorker.includes("out', '_worker.js") && installPagesWorker.includes('env["ASSETS"].fetch(request)'), 'Every production build must install the tested Pages Function bundle as an integrated Worker with static-asset fallback'],
+  [movieApi.includes('allowProductionEmergency') && movieApi.includes('fetchMovieDetailFromExternal(slug, true)') && movieApi.indexOf('fetchMovieDetailFromExternal(slug, true)') > movieApi.indexOf('const candidates = ['), 'Released movies must use an exact-slug public fallback only after every canonical playback endpoint has failed'],
   [autoRepair.indexOf('const penalizedStreams = await penalizeTelemetryFailedStreams') > autoRepair.indexOf("'unified-provider-brain'"), 'Provider refresh must finish before the current stored source is queued for an independent telemetry probe'],
   [playerBox.includes('onLoadedMetadata={(event) =>') && playerBox.includes('onTimeUpdate={(event) =>') && playerBox.includes('onVideoEnded?.();'), 'Direct MP4 playback must restore, save and complete progress like HLS playback'],
   [watchHistory.includes('persistWatchHistoryProgress') && watchHistory.includes('entry.slug === movieSlug'), 'Watch history progress must survive canonical movie ID changes by matching slug'],

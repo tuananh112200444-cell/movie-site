@@ -5,7 +5,7 @@ const KEY = 'kp_favorites';
 
 export type FavMovie = Pick<MovieItem,
   '_id' | 'slug' | 'name' | 'origin_name' | 'thumb_url' | 'poster_url' |
-  'year' | 'quality' | 'lang' | 'episode_current'
+  'year' | 'quality' | 'lang' | 'episode_current' | 'type' | 'category' | 'country'
 >;
 
 function load(): FavMovie[] {
@@ -31,7 +31,8 @@ export function useFavorites() {
         ? prev.filter((f) => f._id !== movie._id)
         : [{ _id: movie._id, slug: movie.slug, name: movie.name, origin_name: movie.origin_name ?? '',
              thumb_url: movie.thumb_url, poster_url: movie.poster_url, year: movie.year,
-             quality: movie.quality, lang: movie.lang, episode_current: movie.episode_current
+             quality: movie.quality, lang: movie.lang, episode_current: movie.episode_current,
+             type: movie.type, category: movie.category, country: movie.country
            }, ...prev];
       save(next);
       added = !exists;

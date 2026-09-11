@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Demo banner Top & Catfish</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080a0f;
+      --panel: #10131b;
+      --line: rgba(255, 255, 255, .1);
+      --muted: rgba(255, 255, 255, .55);
+      --accent: #f0554e;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+      color: white;
+      background:
+        radial-gradient(circle at 80% 8%, rgba(240, 85, 78, .12), transparent 24rem),
+        linear-gradient(135deg, transparent 0 49.8%, rgba(255,255,255,.018) 49.9% 50.1%, transparent 50.2%) 0 0 / 180px 180px,
+        var(--bg);
+    }
+    button { font: inherit; }
+    .demo-nav {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      display: flex;
+      min-height: 64px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(8,10,15,.9);
+      backdrop-filter: blur(18px);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; }
+    .brand-mark {
+      display: grid;
+      width: 32px;
+      height: 32px;
+      place-items: center;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #f0554e, #6d2031);
+      box-shadow: 0 0 30px rgba(240,85,78,.3);
+    }
+    .demo-chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: var(--muted);
+      background: rgba(255,255,255,.035);
+      font-size: 12px;
+    }
+    .top-slot {
+      position: relative;
+      z-index: 30;
+      display: grid;
+      min-height: 118px;
+      place-items: center;
+      padding: 14px 46px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      background: #090b11;
+      transition: min-height .22s ease, padding .22s ease, opacity .22s ease;
+    }
+    .top-slot.is-hidden { display: none; }
+    .ad-frame {
+      position: relative;
+      display: block;
+      width: min(728px, 100%);
+      overflow: hidden;
+      border: 1px solid rgba(255,205,92,.3);
+      border-radius: 8px;
+      background: #07080c;
+      box-shadow: 0 12px 44px rgba(0,0,0,.46), 0 0 0 1px rgba(255,255,255,.03);
+    }
+    .ad-frame::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+    .ad-image { display: block; width: 100%; height: auto; }
+    .ad-label {
+      position: absolute;
+      z-index: 3;
+      top: 4px;
+      left: 5px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: rgba(255,255,255,.72);
+      background: rgba(0,0,0,.65);
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .close-ad {
+      position: absolute;
+      z-index: 4;
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 999px;
+      color: white;
+      background: rgba(7,8,12,.88);
+      cursor: pointer;
+      box-shadow: 0 5px 18px rgba(0,0,0,.4);
+    }
+    .top-close { top: 50%; right: 12px; transform: translateY(-50%); }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 90px; }
+    .eyebrow { color: var(--accent); font-size: 11px; font-weight: 900; letter-spacing: .2em; text-transform: uppercase; }
+    h1 { max-width: 780px; margin: 12px 0; font-size: clamp(34px, 6vw, 74px); line-height: .94; letter-spacing: -.055em; }
+    .lead { max-width: 650px; color: var(--muted); font-size: 15px; line-height: 1.7; }
+    .mock-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 14px; margin-top: 44px; }
+    .mock-card { aspect-ratio: 2/3; border: 1px solid var(--line); background: linear-gradient(150deg, #202531, #0b0d13 66%); }
+    .catfish {
+      position: fixed;
+      z-index: 90;
+      left: 50%;
+      bottom: max(12px, env(safe-area-inset-bottom, 0px));
+      width: min(728px, calc(100vw - 40px));
+      transform: translateX(-50%);
+      transition: transform .28s cubic-bezier(.22,1,.36,1), opacity .2s ease;
+    }
+    .catfish.is-hidden { display: none; }
+    .catfish .ad-frame { width: 100%; border-radius: 8px; }
+    .catfish-close { top: -13px; right: -7px; }
+    .catfish-note {
+      position: absolute;
+      right: 34px;
+      bottom: calc(100% + 5px);
+      color: rgba(255,255,255,.45);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    @media (max-width: 767px) {
+      .demo-nav { min-height: 56px; padding-inline: 14px; }
+      .demo-chip { display: none; }
+      .top-slot { min-height: 78px; padding: 10px 42px 10px 10px; }
+      .top-slot .ad-frame { width: min(320px, 100%); }
+      .top-close { right: 7px; }
+      main { width: min(100% - 24px, 560px); padding-top: 38px; }
+      .mock-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+      .mock-card:nth-child(n+5) { display: none; }
+      .catfish { width: min(320px, calc(100vw - 16px)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .catfish, .top-slot { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="demo-nav">
+    <div class="brand"><span class="brand-mark">K</span><span>KhoPhim</span></div>
+    <span class="demo-chip">Bản demo vị trí quảng cáo</span>
+  </header>
+
+  <section class="top-slot" id="topSlot" aria-label="Banner quảng cáo đầu trang">
+    <div class="ad-frame">
+      <a href="https://154.82.109.139/2138110.html" target="_blank" rel="noopener noreferrer nofollow sponsored" aria-label="Mở trang quảng cáo 9922">
+        <picture>
+          <source media="(max-width: 767px)" srcset="./assets/320x50.gif" />
+          <img class="ad-image" src="./assets/728x90.gif" width="728" height="90" alt="Banner quảng cáo 9922" />
+        </picture>
+      </a>
+    </div>
+    <button class="close-ad top-close" id="closeTop" type="button" aria-label="Đóng banner đầu trang">×</button>
+  </section>
+
+  <main>
+    <p class="eyebrow">Demo layout</p>
+    <h1>Banner Top & Catfish</h1>
+    <p class="lead">Banner top nằm ngay dưới thanh điều hướng. Catfish nổi cố định phía dưới, không che nội dung chính và tôn trọng vùng an toàn trên điện thoại.</p>
+    <div class="mock-grid" aria-hidden="true">
+      <div class="mock-card"></div><div class="mock-card"></div><div class="mock-card"></div><div class="mock-card"></div><div class="mock-card"></div>
+    </div>
+  </main>
+
+  <aside class="catfish" id="catfish" aria-label="Banner catfish">
+    <div class="ad-frame">
+      <a href="https://154.82.109.139/2138110.html" target="_blank" rel="noopener noreferrer nofollow sponsored" aria-label="Mở trang quảng cáo 9922">
+        <picture>
+          <source media="(max-width: 767px)" srcset="./assets/320x50.gif" />
+          <img class="ad-image" src="./assets/728x90.gif" width="728" height="90" alt="Banner quảng cáo 9922" />
+        </picture>
+      </a>
+    </div>
+    <button class="close-ad catfish-close" id="closeCatfish" type="button" aria-label="Đóng banner catfish">×</button>
+  </aside>
+
+  <script>
+    const topSlot = document.getElementById('topSlot');
+    const catfish = document.getElementById('catfish');
+    document.getElementById('closeTop').addEventListener('click', () => topSlot.classList.add('is-hidden'));
+    document.getElementById('closeCatfish').addEventListener('click', () => catfish.classList.add('is-hidden'));
+  </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+/* Size against the player, including a phone's rotated viewport fallback. */
+[data-kp-player] {
+  container-type: inline-size;
+  --kp-brand-width: clamp(88px, 13vw, 150px);
+  --kp-brand-inset: clamp(12px, 2vw, 32px);
+  --kp-brand-opacity: 0.66;
+  --kp-brand-active-opacity: 0.86;
+  --kp-brand-top: max(var(--kp-brand-inset), env(safe-area-inset-top, 0px));
+  --kp-brand-left: max(var(--kp-brand-inset), env(safe-area-inset-left, 0px));
+}
+
+@supports (width: 1cqw) {
+  [data-kp-player] {
+    --kp-brand-width: clamp(88px, 13cqw, 150px);
+    --kp-brand-inset: clamp(12px, 2cqw, 32px);
+  }
+}
+
+/* Desktop viewing needs a stronger mark at normal monitor distance. */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  [data-kp-player] {
+    --kp-brand-width: clamp(168px, 15vw, 220px);
+    --kp-brand-opacity: 0.82;
+    --kp-brand-active-opacity: 0.96;
+  }
+
+  @supports (width: 1cqw) {
+    [data-kp-player] { --kp-brand-width: clamp(168px, 15cqw, 220px); }
+  }
+}
+
+[data-kp-player]:fullscreen,
+[data-kp-player]:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: #000;
+  overscroll-behavior: none;
+}
+
+[data-kp-player]:fullscreen .kp-player-controls-bottom,
+[data-kp-player]:-webkit-full-screen .kp-player-controls-bottom,
+html.kp-player-pseudo-fullscreen .kp-player-controls-bottom {
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+}
+
+/* A phone becomes wider than Tailwind's desktop breakpoint after rotation.
+   Pointer capability keeps the fullscreen bar touch-sized and uncluttered. */
+@media (hover: none) and (pointer: coarse) {
+  [data-kp-player] .kp-desktop-player-control {
+    display: none !important;
+  }
+}
+
+.kp-player-watermark {
+  position: absolute;
+  top: var(--kp-brand-top);
+  left: var(--kp-brand-left);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--kp-brand-width) * 0.045);
+  width: var(--kp-brand-width);
+  color: #fff;
+  opacity: var(--kp-brand-opacity);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  font-family: system-ui, sans-serif;
+  font-size: calc(var(--kp-brand-width) * 0.13);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  text-shadow: 0 1px 3px #000, 0 0 8px rgb(0 0 0 / 45%);
+}
+
+.kp-player-watermark[data-active="true"] { opacity: var(--kp-brand-active-opacity); }
+.kp-player-watermark img {
+  width: 24%;
+  height: auto;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 55%));
+}
+.kp-player-watermark-domain { font-size: 0.72em; font-weight: 500; letter-spacing: 0; }
+
+.kp-player-source-picker {
+  left: var(--kp-brand-left);
+  top: calc(var(--kp-brand-top) + var(--kp-brand-width) * 0.24 + 12px);
+}
+
+/* The video-only system control would exclude our branding and exit button. */
+[data-kp-player] > video::-webkit-media-controls-fullscreen-button { display: none; }
+
+/* In the rotated fallback, physical top/bottom cutouts become left/right. */
+.kp-landscape-fullscreen,
+[data-kp-player][data-rotated="true"] {
+  --kp-brand-top: max(var(--kp-brand-inset), env(safe-area-inset-right, 0px));
+  --kp-brand-left: max(var(--kp-brand-inset), env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px));
+}

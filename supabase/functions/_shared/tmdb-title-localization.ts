@@ -14,6 +14,7 @@ type TmdbSearchResult = {
 type TmdbDetail = TmdbSearchResult;
 
 export type LocalizedMovieTitles = {
+  titleVi: string;
   titleEn: string;
   titleOriginal: string;
   tmdbId?: number;
@@ -72,7 +73,8 @@ async function tmdbJson(path: string, token: string): Promise<Record<string, unk
 }
 
 function sourceHasInternationalTitle(titleVi: string, sourceOriginal: string): boolean {
-  return Boolean(text(sourceOriginal)) && !sameTitle(titleVi, sourceOriginal);
+  const original = text(sourceOriginal);
+  return Boolean(original) && /[A-Za-z]/.test(original) && !sameTitle(titleVi, original);
 }
 
 /**
@@ -88,14 +90,14 @@ export async function resolveLocalizedMovieTitles(input: {
 }): Promise<LocalizedMovieTitles> {
   const titleVi = text(input.titleVi);
   const sourceOriginal = text(input.sourceOriginal);
-  if (!titleVi) return { titleEn: '', titleOriginal: '' };
+  if (!titleVi) return { titleVi: '', titleEn: '', titleOriginal: '' };
 
   if (sourceHasInternationalTitle(titleVi, sourceOriginal)) {
-    return { titleEn: sourceOriginal, titleOriginal: sourceOriginal };
+    return { titleVi, titleEn: sourceOriginal, titleOriginal: sourceOriginal };
   }
 
   const token = text(input.tmdbToken);
-  if (!token) return { titleEn: '', titleOriginal: sourceOriginal };
+  if (!token) return { titleVi, titleEn: '', titleOriginal: sourceOriginal };
   const query = new URLSearchParams({
     query: titleVi,
     language: 'vi-VN',
@@ -110,13 +112,15 @@ export async function resolveLocalizedMovieTitles(input: {
     return safeYearMatch(Number(input.year || 0), candidate)
       && (sameTitle(titleVi, localized) || sameTitle(sourceOriginal, original));
   });
-  if (!matched?.id || !matched.media_type) return { titleEn: '', titleOriginal: sourceOriginal };
+  if (!matched?.id || !matched.media_type) return { titleVi, titleEn: '', titleOriginal: sourceOriginal };
 
   const english = await tmdbJson(`/${matched.media_type}/${matched.id}?language=en-US`, token) as TmdbDetail | null;
   const englishTitle = text(english?.title || english?.name || matched.title || matched.name);
   const originalTitle = text(english?.original_title || english?.original_name || matched.original_title || matched.original_name);
+  const localizedTitle = text(matched.title || matched.name);
+  const resolvedTitleVi = localizedTitle && !sameTitle(localizedTitle, englishTitle) ? localizedTitle : titleVi;
   if (!englishTitle || sameTitle(titleVi, englishTitle)) {
-    return { titleEn: '', titleOriginal: originalTitle || sourceOriginal, tmdbId: matched.id };
+    return { titleVi: resolvedTitleVi, titleEn: '', titleOriginal: originalTitle || sourceOriginal, tmdbId: matched.id };
   }
-  return { titleEn: englishTitle, titleOriginal: originalTitle || englishTitle, tmdbId: matched.id };
+  return { titleVi: resolvedTitleVi, titleEn: englishTitle, titleOriginal: originalTitle || englishTitle, tmdbId: matched.id };
 }

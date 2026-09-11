@@ -13,7 +13,7 @@ const ENABLE_PUBLIC_LAZY_PERSIST =
   Deno.env.get('ENABLE_PUBLIC_LAZY_PERSIST') === 'true'
   && Deno.env.get('ENABLE_VIEWER_WRITE_PATH') === 'true';
 const DETAIL_CACHE_TTL_MIN = 10;
-const DETAIL_CACHE_SCHEMA_VERSION = 'provider-score-v10';
+const DETAIL_CACHE_SCHEMA_VERSION = 'special-episodes-v13';
 const VERIFIED_PLAYBACK_SAFETY_NET: Record<string, Array<{
   server_name: string;
   name: string;
@@ -233,10 +233,17 @@ function removeLegacyUncheckedFullPlaceholders(
       const label = `${ep.slug || ''} ${ep.name || ''}`.trim().toLowerCase();
       const provider = String(ep.source_provider || '').trim().toLowerCase();
       const health = String(ep.source_health_status || '').trim().toLowerCase();
-      // Keep manual/special Full editions. Only hide the old OPhim placeholder
-      // pattern that was never independently checked and conflicts with the
-      // verified numbered series catalogue.
-      return !(/\bfull\b/.test(label) && provider === 'ophim' && health === 'unchecked');
+      const isFull = /\bfull\b/.test(label);
+      const providerIdentity = `${provider} ${serverName}`.toLowerCase();
+      const isKkPhimFullCollision = isFull && /\b(phimapi|kkphim)\b/.test(providerIdentity);
+      // A provider-level `Full` row must never be mixed into a clearly
+      // episodic title once numbered episodes exist. Provider slugs can be
+      // reused for a movie edition (Mouse is a verified real-world example),
+      // and ranking that row as episode zero cross-wires the player.
+      return !(
+        isKkPhimFullCollision
+        || (isFull && provider === 'ophim' && health === 'unchecked')
+      );
     });
     if (filtered.length > 0) serverMap.set(serverName, filtered);
     else serverMap.delete(serverName);
@@ -264,7 +271,47 @@ function isDetailEpisodeIncomplete(payload: Record<string, unknown>): boolean {
     ? payload.episodes as Array<{ server_data?: unknown[] }>
     : [];
   const actual = getMaxEpisodeNumberFromServers(episodes);
-  return actual > 0 && actual < expected;
+  if (actual <= 0 || actual < expected) return true;
+
+  // A highest episode equal to the advertised value does not prove complete
+  // playback. `[3,4,5,6]` was previously cached as a complete six-episode
+  // season because only max(episode) was compared. Verify the full sequence
+  // for ordinary seasons before allowing the detail response into cache.
+  if (expected > 300) return false;
+  const present = new Set<number>();
+  for (const server of episodes) {
+    for (const raw of server.server_data ?? []) {
+      const episode = raw as Record<string, unknown>;
+      const number = extractEpNumber(String(episode.slug || episode.name || ''));
+      if (number > 0 && number <= expected) present.add(number);
+    }
+  }
+  for (let number = 1; number <= expected; number += 1) {
+    if (!present.has(number)) return true;
+  }
+  return false;
+}
+
+function parseStoredSpecialEpisodeIdentity(slug: unknown, name: unknown = ''): {
+  episodeNumber: number;
+  name: string;
+} | null {
+  const raw = `${String(slug || '')} ${String(name || '')}`.trim();
+  const normalized = raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const ordinal = Math.max(1, extractEpNumber(normalized) || 1);
+  if (/\bpilot\b/.test(normalized)) {
+    return { episodeNumber: -(3000 + ordinal), name: ordinal > 1 ? `Pilot ${ordinal}` : 'Pilot' };
+  }
+  if (/\b(?:extra|bonus)\b|ngoai\s*truyen/.test(normalized)) {
+    return { episodeNumber: -(2000 + ordinal), name: `Tập ${ordinal} Extra` };
+  }
+  if (/dac[\s-]*biet|\bspecial\b/.test(normalized)) {
+    return { episodeNumber: -(1000 + ordinal), name: `Tập Đặc Biệt ${ordinal}` };
+  }
+  return null;
 }
 
 function normalizeEpisodeKeyPart(value: string): string {
@@ -474,9 +521,29 @@ function isBrowserManagedHardFailureException(embedUrl: string): boolean {
   return /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl);
 }
 
+function isTrustedPendingDirectHls(row: Record<string, unknown>): boolean {
+  const lastError = String(row.last_error || row.source_last_error || '');
+  if (!lastError.startsWith('Provider verification pending:')) return false;
+  const provider = String(row.provider_key || row.source || row.source_provider || '').trim().toLowerCase();
+  if (!/\b(phimapi|kkphim)\b/.test(provider)) return false;
+  const healthStatus = String(row.health_status || row.source_health_status || 'unchecked').trim().toLowerCase();
+  if (!['unchecked', 'ok', 'degraded'].includes(healthStatus)) return false;
+  const directUrl = String(row.stream_url || row.link_m3u8 || '').trim();
+  try {
+    const parsed = new URL(directUrl);
+    const trustedHost = /(^|\.)(?:kkphimplayer\d*\.com|phim1280\.tv)$/i.test(parsed.hostname);
+    return parsed.protocol === 'https:' && trustedHost && /\.m3u8(?:$|[?#])/i.test(parsed.pathname + parsed.search);
+  } catch {
+    return false;
+  }
+}
+
 function shouldSuppressUnhealthyStream(row: Record<string, unknown> | null): boolean {
   if (!row) return false;
-  if (String(row.last_error || '').startsWith('Provider verification pending:')) return true;
+  if (
+    String(row.last_error || '').startsWith('Provider verification pending:') &&
+    !isTrustedPendingDirectHls(row)
+  ) return true;
   const healthStatus = String(row.health_status || '').toLowerCase();
   const failureCount = Number(row.failure_count || 0);
   const embedUrl = String(row.embed_url || row.link_embed || '').trim();
@@ -487,7 +554,10 @@ function shouldSuppressUnhealthyStream(row: Record<string, unknown> | null): boo
 }
 
 function episodeHealthIsUsable(ep: Record<string, unknown>): boolean {
-  if (String(ep.source_last_error || '').startsWith('Provider verification pending:')) return false;
+  if (
+    String(ep.source_last_error || '').startsWith('Provider verification pending:') &&
+    !isTrustedPendingDirectHls(ep)
+  ) return false;
   const status = String(ep.source_health_status || '').trim().toLowerCase();
   const failures = Number(ep.source_failure_count || 0);
   const embedUrl = String(ep.link_embed || '').trim();
@@ -679,7 +749,7 @@ async function readCachedDetail(
       .from('movie_api_cache')
       .select('detail_json, expires_at')
       .eq('slug', slug)
-      .abortSignal(timeoutSignal(6000))
+      .abortSignal(timeoutSignal(12000))
       .maybeSingle();
 
     const row = data as { detail_json?: unknown; expires_at?: string } | null;
@@ -2183,9 +2253,10 @@ async function handleRequest(req: Request): Promise<Response> {
       .from('movies')
       .select(MOVIE_DETAIL_SELECT)
       .eq('slug', slug)
-      .abortSignal(timeoutSignal(6000))
+      .abortSignal(timeoutSignal(12000))
       .maybeSingle();
     let exactMergeAlias: Record<string, unknown> | null = null;
+    let exactMergeCanonical: Record<string, unknown> | null = null;
     if (!exactCatalogError && exactCatalogMovie && exactCatalogMovie.is_published !== true) {
       const { data: mergeAlias } = await supabase
         .from('movie_slug_aliases')
@@ -2195,11 +2266,14 @@ async function handleRequest(req: Request): Promise<Response> {
       if (mergeAlias?.movie_id) {
         const { data: publishedCanonical } = await supabase
           .from('movies')
-          .select('id')
+          .select(MOVIE_DETAIL_SELECT)
           .eq('id', mergeAlias.movie_id)
           .eq('is_published', true)
           .maybeSingle();
-        if (publishedCanonical?.id) exactMergeAlias = mergeAlias as Record<string, unknown>;
+        if (publishedCanonical?.id) {
+          exactMergeAlias = mergeAlias as Record<string, unknown>;
+          exactMergeCanonical = publishedCanonical as Record<string, unknown>;
+        }
       }
     }
     if (!exactCatalogError && exactCatalogMovie && exactCatalogMovie.is_published !== true && !exactMergeAlias?.movie_id) {
@@ -2237,7 +2311,7 @@ async function handleRequest(req: Request): Promise<Response> {
     // through to provider 404 even though Singapore had playable episodes.
     let movie: Record<string, unknown> | null = !catalogReadUnavailable && exactCatalogMovie?.is_published === true
       ? exactCatalogMovie as Record<string, unknown>
-      : null;
+      : exactMergeCanonical;
     let movieId = movie ? String(movie.id || '') : '';
     let movieData: Record<string, unknown> | null = movie;
 
@@ -2308,7 +2382,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
     const useSupabase = !!movieData;
     const supabaseOphimId = movieData ? String(movieData.ophim_id || '').trim() : '';
-    const isQueerSourceMovie = isBlvietsubMovieRecord(movieData || movie);
+    let isQueerSourceMovie = isBlvietsubMovieRecord(movieData || movie);
 
     /* ── 2. Load episodes from DB ── */
     const serverMap = new Map<string, unknown[]>();
@@ -2331,6 +2405,18 @@ async function handleRequest(req: Request): Promise<Response> {
         .order('priority', { ascending: false })
         .order('response_time_ms', { ascending: true, nullsFirst: false })
         .abortSignal(timeoutSignal(6000));
+
+      // Canonical identity merging can retain PhimAPI/KKPhim as the movie's
+      // catalogue source even after verified BL/GL playback is attached. Use
+      // the playback rows as an additional identity signal so the specialized
+      // episode catalogue (including Pilot/Extra/Special rows) is not skipped.
+      if (!isQueerSourceMovie) {
+        isQueerSourceMovie = (streams ?? []).some((raw) => {
+          const row = raw as Record<string, unknown>;
+          const identity = `${row.source || ''} ${row.provider_key || ''} ${row.server_name || ''}`.toLowerCase();
+          return identity.includes('blvietsub') || identity.includes('glvietsub') || identity.includes('admin-queer');
+        });
+      }
 
       const canonicalStreams = (streams ?? []).filter((raw) => {
         const row = raw as Record<string, unknown>;
@@ -2450,6 +2536,7 @@ async function handleRequest(req: Request): Promise<Response> {
         let epData = {
           name: String(em.episode_name || `Tập ${num}`),
           slug: slugVal,
+          episode_number: num,
           filename: '',
           link_embed: normalizeDailymotionUrl(String(em.link_embed || '')),
           link_m3u8: String(em.link_m3u8 || ''),
@@ -2481,6 +2568,7 @@ async function handleRequest(req: Request): Promise<Response> {
           epData = {
             name: String(rm.episode_name || (num > 0 ? `Tập ${num}` : 'Full')),
             slug: slugVal,
+            episode_number: num,
             filename: '',
             link_embed: normalizeDailymotionUrl(String(rm.link_embed || '')),
             link_m3u8: String(rm.link_m3u8 || ''),
@@ -2491,6 +2579,7 @@ async function handleRequest(req: Request): Promise<Response> {
           epData = {
             name: String(sd.name || ''),
             slug: String(sd.slug || ''),
+            episode_number: num || extractEpNumber(String(sd.slug || sd.name || '')),
             filename: String(sd.filename || ''),
             link_embed: normalizeDailymotionUrl(String(sd.link_embed || '')),
             link_m3u8: String(sd.link_m3u8 || ''),
@@ -2508,6 +2597,7 @@ async function handleRequest(req: Request): Promise<Response> {
             let nestedEpData = {
               name: String(ep.name || ''),
               slug: epSlug,
+              episode_number: epNum,
               filename: String(ep.filename || ''),
               link_embed: normalizeDailymotionUrl(String(ep.link_embed || '')),
               link_m3u8: String(ep.link_m3u8 || ''),
@@ -2554,14 +2644,16 @@ async function handleRequest(req: Request): Promise<Response> {
 
         const slugVal = String(sm.episode_slug || 'full');
         const serverName = String(sm.server_name || 'Nguồn');
-        const num = extractEpNumber(slugVal);
+        const specialIdentity = parseStoredSpecialEpisodeIdentity(slugVal);
+        const num = specialIdentity?.episodeNumber ?? extractEpNumber(slugVal);
         if (String(sm.audio_type || '').trim().toLowerCase() === 'raw' && localizedEpisodeNumbers.has(num)) continue;
-        const epName = slugVal === 'full' ? 'Full' : `Tập ${num || slugVal}`;
+        const epName = specialIdentity?.name ?? (slugVal === 'full' ? 'Full' : `Tập ${num || slugVal}`);
         if (hasSeenEpisode(seen, serverName, slugVal, num, epName)) continue;
         markSeenEpisode(seen, serverName, slugVal, num, epName);
         const epData = {
           name: epName,
           slug: slugVal,
+          episode_number: num,
           filename: '',
           link_embed: normalizeDailymotionUrl(embedUrl),
           link_m3u8: directStreamFailed ? '' : streamUrl,

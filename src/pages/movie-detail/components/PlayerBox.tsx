@@ -1,11 +1,23 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import PlayerWatermark from './PlayerWatermark';
 import type { EpisodeData, EpisodeServer } from '@/types/movie';
 import { detectServerType, getEpisodeFailureCluster, getSourceFailureClusterFromUrl, pickBestEpisodeByScore } from '@/services/movieApi';
 import { getSourceHost, reportPlayerIssue, type PlayerIssuePayload } from '@/services/playerDiagnostics';
 import { useServerNow } from '@/hooks/useServerNow';
 import { formatVerboseTimeLeft, getTimeLeft } from '@/utils/movieSchedule';
 import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
-import { isPortraitPhoneViewport, tryLockPlayerLandscape, unlockPlayerOrientation } from '@/utils/playerFullscreen';
+import {
+  clearPlayerPseudoFullscreenLayout,
+  exitPlayerFullscreen,
+  getPlayerFullscreenElement,
+  isPortraitPhoneViewport,
+  requestPlayerFullscreen,
+  requestPlayerVideoFullscreen,
+  exitPlayerVideoFullscreen,
+  syncPlayerPseudoFullscreenLayout,
+  tryLockPlayerLandscape,
+  unlockPlayerOrientation,
+} from '@/utils/playerFullscreen';
 import {
   isRecentlyBadExactSourceHost,
   isRecentlyBadSourceHost,
@@ -13,6 +25,8 @@ import {
   markSourcePlaybackHealthy,
   SOURCE_HEALTH_UPDATED_EVENT,
 } from '@/services/playerSourceHealth';
+import { isInternationalViewer } from '@/services/viewerRegion';
+import { recordMovieWatchProgress } from '@/services/movieWatchAnalytics';
 /* ─── URL helpers ─── */
 const SSPLAY_VARIANTS = ['SU', 'SG', 'SD', 'HY'] as const;
 type SsplayVariant = typeof SSPLAY_VARIANTS[number];
@@ -206,14 +220,6 @@ function isDailymotion(url: string): boolean {
   return u.includes('dailymotion.com') || u.includes('dai.ly');
 }
 
-function shouldUseProviderNativeFullscreenOnApple(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const userAgent = navigator.userAgent || '';
-  const platform = navigator.platform || '';
-  return /iPhone|iPad|iPod/i.test(userAgent)
-    || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
-
 function isKnownCorsBlockedHls(url: string): boolean {
   const u = url.toLowerCase();
   return (
@@ -247,6 +253,10 @@ function isSingleVariantProviderHls(url: string): boolean {
 function shouldPreferEmbedOverDirectHls(ep: EpisodeData): boolean {
   if (!ep.link_m3u8 || !ep.link_embed || !isIframeSource(ep.link_embed)) return false;
   if (!isHlsUrl(ep.link_m3u8)) return false;
+  if (
+    isInternationalViewer() &&
+    /kkphimplayer|phim1280\.tv|streamvsmov\.com|cdnvideo11\.shop|streamcdn4\.site/i.test(ep.link_m3u8)
+  ) return false;
   // The PhimAPI iframe runs another HLS runtime, trackers and an independent
   // loading lifecycle. Its manifests are CORS-capable, so keep playback in the
   // first-party player and reserve the iframe as a same-provider fallback.
@@ -345,7 +355,6 @@ const DIRECT_VIDEO_STALL_CHECK_MS = 3_000;
 const DIRECT_VIDEO_MIN_PROGRESS_SECONDS = 0.25;
 const DIRECT_VIDEO_MAX_RECOVERY_ATTEMPTS = 1;
 const DIRECT_VIDEO_HEARTBEAT_SECONDS = 300;
-const PLAYER_LOGO_URL = '/brand/khophim-favicon-v2-96.png';
 const LightweightHlsPlayer = lazy(() => import('./LightweightHlsPlayer'));
 
 function finitePlaybackTime(value: unknown): number {
@@ -475,20 +484,6 @@ function buildFallbackServersAvoidingHost(
   };
 }
 
-function PlayerWatermark() {
-  return (
-    <div className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-white/85 shadow-lg shadow-black/30 backdrop-blur-md sm:left-4 sm:top-4 sm:gap-2 sm:px-2.5">
-      <img
-        src={PLAYER_LOGO_URL}
-        alt=""
-        className="h-5 w-5 rounded object-contain sm:h-6 sm:w-6"
-        draggable={false}
-      />
-      <span className="text-[10px] font-black tracking-wide sm:text-xs">khophim.org</span>
-    </div>
-  );
-}
-
 export default function PlayerBox({
   episode,
   movieSlug,
@@ -548,23 +543,19 @@ export default function PlayerBox({
   const [isEmbedPseudoFullscreen, setIsEmbedPseudoFullscreen] = useState(false);
   const isEmbedPseudoFullscreenRef = useRef(false);
   const [isEmbedLandscapeFallback, setIsEmbedLandscapeFallback] = useState(false);
-  const preferProviderNativeFullscreen = useMemo(shouldUseProviderNativeFullscreenOnApple, []);
   const embedScrollPositionRef = useRef(0);
-  const nativeFullscreenIntentUntilRef = useRef(0);
-  const enterEmbedPseudoFullscreenRef = useRef<() => void>(() => {});
+  const fullscreenOperationRef = useRef(0);
+  const fullscreenFallbackExitRef = useRef(false);
   const [directVideoSpeed, setDirectVideoSpeed] = useState(1);
 
   useEffect(() => {
     const handler = () => {
-      const active = Boolean(document.fullscreenElement);
+      const active = Boolean(getPlayerFullscreenElement());
       const pseudoActive = isEmbedPseudoFullscreenRef.current;
       setIsEmbedFullscreen(active || pseudoActive);
       if (!active && !pseudoActive) {
-        if (Date.now() < nativeFullscreenIntentUntilRef.current) {
-          nativeFullscreenIntentUntilRef.current = 0;
-          window.setTimeout(() => enterEmbedPseudoFullscreenRef.current(), 0);
-          return;
-        }
+        if (fullscreenFallbackExitRef.current) fullscreenFallbackExitRef.current = false;
+        else fullscreenOperationRef.current += 1;
         setIsEmbedLandscapeFallback(false);
         unlockPlayerOrientation();
       }
@@ -578,15 +569,11 @@ export default function PlayerBox({
   }, []);
 
   const exitEmbedPseudoFullscreen = useCallback(() => {
-    nativeFullscreenIntentUntilRef.current = 0;
     isEmbedPseudoFullscreenRef.current = false;
     setIsEmbedPseudoFullscreen(false);
     setIsEmbedLandscapeFallback(false);
     setIsEmbedFullscreen(false);
-    if (embedContainerRef.current) {
-      embedContainerRef.current.style.left = '';
-      embedContainerRef.current.style.top = '';
-    }
+    clearPlayerPseudoFullscreenLayout(embedContainerRef.current);
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
     document.documentElement.classList.remove('kp-player-pseudo-fullscreen');
@@ -595,7 +582,6 @@ export default function PlayerBox({
   }, []);
 
   const enterEmbedPseudoFullscreen = useCallback(() => {
-    nativeFullscreenIntentUntilRef.current = 0;
     isEmbedPseudoFullscreenRef.current = true;
     const rotateToLandscape = isPortraitPhoneViewport();
     embedScrollPositionRef.current = window.scrollY;
@@ -608,75 +594,68 @@ export default function PlayerBox({
     requestAnimationFrame(() => {
       const el = embedContainerRef.current;
       if (!el) return;
-      if (!rotateToLandscape) {
-        const fixedRect = el.getBoundingClientRect();
-        el.style.left = `${-fixedRect.left}px`;
-        el.style.top = `${-fixedRect.top}px`;
-      }
+      syncPlayerPseudoFullscreenLayout(el, rotateToLandscape);
     });
     if (rotateToLandscape) {
       void tryLockPlayerLandscape().then((locked) => {
         if (locked && window.innerWidth > window.innerHeight) {
           setIsEmbedLandscapeFallback(false);
+          if (embedContainerRef.current) syncPlayerPseudoFullscreenLayout(embedContainerRef.current, false);
         }
       });
     }
   }, []);
-  enterEmbedPseudoFullscreenRef.current = enterEmbedPseudoFullscreen;
 
   const toggleEmbedFullscreen = useCallback(async () => {
     const el = embedContainerRef.current;
     if (!el) return;
+    const operation = ++fullscreenOperationRef.current;
     if (isEmbedPseudoFullscreen) {
       exitEmbedPseudoFullscreen();
       return;
     }
 
-    if (document.fullscreenElement) {
-      nativeFullscreenIntentUntilRef.current = 0;
-      await document.exitFullscreen().catch(() => {});
+    if (getPlayerFullscreenElement()) {
+      await exitPlayerFullscreen();
       unlockPlayerOrientation();
       return;
     }
 
-    // iPhone Safari supports native fullscreen most reliably on the actual
-    // video element. Cross-origin iframe players keep their own native button.
-    const appleVideo = directVideoRef.current as (HTMLVideoElement & {
-      webkitDisplayingFullscreen?: boolean;
-      webkitEnterFullscreen?: () => void;
-    }) | null;
-    if (shouldUseProviderNativeFullscreenOnApple() && appleVideo?.webkitEnterFullscreen) {
-      try {
-        appleVideo.webkitEnterFullscreen();
-        setIsEmbedFullscreen(true);
-        return;
-      } catch {
-        // Continue to standards fullscreen and then the viewport fallback.
-      }
-    }
 
-    if (document.fullscreenEnabled === true && el.requestFullscreen) {
-      try {
-        const enteredFromPortrait = isPortraitPhoneViewport();
-        nativeFullscreenIntentUntilRef.current = Date.now() + 4000;
-        await el.requestFullscreen();
+    if (exitPlayerVideoFullscreen(directVideoRef.current)) return;
+
+    // Fullscreen the container so the logo and exit control stay with the film.
+    // On iPhone, use viewport fullscreen when the container API is unavailable.
+    const enteredFromPortrait = isPortraitPhoneViewport();
+    if (await requestPlayerFullscreen(el)) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      if (operation !== fullscreenOperationRef.current) return;
+      if (getPlayerFullscreenElement()) {
         setIsEmbedFullscreen(true);
         if (enteredFromPortrait) {
           await tryLockPlayerLandscape();
           await new Promise((resolve) => window.setTimeout(resolve, 150));
           if (window.innerWidth <= window.innerHeight) {
-            nativeFullscreenIntentUntilRef.current = 0;
-            await document.exitFullscreen().catch(() => {});
+            fullscreenFallbackExitRef.current = true;
+            await exitPlayerFullscreen();
+            if (operation !== fullscreenOperationRef.current) {
+              fullscreenFallbackExitRef.current = false;
+              return;
+            }
             enterEmbedPseudoFullscreen();
+            fullscreenFallbackExitRef.current = false;
             return;
           }
           setIsEmbedLandscapeFallback(false);
         }
         return;
-      } catch {
-        nativeFullscreenIntentUntilRef.current = 0;
-        // Continue to the cross-browser viewport fallback.
       }
+    }
+    if (operation !== fullscreenOperationRef.current) return;
+
+    if (requestPlayerVideoFullscreen(directVideoRef.current)) {
+      setIsEmbedFullscreen(true);
+      return;
     }
     enterEmbedPseudoFullscreen();
   }, [enterEmbedPseudoFullscreen, exitEmbedPseudoFullscreen, isEmbedPseudoFullscreen]);
@@ -690,19 +669,26 @@ export default function PlayerBox({
   }, [exitEmbedPseudoFullscreen, isEmbedPseudoFullscreen]);
 
   useEffect(() => {
-    if (!isEmbedFullscreen) return;
+    if (!isEmbedPseudoFullscreen) return;
     const syncLandscapeLayout = () => {
-      setIsEmbedLandscapeFallback(isPortraitPhoneViewport());
+      const rotateToLandscape = isPortraitPhoneViewport();
+      setIsEmbedLandscapeFallback(rotateToLandscape);
+      if (embedContainerRef.current) syncPlayerPseudoFullscreenLayout(embedContainerRef.current, rotateToLandscape);
     };
     window.addEventListener('resize', syncLandscapeLayout);
     window.addEventListener('orientationchange', syncLandscapeLayout);
+    window.visualViewport?.addEventListener('resize', syncLandscapeLayout);
+    window.visualViewport?.addEventListener('scroll', syncLandscapeLayout);
     return () => {
       window.removeEventListener('resize', syncLandscapeLayout);
       window.removeEventListener('orientationchange', syncLandscapeLayout);
+      window.visualViewport?.removeEventListener('resize', syncLandscapeLayout);
+      window.visualViewport?.removeEventListener('scroll', syncLandscapeLayout);
     };
-  }, [isEmbedFullscreen]);
+  }, [isEmbedPseudoFullscreen]);
 
   useEffect(() => () => {
+    clearPlayerPseudoFullscreenLayout(embedContainerRef.current);
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
     document.documentElement.classList.remove('kp-player-pseudo-fullscreen');
@@ -799,6 +785,12 @@ export default function PlayerBox({
     };
   }, [streamcFallbackUrl]);
   const reportIssue = useCallback((issue: Pick<PlayerIssuePayload, 'event_type' | 'playback_time' | 'duration' | 'buffered_ahead' | 'error_message' | 'startup_ms' | 'watched_seconds' | 'stall_count' | 'stall_seconds'>) => {
+    if (
+      movieSlug
+      && (issue.event_type === 'playback_stable' || issue.event_type === 'playback_heartbeat')
+    ) {
+      recordMovieWatchProgress(movieSlug, issue.watched_seconds ?? 0);
+    }
     reportPlayerIssue({
       movie_slug: movieSlug,
       movie_title: movieTitle,
@@ -810,6 +802,21 @@ export default function PlayerBox({
       ...issue,
     });
   }, [activeServerName, activeSourceHost, effectivePlayerMode, episode?.name, episode?.slug, movieSlug, movieTitle]);
+
+  useEffect(() => {
+    if (effectivePlayerMode !== 'embed' || !iframeLoaded || !embedSrc || !movieSlug) return;
+    let engagedSeconds = 0;
+    // Cross-origin providers do not expose their internal play event. Count an
+    // embed only after it stays loaded in a visible tab for 30 seconds; this is
+    // the closest truthful first-party engagement signal without touching the
+    // provider or slowing the iframe.
+    const timer = window.setInterval(() => {
+      if (document.hidden || navigator.onLine === false) return;
+      engagedSeconds += 5;
+      recordMovieWatchProgress(movieSlug, engagedSeconds);
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [effectivePlayerMode, embedSrc, iframeLoaded, movieSlug]);
   const reportPlaybackStarted = useCallback(() => {
     if (!activeSourceHost || document.hidden || navigator.onLine === false) return;
     const identity = `${movieSlug}|${episode?.slug || episode?.name || ''}|${effectivePlayerMode}|${activeSourceHost}`;
@@ -1262,7 +1269,7 @@ export default function PlayerBox({
         stall_count: stallCount,
         stall_seconds: stallSeconds + (stallStartedAt ? Math.max(0, (now - stallStartedAt) / 1000) : 0),
       });
-      if (!stableReported && watchedSeconds >= 15) {
+      if (!stableReported && watchedSeconds >= 30) {
         stableReported = true;
         emitQuality('playback_stable');
       }
@@ -1384,8 +1391,8 @@ export default function PlayerBox({
         {effectivePlayerMode === 'embed' && embedSrc && !iframeBlocked && (
           <div
             ref={embedContainerRef}
-            className={`${isEmbedLandscapeFallback ? 'kp-landscape-fullscreen z-[9999]' : isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'relative aspect-video w-full'} group bg-black`}
-            style={isEmbedLandscapeFallback ? { left: '50%', top: '50%', width: '100dvh', height: '100dvw', transform: 'translate(-50%, -50%) rotate(90deg)' } : undefined}
+            data-kp-player="embed"
+            className={`${isEmbedLandscapeFallback ? 'kp-landscape-fullscreen z-[9999]' : isEmbedPseudoFullscreen ? 'kp-pseudo-fullscreen z-[9999]' : 'relative aspect-video w-full'} group bg-black`}
           >
             {!iframeRevealed && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0c14]">
@@ -1425,7 +1432,7 @@ export default function PlayerBox({
             />
             {iframeLoaded && <PlayerWatermark />}
             {iframeLoaded && embedIsSsplay && (
-              <div className="absolute left-2 top-2 z-20 flex flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-black/70 p-1 text-[11px] font-black text-white/80 backdrop-blur-sm sm:left-3 sm:top-3 sm:gap-1.5 sm:p-1.5">
+              <div className="kp-player-source-picker absolute z-20 flex flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-black/70 p-1 text-[11px] font-black text-white/80 backdrop-blur-sm sm:gap-1.5 sm:p-1.5">
                 <span className="px-1 text-white/45">Nguồn</span>
                 {SSPLAY_VARIANTS.map((variant) => (
                   <button
@@ -1450,20 +1457,6 @@ export default function PlayerBox({
                 ))}
               </div>
             )}
-            {/* Keep the provider's bottom-right native control unobstructed on
-                Apple mobile. The visible KhoPhim control stays available in
-                the top-right because cross-origin iframe fullscreen is often
-                denied there and must fall back to viewport fullscreen. */}
-            {!preferProviderNativeFullscreen && (
-              <button
-                type="button"
-                data-kp-source-fullscreen-proxy="true"
-                aria-label={isEmbedFullscreen ? 'Thu nhỏ từ nút nguồn phát' : 'Phóng to từ nút nguồn phát'}
-                title={isEmbedFullscreen ? 'Thu nhỏ' : 'Phóng to'}
-                onClick={() => void toggleEmbedFullscreen()}
-                className="absolute bottom-0 right-0 z-30 h-16 w-16 cursor-pointer border-0 bg-transparent p-0 opacity-0 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-white"
-              />
-            )}
             {/* Always expose a first-party fullscreen action. Do not rely on
                 a third-party iframe control that iOS may block. */}
             <button
@@ -1472,7 +1465,7 @@ export default function PlayerBox({
               onClick={() => void toggleEmbedFullscreen()}
               title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
               data-kp-fullscreen="true"
-              className={`absolute z-40 flex items-center justify-center rounded-xl bg-black/20 text-white border border-white/35 shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[2px] transition-all hover:bg-black/55 hover:border-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100 ${isEmbedFullscreen ? 'top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] h-14 w-14' : 'top-3 right-3 h-12 w-12'}`}
+              className={`absolute z-40 flex items-center justify-center rounded-xl bg-black/20 text-white border border-white/35 shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[2px] transition-all hover:bg-black/55 hover:border-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 cursor-pointer opacity-100 touch-manipulation ${isEmbedFullscreen ? 'top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] h-14 w-14' : 'top-3 right-3 h-12 w-12'}`}
             >
               <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl drop-shadow-[0_1px_3px_rgba(0,0,0,1)]`} />
             </button>
@@ -1560,8 +1553,8 @@ export default function PlayerBox({
         {effectivePlayerMode === 'video' && (
           <div
             ref={embedContainerRef}
-            className={`${isEmbedLandscapeFallback ? 'kp-landscape-fullscreen z-[9999]' : isEmbedPseudoFullscreen ? 'fixed inset-0 z-[9999] h-[100dvh] w-screen' : 'relative aspect-video w-full'} bg-black`}
-            style={isEmbedLandscapeFallback ? { left: '50%', top: '50%', width: '100dvh', height: '100dvw', transform: 'translate(-50%, -50%) rotate(90deg)' } : undefined}
+            data-kp-player="video"
+            className={`${isEmbedLandscapeFallback ? 'kp-landscape-fullscreen z-[9999]' : isEmbedPseudoFullscreen ? 'kp-pseudo-fullscreen z-[9999]' : 'relative aspect-video w-full'} bg-black`}
           >
             <video
               key={`${directVideoSrc}-${iframeKey}`}
@@ -1571,6 +1564,7 @@ export default function PlayerBox({
               title={movieTitle}
               className="w-full h-full object-contain"
               controls
+              controlsList="nofullscreen"
               autoPlay
               playsInline
               preload="metadata"
@@ -1612,7 +1606,7 @@ export default function PlayerBox({
               title={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
               onClick={() => void toggleEmbedFullscreen()}
               data-kp-fullscreen="true"
-              className="absolute top-3 right-3 z-40 flex h-12 w-12 items-center justify-center rounded-xl border border-white/35 bg-black/20 text-white shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[2px] hover:bg-black/55 hover:border-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+              className={`absolute z-40 flex items-center justify-center rounded-xl border border-white/35 bg-black/20 text-white shadow-[0_2px_12px_rgba(0,0,0,0.35)] backdrop-blur-[2px] hover:bg-black/55 hover:border-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 touch-manipulation ${isEmbedFullscreen ? 'top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] h-14 w-14' : 'top-3 right-3 h-12 w-12'}`}
             >
               <i className={`${isEmbedFullscreen ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'} text-xl drop-shadow-[0_1px_3px_rgba(0,0,0,1)]`} />
             </button>

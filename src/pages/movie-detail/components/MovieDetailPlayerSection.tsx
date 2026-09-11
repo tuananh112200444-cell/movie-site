@@ -7,6 +7,7 @@ import {
   getServerTypeStyle,
   epSortKey,
   hasPlayableUrl,
+  isSpecialEpisode,
 } from '@/services/movieApi';
 import { useServerNow } from '@/hooks/useServerNow';
 import { getMovieCountdownInfo } from '@/utils/movieSchedule';
@@ -28,6 +29,12 @@ function isRawEpisode(ep?: EpisodeData | null): boolean {
 
 function getEpisodeMergeKey(ep: EpisodeData): string {
   if (ep.is_scheduled) return ep.slug || ep.name || 'scheduled';
+  if (isSpecialEpisode(ep)) {
+    const specialNumber = Number(ep.episode_number || 0);
+    return specialNumber < 0
+      ? `special:${Math.abs(specialNumber)}`
+      : `special:${(ep.slug || ep.name || 'episode').toLowerCase().trim().replace(/\s+/g, '-')}`;
+  }
   const sortKey = epSortKey(ep);
   if (Number.isFinite(sortKey)) return `tap-${sortKey}`;
   return (ep.slug || ep.name || '').toLowerCase().trim().replace(/^0+/, '').replace(/\s+/g, '-');
@@ -77,6 +84,7 @@ interface Props {
   activeServer: number;
   onSwitchServer: (idx: number) => void;
   onRefetchMovie?: () => void;
+  episodeDataLoading: boolean;
   initialSeekTime: number;
   onVideoEnded?: () => void;
   slug: string;
@@ -102,6 +110,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       activeServer,
       onSwitchServer,
       onRefetchMovie,
+      episodeDataLoading,
       initialSeekTime,
       onVideoEnded,
       slug,
@@ -177,9 +186,16 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
 
     const epList = useMemo(() => mergedEpisodes.map((m) => m.ep), [mergedEpisodes]);
     const availableEpisodeLabel = useMemo(() => {
+      const specialCount = mergedEpisodes.filter((item) => isSpecialEpisode(item.ep)).length;
       const rawCount = mergedEpisodes.filter((item) => isRawEpisode(item.ep)).length;
       const translatedCount = mergedEpisodes.length - rawCount;
-      if (rawCount > 0) return `${translatedCount} tập Vietsub · ${rawCount} tập RAW`;
+      const regularTranslatedCount = mergedEpisodes.filter((item) => !isRawEpisode(item.ep) && !isSpecialEpisode(item.ep)).length;
+      if (specialCount > 0 || rawCount > 0) {
+        const parts = [`${regularTranslatedCount || translatedCount} tập Vietsub`];
+        if (specialCount > 0) parts.push(`${specialCount} tập đặc biệt`);
+        if (rawCount > 0) parts.push(`${rawCount} tập RAW`);
+        return parts.join(' · ');
+      }
       return getAvailableEpisodeLabel(mergedEpisodes.length || episodes.length, activeEp);
     }, [activeEp, episodes.length, mergedEpisodes]);
     const singleLateEpisodeNumber = useMemo(() => {
@@ -550,11 +566,17 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                 ) : mergedEpisodes.length === 0 && !isTrailerOnly ? (
                   <div className="movie-player-frame aspect-video w-full bg-[#0d0f1a] rounded-2xl flex flex-col items-center justify-center gap-3">
                     <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                      <i className="ri-time-line text-2xl text-amber-400" />
+                      <i className={`${episodeDataLoading ? 'ri-loader-4-line animate-spin' : 'ri-time-line'} text-2xl text-amber-400`} />
                     </div>
-                    <p className="text-white/60 text-sm font-medium">Phim đang cập nhật</p>
-                    <p className="text-white/30 text-xs max-w-sm text-center px-4">Chưa có tập phim nào. Vui lòng quay lại sau hoặc xem trailer (nếu có).</p>
-                    {onRefetchMovie && (
+                    <p className="text-white/60 text-sm font-medium">
+                      {episodeDataLoading ? 'Đang tải nguồn phim…' : 'Chưa có nguồn phát'}
+                    </p>
+                    <p className="text-white/30 text-xs max-w-sm text-center px-4">
+                      {episodeDataLoading
+                        ? 'Hệ thống đang tự lấy danh sách tập, bạn không cần bấm thử lại.'
+                        : 'Hiện chưa tìm thấy tập phim có thể phát. Bạn có thể kiểm tra lại nguồn.'}
+                    </p>
+                    {!episodeDataLoading && onRefetchMovie && (
                       <button
                         onClick={onRefetchMovie}
                         className="mt-1 flex items-center gap-2 px-4 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/20 rounded-xl text-red-400 text-xs font-medium transition-all cursor-pointer whitespace-nowrap"

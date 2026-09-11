@@ -17,6 +17,87 @@ function readReleaseId() {
   }
 }
 
+type HomeHeroMovie = {
+  _id?: string;
+  slug?: string;
+  name?: string;
+  poster_url?: string;
+  thumb_url?: string;
+  hero_poster_url?: string;
+  hero_backdrop_url?: string;
+  tmdb_vote_average?: number;
+  tmdb_vote_count?: number;
+  tmdb_popularity?: number;
+  year?: number;
+  [key: string]: unknown;
+};
+
+function readHomeHeroBootstrap(): HomeHeroMovie[] {
+  try {
+    let topRatedMovies: HomeHeroMovie[] = [];
+    try {
+      const topRatedSnapshot = JSON.parse(
+        readFileSync(resolve(__dirname, 'public/top-rated-fallback.json'), 'utf8'),
+      ) as { movies?: HomeHeroMovie[] };
+      topRatedMovies = topRatedSnapshot.movies ?? [];
+    } catch {
+      topRatedMovies = [];
+    }
+    const snapshot = JSON.parse(
+      readFileSync(resolve(__dirname, 'public/home-fallback.json'), 'utf8'),
+    ) as { sections?: Record<string, HomeHeroMovie[]> };
+    const unique = new Map<string, HomeHeroMovie>();
+    const ordered = topRatedMovies.length > 0
+      ? topRatedMovies
+      : Object.values(snapshot.sections ?? {}).flat();
+    ordered.forEach((movie) => {
+      const key = String(movie._id || movie.slug || '').trim();
+      if (!key || !movie.name || !(movie.hero_backdrop_url || movie.thumb_url || movie.hero_poster_url || movie.poster_url)) return;
+      if (Number(movie.tmdb_vote_average || 0) <= 0) return;
+      if (/ophim|opstream|tmdb.?catalog/i.test(`${movie.source_site || ''} ${movie.source_name || ''}`)) return;
+      const current = unique.get(key);
+      if (!current || Number(movie.tmdb_vote_average || 0) > Number(current.tmdb_vote_average || 0)) {
+        unique.set(key, movie);
+      }
+    });
+    return [...unique.values()]
+      .sort((a, b) => {
+        const ratingDiff = Number(b.tmdb_vote_average || 0) - Number(a.tmdb_vote_average || 0);
+        if (ratingDiff !== 0) return ratingDiff;
+        const voteDiff = Number(b.tmdb_vote_count || 0) - Number(a.tmdb_vote_count || 0);
+        if (voteDiff !== 0) return voteDiff;
+        const popularityDiff = Number(b.tmdb_popularity || 0) - Number(a.tmdb_popularity || 0);
+        if (popularityDiff !== 0) return popularityDiff;
+        return Number(b.year || 0) - Number(a.year || 0);
+      })
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function getHomeHeroPreloadUrl(path: string, compact: boolean): string {
+  const raw = String(path || '').trim();
+  if (!raw || !/^https?:/i.test(raw)) return raw;
+  if (/^https?:\/\/image\.tmdb\.org\/t\/p\//i.test(raw)) {
+    return raw.replace(/\/t\/p\/[^/]+\//i, `/t/p/${compact ? 'w780' : 'w1280'}/`);
+  }
+  const phimimg = raw.match(/^https?:\/\/(phimimg\.com)(\/[^?#]+)(?:[?#].*)?$/i);
+  if (phimimg) {
+    return `https://i0.wp.com/${phimimg[1]}${phimimg[2]}?w=${compact ? 900 : 1440}&quality=${compact ? 82 : 84}&strip=all`;
+  }
+  if (/^https?:\/\/icdn\.darkbytes\.xyz\//i.test(raw)) return raw;
+  return `https://wsrv.nl/?url=${encodeURIComponent(raw)}&w=${compact ? 900 : 1440}&q=${compact ? 82 : 84}&output=webp&fit=cover&we&default=1`;
+}
+
 const entryCacheRevision = '20260823-prod-v10e';
 
 function injectProductionReleaseMeta(releaseId: string) {
@@ -32,12 +113,43 @@ function injectProductionReleaseMeta(releaseId: string) {
   };
 }
 
+function injectHomeHeroBootstrap(movies: HomeHeroMovie[]) {
+  return {
+    name: 'khophim-home-hero-bootstrap',
+    enforce: 'post' as const,
+    transformIndexHtml(html: string) {
+      if (movies.length === 0) return html;
+      const first = movies[0];
+      const mobileImage = getHomeHeroPreloadUrl(
+        String(first.hero_poster_url || first.poster_url || first.hero_backdrop_url || first.thumb_url || ''),
+        true,
+      );
+      const desktopImage = getHomeHeroPreloadUrl(
+        String(first.hero_backdrop_url || first.thumb_url || first.hero_poster_url || first.poster_url || ''),
+        false,
+      );
+      const preloads = [
+        mobileImage
+          ? `<link rel="preload" as="image" href="${escapeHtmlAttribute(mobileImage)}" fetchpriority="high" media="(max-width: 639px)" data-kp-home-hero-preload="mobile">`
+          : '',
+        desktopImage
+          ? `<link rel="preload" as="image" href="${escapeHtmlAttribute(desktopImage)}" fetchpriority="high" media="(min-width: 640px)" data-kp-home-hero-preload="desktop">`
+          : '',
+      ].filter(Boolean).join('\n    ');
+      const bootstrapJson = JSON.stringify(movies).replaceAll('<', '\\u003c');
+      const bootstrap = `<script id="kp-home-hero-bootstrap" type="application/json">${bootstrapJson}</script>`;
+      return html.replace('</head>', `    ${preloads}\n    ${bootstrap}\n  </head>`);
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(() => {
   // `prebuild` owns release generation. Vite only reads that immutable value so
   // Windows, CI and Cloudflare all publish the same manifest without a second
   // write racing the build process.
   const releaseId = readReleaseId();
+  const homeHeroMovies = readHomeHeroBootstrap();
   return {
   define: {
     __BASE_PATH__: JSON.stringify(base),
@@ -104,6 +216,7 @@ export default defineConfig(() => {
       dts: true,
     }),
     injectProductionReleaseMeta(releaseId),
+    injectHomeHeroBootstrap(homeHeroMovies),
   ],
   base,
   build: {

@@ -5,25 +5,10 @@ let offsetPromise: Promise<number> | null = null;
 
 async function loadServerOffset(): Promise<number> {
   if (!offsetPromise) {
-    offsetPromise = (async () => {
-      const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), 2_000);
-      try {
-        const response = await fetch('/api/time', {
-          signal: controller.signal,
-          cache: 'no-store',
-          headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) return 0;
-        const payload = await response.json() as { now?: string };
-        const serverMs = new Date(String(payload.now || '')).getTime();
-        return Number.isFinite(serverMs) ? serverMs - Date.now() : 0;
-      } catch {
-        return 0;
-      } finally {
-        window.clearTimeout(timer);
-      }
-    })();
+    // Modern devices already synchronize their clocks. Avoid spending one
+    // Pages Function invocation on every app load merely to recover a tiny
+    // display-only offset for schedule countdowns.
+    offsetPromise = Promise.resolve(0);
   }
   offsetMs = await offsetPromise;
   return offsetMs;

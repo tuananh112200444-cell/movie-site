@@ -75,21 +75,23 @@ requireText(sitemap, "url.searchParams.get('ongoing') === '1'", 'sitemap endpoin
 requireText(sitemap, "isOngoingTier(movie) ? 'daily'", 'ongoing sitemap has no active crawl hint');
 requireText(sitemap, "return '0.98'", 'fresh ongoing movies are not prioritized');
 requireText(sitemap, "'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'", 'ongoing sitemap cache can hide new episodes for too long');
-requireText(sitemap, 'fetchEligibleMovies(options.offset, options.limit)', 'full movie sitemap does not read the quality-gated catalogue');
+requireText(sitemap, 'fetchEligibleMovies(5000)', 'full movie sitemap does not read the complete high-value candidate pool');
 requireText(sitemap, 'movie.seo_eligible_for_index === true || qualityByMovieId.get(movie.id) === true', 'unreviewed movies can still enter a sitemap');
 
 requireText(prerenderData, 'seo_latest_episode_number', 'prerender does not expose latest episode state');
 requireText(prerenderData, 'seo_last_episode_change_at', 'prerender does not expose episode freshness');
-requireText(worker, "['playable', 'ongoing', 'upcoming'].includes(tier)", 'Cloudflare blocks approved ongoing pages');
-requireText(worker, 'const isIndexable = isHighValueIndexCandidate(movie)', 'ongoing pages bypass the public cohort gate');
+requireText(worker, "['playable', 'ongoing'].includes(tier)", 'Cloudflare blocks approved ongoing pages or auto-indexes unreviewed upcoming pages');
+requireText(worker, 'const automaticIndexable = isHighValueIndexCandidate(movie)', 'ongoing pages bypass the public cohort gate');
 requireText(worker, 'Phim đang chiếu và cập nhật tập mới', 'ongoing prerender lacks visible status context');
 requireText(worker, "'public, max-age=300, s-maxage=600, stale-while-revalidate=1800'", 'ongoing prerender cache can hide new episode metadata for too long');
 requireText(worker, "'@type': 'Episode'", 'ongoing structured data lacks Episode information');
 requireText(worker, '/sitemap-movies-ongoing.xml', 'Cloudflare sitemap routing omits ongoing movies');
 requireText(worker, 'renderSitemapIndexXml', 'root sitemap has no bounded fallback index');
-requireText(worker, 'EDGE_FALLBACK_MOVIE_CHUNKS = 18', 'root sitemap fallback omits approved catalogue chunks');
+requireText(worker, 'EDGE_FALLBACK_MOVIE_CHUNKS = 1', 'root sitemap fallback does not match the filtered high-value catalogue');
 requireText(worker, 'EDGE_SITEMAP_CHUNK_SIZE = 1000', 'numbered sitemap chunks are too large for stable production requests');
-requireText(sitemapGenerator, "'sitemap-movies-ongoing.xml'", 'generated root sitemap omits ongoing movies');
+if (sitemapGenerator.includes("'sitemap-movies-ongoing.xml'")) {
+  failures.push('generated root sitemap must not submit the runtime-only ongoing sitemap');
+}
 requireText(movieSitemapGenerator, 'fetchSitemapWithLastKnownGood', 'a transient Supabase outage can break the entire frontend build');
 if (/^\/sitemap[^\s]*\s+https:\/\//m.test(redirects)) {
   failures.push('a duplicate _redirects sitemap proxy bypasses Cloudflare timeout and fallback safeguards');
@@ -97,7 +99,10 @@ if (/^\/sitemap[^\s]*\s+https:\/\//m.test(redirects)) {
 
 requireText(gsc, "item.tier === 'ongoing' && item.episodeChangedAt > lastInspection", 'GSC does not re-inspect a movie after a new episode');
 requireText(gsc, "item.tier === 'ongoing' ? 3", 'GSC does not prioritize actively airing movies');
-requireText(gsc, ".in('index_tier',['ongoing','upcoming','playable'])", 'GSC inspection candidates are not restricted to indexable lifecycle tiers');
+requireText(gsc, ".in('index_tier',['ongoing','playable','upcoming'])", 'GSC inspection candidates are not restricted to the approved lifecycle tiers');
+requireText(gsc, ".gte('content_length',350)", 'GSC candidate query lacks the minimum upcoming content floor');
+requireText(gsc, "score < 88 || contentLength < 350", 'GSC does not apply the strict upcoming quality/content gate');
+requireText(gsc, "else if (contentLength < 500)", 'GSC can waste its quota on thin playable or ongoing movie pages');
 requireText(gsc, '/BLOCKED|DISALLOWED/i.test(robots)', 'GSC treats an unspecified robots state as a false blocking error');
 requireText(gsc, 'INTERNAL_CRAWL_ERROR|INVALID_URL/i.test(fetchState)', 'GSC does not distinguish explicit fetch errors from an unspecified fetch state');
 requireText(gsc, 'phát hiện.*chưa được lập chỉ mục', 'GSC diagnosis ignores the Vietnamese coverage state returned in production');

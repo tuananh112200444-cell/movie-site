@@ -82,8 +82,13 @@ const sitemapXml = await sitemapResponse.text();
 expect(sitemapResponse.status === 200, 'Root sitemap must return 200 without a database call.');
 expect(sitemapResponse.headers.get('X-Sitemap-Proxy') === 'cloudflare-pages-priority-index',
   'Root sitemap must use the local crawl-recovery index.');
-expect(!/sitemap-movies-\d+\.xml/.test(sitemapXml), 'Root sitemap must not advertise archive chunks during crawl recovery.');
+expect(sitemapXml.includes('/sitemap-movies-1.xml') && !sitemapXml.includes('/sitemap-movies-2.xml'),
+  'Root sitemap must submit exactly the current filtered high-value movie chunk.');
 expect(sitemapXml.includes('/sitemap-movies-recent.xml'), 'Root sitemap must retain the recent priority movie sitemap.');
+expect(sitemapXml.includes('/sitemap-movies-upcoming.xml')
+  && !sitemapXml.includes('/sitemap-movies-ongoing.xml')
+  && !sitemapXml.includes('/feed.xml'),
+  'Root sitemap must include the static upcoming cohort without runtime-only discovery endpoints.');
 
 if (failures.length) {
   console.error('People-first SEO regression failed:');

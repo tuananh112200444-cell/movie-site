@@ -11,6 +11,8 @@ interface UseImageFallbackResult {
 
 interface ImageFallbackOptions {
   preferredAspect?: 'portrait' | 'landscape';
+  includeOriginalFallback?: boolean;
+  minimumWidth?: number;
 }
 
 function isPreferredAspect(width: number, height: number, preferredAspect?: ImageFallbackOptions['preferredAspect']): boolean {
@@ -30,8 +32,15 @@ export function useImageFallback(
   options: ImageFallbackOptions = {},
 ): UseImageFallbackResult {
   const fallbackUrls = useMemo(
-    () => getOptimizedImageFallbacks(primaryPath, altPath, width, quality),
-    [primaryPath, altPath, width, quality],
+    () => getOptimizedImageFallbacks(
+      primaryPath,
+      altPath,
+      width,
+      quality,
+      options.includeOriginalFallback ?? true,
+      options.minimumWidth ?? 180,
+    ),
+    [primaryPath, altPath, width, quality, options.includeOriginalFallback, options.minimumWidth],
   );
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState(preloaded);

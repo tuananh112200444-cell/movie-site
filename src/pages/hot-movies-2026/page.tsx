@@ -6,7 +6,7 @@ import SEO from '../../components/base/SEO';
 import AdsterraNativeBanner from '../../components/feature/AdsterraNativeBanner';
 import AdsterraResponsiveBanner from '../../components/feature/AdsterraResponsiveBanner';
 import TrendingSection from '../home/components/TrendingSection';
-import { fetchTrendingMovies } from '../../services/movieApi';
+import { fetchLatestReleaseMovies } from '../../services/movieApi';
 import { movieDetailUrl } from '../../utils/slugEncoder';
 import type { Movie } from '../../types/movie';
 
@@ -18,9 +18,12 @@ export default function HotMovies2026Page() {
 
   useEffect(() => {
     let active = true;
-    fetchTrendingMovies()
+    fetchLatestReleaseMovies(1, 'episode_updates')
       .then((response) => {
-        if (active) setMovies((response.items ?? []) as Movie[]);
+        const currentYear = new Date().getFullYear();
+        if (active) {
+          setMovies(((response.items ?? []) as Movie[]).filter((movie) => Number(movie.year) === currentYear));
+        }
       })
       .catch(() => {
         if (active) setMovies([]);

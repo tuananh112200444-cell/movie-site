@@ -503,6 +503,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
   const streamSelect = 'id,movie_id,episode_slug,source,server_name,stream_url,embed_url,quality,priority,health_status,failure_count,last_checked_at,last_error,response_time_ms,movies!inner(slug,is_published,status,seo_catalog_status,episode_current,current_episode,trailer_url)';
+  const streamSelectBare = 'id,movie_id,episode_slug,source,server_name,stream_url,embed_url,quality,priority,health_status,failure_count,last_checked_at,last_error,response_time_ms';
   let query = supabase
     .from('streams')
     .select(streamSelect)
@@ -562,7 +563,7 @@ serve(async (req) => {
     const [recentResult, backlogResult] = await Promise.all([
       supabase
         .from('streams')
-        .select(streamSelect)
+        .select(streamSelectBare)
         .eq('is_active', true)
         .eq('health_status', 'unchecked')
         .or('stream_url.neq.,embed_url.neq.')
@@ -571,7 +572,7 @@ serve(async (req) => {
       backlogLimit > 0
         ? supabase
           .from('streams')
-          .select(streamSelect)
+          .select(streamSelectBare)
           .eq('is_active', true)
           .eq('health_status', 'unchecked')
           .or('stream_url.neq.,embed_url.neq.')
@@ -586,7 +587,17 @@ serve(async (req) => {
       [...(recentResult.data || []), ...(backlogResult.data || [])]
         .map((row) => [String((row as StreamRow).id), row]),
     ).values()];
-    preselectedRows = spreadAcrossMovies(distinctRows, limit);
+    const selected = spreadAcrossMovies(distinctRows, limit);
+    const selectedMovieIds = unique(selected.map((row) => String((row as StreamRow).movie_id || '')).filter(Boolean));
+    const { data: selectedMovies, error: selectedMoviesError } = selectedMovieIds.length > 0
+      ? await supabase.from('movies').select('id,slug').in('id', selectedMovieIds)
+      : { data: [], error: null };
+    if (selectedMoviesError) return json({ success: false, error: selectedMoviesError.message }, 500);
+    const selectedSlugByMovieId = new Map((selectedMovies || []).map((movie) => [String(movie.id), String(movie.slug || '')]));
+    preselectedRows = selected.map((row) => ({
+      ...(row as Record<string, unknown>),
+      movies: { slug: selectedSlugByMovieId.get(String((row as StreamRow).movie_id || '')) || '' },
+    }));
   } else if (queue === 'recovery') {
     // Hidden movies cannot generate new viewer telemetry. A second failure
     // mode used to strand released movies that had a promotional trailer:

@@ -1,0 +1,35 @@
+[
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt",
+    "episode_number": -1001,
+    "link_embed": "https://ok.ru/videoembed/8211922946577?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "BLVietsub OK Tập Đặc Biệt",
+    "slug": "tap-dac-biet",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt",
+    "episode_number": -1001,
+    "link_embed": "https://ssplay.net/ok/8211922946577",
+    "link_m3u8": "",
+    "server_name": "BLVietsub SS Tập Đặc Biệt",
+    "slug": "tap-dac-biet",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt",
+    "episode_number": -1001,
+    "link_embed": "https://vk.com/video_ext.php?oid=458745691&id=456239771&autoplay=1",
+    "link_m3u8": "",
+    "server_name": "BLVietsub VK Tập Đặc Biệt",
+    "slug": "tap-dac-biet",
+    "source": "blvietsub",
+    "subtitle_url": ""
+  }
+]

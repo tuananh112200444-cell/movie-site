@@ -19,15 +19,23 @@
 
 /
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Link: <https://khophim.org/>; rel="canonical"
 
 /phim/*
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
 /xem-phim/*
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  X-Robots-Tag: noindex, follow
+
+/movie-data/*
+  Cache-Control: public, max-age=300, s-maxage=3600, stale-while-revalidate=86400
+  Content-Type: application/json; charset=utf-8
+  X-Content-Type-Options: nosniff
 
 /search*
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  X-Robots-Tag: noindex, follow
 
 /vu-tru-dam-my
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
@@ -83,6 +91,10 @@
   Cache-Control: public, max-age=300, s-maxage=600, stale-while-revalidate=1800
   Content-Type: application/json; charset=utf-8
 
+/api/home
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=86400
+
 /queer-fallback.json
   Cache-Control: public, max-age=300, s-maxage=600, stale-while-revalidate=1800
   Content-Type: application/json; charset=utf-8
@@ -114,6 +126,11 @@
 /sitemap*.xml
   Cache-Control: public, max-age=3600
   Content-Type: application/xml
+  X-Sitemap-Proxy: cloudflare-pages-static-fallback
+
+/feed.xml
+  Cache-Control: public, max-age=300, s-maxage=600, stale-while-revalidate=3600
+  Content-Type: application/rss+xml; charset=utf-8
 
 /mhophim/sitemap.xml
   Cache-Control: public, max-age=3600

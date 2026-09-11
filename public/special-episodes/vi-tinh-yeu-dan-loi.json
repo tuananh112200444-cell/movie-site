@@ -1,0 +1,24 @@
+[
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 2",
+    "episode_number": -1002,
+    "link_embed": "https://ok.ru/videoembed/10940829207057?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet-2",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  },
+  {
+    "audio_type": "vietsub",
+    "episode_name": "Tập Đặc Biệt 1",
+    "episode_number": -1001,
+    "link_embed": "https://ok.ru/videoembed/10940829141521?autoplay=1",
+    "link_m3u8": "",
+    "server_name": "GLVietsub 1",
+    "slug": "tap-dac-biet-1",
+    "source": "glvietsub",
+    "subtitle_url": ""
+  }
+]

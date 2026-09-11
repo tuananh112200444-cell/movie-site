@@ -732,7 +732,7 @@ export default function AnimePage() {
               <div className="grid movie-grid-desktop">
                 {filteredMovies.map((m, idx) => (
                   <div key={m._id} className="relative group">
-                    <MovieCard movie={m} priority={idx < 2} />
+                    <MovieCard movie={m} priority={idx < 2} contextLabel="Hoạt Hình" />
                     <div className="absolute top-1.5 left-1.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                       <AnimeSeasonBadge episode={m.episode_current} />
                     </div>

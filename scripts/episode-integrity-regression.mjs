@@ -40,11 +40,16 @@ const alternativeRepairMigration = fs.readFileSync(
   path.join(root, 'supabase/migrations/20260822013246_restore_hidden_movie_alternative_repair.sql'),
   'utf8',
 );
+const pendingVisibilityMigration = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20260830065000_recover_pending_episode_visibility.sql'),
+  'utf8',
+);
 const syncSource = fs.readFileSync(path.join(root, 'supabase/functions/sync-ophim-movies/index.ts'), 'utf8');
 const proxySource = fs.readFileSync(path.join(root, 'supabase/functions/movie-detail-proxy/index.ts'), 'utf8');
 const healthCheckSource = fs.readFileSync(path.join(root, 'supabase/functions/stream-health-check/index.ts'), 'utf8');
 const sourceHealthFunction = fs.readFileSync(path.join(root, 'supabase/functions/player-source-health/index.ts'), 'utf8');
 const moviePageSource = fs.readFileSync(path.join(root, 'src/pages/movie-detail/page.tsx'), 'utf8');
+const movieApiSource = fs.readFileSync(path.join(root, 'src/services/movieApi.ts'), 'utf8');
 const sourceHealthClient = fs.readFileSync(path.join(root, 'src/services/playerSourceHealth.ts'), 'utf8');
 
 const failures = [];
@@ -142,7 +147,11 @@ expect(
   'source filenames can still be interpreted as numbered episode slugs',
 );
 expect(healthAwareMigration.includes("'health_aware_movie_identity_v3'"), 'gap repair contract is not health-aware');
-expect(syncSource.includes("rpc(\n      'normalize_verified_cumulative_season_numbering'"), 'sync does not reconcile persisted cumulative rows');
+expect(
+  syncSource.includes("'normalize_verified_cumulative_season_numbering'")
+    && syncSource.includes('p_raw_start: normalization.rawStart'),
+  'sync does not reconcile persisted cumulative rows',
+);
 expect(syncSource.includes('return getProviderEpisodeNumber(ep);'), 'provider sync does not share fractional-special episode numbering');
 expect((syncSource.match(/\^embed\\d\*\\\.streamc\\\.xyz\$/g) || []).length >= 2, 'NguonC primary embed.streamc.xyz host is rejected by parsing or the provider allowlist');
 expect(
@@ -165,6 +174,28 @@ expect(
 );
 expect(proxySource.includes('normalizeVerifiedSeasonNumbering'), 'edge fallback does not normalize provider numbering');
 expect(
+  proxySource.includes('function isTrustedPendingDirectHls')
+    && proxySource.includes('kkphimplayer\\d*\\.com')
+    && proxySource.includes('Provider verification pending:'),
+  'trusted pending KKPhim HLS cannot bridge the verification delay safely',
+);
+expect(
+  proxySource.includes('for (let number = 1; number <= expected; number += 1)')
+    && proxySource.includes('if (!present.has(number)) return true;'),
+  'detail cache can still treat a gapped episode range as complete',
+);
+expect(
+  movieApiSource.includes('function detailHasCompleteAdvertisedSequence')
+    && movieApiSource.includes('detailHasCompleteAdvertisedSequence(cached.data)')
+    && movieApiSource.includes('detailHasCompleteAdvertisedSequence(data) ? data : null'),
+  'the client quick path can still prefer a gapped cached/proxy response over an exact complete provider response',
+);
+expect(
+  moviePageSource.includes('countMissingEpisodeNumbers(visibleEpisodes, displayedCurrent) > 0')
+    && moviePageSource.includes('refreshedMissing < oldMissing'),
+  'the watch page cannot replace a gapped response unless the newest episode number increases',
+);
+expect(
   proxySource.match(/healthStatus === 'dead' \|\| \(healthStatus === 'failed' && failureCount >= 3\)/g)?.length >= 2,
   'movie detail proxy can still expose a source already confirmed dead',
 );
@@ -180,11 +211,20 @@ const targetedRecoveryBlock = healthCheckSource.slice(
   healthCheckSource.indexOf('if (slug)'),
   healthCheckSource.indexOf("queue === 'unchecked'"),
 );
+const uncheckedQueueBlock = healthCheckSource.slice(
+  healthCheckSource.indexOf("queue === 'unchecked'"),
+  healthCheckSource.indexOf("queue === 'recovery'"),
+);
 const hiddenRecoveryBlock = healthCheckSource.slice(
   healthCheckSource.indexOf("queue === 'recovery'"),
   healthCheckSource.indexOf("queue === 'problem'"),
 );
 expect(!targetedRecoveryBlock.includes(".eq('is_active', true)"), 'targeted recheck cannot revive inactive streams');
+expect(
+  uncheckedQueueBlock.includes('.select(streamSelectBare)')
+    && uncheckedQueueBlock.includes("from('movies').select('id,slug').in('id', selectedMovieIds)"),
+  'unchecked health selection still joins the full movies table before applying its bounded limit',
+);
 expect(hiddenRecoveryBlock.includes(".eq('seo_catalog_status', 'awaiting_playback')"), 'hidden movie recovery queue is missing');
 expect(hiddenRecoveryBlock.includes(".eq('movies.is_published', true)"), 'published zero-source movies are missing from recovery');
 expect(hiddenRecoveryBlock.includes('isPreviewOnlyMovie'), 'recovery can waste capacity probing genuine preview-only titles');
@@ -215,7 +255,7 @@ expect(
   'opening a released zero-source title cannot start a cooldown-bounded targeted recovery',
 );
 expect(
-  moviePageSource.includes('for (const delay of [4000, 12000])')
+  moviePageSource.includes('for (const delay of [4000, 12_050])')
     && moviePageSource.includes('autoRecoverySucceeded')
     && moviePageSource.includes('isPreviewOnlyDetail(data)'),
   'the viewer cannot automatically receive a source restored just after the first empty response',
@@ -242,6 +282,19 @@ expect(
   healthCheckSource.includes("last_error: 'Server probe inconclusive; browser validation required'")
     && healthCheckSource.includes('is_active: true'),
   'an inconclusive server probe cannot restore a source for browser validation',
+);
+expect(
+  pendingVisibilityMigration.includes('streams_unchecked_recent_queue_idx')
+    && pendingVisibilityMigration.includes('streams_provider_verification_hot_queue_idx')
+    && pendingVisibilityMigration.includes("'playback:provider-verification'")
+    && pendingVisibilityMigration.includes("where task_key = 'playback:learning'")
+    && pendingVisibilityMigration.includes("playback-brain?limit=2"),
+  'pending stream verification can still time out or starve behind playback learning',
+);
+expect(
+  pendingVisibilityMigration.includes('count(distinct episode_number) = max(episode_number)')
+    && pendingVisibilityMigration.includes("sep-chinh-la-than-tuong-bias-toi-sep-cua-toi"),
+  'contiguous trusted KKPhim episodes do not repair stale movie metadata and detail cache',
 );
 const telemetryRecoveryBlock = healthCheckSource.slice(
   healthCheckSource.indexOf('const hotCandidateQuery'),

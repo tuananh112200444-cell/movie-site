@@ -2,143 +2,23 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
-    <loc>https://khophim.org/phim/nhan-ngu-2026</loc>
-    <lastmod>2026-08-22</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260808/nhan-ngu-2026-thumb.webp</image:loc>
-      <image:title>Nhân Ngư</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/lua-trang-2026</loc>
-    <lastmod>2026-08-22</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260620-1/3e4a5707b7b1cd0e9e4fcee32e630cf1.jpg</image:loc>
-      <image:title>Lửa Trắng</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tam-tay-lua-dao</loc>
-    <lastmod>2026-08-21</lastmod>
+    <loc>https://khophim.org/phim/biet-doi-cong-ly-avalanche</loc>
+    <lastmod>2026-09-06</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.90</priority>
+    <priority>0.85</priority>
     <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260619-1/9e93d64325569582ddae5c844a3c1d4d.jpg</image:loc>
-      <image:title>Tám Tay Lừa Đảo</image:title>
+      <image:loc>https://phim.nguonc.com/public/images/Post/1/biet-doi-cong-ly-avalanche.jpg</image:loc>
+      <image:title>Biệt Đội Công Lý Avalanche</image:title>
     </image:image>
   </url>
   <url>
     <loc>https://khophim.org/phim/cuu-mon-2026</loc>
     <lastmod>2026-08-18</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.92</priority>
+    <changefreq>monthly</changefreq>
+    <priority>0.95</priority>
     <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260731/cuu-mon-2026-thumb.webp</image:loc>
+      <image:loc>https://vsmov.com/storage/images/pUK6xGvEINMxAxGs1oldWBmQsa0.jpg</image:loc>
       <image:title>Cửu Môn</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nguoi-dep-dai-dich-sac-dep</loc>
-    <lastmod>2026-08-18</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260123-1/4396ea303a257496819163ee35fd6066.jpg</image:loc>
-      <image:title>Người Đẹp (Đại Dịch Sắc Đẹp)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nam-hi</loc>
-    <lastmod>2026-08-18</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.85</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260808/nam-hi-thumb.webp</image:loc>
-      <image:title>Nam Hí</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ngo-hoang-tai-thuong-phuong-ngu-tu-phuong</loc>
-    <lastmod>2026-08-17</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260808/ngo-hoang-tai-thuong-phuong-ngu-tu-phuong-thumb.webp</image:loc>
-      <image:title>Ngô Hoàng Tại Thượng: Phượng Ngự Tứ Phương</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/da-ngu-ky</loc>
-    <lastmod>2026-08-16</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260802/da-ngu-ky-thumb.webp</image:loc>
-      <image:title>Dạ Ngữ Ký</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nhat-niem-khuynh-tam</loc>
-    <lastmod>2026-08-15</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/roi-vao-luoi-tinh-2025-thumb.jpg</image:loc>
-      <image:title>Rơi Vào Lưới Tình</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/young-washington-2026</loc>
-    <lastmod>2026-08-15</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://vsmov.com/storage/images/6CdoTKnRQHJkjRGxTefFGkPQplB.jpg</image:loc>
-      <image:title>Thời Trẻ Của Washington</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/gail-daughtry-and-the-celebrity-sex-pass-2026</loc>
-    <lastmod>2026-08-15</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260815/gail-daughtry-va-tam-ve-quan-he-voi-nguoi-noi-tieng-thumb.webp</image:loc>
-      <image:title>Gail Daughtry Và Tấm Vé Quan Hệ Với Người Nổi Tiếng</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/khong-doi-nao-toi-co-the-co-nguoi-yeu-hoac-co-the-la-co-watashi-ga-koibito-ni-nareru-wake-nai-jan-muri-muri</loc>
-    <lastmod>2026-08-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251210-1/9ea61f89169d030e50a9944822af1d84.jpg</image:loc>
-      <image:title>Không Đời Nào Tôi Có Thể Có Người Yêu! Hoặc Có Thể Là Có... (Watashi ga Koibito ni Nareru Wake Nai jan, Muri Muri!)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nam-oxford-cua-toi</loc>
-    <lastmod>2026-08-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250802-1/2d28ead3c13044f69dd5c08cdd964525.jpg</image:loc>
-      <image:title>Năm Oxford Của Tôi</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thiet-quyen-lang-tu-phan-1</loc>
-    <lastmod>2026-08-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260810/thiet-quyen-lang-tu-phan-1-thumb.webp</image:loc>
-      <image:title>Thiết Quyền Lãng Tử (Phần 1)</image:title>
     </image:image>
   </url>
   <url>
@@ -152,152 +32,12 @@
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/trai-he-kinh-hoang-2</loc>
-    <lastmod>2026-08-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260811/trai-he-kinh-hoang-2-thumb.webp</image:loc>
-      <image:title>Trại Hè Kinh Hoàng 2</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/trai-he-kinh-hoang-3</loc>
-    <lastmod>2026-08-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260811/trai-he-kinh-hoang-3-thumb.webp</image:loc>
-      <image:title>Trại Hè Kinh Hoàng 3</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tro-lai-trai-he-kinh-hoang</loc>
-    <lastmod>2026-08-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260811/tro-lai-trai-he-kinh-hoang-thumb.webp</image:loc>
-      <image:title>Trở Lại Trại Hè Kinh Hoàng</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/trai-he-kinh-hoang</loc>
-    <lastmod>2026-08-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260811/trai-he-kinh-hoang-thumb.webp</image:loc>
-      <image:title>Trại Hè Kinh Hoàng</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tan-binh-2025</loc>
-    <lastmod>2026-08-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251010-1/f556108907e9a60793502f6a7fe9abc5.jpg</image:loc>
-      <image:title>Tân Binh</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nong-sung-hang-o-cua-soi</loc>
-    <lastmod>2026-08-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/nong-sung-hang-o-cua-soi-thumb.jpg</image:loc>
-      <image:title>Nòng Súng: Hang Ổ của Sói</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/trang-chieu-ruc-ro</loc>
-    <lastmod>2026-08-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260113-1/f8b8e380c7706cc6437b74f832ffbfc9.jpg</image:loc>
-      <image:title>Trăng Chiều Rực Rỡ</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hoa-xa-dao-chich</loc>
-    <lastmod>2026-08-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/hoa-xa-dao-chich-thumb.jpg</image:loc>
-      <image:title>Hoả Xa Đạo Chích</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/dien-cuong-731</loc>
-    <lastmod>2026-08-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/dien-cuong-731-thumb.jpg</image:loc>
-      <image:title>Điên Cuồng 731</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/your-forma</loc>
-    <lastmod>2026-08-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/your-forma-thumb.jpg</image:loc>
-      <image:title>Your Forma</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/xuan-ve-phuong-tri</loc>
-    <lastmod>2026-08-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.90</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260725/xuan-ve-phuong-tri-thumb.webp</image:loc>
-      <image:title>Xuân Về Phượng Trì</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/the-gioi-hoan-my-movie-cuu-kiep-phan-thien</loc>
-    <lastmod>2026-08-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260809/the-gioi-hoan-my-movie-cuu-kiep-phan-thien-thumb.webp</image:loc>
-      <image:title>Thế Giới Hoàn Mỹ Movie: Cửu Kiếp Phần Thiên</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/van-khau-tai-ho</loc>
-    <lastmod>2026-08-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/van-khau-tai-ho-thumb.jpg</image:loc>
-      <image:title>Gặp Gỡ Tại Vân Khâu</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/moonlight-chicken</loc>
-    <lastmod>2026-08-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://blvietsub.com/wp-content/uploads/2026/04/com-ga-anh-trang-moonlight-chicken-2023.jpg</image:loc>
-      <image:title>Moonlight Chicken</image:title>
-    </image:image>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/ban-gai-thien-tai</loc>
     <lastmod>2026-08-13</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
+    <priority>0.95</priority>
     <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260802/ban-gai-thien-tai-thumb.webp</image:loc>
+      <image:loc>https://phim.nguonc.com/public/images/Post/7/ban-gai-thien-tai.jpg</image:loc>
       <image:title>Bạn Gái Thiên Tài</image:title>
     </image:image>
   </url>
@@ -309,36 +49,6 @@
     <image:image>
       <image:loc>https://phimimg.com/upload/vod/20260627-1/4c213d3213bfbfff8254a2bace26b730.jpg</image:loc>
       <image:title>Trảm Thần: Phàm Trần Thần Vực (Phần 2)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/topakk</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/topakk-thumb.jpg</image:loc>
-      <image:title>Topakk</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/gia-dinh-doc-mieng</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/gia-dinh-doc-mieng-thumb.jpg</image:loc>
-      <image:title>Gia Đình Độc Miệng</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thoi-dai-thieu-nien-cua-toi</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20240502-1/20c1ded756df2e2ac663fca471126f8c.jpg</image:loc>
-      <image:title>Thời Đại Thiếu Niên Của Tôi</image:title>
     </image:image>
   </url>
   <url>
@@ -362,102 +72,12 @@
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/hoang-hau-ki</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20231204-1/85d2e2cc50dc807b7530504bdfb8a51f.jpg</image:loc>
-      <image:title>Hoàng Hậu Ki</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ky-uc-khong-gian</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ky-uc-khong-gian-thumb.jpg</image:loc>
-      <image:title>Ký Ức Không Gian</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/diep-vien-chuck-phan-4</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250907-1/dfb43b9f0acc8bfa5063a212d9cae144.jpg</image:loc>
-      <image:title>Điệp Viên Chuck (Phần 4)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/the-invite-2026</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260813/loi-moi-thumb.webp</image:loc>
-      <image:title>Lời Mời</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/mua-san</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/mua-san-thumb.jpg</image:loc>
-      <image:title>Mùa Săn</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/vien-det-hoang-cung</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20231219-1/1a335c3bf0d874df16962d5c81fffd89.jpg</image:loc>
-      <image:title>Viện Dệt Hoàng Cung</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/anh-hung-bat-tinh-va-cong-chua-am-sat</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/sat-thu-an-danh-phan-1-thumb.jpg</image:loc>
-      <image:title>Sát Thủ Ẩn Danh (Phần 1)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thiet-ma-tam-kieu</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/thiet-ma-tam-kieu-thumb.jpg</image:loc>
-      <image:title>Thiết Mã Tầm Kiều</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ngoc-oi-tuoi-17</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ngoc-oi-tuoi-17-thumb.jpg</image:loc>
-      <image:title>Ngốc Ơi Tuổi 17</image:title>
-    </image:image>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/cuu-long-mang-dao-khu-bach-ma</loc>
     <lastmod>2026-08-12</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
+    <priority>0.92</priority>
     <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/cuu-long-mang-dao-khu-bach-ma-thumb.jpg</image:loc>
+      <image:loc>https://phimimg.com/upload/vod/20251229-1/bf37f490c32f7936e2d66f0ab5ccc366.jpg</image:loc>
       <image:title>Cửu Long Mang Đao Khử Bạch Mã</image:title>
     </image:image>
   </url>
@@ -472,123 +92,13 @@
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/hoc-vien-greenhouse-phan-1</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/hoc-vien-greenhouse-phan-1-thumb.jpg</image:loc>
-      <image:title>Học Viện Greenhouse (Phần 1)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ash-doi-dau-ma-cay-phan-2</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ash-doi-dau-ma-cay-phan-2-thumb.jpg</image:loc>
-      <image:title>Ash Đối Đầu Ma Cây (Phần 2)</image:title>
-    </image:image>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/ngu-dinh-dao</loc>
     <lastmod>2026-08-12</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
+    <priority>0.95</priority>
     <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260729/ngu-dinh-dao-thumb.webp</image:loc>
+      <image:loc>https://phim.nguonc.com/public/images/Post/5/ngu-dinh-dao.jpg</image:loc>
       <image:title>Ngự Đình Dao</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ai-noi-toi-khong-the-ket-hon</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20240802-1/08cfc5deb47ba864585c7d723648b39b.jpg</image:loc>
-      <image:title>Ai Nói Tôi Không Thể Kết Hôn</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nguoi-soi-tran-chien-cuoi-cung</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250817-1/4e1662277f178f7d79325ffc10657d27.jpg</image:loc>
-      <image:title>X-Men 9: Logan - Trận Chiến Cuối Cùng</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nhat-da-tan-nuong</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/nhat-da-tan-nuong-thumb.jpg</image:loc>
-      <image:title>Nhất Dạ Tân Nương</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/trang-den-sang-to</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/trang-den-sang-to-thumb.jpg</image:loc>
-      <image:title>Trắng Đen Sáng Tỏ</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thieu-nien-du-chi-mot-tac-tuong-tu</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/thieu-nien-du-chi-mot-tac-tuong-tu-thumb.jpg</image:loc>
-      <image:title>Thiếu Niên Du Chi Một Tấc Tương Tư</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nu-ve-si-2023</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20250808-1/b5f7e47ffa4b57f9d7870b84275050ef.jpg</image:loc>
-      <image:title>Nữ Vệ Sĩ</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/pachinko</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/pachinko-thumb.jpg</image:loc>
-      <image:title>Pachinko</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/mach-thuong-nhan-nhu-ngoc</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/mach-thuong-nhan-nhu-ngoc-thumb.jpg</image:loc>
-      <image:title>Mạch Thượng Nhân Như Ngọc</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/sau-hon-su</loc>
-    <lastmod>2026-08-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/sau-hon-su-thumb.jpg</image:loc>
-      <image:title>Sau Hôn Sự</image:title>
     </image:image>
   </url>
   <url>
@@ -605,9 +115,9 @@
     <loc>https://khophim.org/phim/vung-trom-khong-the-giau</loc>
     <lastmod>2026-08-11</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
+    <priority>0.95</priority>
     <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/vung-trom-khong-the-giau-thumb.jpg</image:loc>
+      <image:loc>https://phimimg.com/upload/vod/20240314-1/95c23009354463bf639852c6b906577c.jpg</image:loc>
       <image:title>Vụng Trộm Không Thể Giấu</image:title>
     </image:image>
   </url>
@@ -622,383 +132,873 @@
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/ba-bo-truong-phan-1</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ba-bo-truong-phan-1-thumb.jpg</image:loc>
-      <image:title>Bà Bộ Trưởng (Phần 1)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hong-trang-van-giai-nhan</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/hong-trang-van-giai-nhan-thumb.jpg</image:loc>
-      <image:title>Hồng Trang Vấn Giai Nhân</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/chien-tranh-the-gioi</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/chien-tranh-the-gioi-thumb.jpg</image:loc>
-      <image:title>Chiến Tranh Thế Giới</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tao-nen-ke-giet-nguoi</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tao-nen-ke-giet-nguoi-thumb.jpg</image:loc>
-      <image:title>Tạo nên kẻ giết người</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/khe-uoc-ban-dau</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.90</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/khe-uoc-ban-dau-thumb.jpg</image:loc>
-      <image:title>Khế Ước Bán Dâu</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ma-boi-dieu-lam</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ma-boi-dieu-lam-thumb.jpg</image:loc>
-      <image:title>Mã Bối Diêu Lam</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/border-hunters</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/border-hunters-thumb.jpg</image:loc>
-      <image:title>Trận Chiến Biên Giới</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/da-ngoai-mot-minh-cung-nhau</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/da-ngoai-mot-minh-cung-nhau-thumb.jpg</image:loc>
-      <image:title>Dã Ngoại Một Mình Cùng Nhau</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thung-lung-silicon-phan-6</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/thung-lung-silicon-phan-6-thumb.jpg</image:loc>
-      <image:title>Thung Lũng Silicon (Phần 6)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/chieu-ly-phu</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/chieu-ly-phu-thumb.jpg</image:loc>
-      <image:title>Chiêu Ly Phú</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ma-tran-tien-ngam</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260531-1/376d460bd6c896f6fb8f01ef14b2911d.jpg</image:loc>
-      <image:title>Ma Trận Tiền Ngầm</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hoc-vien-canh-sat</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/hoc-vien-canh-sat-thumb.jpg</image:loc>
-      <image:title>Học Viện Cảnh Sát</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/thung-lung-xe-hoi</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/thung-lung-xe-hoi-thumb.jpg</image:loc>
-      <image:title>Thung Lũng Xe Hơi</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/nhung-nguoi-ban-toc-do-phan-1</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20241224-1/2706fdc5c938accf2f84d5a57b3bd192.jpg</image:loc>
-      <image:title>Những Người Bạn Tốc Độ (Phần 1)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/1670-phan-3</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260809/1670-phan-3-thumb.webp</image:loc>
-      <image:title>1670 (Phần 3)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/fleabag-phan-2</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260811/fleabag-phan-2-thumb.webp</image:loc>
-      <image:title>Fleabag (Phần 2)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/dieu-20-chinh-dang-phong-ve</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260811/dieu-20-chinh-dang-phong-ve-thumb.webp</image:loc>
-      <image:title>Điều 20 (Chính Đáng Phòng Vệ)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/linh-truong</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260213-1/492338f69dcb3344f8a3bbdb0dcdc354.jpg</image:loc>
-      <image:title>Linh Trưởng</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/wonder-man</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/wonder-man-thumb.jpg</image:loc>
-      <image:title>Wonder Man</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/chu-re-va-hai-co-dau</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251109-1/36282ca6db8379073272736b62451a0c.jpg</image:loc>
-      <image:title>Chú Rể Và Hai Cô Dâu</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/gau-boonie-doi-tham-hiem-phan-2</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260429-1/27538e6850ff4cc69f254ae8053c8247.jpg</image:loc>
-      <image:title>Gấu Boonie: Đội Thám Hiểm (Phần 2)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hac-dieu-phan-1</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/hac-dieu-phan-1-thumb.jpg</image:loc>
-      <image:title>Hắc Điểu (Phần 1)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/toa-an-quan-he-cha-con-cua-lauren-lake-phan-2</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20241226-1/505c8309850dbe9f3b509939c115cd5f.jpg</image:loc>
-      <image:title>Tòa Án Quan Hệ Cha Con Của Lauren Lake (Phần 2)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/sat-thu-hanna-phan-3</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/sat-thu-hanna-phan-3-thumb.jpg</image:loc>
-      <image:title>Sát Thủ Hanna (Phần 3)</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/ke-thu-dau-yeu</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.95</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ke-thu-dau-yeu-thumb.jpg</image:loc>
-      <image:title>Kẻ Thù Dấu Yêu</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/eloa-pimentel-con-tin-tren-truyen-hinh-truc-tiep</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251113-1/1760d50c4a28f12abf16c1194928dc7c.jpg</image:loc>
-      <image:title>Eloá Pimentel: Con Tin Trên Truyền Hình Trực Tiếp</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/tram-vun-huong-phai</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/tram-vun-huong-phai-thumb.jpg</image:loc>
-      <image:title>Trầm Vụn Hương Phai</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/hong-y-tuy</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/hong-y-tuy-thumb.jpg</image:loc>
-      <image:title>Hồng Y Túy</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/con-thinh-no</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/uploads/movies/20260707/con-thinh-no-thumb.webp</image:loc>
-      <image:title>Cơn Thịnh Nộ</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/mau-cua-del-toro</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.92</priority>
-    <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20251122-1/d14d8787a962491ba89b894f076d11fc.jpg</image:loc>
-      <image:title>Máu Của del Toro</image:title>
-    </image:image>
-  </url>
-  <url>
     <loc>https://khophim.org/phim/luyen-ca-dong-bac-lua-giua-ngay-dong</loc>
     <lastmod>2026-08-11</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.70</priority>
     <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/luyen-ca-dong-bac-lua-giua-ngay-dong-thumb.jpg</image:loc>
-      <image:title>Luyến Ca Đông Bắc Lửa Giữa Ngày Đông</image:title>
+      <image:loc>https://phimimg.com/upload/vod/20260221-1/eb41248ed9191072c5741d72b2e23334.jpg</image:loc>
+      <image:title>Luyến Ca Đông Bắc: Lửa Giữa Ngày Đông</image:title>
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/dai-kiep-an</loc>
-    <lastmod>2026-08-11</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-    <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/dai-kiep-an-thumb.jpg</image:loc>
-      <image:title>Đại Kiếp Án</image:title>
-    </image:image>
-  </url>
-  <url>
-    <loc>https://khophim.org/phim/cuu-nghia-nhan-yen-van-tu</loc>
+    <loc>https://khophim.org/phim/nguoc-chieu-anh-sang-vi-em</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.70</priority>
     <image:image>
-      <image:loc>https://phimimg.com/upload/vod/20260612-1/6ce8f2313456d536296b45fc08b24a5e.jpg</image:loc>
-      <image:title>Cửu Nghĩa Nhân: Yên Vân Tú</image:title>
+      <image:loc>https://phimimg.com/upload/vod/20240305-1/ab4aeee94d4f21fd86d202059e8cde45.jpg</image:loc>
+      <image:title>Ngược Chiều Ánh Sáng Vì Em</image:title>
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/ai-con-lang-nghe</loc>
+    <loc>https://khophim.org/phim/thanh-thanh-tu-kham</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20240815-1/f77ac4915131d004c4a5a889a3e23625.jpg</image:loc>
+      <image:title>Thanh Thanh Tử Khâm</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/van-phuc-kim-an</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260317-1/38d4210cedab3142d931e619056519c0.jpg</image:loc>
+      <image:title>Vạn Phúc Kim An</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/su-tro-lai-cua-nu-hoang</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.92</priority>
     <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/ai-con-lang-nghe-thumb.jpg</image:loc>
-      <image:title>Ai Còn Lắng Nghe?</image:title>
+      <image:loc>https://phimimg.com/upload/vod/20250917-1/5ad929d81def8af9e47f4944be6b3c6f.jpg</image:loc>
+      <image:title>Sự Trở Lại Của Nữ Hoàng</image:title>
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/saipan</loc>
+    <loc>https://khophim.org/phim/hiep-si-xe-den-phan-1</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.92</priority>
     <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/saipan-thumb.jpg</image:loc>
-      <image:title>Saipan</image:title>
+      <image:loc>https://phimimg.com/upload/vod/20251208-1/20788f5dace02a5eabc52f264bc8e87f.jpg</image:loc>
+      <image:title>Hiệp Sĩ Xe Đen (Phần 1)</image:title>
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/nguoi-la-o-cong-vien</loc>
+    <loc>https://khophim.org/phim/kamen-rider-hiep-si-rong-sieu-nhan-phi-long</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.92</priority>
     <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/nguoi-la-o-cong-vien-thumb.jpg</image:loc>
-      <image:title>Người lạ ở công viên</image:title>
+      <image:loc>https://phimimg.com/upload/vod/20250320-1/a25828779e4eb32f094129b73ca384d6.jpg</image:loc>
+      <image:title>Kamen Rider: Hiệp Sĩ Rồng (Siêu Nhân Phi Long)</image:title>
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/bay-tam</loc>
+    <loc>https://khophim.org/phim/tam-nhuyen-dich-than</loc>
     <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260430-1/b1fdab2299e8e2534a4a935db4245c7a.jpg</image:loc>
+      <image:title>Tâm Nhuyễn Đích Thần</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/boc-dan</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260504-1/10245db2f3748fc1f01497d3c8468740.jpg</image:loc>
+      <image:title>Bộc Đạn</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/40-ngay-yeu</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250121-1/bbe130aa831b2eaec521057464709d40.jpg</image:loc>
+      <image:title>40 Ngày Yêu</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/co-nang-manh-me-do-bong-soon</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/uploads/movies/20260810/co-nang-manh-me-do-bong-soon-thumb.webp</image:loc>
+      <image:title>Cô Nàng Mạnh Mẽ Do Bong Soon</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/bach-xa-2-thanh-xa-kiep-khoi</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260125-1/1eb0172990caedaf4a31e94ebe902bff.jpg</image:loc>
+      <image:title>Bạch Xà 2: Thanh Xà Kiếp Khởi</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/co-mot-la-thu-gui-tu-thanh-pho-cang</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260424-1/42d8ab09e1c1a74eb88290ce759cb335.jpg</image:loc>
+      <image:title>Có Một Lá Thư Gửi Từ Thành Phố Cảng</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ngoi-nha-ma-am-ac-linh-tro-lai</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20251019-1/fae9e9b092d689eaa446ff354bcf8496.jpg</image:loc>
+      <image:title>Ngôi Nhà Ma Ám: Ác Linh Trở Lại</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tieu-dao-2025</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/7/tieu-dao-2025.jpg</image:loc>
+      <image:title>Tiêu Dao (2025)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/hau-vua-nhu-hau-cop</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260207-1/a9d75735db1f70ea22525e30f0cb0049.jpg</image:loc>
+      <image:title>Hầu Vua Như Hầu Cọp</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/sieu-trom-chiec-vuong-mien-thanh</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250628-1/324deaca6b835990e6885e61d3333b75.jpg</image:loc>
+      <image:title>Siêu Trộm: Chiếc Vương Miện Thánh</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/toi-muon-di-nguoc-chieu-gio</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260206-1/e406652e3c29cc6378773236a2b62fee.jpg</image:loc>
+      <image:title>Tôi Muốn Đi Ngược Chiều Gió</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/anh-hung-thanh-pho-an-danh</loc>
+    <lastmod>2026-08-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.70</priority>
     <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/bay-tam-thumb.jpg</image:loc>
-      <image:title>Bẫy Tâm</image:title>
+      <image:loc>https://phim.nguonc.com/public/images/Film/tfbw7yQg8U643HFSShZrcFPIbKZ.jpg</image:loc>
+      <image:title>Anh Hùng Thành Phố Ẩn Danh</image:title>
     </image:image>
   </url>
   <url>
-    <loc>https://khophim.org/phim/vladimir</loc>
-    <lastmod>2026-08-10</lastmod>
+    <loc>https://khophim.org/phim/duoi-bong-dien-ha</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Film/rEWfnghvwvhwK99NerqQcllWKJ6.jpg</image:loc>
+      <image:title>Dưới Bóng Điện Hạ</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/dai-hiep-hoac-nguyen-giap</loc>
+    <lastmod>2026-08-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.92</priority>
     <image:image>
-      <image:loc>https://img.ophim.live/uploads/movies/vladimir-thumb.jpg</image:loc>
-      <image:title>Vladimir</image:title>
+      <image:loc>https://phimimg.com/upload/vod/20241108-1/4a38930d8ebdff18cc1c820b70f60982.jpg</image:loc>
+      <image:title>Đại Hiệp Hoắc Nguyên Giáp</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/les-orphelins</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260508-1/691783429f5666430e976c66b25517ff.jpg</image:loc>
+      <image:title>Đứa Trẻ Mồ Côi</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tro-choi-phu-thuy</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/tro-choi-phu-thuy-thumb.jpg</image:loc>
+      <image:title>Trò Chơi Phù Thủy</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tham-tu-lung-danh-conan-21-ban-tinh-ca-mau-do-tham</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20231019-1/84f91112b6fe999381342ad1f84e8f81.jpg</image:loc>
+      <image:title>Thám Tử Lừng Danh Conan 21: Bản Tình Ca Màu Đỏ Thẫm</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tham-tu-lung-danh-conan-sat-thu-ban-tia-khong-tuong</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/uploads/movies/20260804/tham-tu-lung-danh-conan-sat-thu-ban-tia-khong-tuong-thumb.webp</image:loc>
+      <image:title>Thám Tử Lừng Danh Conan: Sát Thủ Bắn Tỉa Không Tưởng</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/chia-khoa-xuong-nguoi</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Film/chia-khoa-xuong-nguoi-thumb.jpg</image:loc>
+      <image:title>Chìa Khóa Xương Người</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/khanh-khanh-nhat-thuong-tan-xuyen-nhat-thuong</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Film/MV5BNDg0NGE4NDQtMDBmOC00OTc4LWE4NTItOGRmODNlYmQ4NGY5XkEyXkFqcGdeQXVyMTU4NjM5MDk0._V1_.jpg</image:loc>
+      <image:title>Khanh Khanh Nhật Thường (Tân Xuyên Nhật Thường)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/son-ha-nguyet-minh</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20251107-1/9c13eec3d7c25a61bb3df06cc8bb598b.jpg</image:loc>
+      <image:title>Sơn Hà Nguyệt Minh</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/am-anh-trinh-tham</loc>
+    <lastmod>2026-08-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/7/am-anh-trinh-tham-trinh-tham-bong-dem.jpg</image:loc>
+      <image:title>Ám Ảnh Trinh Thám (Trinh Thám Bóng Đêm)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/vo-duong-dai-nao</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Film/hmN8y6J7sKBahXzEvJIQlt5vfAa.jpg</image:loc>
+      <image:title>Võ Đường Đại Náo</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/sieu-nhien-phan-6</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20241124-1/ff976285e8f0b49253df923232e9d72d.jpg</image:loc>
+      <image:title>Siêu Nhiên (Phần 6)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/thoi-gian-co-em</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250407-1/5366e0485698ab481efaa14686949c01.jpg</image:loc>
+      <image:title>Thời Gian Có Em</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/dao-hoa-anh-giang-son</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250625-1/2ee8faad9354284ba4c7564094a279bc.jpg</image:loc>
+      <image:title>Đào Hoa Ánh Giang Sơn</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/danh-du-phan-8</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260527-1/87d5d11fba47cdfae87535ddedfaf0c9.jpg</image:loc>
+      <image:title>Danh Dự (Phần 8)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/cam-nguyet-nhu-ca</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250806-1/0d83ca81d2ed84f40d0979bd3a6c496f.jpg</image:loc>
+      <image:title>Cẩm Nguyệt Như Ca</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/trieu-tuyet-luc</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250713-1/49c56c1f733ed8a328dc7984df495075.jpg</image:loc>
+      <image:title>Triều Tuyết Lục</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/xac-uop-cuoc-phieu-luu-den-london</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20240919-1/4f62df93d0d11608cabac88ce065896b.jpg</image:loc>
+      <image:title>Xác Ướp: Cuộc Phiêu Lưu Đến London</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/loi-noi-doi-cua-em-cung-de-nghe</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20241020-1/90e5c8ba790ecf25cd595c5a93cc2820.jpg</image:loc>
+      <image:title>Lời Nói Dối Của Em Cũng Dễ Nghe</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ninh-an-nhu-mong</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250516-1/a8dcdb46d759d82c85b9d119ce8c7c05.jpg</image:loc>
+      <image:title>Ninh An Như Mộng</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/khoanh-khac-sinh-tu</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/6/khoanh-khac-sinh-tu.jpg</image:loc>
+      <image:title>Khoảnh Khắc Sinh Tử</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nhap-thanh-van</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/4/nhap-thanh-van.jpg</image:loc>
+      <image:title>Nhập Thanh Vân</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nhung-nguoi-phu-nu-be-nho-2019</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20241114-1/e1009abdfd02b04dd82f727c92d4f831.jpg</image:loc>
+      <image:title>Những Người Phụ Nữ Bé Nhỏ</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tham-yeu-quat-sinh-hoai-nam-2019</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20240909-1/79c3a971cc315b08aca64c65b739388c.jpg</image:loc>
+      <image:title>Thầm Yêu Quất Sinh Hoài Nam</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/hung-than-trang</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20240121-1/a894fce43f586d27ace69e217e8d5068.jpg</image:loc>
+      <image:title>Hung Thần Trắng</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/anh-sang-thien-thu</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/10/anh-sang-thien-thu.jpg</image:loc>
+      <image:title>Ánh Sáng Thiên Thư</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/an-nap-noi-vuc-sau</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250610-1/33117a6e31eb5f3fc7b8c5652c120454.jpg</image:loc>
+      <image:title>Ẩn Nấp Nơi Vực Sâu</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ti-nu-2025</loc>
+    <lastmod>2026-08-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250910-1/7c8d58071596b4d0b7d455838a5b66a3.jpg</image:loc>
+      <image:title>Tì Nữ</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/rong-ngam-ngoc-quy-thuo-nao-ve</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260110-1/ad8b63ab3d6859170b8ed01ae9871dc4.jpg</image:loc>
+      <image:title>Rồng Ngậm Ngọc Quý Thuở Nào Về</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/pho-nhan</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250210-1/8dcbd502b8848dc351b60f173b72509e.jpg</image:loc>
+      <image:title>Phó Nhận</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/rat-may-man-khi-gap-duoc-em</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Film/b3AQXstfT8aC7ot84WZf5AhyQRb.jpg</image:loc>
+      <image:title>Rất May Mắn Khi Gặp Được Em</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/truy-tim-dau-vet</loc>
+    <lastmod>2026-08-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260120-1/2ed5110806af3dd613afdd3a7d459d74.jpg</image:loc>
+      <image:title>Truy Tìm Dấu Vết</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nhen-tien</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260221-1/a86471e4a2b65214ea5c91afec3c6b5d.jpg</image:loc>
+      <image:title>Nhện Tiên</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tuoi-tre-tai-cao</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260131-1/09053bd2932d9d5a0f6d201bee4ad1ac.jpg</image:loc>
+      <image:title>Tuổi Trẻ Tài Cao</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/toi-la-ke-nam-vung</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260227-1/2294aabcacda6da292b8b8b58b0ee4c3.jpg</image:loc>
+      <image:title>Tôi Là Nội Gián</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/duong-cung-ky-an-thanh-vu-phong-minh</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/2/duong-cung-ky-an-thanh-vu-phong-minh.jpg</image:loc>
+      <image:title>Đường Cung Kỳ Án: Thanh Vụ Phong Minh</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/be-ghe-ma-cung</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Film/jCXbS2yCqHKPpaSAdTClGIW8FtO.jpg</image:loc>
+      <image:title>Bé Ma Của Anh 2 (Bé Ghệ Ma Cưng)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/phu-the-tien-y-bat-nhiem-tran</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/1/phu-the-tien-y-bat-nhiem-tran.jpg</image:loc>
+      <image:title>Phù Thế Tiên Y Bất Nhiễm Trần</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ac-thu</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250323-1/a840352c67260ab0a25be839ba4720f7.jpg</image:loc>
+      <image:title>Ác Thú</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/chuyen-bong-va-ghi-ban</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260508-1/56e85a174faffc541970a8c0bd3a6f86.jpg</image:loc>
+      <image:title>Chuyền bóng và ghi bàn</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/cam-tu-nam-ca-the-song-of-glory</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://img.ophim.live/uploads/movies/cam-tu-nam-ca-thumb.jpg</image:loc>
+      <image:title>Cẩm Tú Nam Ca</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/phu-do-duyen</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/uploads/movies/20260809/phu-do-duyen-thumb.webp</image:loc>
+      <image:title>Phù Đồ Duyên</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/am-ha-truyen-2025</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.95</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/10/am-ha-truyen.jpg</image:loc>
+      <image:title>Ám Hà Truyện</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/su-troi-day-cua-ma-ca-rong</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260326-1/33482b1fd539cbee5672474925803f34.jpg</image:loc>
+      <image:title>Sự trỗi dậy của ma cà rồng</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/mai-nha-sau-song-sat</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Film/dS9CDyEAIKW5l9nUNNvbYwTjG7A.jpg</image:loc>
+      <image:title>Nắng Ấm Sau Song Sắt</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/vuot-tam-kiem-soat</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250913-1/2304f1aaca62ffcee4568b831e30ee9a.jpg</image:loc>
+      <image:title>Vượt Tầm Kiểm Soát</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/hoang-phi-khong-giang-vo-duc</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250207-1/9a47bb4459b6a62ee83cca4df32487f2.jpg</image:loc>
+      <image:title>Hoàng Phi Không Giảng Võ Đức</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/ngon-lua-ruc-ro-cua-co-ay</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260317-1/e9ebc05d684bf4be4c78f32106e12166.jpg</image:loc>
+      <image:title>Ngọn Lửa Rực Rỡ Của Cô Ấy</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/the-air-4-elements</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://image.tmdb.org/t/p/w500/nvkFkBXCmaLS8N1S7IcSi2Oh9cB.jpg</image:loc>
+      <image:title>The Air</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/co-gai-than-quen</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250310-1/2205b50ac6926b19f6b91beda26daaa9.jpg</image:loc>
+      <image:title>Cô Gái Thân Quen</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tieu-phuong</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://vsmov.com/storage/images/dF8AzhhHtOLHTmuZ12Wx2if7oz2.jpg</image:loc>
+      <image:title>Tiểu Phương</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/phong-tich-chi</loc>
+    <lastmod>2026-08-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250214-1/2402aa84ebd0ee50f2e4e75aca63f441.jpg</image:loc>
+      <image:title>Phong Tịch Chí</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nang-bach-tuyet</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://vsmov.com/storage/images/nang-bach-tuyet/poster_24vmIaNTaXPXKdveylQ2C3hcWaD.jpg</image:loc>
+      <image:title>Nàng Bạch Tuyết</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nu-tuan-dac-canh-doi-dot-kich-chim-ruoi</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250402-1/72667f43d9b87b06767f0ebea35065b8.jpg</image:loc>
+      <image:title>Nữ Tuần Đặc Cảnh: Đội Đột Kích Chim Ruồi</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/phi-vu-cuoi-cung-phat-sung-dinh-menh</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Film/hVefk5gtJiPwLM5cvY3I58CQKuj.jpg</image:loc>
+      <image:title>Phi Vụ Cuối Cùng (2026)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nguoi-tinh-yeu-dau-cua-toi</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20240920-1/ec43ca6fb740782b8a2f900da3f5ce49.jpg</image:loc>
+      <image:title>Người Tình Yêu Dấu Của Tôi</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/thieu-nien-than-tham-dich-nhan-kiet</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/10/thieu-nien-than-tham-dich-nhan-kiet.jpg</image:loc>
+      <image:title>Thiếu Niên Thần Thám Địch Nhân Kiệt</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tinh-nguoi-duyen-ma-tai-hop-2025</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260513-1/453e2737621593c8c81466fb9549fb38.jpg</image:loc>
+      <image:title>Tình Người Duyên Ma: Tái Hợp</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/toi-ac-ngo-ngan-toi-pham-iq-thap</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.90</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/1/toi-pham-iq-thap.jpg</image:loc>
+      <image:title>Tội Phạm IQ Thấp</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/vuc-tham</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260518-1/3e272c9d1d0cccbc58c6327fe030af56.jpg</image:loc>
+      <image:title>Vực Thẳm</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/tham-tu-lung-danh-conan-bong-ma-duong-baker</loc>
+    <lastmod>2026-08-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/uploads/movies/20260729/tham-tu-lung-danh-conan-bong-ma-duong-baker-thumb.webp</image:loc>
+      <image:title>Thám Tử Lừng Danh Conan: Bóng Ma Đường Baker</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/huyen-chien-thanh-long-trai</loc>
+    <lastmod>2026-08-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Film/x0QvSsas6exRkwaF8gAiMk7UxQD.jpg</image:loc>
+      <image:title>Huyến Chiến Thanh Long Trại</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/bon-huyen-nha-la-phuc-tinh</loc>
+    <lastmod>2026-08-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260518-1/269b911e5a65c3ffdd833d0185f51c91.jpg</image:loc>
+      <image:title>Bổn Huyền Nha Là Phúc Tinh</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/180-ngay-tai-khoi-dong-ke-hoach</loc>
+    <lastmod>2026-08-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250219-1/58716fdf5fe3f5f6a3ba0b5026981954.jpg</image:loc>
+      <image:title>180 Ngày Tái Khởi Động Kế Hoạch</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/muoi-hai-la-thu-2025</loc>
+    <lastmod>2026-08-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20250830-1/e97ccc8e56c3f84a8d934c56ee921f31.jpg</image:loc>
+      <image:title>Mười Hai Lá Thư</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/nguoi-giu-den-o-chua-ky-cot</loc>
+    <lastmod>2026-08-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.92</priority>
+    <image:image>
+      <image:loc>https://phimimg.com/upload/vod/20260518-1/3edc00db70c870aa5e04c20148e6db04.jpg</image:loc>
+      <image:title>Người Giữ Đèn Ở Chùa Ký Cốt</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/long-giam-2026</loc>
+    <lastmod>2026-08-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/5/long-giam-2026.jpg</image:loc>
+      <image:title>Lồng Giam (2026)</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://khophim.org/phim/gia-tri-tuyet-doi-cua-lang-man</loc>
+    <lastmod>2026-08-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+    <image:image>
+      <image:loc>https://phim.nguonc.com/public/images/Post/10/gia-tri-tuyet-doi-cua-lang-man.jpg</image:loc>
+      <image:title>Giá Trị Tuyệt Đối Của Lãng Mạn</image:title>
     </image:image>
   </url>
 </urlset>

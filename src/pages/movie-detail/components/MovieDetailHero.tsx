@@ -6,6 +6,7 @@ import type { MovieDetail } from '@/types/movie';
 import { getLandscapeImagePaths, getPortraitImagePaths, getMovieDisplayName, getOptimizedImageUrl } from '@/services/movieApi';
 import AudioLanguageBadges from '@/components/base/AudioLanguageBadges';
 import MovieCountdown from '@/components/base/MovieCountdown';
+import SocialBrandIcon from '@/components/base/SocialBrandIcon';
 
 interface Props {
   movie: MovieDetail;
@@ -13,6 +14,8 @@ interface Props {
   favored: boolean;
   isTrailerOnly: boolean;
   hasEpisodes: boolean;
+  episodeDataLoading: boolean;
+  noIndex: boolean;
   onFavToggle: () => void;
   onWatchNow: () => void;
 }
@@ -108,7 +111,7 @@ function MobileMovieInfo({ movie }: { movie: MovieDetail }) {
 
 function SocialShare({ title, url }: { title: string; url: string }) {
   const shareLinks = useMemo(() => [
-    { name: 'Facebook', icon: 'ri-facebook-fill', color: 'bg-[#1877F2]', href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}` },
+    { name: 'Facebook', brand: 'facebook' as const, color: 'bg-gradient-to-br from-[#2d8cff] to-[#1264d8] shadow-[0_6px_18px_rgba(24,119,242,0.22)]', href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}` },
     { name: 'Twitter', icon: 'ri-twitter-x-fill', color: 'bg-[#1DA1F2]', href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`Xem phim ${title}`)}&url=${encodeURIComponent(url)}` },
     { name: 'Copy', icon: 'ri-link', color: 'bg-white/[0.10] text-white/70', onClick: () => navigator.clipboard.writeText(url).catch(() => {}) },
   ], [title, url]);
@@ -121,7 +124,9 @@ function SocialShare({ title, url }: { title: string; url: string }) {
           <a key={link.name} href={link.href} target="_blank" rel="noopener noreferrer nofollow"
             className={`w-11 h-11 flex items-center justify-center ${link.color} text-white rounded-xl transition-all hover:scale-105 touch-manipulation`}
             title={link.name}>
-            <i className={`${link.icon} text-xs`} />
+            {'brand' in link && link.brand
+              ? <SocialBrandIcon platform={link.brand} className="h-5 w-5" />
+              : <i className={`${link.icon} text-base`} aria-hidden="true" />}
           </a>
         ) : (
           <button key={link.name} onClick={link.onClick}
@@ -304,7 +309,7 @@ function buildMovieSchema({
   return schemas;
 }
 
-export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, hasEpisodes, onFavToggle, onWatchNow }: Props) {
+export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, hasEpisodes, episodeDataLoading, noIndex, onFavToggle, onWatchNow }: Props) {
   const [showDesc, setShowDesc] = useState(false);
 
   const portraitArtwork = getPortraitImagePaths(movie);
@@ -356,6 +361,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
         publishedYear={movie.year}
         genre={movie.category?.[0]?.name}
         updatedAt={movie.modified?.time}
+        noIndex={noIndex}
       />
 
       <div className="movie-detail-hero relative pt-16">
@@ -423,8 +429,8 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
                     : 'bg-red-500 hover:bg-red-600'
                 }`}>
                 <i className={!hasEpisodes && !isTrailerOnly ? 'ri-time-line' : isTrailerOnly ? 'ri-film-line' : 'ri-play-fill'} />
-                <span className="hidden xs:inline">{!hasEpisodes && !isTrailerOnly ? 'Đang cập nhật' : isTrailerOnly ? 'Xem Trailer' : 'Xem Ngay'}</span>
-                <span className="xs:hidden">{!hasEpisodes && !isTrailerOnly ? 'Cập nhật' : isTrailerOnly ? 'Trailer' : 'Xem'}</span>
+                <span className="hidden xs:inline">{!hasEpisodes && !isTrailerOnly ? (episodeDataLoading ? 'Đang tải tập...' : 'Chưa có tập') : isTrailerOnly ? 'Xem Trailer' : 'Xem Ngay'}</span>
+                <span className="xs:hidden">{!hasEpisodes && !isTrailerOnly ? (episodeDataLoading ? 'Đang tải...' : 'Chưa có') : isTrailerOnly ? 'Trailer' : 'Xem'}</span>
               </button>
               <button onClick={onFavToggle}
                 className={`mt-1.5 min-h-11 w-full flex items-center justify-center gap-1.5 text-xs font-medium px-3 rounded-xl transition-all cursor-pointer whitespace-nowrap active:scale-[0.97] border touch-manipulation ${
@@ -449,13 +455,14 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
                 <AudioLanguageBadges value={movie.lang} />
                 {movie.year && <span className="text-[10px] sm:text-xs bg-white/10 text-white/80 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg">{movie.year}</span>}
                 {movie.time && <span className="text-[10px] sm:text-xs bg-white/10 text-white/80 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg hidden sm:inline-flex items-center gap-1"><i className="ri-time-line mr-0.5" />{movie.time}</span>}
-                {!hasEpisodes && !isTrailerOnly ? (
-                  <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg bg-amber-500/15 text-amber-400 font-semibold flex items-center gap-1">
-                    <i className="ri-time-line text-[10px]" /><span>Đang cập nhật</span>
-                  </span>
-                ) : isTrailerOnly ? (
+                {isTrailerOnly ? (
                   <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg bg-orange-500/20 text-orange-400 font-semibold flex items-center gap-1">
-                    <i className="ri-time-line text-[10px]" /><span>Đang cập nhật</span>
+                    <i className="ri-film-line text-[10px]" /><span>Sắp ra mắt</span>
+                  </span>
+                ) : !hasEpisodes ? (
+                  <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg bg-amber-500/15 text-amber-400 font-semibold flex items-center gap-1">
+                    <i className={episodeDataLoading ? 'ri-loader-4-line text-[10px]' : 'ri-time-line text-[10px]'} />
+                    <span>{episodeDataLoading ? 'Đang kiểm tra tập' : 'Chưa có tập'}</span>
                   </span>
                 ) : movie.status === 'completed' ? (
                   <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg bg-green-500/20 text-green-400 font-semibold flex items-center gap-1">

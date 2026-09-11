@@ -4,7 +4,7 @@ const SITE_URL = 'https://khophim.org';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const MOVIE_CHUNK_SIZE = 1000;
-const FALLBACK_MOVIE_CHUNKS = 18;
+const FALLBACK_MOVIE_CHUNKS = 1;
 
 async function getMovieChunkCount(): Promise<number> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return FALLBACK_MOVIE_CHUNKS;
@@ -15,8 +15,12 @@ async function getMovieChunkCount(): Promise<number> {
     .from('movie_seo_quality_status')
     .select('movie_id,movies!inner(id)', { count: 'exact', head: true })
     .eq('eligible_for_index', true)
-    .in('index_tier', ['playable', 'ongoing', 'upcoming'])
-    .eq('movies.is_published', true);
+    .in('index_tier', ['playable', 'ongoing'])
+    .gte('quality_score', 85)
+    .gte('content_length', 500)
+    .eq('movies.is_published', true)
+    .is('movies.superseded_by_movie_id', null)
+    .not('movies.tmdb_id', 'is', null);
   if (error || !Number.isFinite(count)) return FALLBACK_MOVIE_CHUNKS;
   return Math.max(1, Math.min(50, Math.ceil(Number(count) / MOVIE_CHUNK_SIZE)));
 }
@@ -34,6 +38,7 @@ Deno.serve(async (req) => {
     'sitemap-movies-recent.xml',
     'sitemap-movies-upcoming.xml',
     'sitemap-movies-ongoing.xml',
+    'sitemap-seo-studio.xml',
     ...Array.from({ length: movieChunkCount }, (_, index) => `sitemap-movies-${index + 1}.xml`),
     'feed.xml',
   ];

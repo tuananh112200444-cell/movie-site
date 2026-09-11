@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { findCanonicalMovieByIdentity, retireSourceMovieDuplicate } from '../_shared/movie-identity.ts';
 import { resolveLocalizedMovieTitles } from '../_shared/tmdb-title-localization.ts';
+import { resolveSourceTitleFields } from '../../../scripts/source-title-localization.mjs';
 
 const BASE = 'https://www.glvietsub.net';
 const SOURCE = 'glvietsub';
@@ -44,14 +45,17 @@ function titleAliases(...values: unknown[]): string[] {
 }
 
 async function enrichEntryTitles(entry: Record<string, unknown>): Promise<void> {
+  const sourceTitles = resolveSourceTitleFields(String(entry.name || ''), String(entry.originName || ''));
   const localized = await resolveLocalizedMovieTitles({
-    titleVi: String(entry.name || ''),
-    sourceOriginal: String(entry.originName || ''),
+    titleVi: sourceTitles.titleVi || String(entry.name || ''),
+    sourceOriginal: sourceTitles.titleOriginal || String(entry.originName || ''),
     year: Number(entry.year || 0),
     tmdbToken: TMDB_READ_ACCESS_TOKEN,
   });
-  entry.titleEn = localized.titleEn;
-  entry.titleOriginal = localized.titleOriginal || String(entry.originName || '');
+  entry.titleVi = sourceTitles.titleVi
+    || (slugify(localized.titleVi) !== slugify(String(entry.name || '')) ? localized.titleVi : '');
+  entry.titleEn = sourceTitles.titleEn || localized.titleEn;
+  entry.titleOriginal = localized.titleOriginal || sourceTitles.titleOriginal || String(entry.originName || '');
   entry.tmdbId = localized.tmdbId;
 }
 
@@ -371,7 +375,7 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
   if (!movie) {
     const payload = {
       slug: `glvietsub-${entry.sourceSlug}`, name: entry.name, origin_name: entry.originName,
-      title_vi: entry.name, title_en: titleEn, title_original: titleOriginal,
+      title_vi: entry.titleVi || '', title_en: titleEn, title_original: titleOriginal,
       tmdb_id: entry.tmdbId || null,
       normalized_name: slugify([entry.name, entry.originName, titleEn, titleOriginal].filter(Boolean).join(' ')),
       content: entry.content, type: 'series', status: 'ongoing', thumb_url: entry.image, poster_url: entry.image,
@@ -391,6 +395,7 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
     const update: Record<string, unknown> = { last_synced_at: now };
     if (movie.source_site === SOURCE) Object.assign(update, {
       name: entry.name, origin_name: entry.originName, content: entry.content,
+      title_vi: entry.titleVi || '',
       thumb_url: entry.image, poster_url: entry.image, category: entry.category, country: entry.country,
       episode_current: `Tập ${nextCurrent}`, current_episode: nextCurrent,
       total_episodes: Math.max(Number(movie.total_episodes || 0), Number(entry.expectedEpisodes || 0), nextCurrent),
@@ -550,7 +555,6 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
   const titleOriginal = String(entry.titleOriginal || entry.originName || '').trim();
   const update: Record<string, unknown> = {
     last_synced_at: now,
-    title_vi: entry.name,
     content: entry.content,
     status: hasPlayableEpisode ? 'ongoing' : 'upcoming',
     episode_current: displayEpisode,
@@ -560,6 +564,13 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
     lang: displayLanguage,
     is_published: Boolean(movie.is_published) || hasPlayableEpisode,
   };
+  const currentTitleVi = String(movie.title_vi || '').trim();
+  const sourceDisplayName = String(entry.name || '').trim();
+  if (entry.titleVi && (!currentTitleVi || slugify(currentTitleVi) === slugify(sourceDisplayName))) {
+    update.title_vi = entry.titleVi;
+  } else if (movie.source_site === SOURCE && !entry.titleVi && slugify(currentTitleVi) === slugify(sourceDisplayName)) {
+    update.title_vi = '';
+  }
   const currentTitleEn = String(movie.title_en || '').trim();
   if (titleEn && (!currentTitleEn || slugify(currentTitleEn) === slugify(String(entry.name || '')))) update.title_en = titleEn;
   if (titleOriginal && !String(movie.title_original || '').trim()) update.title_original = titleOriginal;
