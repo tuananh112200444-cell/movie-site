@@ -339,8 +339,21 @@ Deno.serve(async (req) => {
   const {data:run,error:runError} = await supabase.from('seo_gsc_runs').insert({started_at:startedAt,property_uri:PROPERTY_URI}).select('id').single();
   if (runError || !run) return json({error:runError?.message || 'run insert failed'},500,headers);
   try {
-    const input = await req.json().catch(()=>({})) as {inspection_limit?:number;resubmit_sitemap?:boolean};
+    const input = await req.json().catch(()=>({})) as {
+      inspection_limit?:number;
+      inspection_slugs?:unknown;
+      resubmit_sitemap?:boolean;
+    };
     const inspectionLimit = Math.max(1,Math.min(Number(input.inspection_limit || 25),50));
+    const requestedInspectionSlugs = [...new Set(
+      (Array.isArray(input.inspection_slugs) ? input.inspection_slugs : [])
+        .map(value=>String(value || '').trim().toLowerCase())
+        .filter(value=>/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value))
+        .slice(0,5),
+    )];
+    const requestedInspectionRank = new Map(
+      requestedInspectionSlugs.map((slug,index)=>[slug,requestedInspectionSlugs.length-index]),
+    );
     const token = await googleAccessToken();
     const [pageResult,queryResult,queryPageResult,movieQueryPageResult,sitemapResult,gaTotalResult,gaCountryResult,gaDeviceResult] = await Promise.allSettled([
       searchAnalytics(token,['page']),
@@ -406,18 +419,32 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
     const staleBefore = Date.now()-72*3600000;
-    const [{data:eligible,error:candidateError},{data:known,error:knownError}] = await Promise.all([
+    const [
+      {data:eligible,error:candidateError},
+      {data:known,error:knownError},
+      {data:hotCandidates,error:hotCandidateError},
+    ] = await Promise.all([
       supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at,index_tier,quality_score,freshness_score,last_episode_change_at,content_length,movies!inner(id,slug,is_published,superseded_by_movie_id,tmdb_id,actor,director,category,country,year,trailer_url)').eq('eligible_for_index',true).in('index_tier',['ongoing','playable','upcoming']).gte('quality_score',85).gte('content_length',350).eq('movies.is_published',true).is('movies.superseded_by_movie_id',null).not('movies.tmdb_id','is',null).order('quality_score',{ascending:false}).order('movie_updated_at',{ascending:false}).limit(1500),
       supabase.from('seo_url_inspections').select('url,inspected_at').order('inspected_at',{ascending:true}).limit(5000),
+      supabase.from('seo_hot_movie_candidates').select('matched_slug,demand_score').eq('active',true).gt('expires_at',new Date().toISOString()).not('matched_slug','is',null).order('demand_score',{ascending:false}).limit(100),
     ]);
     if (candidateError) throw candidateError;
     if (knownError) throw knownError;
+    if (hotCandidateError) throw hotCandidateError;
     const inspectedAt = new Map((known || []).map(item=>[String(item.url),Date.parse(String(item.inspected_at || '')) || 0]));
+    const hotDemandBySlug = new Map<string,number>();
+    for (const candidate of hotCandidates || []) {
+      const slug = String(candidate.matched_slug || '');
+      if (!slug) continue;
+      hotDemandBySlug.set(slug,Math.max(hotDemandBySlug.get(slug) || 0,Number(candidate.demand_score || 0)));
+    }
     const candidateRows = (eligible || [])
       .flatMap(item=>{
         const nested = Array.isArray(item.movies) ? item.movies[0] : item.movies;
         const movie = nested && typeof nested === 'object' ? nested as Record<string,unknown> : null;
         if (!isStrongInspectionCandidate(movie)) return [];
+        const slug = String(movie?.slug || item.slug);
+        const requestedRank = requestedInspectionRank.get(slug) || 0;
         const tier = String(item.index_tier || '');
         const score = Number(item.quality_score || 0);
         const contentLength = Number(item.content_length || 0);
@@ -425,30 +452,35 @@ Deno.serve(async (req) => {
           const currentYear = new Date().getUTCFullYear();
           if (score < 88 || contentLength < 350 || Number(movie?.year || 0) < currentYear
             || !hasTrustedYouTubeTrailer(movie?.trailer_url)) return [];
-        } else if (contentLength < 500) {
+        } else if (contentLength < 500 && requestedRank === 0) {
           return [];
         }
         return [{
           id:String(item.movie_id),
-          slug:String(movie?.slug || item.slug),
+          slug,
           tier,
           score,
           freshness:Number(item.freshness_score || 0),
           episodeChangedAt:Date.parse(String(item.last_episode_change_at || '')) || 0,
           updatedAt:Date.parse(String(item.movie_updated_at || '')) || 0,
+          requestedRank,
+          hotDemand:hotDemandBySlug.get(slug) || 0,
         }];
       })
       .filter(item=>{
+        if (item.requestedRank > 0) return true;
         const lastInspection = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(item.slug)}`) || 0;
         if (lastInspection < staleBefore) return true;
         return item.tier === 'ongoing' && item.episodeChangedAt > lastInspection;
       })
       .sort((a,b)=>{
+        if (a.requestedRank !== b.requestedRank) return b.requestedRank - a.requestedRank;
         const lastA = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(a.slug)}`) || 0;
         const lastB = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(b.slug)}`) || 0;
         const ongoingChangeA = Number(a.tier === 'ongoing' && a.episodeChangedAt > lastA);
         const ongoingChangeB = Number(b.tier === 'ongoing' && b.episodeChangedAt > lastB);
         if (ongoingChangeA !== ongoingChangeB) return ongoingChangeB - ongoingChangeA;
+        if (a.hotDemand !== b.hotDemand) return b.hotDemand - a.hotDemand;
         const tierWeight = (item:typeof a) => item.tier === 'ongoing' ? 3 : item.tier === 'upcoming' ? 2 : 1;
         const tierDiff = tierWeight(b) - tierWeight(a);
         if (tierDiff !== 0) return tierDiff;

@@ -39,6 +39,16 @@ expect(source.includes(".in('index_tier',['ongoing','playable','upcoming'])")
     && source.includes('score < 88 || contentLength < 350')
     && source.includes('hasTrustedYouTubeTrailer'),
   'GSC may inspect only the bounded high-quality trailer-backed upcoming cohort.');
+expect(source.includes('inspection_slugs?:unknown')
+    && source.includes('requestedInspectionRank')
+    && source.includes('.slice(0,5)')
+    && source.includes('if (item.requestedRank > 0) return true;')
+    && source.includes('contentLength < 500 && requestedRank === 0'),
+  'GSC must support a tightly bounded explicit reinspection request for a priority movie.');
+expect(source.includes("from('seo_hot_movie_candidates').select('matched_slug,demand_score')")
+    && source.includes('hotDemandBySlug')
+    && source.includes('if (a.hotDemand !== b.hotDemand)'),
+  'GSC must prioritize quality-approved movies with current hot-demand evidence.');
 
 if (failures.length) {
   console.error('GSC SEO feedback regression failed:');
