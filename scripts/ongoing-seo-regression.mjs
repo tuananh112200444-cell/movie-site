@@ -102,7 +102,7 @@ requireText(gsc, "item.tier === 'ongoing' ? 3", 'GSC does not prioritize activel
 requireText(gsc, ".in('index_tier',['ongoing','playable','upcoming'])", 'GSC inspection candidates are not restricted to the approved lifecycle tiers');
 requireText(gsc, ".gte('content_length',350)", 'GSC candidate query lacks the minimum upcoming content floor');
 requireText(gsc, "score < 88 || contentLength < 350", 'GSC does not apply the strict upcoming quality/content gate');
-requireText(gsc, "else if (contentLength < 500)", 'GSC can waste its quota on thin playable or ongoing movie pages');
+requireText(gsc, "else if (contentLength < 500 && requestedRank === 0)", 'GSC can waste its quota on thin playable or ongoing movie pages');
 requireText(gsc, '/BLOCKED|DISALLOWED/i.test(robots)', 'GSC treats an unspecified robots state as a false blocking error');
 requireText(gsc, 'INTERNAL_CRAWL_ERROR|INVALID_URL/i.test(fetchState)', 'GSC does not distinguish explicit fetch errors from an unspecified fetch state');
 requireText(gsc, 'phát hiện.*chưa được lập chỉ mục', 'GSC diagnosis ignores the Vietnamese coverage state returned in production');
