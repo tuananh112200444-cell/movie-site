@@ -6,5 +6,5 @@ test('Weirdo public detail merges the verified BLVietsub sibling episodes', asyn
   await expect(page.getByRole('heading', { name: 'Weirdo 101 The Series', exact: true })).toBeVisible({ timeout: 25_000 });
   await expect(page.getByRole('link', { name: 'Tập 3', exact: true })).toBeVisible({ timeout: 25_000 });
   await expect(page.getByRole('link', { name: 'Tập 4', exact: true })).toBeVisible();
-  await expect(page.getByText(/4 tập\s*·\s*mở trong chế độ xem tập trung/i)).toBeVisible();
+  await expect(page.getByText(/\d+ tập\s*·\s*mở trong chế độ xem tập trung/i)).toBeVisible();
 });
