@@ -1,7 +1,7 @@
 {
   "status": true,
   "source": "supabase-top-rated-fallback",
-  "generated_at": "2026-09-11T03:06:02.226Z",
+  "generated_at": "2026-09-14T06:31:20.608Z",
   "movies": [
     {
       "id": "7b7662d6-7852-4735-becf-bcf34731afbb",
@@ -277,6 +277,166 @@
       "tmdb_vote_count": 2510,
       "tmdb_popularity": 145.2921,
       "_id": "3f7f06cf-c3b3-4947-a2eb-cc66f0d88bca"
+    },
+    {
+      "id": "4c926365-f9c8-4fe3-9cde-9d091b6168c6",
+      "slug": "hen-ho-khoa-than-anh-phan-1",
+      "name": "Hẹn hò khỏa thân Anh Quốc (Phần 1)",
+      "origin_name": "Dating Naked UK (Season 1)",
+      "poster_url": "https://phim.nguonc.com/public/images/Post/7/hen-ho-khoa-than-anh-quoc-phan-1-1.jpg",
+      "thumb_url": "https://phim.nguonc.com/public/images/Post/7/hen-ho-khoa-than-anh-quoc-phan-1.jpg",
+      "hero_backdrop_url": null,
+      "hero_poster_url": null,
+      "episode_current": "Hoàn Tất (10/10)",
+      "episode_total": "10",
+      "current_episode": 10,
+      "total_episodes": 10,
+      "quality": "HD",
+      "lang": "Vietsub",
+      "year": 2024,
+      "type": "series",
+      "category": [
+        {
+          "id": "c51ce410c124a10e0db5e4b97fc2af39",
+          "name": "Chính Kịch",
+          "slug": "chinh-kich"
+        },
+        {
+          "id": "0a09c8844ba8f0936c20bd791130d6b6",
+          "name": "Phim 18+",
+          "slug": "phim-18"
+        }
+      ],
+      "country": [
+        {
+          "id": "f457c545a9ded88f18ecee47145a72c0",
+          "name": "Anh",
+          "slug": "anh"
+        }
+      ],
+      "source_site": "phimapi",
+      "source_name": "KKPhim",
+      "is_published": true,
+      "seo_catalog_status": "published",
+      "superseded_by_movie_id": null,
+      "created_at": "2026-06-20T03:22:30.770213+00:00",
+      "published_at": "2026-07-22T01:43:26.175873+00:00",
+      "last_episode_change_at": "2026-08-10T20:28:00.104253+00:00",
+      "tmdb_id": 262469,
+      "tmdb_vote_average": 8.3,
+      "tmdb_vote_count": 46,
+      "tmdb_popularity": 49.9362,
+      "_id": "4c926365-f9c8-4fe3-9cde-9d091b6168c6"
+    },
+    {
+      "id": "4032cfe8-5a83-4740-bf48-a44fee2d8a7f",
+      "slug": "ca-phau-thuat-cua-grey-phan-18",
+      "name": "Ca Phẫu Thuật Của Grey (Phần 18)",
+      "origin_name": "Grey's Anatomy (Season 18)",
+      "poster_url": "https://phimimg.com/upload/vod/20251104-1/9a2646df585da4c67959d44e96e348b2.jpg",
+      "thumb_url": "https://phimimg.com/upload/vod/20251104-1/953d17bdc1ac9fac008cf79b5f9b4675.jpg",
+      "hero_backdrop_url": null,
+      "hero_poster_url": null,
+      "episode_current": "Hoàn Tất (20/20)",
+      "episode_total": "20",
+      "current_episode": 20,
+      "total_episodes": 20,
+      "quality": "FHD",
+      "lang": "Vietsub",
+      "year": 2021,
+      "type": "series",
+      "category": [
+        {
+          "id": "37a7b38b6184a5ebd3c43015aa20709d",
+          "name": "Chính Kịch",
+          "slug": "chinh-kich"
+        },
+        {
+          "id": "bb2b4b030608ca5984c8dd0770f5b40b",
+          "name": "Tình Cảm",
+          "slug": "tinh-cam"
+        },
+        {
+          "id": "a7b065b92ad356387ef2e075dee66529",
+          "name": "Tâm Lý",
+          "slug": "tam-ly"
+        }
+      ],
+      "country": [
+        {
+          "id": "74d9fa92f4dea9ecea8fc2233dc7921a",
+          "name": "Âu Mỹ",
+          "slug": "au-my"
+        }
+      ],
+      "source_site": "phimapi",
+      "source_name": "KKPhim",
+      "is_published": true,
+      "seo_catalog_status": "published",
+      "superseded_by_movie_id": null,
+      "created_at": "2026-06-20T14:22:17.018493+00:00",
+      "published_at": "2026-07-22T16:24:33.684314+00:00",
+      "last_episode_change_at": "2026-08-10T19:32:00.045825+00:00",
+      "tmdb_id": 1416,
+      "tmdb_vote_average": 8.206,
+      "tmdb_vote_count": 10999,
+      "tmdb_popularity": 249.1535,
+      "_id": "4032cfe8-5a83-4740-bf48-a44fee2d8a7f"
+    },
+    {
+      "id": "3e406133-363c-444a-a8b3-278f5f4286db",
+      "slug": "chowder",
+      "name": "Chowder",
+      "origin_name": "Chowder",
+      "poster_url": "https://image.tmdb.org/t/p/original/vYdXRzia0OeFmtRsIvORRFMjmWC.jpg",
+      "thumb_url": "https://image.tmdb.org/t/p/original/4H5diUE5bKp9dxcisJ3wbZzvAg7.jpg",
+      "hero_backdrop_url": null,
+      "hero_poster_url": null,
+      "episode_current": "Tập 19",
+      "episode_total": "38",
+      "current_episode": 19,
+      "total_episodes": 38,
+      "quality": "HD",
+      "lang": "Vietsub",
+      "year": 2007,
+      "type": "series",
+      "category": [
+        {
+          "id": "16",
+          "name": "Phim Hoạt Hình",
+          "slug": "phim-hoat-hinh"
+        },
+        {
+          "id": "35",
+          "name": "Phim Hài",
+          "slug": "phim-hai"
+        },
+        {
+          "id": "10762",
+          "name": "Kids",
+          "slug": "kids"
+        }
+      ],
+      "country": [
+        {
+          "id": "US",
+          "name": "United States of America",
+          "slug": "united-states-of-america"
+        }
+      ],
+      "source_site": "cobephim",
+      "source_name": "CobePhim / StreamVSMov",
+      "is_published": true,
+      "seo_catalog_status": "published",
+      "superseded_by_movie_id": null,
+      "created_at": "2026-07-11T03:04:13.802524+00:00",
+      "published_at": "2026-07-11T03:04:13.802524+00:00",
+      "last_episode_change_at": "2026-07-13T08:43:11.835681+00:00",
+      "tmdb_id": 9907,
+      "tmdb_vote_average": 8.2,
+      "tmdb_vote_count": 455,
+      "tmdb_popularity": 18.1804,
+      "_id": "3e406133-363c-444a-a8b3-278f5f4286db"
     }
   ]
 }

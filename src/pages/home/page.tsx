@@ -319,60 +319,39 @@ function hasHomeMovies(sections: Record<string, MovieItem[]>): boolean {
   return Object.values(sections).some((items) => Array.isArray(items) && items.length > 0);
 }
 
-function heroTimestamp(value: string | undefined): number {
-  const parsed = Date.parse(String(value || ''));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+const HERO_MOVIE_LIMIT = 8;
+const TOP_RATED_MOVIE_LIMIT = 10;
 
-function isRetiredHeroSource(movie: MovieItem): boolean {
-  const identity = `${movie.source_site || ''} ${movie.source_name || ''}`.toLowerCase();
-  return /(?:^|[^a-z0-9])ophim(?:[^a-z0-9]|$)|ophim1\.com|opstream|tmdb.?catalog/.test(identity);
-}
-
-function isHeroEligible(movie: MovieItem): boolean {
-  const status = String(movie.seo_catalog_status || 'published').toLowerCase();
-  const episode = String(movie.episode_current || '').toLowerCase();
-  const hasArtwork = Boolean(
-    movie.hero_backdrop_url || movie.thumb_url || movie.hero_poster_url || movie.poster_url,
-  );
-  return Boolean(movie._id || movie.slug)
-    && Boolean(movie.name)
-    && hasArtwork
-    && movie.is_published !== false
-    && !movie.superseded_by_movie_id
-    && !['awaiting_playback', 'hidden', 'draft', 'superseded'].includes(status)
-    && !/\b(trailer|teaser)\b/.test(episode)
-    && !isRetiredHeroSource(movie);
-}
-
-function heroRating(movie: MovieItem): number {
-  const rating = Number(movie.tmdb_vote_average || 0);
-  return Number.isFinite(rating) ? Math.max(0, Math.min(10, rating)) : 0;
+// The opening hero and the "Phim Được Đánh Giá Cao" shelf must be fed by the
+// same ordered list. This prevents the large artwork from promoting a film
+// that does not appear in the ranking immediately below.
+function selectTopRatedMovies(sections: Record<string, MovieItem[]>, limit = TOP_RATED_MOVIE_LIMIT): MovieItem[] {
+  const seen = new Set<string>();
+  return [
+    ...(sections['phim-chieu-rap'] ?? []),
+    ...(sections['phim-le'] ?? []),
+    ...(sections['phim-bo'] ?? []),
+    ...(sections['han-quoc'] ?? []),
+    ...(sections['au-my'] ?? []),
+  ]
+    .filter((movie) => {
+      const key = movie.slug || movie._id || movie.name;
+      if (!key || seen.has(key) || (movie.episode_current ?? '').toLowerCase().trim() === 'trailer') return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      const ratingDiff = Number(b.tmdb_vote_average || 0) - Number(a.tmdb_vote_average || 0);
+      if (ratingDiff !== 0) return ratingDiff;
+      const popularityDiff = Number(b.tmdb_popularity || 0) - Number(a.tmdb_popularity || 0);
+      if (popularityDiff !== 0) return popularityDiff;
+      return Number(b.year || 0) - Number(a.year || 0);
+    })
+    .slice(0, limit);
 }
 
 function selectHeroMovies(sections: Record<string, MovieItem[]>): MovieItem[] {
-  const candidates = new Map<string, MovieItem>();
-  for (const movies of Object.values(sections)) {
-    for (const movie of movies ?? []) {
-      if (!isHeroEligible(movie)) continue;
-      const key = movie._id || movie.slug;
-      const current = candidates.get(key);
-      if (!current || heroRating(movie) > heroRating(current)) candidates.set(key, movie);
-    }
-  }
-
-  return [...candidates.values()]
-    .filter((movie) => heroRating(movie) > 0)
-    .sort((a, b) => {
-      const ratingDiff = heroRating(b) - heroRating(a);
-      if (ratingDiff !== 0) return ratingDiff;
-      const voteDiff = Number(b.tmdb_vote_count || 0) - Number(a.tmdb_vote_count || 0);
-      if (voteDiff !== 0) return voteDiff;
-      const popularityDiff = Number(b.tmdb_popularity || 0) - Number(a.tmdb_popularity || 0);
-      if (popularityDiff !== 0) return popularityDiff;
-      return heroTimestamp(b.created_at || b.published_at) - heroTimestamp(a.created_at || a.published_at);
-    })
-    .slice(0, 5);
+  return selectTopRatedMovies(sections, HERO_MOVIE_LIMIT);
 }
 
 function readBootHeroMovies(): MovieItem[] {
@@ -381,7 +360,10 @@ function readBootHeroMovies(): MovieItem[] {
     if (!node?.textContent) return [];
     const parsed = JSON.parse(node.textContent) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return selectHeroMovies({ trending: parsed as MovieItem[] });
+    // The build-time snapshot is already the top-rated order. Use it only for
+    // the first paint; live home data replaces it with the exact same 8-card
+    // ranking as soon as the homepage response arrives.
+    return (parsed as MovieItem[]).slice(0, HERO_MOVIE_LIMIT);
   } catch {
     return [];
   }
@@ -510,8 +492,8 @@ export default function Home() {
     if (!heroReady) return;
     const liveRecommendations = selectHeroMovies(homeData);
     // Never let a stale or partially repaired edge response collapse the
-    // verified five-film bootstrap to a single remaining item.
-    if (liveRecommendations.length >= 5) setHeroMovies(liveRecommendations);
+    // verified eight-film bootstrap to a single remaining item.
+    if (liveRecommendations.length >= HERO_MOVIE_LIMIT) setHeroMovies(liveRecommendations);
   }, [heroReady, homeData]);
 
   // ── Fetch home data ONCE via home-proxy ──
@@ -709,30 +691,10 @@ export default function Home() {
       })
       .slice(0, 10);
   }, [homeData, rankedTop10Movies, trendingMovies]);
-  const topRatedMovies = useMemo(() => {
-    const seen = new Set<string>();
-    return [
-      ...(homeData['phim-chieu-rap'] ?? []),
-      ...(homeData['phim-le'] ?? []),
-      ...(homeData['phim-bo'] ?? []),
-      ...(homeData['han-quoc'] ?? []),
-      ...(homeData['au-my'] ?? []),
-    ]
-      .filter((movie) => {
-        const key = movie.slug || movie._id || movie.name;
-        if (!key || seen.has(key) || (movie.episode_current ?? '').toLowerCase().trim() === 'trailer') return false;
-        seen.add(key);
-        return true;
-      })
-      .sort((a, b) => {
-        const ratingDiff = Number(b.tmdb_vote_average || 0) - Number(a.tmdb_vote_average || 0);
-        if (ratingDiff !== 0) return ratingDiff;
-        const popularityDiff = Number(b.tmdb_popularity || 0) - Number(a.tmdb_popularity || 0);
-        if (popularityDiff !== 0) return popularityDiff;
-        return Number(b.year || 0) - Number(a.year || 0);
-      })
-      .slice(0, 10);
-  }, [homeData]);
+  const topRatedMovies = useMemo(
+    () => selectTopRatedMovies(homeData, TOP_RATED_MOVIE_LIMIT),
+    [homeData],
+  );
   // Keep a stable hero-sized loading surface even if both the live endpoint
   // and the static snapshot are temporarily unavailable. Returning `null`
   // here collapsed the top of the page and made it look as if content had

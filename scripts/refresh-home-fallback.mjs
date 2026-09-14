@@ -97,7 +97,7 @@ async function fetchTopRatedFallback(publicKey) {
     .filter((item) => !/(?:^|[^a-z0-9])ophim(?:[^a-z0-9]|$)|ophim1\.com|opstream|tmdb.?catalog/i.test(`${item.source_site || ''} ${item.source_name || ''}`))
     .map((item) => sanitizeMovie({ ...item, _id: item.id }))
     .filter(isCanonicalMovie)
-    .slice(0, 5);
+    .slice(0, 8);
 }
 
 function providerItems(payload) {
@@ -202,6 +202,17 @@ try {
   if (!publicKey) throw new Error('missing public Supabase key');
   const verifiedVsmov4K = await fetchVerifiedVsmov4KFallback();
   await writeVerifiedVsmovSection(verifiedVsmov4K);
+  // Keep the initial eight-slide hero fresh even if another homepage shelf
+  // is briefly unavailable and prevents a full fallback refresh.
+  const directTopRated = await fetchTopRatedFallback(publicKey);
+  if (directTopRated.length >= 8) {
+    await writeFile(TOP_RATED_OUTPUT_URL, `${JSON.stringify({
+      status: true,
+      source: 'supabase-top-rated-fallback',
+      generated_at: new Date().toISOString(),
+      movies: directTopRated,
+    }, null, 2)}\n`, 'utf8');
+  }
   HOME_PROXY_URL.searchParams.set('sections', REQUIRED_SECTIONS.join(','));
   const response = await fetch(HOME_PROXY_URL, {
     headers: { accept: 'application/json', apikey: publicKey, origin: 'https://khophim.org' },
@@ -211,15 +222,6 @@ try {
 
   const payload = await response.json();
   if (!payload?.status || !payload.sections) throw new Error('response failed the homepage section contract');
-  const directTopRated = await fetchTopRatedFallback(publicKey);
-  if (directTopRated.length >= 5) {
-    await writeFile(TOP_RATED_OUTPUT_URL, `${JSON.stringify({
-      status: true,
-      source: 'supabase-top-rated-fallback',
-      generated_at: new Date().toISOString(),
-      movies: directTopRated,
-    }, null, 2)}\n`, 'utf8');
-  }
   let sourceSections = payload.sections;
   if (verifiedVsmov4K.length >= 2) sourceSections['vsmov-4k'] = verifiedVsmov4K;
   if (!validateSections(sourceSections, false)) {

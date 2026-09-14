@@ -12,6 +12,8 @@ interface EditorialHeroProps {
   variant?: 'editorial' | 'midnight';
 }
 
+const HERO_DISPLAY_LIMIT = 8;
+
 function plainText(value?: string) {
   return String(value || '')
     .replace(/<[^>]*>/g, ' ')
@@ -182,7 +184,7 @@ function HeroArtwork({ movie, compact, active, shouldLoad, priority, preferLands
 
 export default function EditorialHero({ movies, loading = false, onReady, variant = 'editorial' }: EditorialHeroProps) {
   const compactHero = useMediaQuery('(max-width: 639px)');
-  const featured = movies.slice(0, 5);
+  const featured = movies.slice(0, HERO_DISPLAY_LIMIT);
   const featuredKey = featured.map((movie) => movie._id || movie.slug).join('|');
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -298,7 +300,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
     <section
       className={`editorial-hero${paused ? ' is-paused' : ''}`}
       aria-labelledby="editorial-hero-title"
-      aria-label="5 phim được đánh giá cao nhất"
+      aria-label={`${HERO_DISPLAY_LIMIT} phim được đánh giá cao nhất`}
       onPointerEnter={(event) => { if (event.pointerType === 'mouse') setPaused(true); }}
       onPointerLeave={(event) => { if (event.pointerType === 'mouse') setPaused(false); }}
       onTouchStart={handleTouchStart}
@@ -329,7 +331,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       <div key={`copy-${movie._id || movie.slug}`} className="editorial-hero-copy">
         <p className="editorial-hero-kicker">
           <span aria-hidden="true" />
-          5 phim được đánh giá cao nhất
+          {HERO_DISPLAY_LIMIT} phim được đánh giá cao nhất
         </p>
 
         <div className="editorial-hero-meta">
@@ -357,7 +359,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       </div>
 
       {featured.length > 1 && (
-        <div className="editorial-hero-thumbnails" aria-label="Chọn một trong 5 phim điểm cao">
+        <div className="editorial-hero-thumbnails" aria-label={`Chọn một trong ${featured.length} phim điểm cao`}>
           {featured.map((thumbnailMovie, index) => (
             <button
               key={thumbnailMovie._id || thumbnailMovie.slug}
