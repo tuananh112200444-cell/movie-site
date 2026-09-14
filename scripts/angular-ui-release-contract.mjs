@@ -6,6 +6,7 @@ const requiredSource = [
   ['src/pages/home/components/GenreSEOSection.tsx', ['primaryLinks', 'Thể loại và quốc gia khác', 'grid-cols-2', 'lg:grid-cols-8']],
   ['src/index.css', ['HOME — ANGULAR CINEMA V7', '.editorial-section-frame', '.home-poster-item', '1760px']],
   ['src/pages/home/components/MovieSection.tsx', ['movie-section-mobile-grid', 'grid-cols-2', 'sm:grid-cols-3', 'carouselItemClass']],
+  ['src/components/feature/CampaignBannerDemo.tsx', ["return 'mix';", 'campaign-demo-f8bet/top-728x90.gif', 'campaign-demo-shbet/catfish-desktop-728x90.gif', 'Thu gọn banner đầu trang', 'Thu gọn banner catfish']],
 ];
 
 const failures = [];
@@ -64,6 +65,14 @@ for (const marker of ['.editorial-section-frame', '.movie-player-box']) {
 }
 for (const marker of ['daily-update-demo', 'genre-seo-heading', 'editorial-section-frame']) {
   if (!jsBundle.includes(marker)) failures.push(`Built JavaScript is missing ${marker}`);
+}
+for (const marker of ['campaign-demo-f8bet/top-728x90.gif', 'campaign-demo-shbet/catfish-desktop-728x90.gif']) {
+  if (!jsBundle.includes(marker)) failures.push(`Built JavaScript is missing banner ${marker}`);
+  try {
+    await readFile(path.join('out', marker));
+  } catch {
+    failures.push(`Deploy artifact is missing banner ${marker}`);
+  }
 }
 if (cssBundle.includes('.home-angular-index') || jsBundle.includes('home-angular-index')) {
   failures.push('The retired duplicate home-angular-index must not remain in production assets');

@@ -4947,3 +4947,339 @@ body.tab-hidden .animate-pulse {
     border-radius: 12px !important;
   }
 }
+
+/* Alternate 9922 campaign demo — enabled only by ?banner-v2=1. */
+.campaign-banner-v2 {
+  isolation: isolate;
+}
+
+.campaign-banner-v2--top {
+  position: relative;
+  display: flex;
+  min-height: 66px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: .55rem 1rem;
+  border-block: 1px solid rgba(255, 255, 255, .065);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 183, 72, .07), transparent 25rem),
+    #080a0f;
+}
+
+.campaign-banner-v2__shell {
+  position: relative;
+  width: min(100%, 760px);
+  padding: 4px;
+  border: 1px solid rgba(255, 205, 112, .2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .025);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .34);
+}
+
+.campaign-banner-v2__media {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 211, 126, .24);
+  border-radius: 10px;
+  background: #050609;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .52);
+}
+
+.campaign-banner-v2__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.campaign-banner-v2__close {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .17);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, .78);
+  background: rgba(6, 8, 12, .94);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .45);
+  transition: color .18s ease, background-color .18s ease, transform .18s ease;
+}
+
+.campaign-banner-v2__close:hover,
+.campaign-banner-v2__close:focus-visible {
+  color: #fff;
+  background: #151820;
+  outline: none;
+  transform: scale(1.04);
+}
+
+.campaign-banner-v2__close--top {
+  top: -11px;
+  right: -11px;
+}
+
+.campaign-banner-v2--catfish {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  width: min(760px, calc(100vw - 40px));
+  padding: 5px;
+  border: 1px solid rgba(255, 205, 112, .18);
+  border-radius: 15px;
+  background: rgba(7, 9, 13, .82);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, .62);
+  transform: translateX(-50%);
+  backdrop-filter: blur(10px);
+}
+
+.campaign-banner-v2__close--catfish {
+  top: -18px;
+  right: -12px;
+}
+
+@media (min-width: 768px) {
+  .campaign-banner-v2--top {
+    min-height: 112px;
+    padding: .65rem 3.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .campaign-banner-v2--top {
+    min-height: 61px;
+    padding: .45rem 1.15rem;
+  }
+
+  .campaign-banner-v2__shell {
+    width: min(100%, 360px);
+    padding: 3px;
+    border-radius: 10px;
+  }
+
+  .campaign-banner-v2__media {
+    border-radius: 7px;
+  }
+
+  .campaign-banner-v2--catfish {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: min(360px, calc(100vw - 16px));
+    padding: 3px;
+    border-radius: 10px;
+    backdrop-filter: none;
+  }
+
+  .campaign-banner-v2__close {
+    width: 36px;
+    height: 36px;
+  }
+
+  .campaign-banner-v2__close--top {
+    top: -10px;
+    right: -10px;
+  }
+
+  .campaign-banner-v2__close--catfish {
+    top: -22px;
+    right: -4px;
+  }
+}
+
+/* SHBET responsive pairing: 1090x66 top, 728x90 catfish, 300x80 mobile. */
+.campaign-banner-v3--top {
+  min-height: 88px;
+  padding-block: .5rem;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 166, 201, .1), transparent 32rem),
+    #080b0f;
+}
+
+.campaign-banner-v3--top .campaign-banner-v2__shell {
+  width: min(100%, 1120px);
+  border-color: rgba(0, 174, 209, .2);
+  background: rgba(255, 255, 255, .035);
+}
+
+.campaign-banner-v3 .campaign-banner-v2__media {
+  border-color: rgba(0, 174, 209, .28);
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .42);
+}
+
+.campaign-banner-v3 .campaign-banner-v2__close {
+  border-color: rgba(0, 174, 209, .3);
+  color: #d8f9ff;
+  background: rgba(5, 17, 22, .96);
+}
+
+.campaign-banner-v3--catfish {
+  border-color: rgba(0, 174, 209, .24);
+  background: rgba(5, 15, 20, .86);
+}
+
+@media (max-width: 767px) {
+  .campaign-banner-v3--top {
+    min-height: 96px;
+    padding: .45rem 1rem;
+  }
+
+  .campaign-banner-v3--top .campaign-banner-v2__shell {
+    width: min(300px, calc(100vw - 34px));
+  }
+
+  .campaign-banner-v3--catfish {
+    width: min(306px, calc(100vw - 16px));
+  }
+}
+
+/* Mixed campaign demo — desktop shows both; mobile swaps them across both placements. */
+@keyframes campaign-banner-mix-in {
+  from {
+    opacity: .4;
+    transform: scale(.993);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.campaign-banner-mix--top {
+  min-height: 94px;
+  padding: .55rem 1.25rem;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 166, 201, .07), transparent 30rem),
+    #080a0f;
+}
+
+.campaign-banner-mix--top .campaign-banner-v2__shell {
+  width: min(1210px, 100%);
+}
+
+.campaign-banner-mix .campaign-banner-v2__media {
+  border-color: rgba(255, 255, 255, .16);
+  background: #06080c;
+}
+
+.campaign-banner-mix--catfish {
+  width: min(1210px, calc(100vw - 40px));
+}
+
+.campaign-banner-mix__desktop {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 3px;
+}
+
+.campaign-banner-mix__mobile {
+  display: none;
+}
+
+.campaign-banner-mix__collapse {
+  position: absolute;
+  z-index: 3;
+  display: none;
+  height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding-inline: 10px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, .9);
+  background: rgba(6, 8, 12, .96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.campaign-banner-mix__collapse span {
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.campaign-banner-mix .campaign-banner-creative,
+.campaign-banner-mix .campaign-banner-v2__media picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.campaign-banner-mix .campaign-banner-creative {
+  overflow: hidden;
+  aspect-ratio: 728 / 90;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.campaign-banner-mix .campaign-banner-v2__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: campaign-banner-mix-in .34s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campaign-banner-mix .campaign-banner-v2__image {
+    animation: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .campaign-banner-mix--top {
+    min-height: 62px;
+    padding: .42rem 1rem;
+  }
+
+  .campaign-banner-mix--top .campaign-banner-v2__shell,
+  .campaign-banner-mix--catfish {
+    width: min(336px, calc(100vw - 18px));
+  }
+
+  .campaign-banner-mix__desktop {
+    display: none;
+  }
+
+  .campaign-banner-mix__mobile {
+    display: block;
+    padding: 3px;
+  }
+
+  .campaign-banner-mix__mobile-stack {
+    display: grid;
+    gap: 4px;
+  }
+
+  .campaign-banner-mix__collapse {
+    display: flex;
+  }
+
+  .campaign-banner-mix__collapse--top {
+    top: -11px;
+    right: -9px;
+  }
+
+  .campaign-banner-mix__collapse--catfish {
+    top: -18px;
+    right: -4px;
+  }
+
+  .campaign-banner-mix:not(.campaign-banner-mix--collapsed) .campaign-banner-mix__close {
+    display: none;
+  }
+
+  .campaign-banner-mix .campaign-banner-creative {
+    border-radius: 6px;
+  }
+
+  .campaign-banner-mix .campaign-banner-v2__close {
+    width: 34px;
+    height: 34px;
+  }
+}

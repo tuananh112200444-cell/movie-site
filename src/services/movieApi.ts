@@ -4462,6 +4462,14 @@ async function fetchMovieDetailFromExternal(
   return winner ?? null;
 }
 
+// Verified cross-provider identity bridge. These two rows describe the same
+// series, but the BLVietsub Vietnamese/Thai title cannot be matched safely by
+// the generic title identity policy. Merge its translated mirrors at read time
+// so the stable public GLVietsub URL never remains behind the playable source.
+const VERIFIED_DETAIL_SIBLING_SLUGS: Readonly<Record<string, string>> = {
+  'glvietsub-weirdo-101-the-series': 'blvietsub-1764-luc-hap-dan-giua-chung-ta-weirdo-101-2026',
+};
+
 export async function fetchMovieDetail(slug: string, forceRefresh = false, source?: string): Promise<MovieDetailResponse | null> {
   const detailSourceKey = source || 'default';
   const cacheKey = `detail_v12_special_rpc_${detailSourceKey}_${slug}`;
@@ -4498,6 +4506,10 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
 
   const promise = (async (): Promise<MovieDetailResponse | null> => {
     const storedSpecialEpisodesPromise = fetchStoredSpecialEpisodeServers(slug).catch(() => []);
+    const verifiedSiblingSlug = VERIFIED_DETAIL_SIBLING_SLUGS[slug];
+    const verifiedSiblingPromise = verifiedSiblingSlug
+      ? fetchMovieDetailFromProxy(verifiedSiblingSlug, forceRefresh).catch(() => null)
+      : Promise.resolve<MovieDetailResponse | null>(null);
     let blvietsubPromise: Promise<MovieDetailResponse | null> | undefined;
 
     let ophim: MovieDetailResponse | null = null;
@@ -4548,6 +4560,14 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       const quickPlayable = canonicalQuickPlayable
         ?? await raceFirstValidWithTimeout(playablePromises, 900);
       if (quickPlayable) {
+        if (verifiedSiblingSlug) {
+          const sibling = await withNullTimeout(verifiedSiblingPromise, 4_500);
+          const verifiedMerged = mergeQueerDetailWithSources(quickPlayable, sibling, null);
+          if (verifiedMerged && detailHasPlayableEpisodes(verifiedMerged)) {
+            setCached(cacheKey, verifiedMerged);
+            return verifiedMerged;
+          }
+        }
         if (isQueerMovieDetail(quickPlayable.movie)) {
           if (isBlvietsubMovie(quickPlayable.movie)) {
             refreshQueerDetailCacheInBackground(cacheKey, quickPlayable, undefined, undefined);
