@@ -12,6 +12,7 @@ import UpdateCoordinator from "./components/base/UpdateCoordinator";
 import AdsterraSocialBar from "./components/feature/AdsterraSocialBar";
 import { warmViewerRegion } from "./services/viewerRegion";
 import CinematicLogoIntro from "./components/feature/CinematicLogoIntro";
+import { CampaignCatfishBanner } from "./components/feature/CampaignBannerDemo";
 
 const BackToTop = lazy(() => import("./components/base/BackToTop"));
 const CWVMonitor = lazy(() => import("./components/base/CWVMonitor"));
@@ -209,6 +210,7 @@ function App() {
                 <AdsterraSocialBar />
                 <ScrollProgressBar />
                 <AnimatedContent />
+                <CampaignCatfishBanner />
                 <CinematicLogoIntro />
                 <NonCriticalEnhancements />
               </AnalyticsProvider>

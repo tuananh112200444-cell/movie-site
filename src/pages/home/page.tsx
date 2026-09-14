@@ -2,7 +2,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCallback } from 'react';
 import Navbar from '../../components/feature/Navbar';
-import { CampaignCatfishBanner } from '../../components/feature/CampaignBannerDemo';
 import EditorialHero from './components/EditorialHero';
 import { prefetchCriticalRoutes } from '../../utils/prefetchRoute';
 import { removeSmartSessionCache, setSmartSessionCache } from '../../utils/smartCache';
@@ -775,8 +774,6 @@ export default function Home() {
         </Suspense>
       )}
       <Navbar />
-
-      <CampaignCatfishBanner />
 
       <div className="editorial-hero-shell">
         <EditorialHero movies={heroMovies} loading={bannerLoading} onReady={handleHeroReady} variant={homeV2 ? 'midnight' : 'editorial'} />

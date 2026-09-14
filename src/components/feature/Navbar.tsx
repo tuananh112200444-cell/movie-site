@@ -2,7 +2,6 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { prefetchRoute } from '../../utils/prefetchRoute';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
-import StickyBanner from './StickyBanner';
 import { CampaignTopBanner } from './CampaignBannerDemo';
 import SearchSuggestions from './SearchSuggestions';
 import SocialBrandIcon, { type SocialBrandPlatform } from '@/components/base/SocialBrandIcon';
@@ -528,11 +527,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {pathname === '/' ? (
-          <CampaignTopBanner />
-        ) : (
-          !/^\/(?:phim|xem-phim)\//.test(pathname) && <StickyBanner />
-        )}
+        <CampaignTopBanner />
         
         {/* Mobile Search Overlay */}
         {searchOpen && (
