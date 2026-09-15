@@ -319,8 +319,25 @@ function hasHomeMovies(sections: Record<string, MovieItem[]>): boolean {
   return Object.values(sections).some((items) => Array.isArray(items) && items.length > 0);
 }
 
-const HERO_MOVIE_LIMIT = 8;
+const HERO_MOVIE_LIMIT = 5;
 const TOP_RATED_MOVIE_LIMIT = 10;
+
+function isRetiredHeroSource(movie: MovieItem): boolean {
+  return /(?:^|[^a-z0-9])ophim(?:[^a-z0-9]|$)|ophim1\.com|opstream|tmdb.?catalog/i.test(`${movie.source_site || ''} ${movie.source_name || ''}`);
+}
+
+function heroRating(movie: MovieItem): number {
+  return Number(movie.tmdb_vote_average || 0);
+}
+
+function isHeroEligible(movie: MovieItem): boolean {
+  const catalogStatus = String(movie.seo_catalog_status || 'published').toLowerCase().trim();
+  if (!movie.slug || !movie.name || movie.superseded_by_movie_id) return false;
+  if (/trailer|teaser/i.test(String(movie.episode_current || ''))) return false;
+  if (['hidden', 'draft', 'superseded', 'awaiting_playback'].includes(catalogStatus)) return false;
+  if (isRetiredHeroSource(movie)) return false;
+  return heroRating(movie) > 0 && Number(movie.tmdb_vote_count || 0) >= 10;
+}
 
 // The opening hero and the "Phim Được Đánh Giá Cao" shelf must be fed by the
 // same ordered list. This prevents the large artwork from promoting a film
@@ -336,13 +353,15 @@ function selectTopRatedMovies(sections: Record<string, MovieItem[]>, limit = TOP
   ]
     .filter((movie) => {
       const key = movie.slug || movie._id || movie.name;
-      if (!key || seen.has(key) || (movie.episode_current ?? '').toLowerCase().trim() === 'trailer') return false;
+      if (!key || seen.has(key) || !isHeroEligible(movie)) return false;
       seen.add(key);
       return true;
     })
     .sort((a, b) => {
-      const ratingDiff = Number(b.tmdb_vote_average || 0) - Number(a.tmdb_vote_average || 0);
+      const ratingDiff = heroRating(b) - heroRating(a);
       if (ratingDiff !== 0) return ratingDiff;
+      const voteDiff = Number(b.tmdb_vote_count || 0) - Number(a.tmdb_vote_count || 0);
+      if (voteDiff !== 0) return voteDiff;
       const popularityDiff = Number(b.tmdb_popularity || 0) - Number(a.tmdb_popularity || 0);
       if (popularityDiff !== 0) return popularityDiff;
       return Number(b.year || 0) - Number(a.year || 0);
@@ -351,7 +370,7 @@ function selectTopRatedMovies(sections: Record<string, MovieItem[]>, limit = TOP
 }
 
 function selectHeroMovies(sections: Record<string, MovieItem[]>): MovieItem[] {
-  return selectTopRatedMovies(sections, HERO_MOVIE_LIMIT);
+  return selectTopRatedMovies(sections, HERO_MOVIE_LIMIT).slice(0, 5);
 }
 
 function readBootHeroMovies(): MovieItem[] {

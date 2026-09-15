@@ -285,7 +285,9 @@ if (
 ) {
   failures.push('episode sequence gaps or telemetry-only source recovery are not repaired through stable cross-provider movie identity');
 }
-if (!navbar.includes('<StickyBanner />') || navbar.includes('!scrolled && <StickyBanner />')) {
+const persistentTopBanner = navbar.includes('<StickyBanner />') || navbar.includes('<CampaignTopBanner />');
+const scrollConditionalBanner = navbar.includes('!scrolled && <StickyBanner />') || navbar.includes('!scrolled && <CampaignTopBanner />');
+if (!persistentTopBanner || scrollConditionalBanner) {
   failures.push('top campaign banner disappears when the fixed header enters its scrolled state');
 }
 

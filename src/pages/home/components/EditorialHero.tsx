@@ -12,7 +12,7 @@ interface EditorialHeroProps {
   variant?: 'editorial' | 'midnight';
 }
 
-const HERO_DISPLAY_LIMIT = 8;
+const HERO_DISPLAY_LIMIT = 5;
 
 function plainText(value?: string) {
   return String(value || '')
@@ -300,7 +300,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
     <section
       className={`editorial-hero${paused ? ' is-paused' : ''}`}
       aria-labelledby="editorial-hero-title"
-      aria-label={`${HERO_DISPLAY_LIMIT} phim được đánh giá cao nhất`}
+      aria-label="5 phim được đánh giá cao nhất"
       onPointerEnter={(event) => { if (event.pointerType === 'mouse') setPaused(true); }}
       onPointerLeave={(event) => { if (event.pointerType === 'mouse') setPaused(false); }}
       onTouchStart={handleTouchStart}

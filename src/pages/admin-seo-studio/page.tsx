@@ -6,6 +6,7 @@ import {
   publishSeoDraft,
   saveSeoDraft,
   searchSeoMovies,
+  suggestSeoDraft,
   SeoStudioApiError,
   validateSeoDraft,
   type SeoFaqItem,
@@ -15,6 +16,7 @@ import {
   type SeoStudioPayload,
   type SeoTopicLink,
   type SeoLiveAuditResult,
+  type SeoAiSuggestionResult,
   type SeoSafeFieldState,
   type SeoValidationIssue,
   type SeoValidationResult,
@@ -33,6 +35,12 @@ const STEPS: Array<{ key: StepKey; label: string; short: string; icon: string }>
   { key: 'content', label: '3. Nội dung hữu ích', short: 'Nội dung', icon: 'ri-article-line' },
   { key: 'links', label: '4. Cụm chủ đề', short: 'Liên kết', icon: 'ri-links-line' },
   { key: 'technical', label: '5. Kiểm tra & xuất bản', short: 'Xuất bản', icon: 'ri-checkbox-circle-line' },
+];
+
+const WORKFLOW_STAGES: Array<{ key: 'diagnose' | 'create' | 'verify'; step: StepKey; label: string; description: string; icon: string }> = [
+  { key: 'diagnose', step: 'movie', label: '1. Chẩn đoán', description: 'Chỉ xem mục cần sửa', icon: 'ri-pulse-line' },
+  { key: 'create', step: 'content', label: '2. AI & biên tập', description: 'Tạo và duyệt bản nháp', icon: 'ri-sparkling-2-line' },
+  { key: 'verify', step: 'technical', label: '3. Kiểm tra & xuất bản', description: 'Xác minh trang thật', icon: 'ri-shield-check-line' },
 ];
 
 const FIELD_LABELS: Record<string, string> = {
@@ -220,6 +228,18 @@ function Counter({ value, recommended }: { value: string; recommended: string })
   return <span className="text-[11px] text-white/30">{value.length} ký tự · {recommended}</span>;
 }
 
+function previewValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'Chưa có';
+    if (typeof value[0] === 'string') return value.join(', ');
+    return value.map((item) => {
+      const row = item as Record<string, unknown>;
+      return String(row.question || row.title || row.anchor || '').trim();
+    }).filter(Boolean).join(' · ');
+  }
+  return String(value || '').trim() || 'Chưa có';
+}
+
 export default function AdminSeoStudioPage() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SeoMovieSearchItem[]>([]);
@@ -229,7 +249,7 @@ export default function AdminSeoStudioPage() {
   const [payload, setPayload] = useState<SeoStudioPayload | null>(null);
   const [step, setStep] = useState<StepKey>('movie');
   const [validation, setValidation] = useState<SeoValidationResult>({ score: 0, issues: [] });
-  const [busy, setBusy] = useState<'load' | 'save' | 'publish' | 'inspect' | 'validate' | ''>('');
+  const [busy, setBusy] = useState<'load' | 'save' | 'publish' | 'inspect' | 'validate' | 'ai' | ''>('');
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [liveAudit, setLiveAudit] = useState<SeoLiveAuditResult | null>(null);
   const [secondaryText, setSecondaryText] = useState('');
@@ -243,6 +263,9 @@ export default function AdminSeoStudioPage() {
   const [fieldStates, setFieldStates] = useState<Record<string, SeoSafeFieldState>>({});
   const [baselineVersion, setBaselineVersion] = useState(0);
   const [unlockedFields, setUnlockedFields] = useState<string[]>([]);
+  const [aiMode, setAiMode] = useState<'quick' | 'deep'>('quick');
+  const [aiSuggestion, setAiSuggestion] = useState<SeoAiSuggestionResult | null>(null);
+  const [selectedAiFields, setSelectedAiFields] = useState<string[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const validationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -287,6 +310,8 @@ export default function AdminSeoStudioPage() {
         ? localDraft?.unlockedFields ?? []
         : serverDraft?.unlocked_fields ?? [];
       setLoaded(result);
+      setAiSuggestion(null);
+      setSelectedAiFields([]);
       setBaselinePayload(result.safe_edit?.baseline ?? serverPayload);
       setBaselineValidation(result.safe_edit?.baseline_validation ?? await validateSeoDraft(serverPayload));
       setFieldStates(result.safe_edit?.fields ?? {});
@@ -429,6 +454,38 @@ export default function AdminSeoStudioPage() {
     setNotice({ type: 'success', text: 'Đã khôi phục toàn bộ biểu mẫu về phiên bản đang chạy; website công khai không bị thay đổi.' });
   };
 
+  const handleAiSuggest = async () => {
+    if (!payload) return;
+    setBusy('ai');
+    setNotice(null);
+    try {
+      const result = await suggestSeoDraft(payload.movie_id, payload.slug, aiMode);
+      setAiSuggestion(result);
+      const safeDefaults = result.changed_fields.filter((field) => fieldStates[field]?.status === 'needs_attention');
+      setSelectedAiFields(safeDefaults);
+      setNotice({
+        type: 'success',
+        text: result.ai_available
+          ? `AI đã tạo bản đề xuất có kiểm soát. ${safeDefaults.length} mục còn yếu được chọn sẵn; chưa có gì được xuất bản.`
+          : 'Đã tạo gợi ý an toàn từ dữ liệu có sẵn. Muốn AI viết nội dung, máy chủ cần cấu hình khóa OpenAI.',
+      });
+    } catch (error) {
+      setNotice({ type: 'error', text: error instanceof Error ? error.message : 'AI chưa tạo được bản đề xuất.' });
+    } finally { setBusy(''); }
+  };
+
+  const applyAiSuggestion = () => {
+    if (!payload || !aiSuggestion || selectedAiFields.length === 0) return;
+    let next = payload;
+    for (const field of selectedAiFields) {
+      next = replacePayloadField(next, field, getPayloadField(aiSuggestion.proposed_payload, field));
+    }
+    setPayload(next);
+    syncTextFields(next);
+    setUnlockedFields((current) => Array.from(new Set([...current, ...selectedAiFields])));
+    setNotice({ type: 'success', text: `Đã áp dụng ${selectedAiFields.length} mục vào bản nháp. Hãy đọc lại, kiểm tra trang thật rồi mới xuất bản.` });
+  };
+
   const handleInspect = async () => {
     if (!payload) return;
     setBusy('inspect');
@@ -503,7 +560,15 @@ export default function AdminSeoStudioPage() {
   const pageTitle = payload?.seo_title || 'SEO Title chưa được đặt';
   const pageDescription = payload?.meta_description || 'Meta Description chưa được đặt.';
   const pageUrl = payload ? `https://khophim.org${payload.canonical_path}` : '';
-  const visibleIssues = issuesByStep[step] ?? [];
+  const workflowStage = step === 'movie' ? 'diagnose' : step === 'technical' ? 'verify' : 'create';
+  const visibleIssues = workflowStage === 'create'
+    ? validation.issues.filter((issue) => ['search', 'content', 'links'].includes(issue.section) && issue.severity !== 'success')
+    : workflowStage === 'diagnose'
+      ? validation.issues.filter((issue) => issue.section === 'movie' && issue.severity !== 'success')
+      : validation.issues.filter((issue) => issue.section === 'technical' && issue.severity !== 'success');
+  const activeSafeFields = workflowStage === 'create'
+    ? [...STEP_FIELDS.search, ...STEP_FIELDS.content, ...STEP_FIELDS.links]
+    : workflowStage === 'diagnose' ? STEP_FIELDS.movie : STEP_FIELDS.technical;
 
   return (
     <div className="min-h-screen bg-[#080a10] text-white">
@@ -517,11 +582,7 @@ export default function AdminSeoStudioPage() {
               {payload && <p className="mt-0.5 text-[10px] text-emerald-400/70">{draftState === 'saving' ? 'Đang tự lưu bản nháp…' : draftState === 'restored' ? 'Đã khôi phục bản nháp tự động' : draftState === 'saved' ? 'Bản nháp đã tự lưu trên máy này' : 'Bản nháp an toàn'}</p>}
             </div>
           </div>
-          {payload && <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block"><p className="text-[10px] uppercase tracking-wider text-white/30">Điểm sẵn sàng</p><p className={`text-lg font-black ${scoreColor(validation.score)}`}>{validation.score}/100</p></div>
-            <button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/[0.1] disabled:opacity-40">{busy === 'save' ? 'Đang lưu...' : 'Lưu nháp'}</button>
-            <button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-black hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-35">{busy === 'publish' ? 'Đang xuất bản...' : 'Xuất bản SEO'}</button>
-          </div>}
+          {payload && <div className="hidden items-center gap-2 rounded-xl border border-emerald-500/15 bg-emerald-500/[0.06] px-3 py-2 text-xs text-emerald-300 sm:flex"><i className="ri-shield-check-line" /> AI không tự xuất bản</div>}
         </div>
       </header>
 
@@ -540,7 +601,7 @@ export default function AdminSeoStudioPage() {
             <div className={`rounded-xl px-3 py-2 ${hasScoreRegression ? 'bg-red-500/10' : 'bg-black/20'}`}><p className="text-[10px] uppercase text-white/30">So với bản đang chạy</p><strong className={`text-sm ${hasScoreRegression ? 'text-red-300' : 'text-emerald-300'}`}>{hasScoreRegression ? 'Đang giảm chất lượng' : 'Không suy giảm'}</strong></div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {STEP_FIELDS[step].map((field) => {
+            {activeSafeFields.map((field) => {
               const state = fieldStates[field];
               if (!state) return null;
               const changed = changedFields.includes(field);
@@ -581,7 +642,7 @@ export default function AdminSeoStudioPage() {
 
         {!payload && <section className="mx-auto mt-20 max-w-xl text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10"><i className="ri-focus-3-line text-3xl text-emerald-400" /></div><h2 className="text-xl font-bold">Chọn một phim để bắt đầu</h2><p className="mt-2 text-sm leading-6 text-white/40">SEO Studio sẽ tải dữ liệu phim, review, trạng thái index và các tín hiệu chất lượng vào cùng một quy trình.</p></section>}
 
-        {payload && loaded && <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)_330px]">
+        {payload && loaded && <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)_310px]">
           <aside className="space-y-3 lg:sticky lg:top-[82px] lg:self-start">
             <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-3">
               <div className="mb-3 flex items-center gap-3 border-b border-white/[0.06] pb-3">
@@ -589,17 +650,19 @@ export default function AdminSeoStudioPage() {
                 <div className="min-w-0"><p className="truncate text-sm font-bold">{payload.movie_patch.name}</p><p className="truncate text-[11px] text-white/35">/{payload.slug}</p><p className="mt-1 text-[10px] text-emerald-400">{loaded.profile?.status === 'published' ? 'SEO đã xuất bản' : 'Đang là bản nháp'}</p></div>
               </div>
               <nav className="space-y-1">
-                {STEPS.map((item) => {
-                  const count = issuesByStep[item.key]?.length ?? 0;
-                  return <button key={item.key} onClick={() => setStep(item.key)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs transition ${step === item.key ? 'bg-emerald-500/15 font-semibold text-emerald-300' : 'text-white/50 hover:bg-white/[0.04] hover:text-white/80'}`}><i className={item.icon} /><span className="flex-1">{item.label}</span>{count > 0 ? <span className="rounded-full bg-amber-500/15 px-1.5 text-[10px] text-amber-300">{count}</span> : <i className="ri-checkbox-circle-fill text-emerald-500/70" />}</button>;
+                {WORKFLOW_STAGES.map((item) => {
+                  const sections = item.key === 'create' ? ['search', 'content', 'links'] : item.key === 'diagnose' ? ['movie'] : ['technical'];
+                  const count = validation.issues.filter((issue) => sections.includes(issue.section) && issue.severity !== 'success').length;
+                  return <button key={item.key} onClick={() => setStep(item.step)} className={`flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-xs transition ${workflowStage === item.key ? 'bg-emerald-500/15 font-semibold text-emerald-300' : 'text-white/50 hover:bg-white/[0.04] hover:text-white/80'}`}><i className={item.icon} /><span className="min-w-0 flex-1"><strong className="block">{item.label}</strong><span className="mt-0.5 block text-[10px] font-normal opacity-60">{item.description}</span></span>{count > 0 ? <span className="rounded-full bg-amber-500/15 px-1.5 text-[10px] text-amber-300">{count}</span> : <i className="ri-checkbox-circle-fill text-emerald-500/70" />}</button>;
                 })}
               </nav>
             </div>
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3 text-xs leading-5 text-white/40"><p className="font-semibold text-white/65">Nguyên tắc an toàn</p><p className="mt-1">Bản nháp không thay đổi trang công khai. Chỉ nút “Xuất bản SEO” mới đồng bộ tất cả nội dung.</p></div>
+            {loaded.insights?.work_item && <div className="rounded-xl border border-amber-500/15 bg-amber-500/[0.05] p-3 text-xs leading-5"><p className="font-semibold text-amber-300">Vì sao phim này cần làm?</p><p className="mt-1 text-white/50">{loaded.insights.work_item.reason || 'Bộ não SEO phát hiện tín hiệu còn thiếu.'}</p><p className="mt-2 text-[10px] uppercase text-white/30">Ưu tiên {loaded.insights.work_item.priority_score ?? 0}/100 · {loaded.insights.work_item.urgency || 'chưa xếp mức'}</p></div>}
           </aside>
 
           <section className="min-w-0 rounded-2xl border border-white/[0.07] bg-[#10131d] p-4 md:p-6">
-            <div className="mb-5 flex items-start justify-between gap-3 border-b border-white/[0.06] pb-4"><div><p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">{STEPS.find((item) => item.key === step)?.label}</p><h2 className="mt-1 text-lg font-bold">{payload.movie_patch.name}</h2></div>{visibleIssues.length > 0 && <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-300">{visibleIssues.length} mục cần xem</span>}</div>
+            <div className="mb-5 flex items-start justify-between gap-3 border-b border-white/[0.06] pb-4"><div><p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">{WORKFLOW_STAGES.find((item) => item.key === workflowStage)?.label}</p><h2 className="mt-1 text-lg font-bold">{payload.movie_patch.name}</h2></div>{visibleIssues.length > 0 && <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-300">{visibleIssues.length} mục cần xem</span>}</div>
 
             {step === 'movie' && <div className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2"><div><label className={labelClass}>Tên hiển thị *</label><input disabled={isFieldLocked('movie_patch.name')} className={inputClass} value={payload.movie_patch.name} onChange={(event) => updatePatch('name', event.target.value)} /></div><div><label className={labelClass}>Tên tiếng Việt</label><input disabled={isFieldLocked('movie_patch.title_vi')} className={inputClass} value={payload.movie_patch.title_vi} onChange={(event) => updatePatch('title_vi', event.target.value)} /></div><div><label className={labelClass}>Tên tiếng Anh</label><input disabled={isFieldLocked('movie_patch.title_en')} className={inputClass} value={payload.movie_patch.title_en} onChange={(event) => updatePatch('title_en', event.target.value)} /></div><div><label className={labelClass}>Tên gốc</label><input disabled={isFieldLocked('movie_patch.origin_name')} className={inputClass} value={payload.movie_patch.origin_name} onChange={(event) => updatePatch('origin_name', event.target.value)} /></div></div>
@@ -610,6 +673,34 @@ export default function AdminSeoStudioPage() {
               <div><label className={labelClass}>Đạo diễn</label><input disabled={isFieldLocked('movie_patch.director')} className={inputClass} value={directorText} onChange={(event) => { setDirectorText(event.target.value); updatePatch('director', listFromCsv(event.target.value)); }} /></div>
               <div className="grid gap-4 md:grid-cols-2"><div><label className={labelClass}>Poster dọc *</label><input disabled={isFieldLocked('movie_patch.thumb_url')} className={inputClass} value={payload.movie_patch.thumb_url} onChange={(event) => updatePatch('thumb_url', event.target.value)} placeholder="https://..." /></div><div><label className={labelClass}>Backdrop ngang</label><input disabled={isFieldLocked('movie_patch.poster_url')} className={inputClass} value={payload.movie_patch.poster_url} onChange={(event) => updatePatch('poster_url', event.target.value)} placeholder="https://..." /></div></div>
               <div><label className={labelClass}>Trailer chính thức</label><input disabled={isFieldLocked('movie_patch.trailer_url')} className={inputClass} value={payload.movie_patch.trailer_url} onChange={(event) => updatePatch('trailer_url', event.target.value)} placeholder="https://www.youtube.com/embed/..." /></div>
+            </div>}
+
+            {workflowStage === 'create' && <div className="mb-6 space-y-4">
+              <div className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.09] to-cyan-500/[0.04] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="max-w-2xl"><p className="flex items-center gap-2 text-sm font-bold text-violet-200"><i className="ri-sparkling-2-line" /> Trợ lý AI SEO có kiểm soát</p><p className="mt-1 text-xs leading-5 text-white/45">AI đọc dữ liệu phim, nhiệm vụ của bộ não SEO và tín hiệu Google đang có để tạo bản nháp. AI không được đổi URL chuẩn, dữ liệu nhận diện, quyền index hoặc tự xuất bản.</p></div>
+                  <div className="flex gap-2"><button onClick={() => setAiMode('quick')} className={`rounded-lg px-3 py-2 text-xs ${aiMode === 'quick' ? 'bg-white/10 text-white' : 'text-white/40'}`}>Nhanh</button><button onClick={() => setAiMode('deep')} className={`rounded-lg px-3 py-2 text-xs ${aiMode === 'deep' ? 'bg-white/10 text-white' : 'text-white/40'}`}>Kỹ hơn</button></div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-3"><button onClick={() => void handleAiSuggest()} disabled={!!busy} className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{busy === 'ai' ? 'AI đang phân tích…' : 'AI tạo bản đề xuất'}</button><span className="text-[11px] text-white/35"><i className="ri-shield-check-line text-emerald-400" /> Chỉ tạo nháp · có so sánh trước/sau · vẫn phải kiểm tra cứng</span></div>
+              </div>
+
+              {aiSuggestion && <div className="rounded-2xl border border-white/[0.08] bg-[#0b0e16] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-white/85">Bản đề xuất của {aiSuggestion.ai_available ? 'AI' : 'hệ thống dự phòng'}</p><p className="mt-1 max-w-2xl text-xs leading-5 text-white/45">{aiSuggestion.summary}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] ${aiSuggestion.validation.score >= baselineValidation.score ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}>Dự kiến {aiSuggestion.validation.score}/100</span></div>
+                {aiSuggestion.warnings.length > 0 && <div className="mt-3 space-y-1">{aiSuggestion.warnings.map((warning) => <p key={warning} className="text-[11px] text-amber-300"><i className="ri-error-warning-line" /> {warning}</p>)}</div>}
+                <div className="mt-4 space-y-2">{aiSuggestion.changed_fields.length > 0 ? aiSuggestion.changed_fields.map((field) => {
+                  const checked = selectedAiFields.includes(field);
+                  const protectedField = fieldStates[field]?.protected;
+                  return <label key={field} className={`block cursor-pointer rounded-xl border p-3 ${checked ? 'border-violet-400/30 bg-violet-500/[0.08]' : 'border-white/[0.07] bg-white/[0.02]'}`}><div className="flex items-start gap-3"><input type="checkbox" checked={checked} onChange={() => setSelectedAiFields((current) => current.includes(field) ? current.filter((item) => item !== field) : [...current, field])} className="mt-1 accent-violet-500" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><strong className="text-xs text-white/80">{FIELD_LABELS[field]}</strong>{protectedField && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] text-emerald-300">Đang tốt · không chọn sẵn</span>}</div><p className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/35"><span className="text-white/20">Hiện tại:</span> {previewValue(getPayloadField(payload, field))}</p><p className="mt-1 line-clamp-3 text-[11px] leading-5 text-violet-200/70"><span className="text-violet-300">Đề xuất:</span> {previewValue(getPayloadField(aiSuggestion.proposed_payload, field))}</p></div></div></label>;
+                }) : <p className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.06] p-3 text-xs text-emerald-300">AI không tìm thấy thay đổi an toàn nào tốt hơn bản hiện tại.</p>}</div>
+                {aiSuggestion.evidence.length > 0 && <details className="mt-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><summary className="cursor-pointer text-xs font-semibold text-white/55">Dữ kiện AI đã dùng ({aiSuggestion.evidence.length})</summary><div className="mt-3 space-y-2">{aiSuggestion.evidence.map((item, index) => <a key={`${item.field}-${index}`} href={item.source_url} target="_blank" rel="noreferrer" className="block text-[11px] leading-5 text-cyan-300/70 hover:text-cyan-200">{item.fact} · {item.confidence === 'high' ? 'tin cậy cao' : item.confidence === 'medium' ? 'tin cậy vừa' : 'cần kiểm tra lại'}</a>)}</div></details>}
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-white/35">Đã chọn {selectedAiFields.length}/{aiSuggestion.changed_fields.length} mục. Các mục tốt chỉ thay đổi khi bạn tự chọn.</p><button onClick={applyAiSuggestion} disabled={selectedAiFields.length === 0} className="rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-black disabled:opacity-30">Áp dụng vào bản nháp</button></div>
+              </div>}
+
+              <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/[0.07] bg-black/20 p-1.5">{[
+                ['search', 'Hiển thị Google', 'ri-google-line'],
+                ['content', 'Nội dung hữu ích', 'ri-article-line'],
+                ['links', 'Cụm chủ đề', 'ri-links-line'],
+              ].map(([target, label, icon]) => <button key={target} onClick={() => setStep(target as StepKey)} className={`rounded-lg px-2 py-2.5 text-[11px] font-semibold ${step === target ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}><i className={`${icon} mr-1`} /> {label}</button>)}</div>
             </div>}
 
             {step === 'search' && <div className="space-y-5">
@@ -647,19 +738,18 @@ export default function AdminSeoStudioPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold text-white/70">Kiểm tra trang thật</p><p className="mt-1 text-[11px] text-white/35">Mô phỏng Googlebot và kiểm tra HTTP, canonical, H1, schema, ảnh, liên kết.</p></div><button onClick={() => void handleInspect()} disabled={!!busy} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 disabled:opacity-40">{busy === 'inspect' ? 'Đang kiểm tra...' : 'Kiểm tra trang thật'}</button></div>
                 {liveAudit && <div className="mt-4 space-y-2">{liveAudit.checks.map((check) => <div key={check.code} className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${check.passed ? 'bg-emerald-500/[0.07] text-emerald-300' : 'bg-red-500/[0.08] text-red-300'}`}><i className={check.passed ? 'ri-checkbox-circle-line' : 'ri-close-circle-line'} /><span>{check.message}</span></div>)}</div>}
               </div>
-              <div className="rounded-2xl border border-white/[0.08] bg-[#0b0e16] p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-white/40">Điểm sẵn sàng xuất bản</p><p className={`mt-1 text-3xl font-black ${scoreColor(validation.score)}`}>{validation.score}<span className="text-base text-white/25">/100</span></p></div><div className="text-right text-xs text-white/35"><p>{validation.issues.filter((item) => item.severity === 'error').length} lỗi bắt buộc</p><p>{validation.issues.filter((item) => item.severity === 'warning').length} cảnh báo</p></div></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className={`h-full rounded-full ${validation.score >= 80 ? 'bg-emerald-500' : validation.score >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${validation.score}%` }} /></div></div>
-              <div className="grid gap-3 sm:grid-cols-3"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white/70 disabled:opacity-40">Lưu bản nháp</button><button onClick={() => void handleInspect()} disabled={!!busy} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-300 disabled:opacity-40">Kiểm tra thật</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black disabled:opacity-35">Xuất bản toàn bộ SEO</button></div>
+              <div className="sticky bottom-3 grid gap-3 rounded-2xl border border-white/10 bg-[#080a10]/95 p-3 shadow-2xl backdrop-blur-xl sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white/70 disabled:opacity-40">{busy === 'save' ? 'Đang lưu…' : 'Lưu bản nháp'}</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black disabled:opacity-35">{busy === 'publish' ? 'Đang xuất bản…' : 'Xuất bản toàn bộ SEO'}</button></div>
               {loaded.profile?.status === 'published' && <div className="flex flex-wrap gap-2"><a href={`/phim/${payload.slug}`} target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-external-link-line" /> Mở trang phim</a><a href="https://search.google.com/search-console/inspect" target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-google-line" /> Mở URL Inspection</a><a href="/sitemap-movies.xml" target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-map-2-line" /> Kiểm tra sitemap</a></div>}
             </div>}
 
             {visibleIssues.length > 0 && step !== 'technical' && <div className="mt-6 border-t border-white/[0.06] pt-4"><p className="mb-2 text-xs font-semibold text-white/50">Cần xử lý ở bước này</p><div className="space-y-2">{visibleIssues.map((issue) => <IssueBadge key={issue.code} issue={issue} />)}</div></div>}
-            <div className="mt-6 flex items-center justify-between border-t border-white/[0.06] pt-4"><button onClick={() => { const index = STEPS.findIndex((item) => item.key === step); if (index > 0) setStep(STEPS[index - 1].key); }} disabled={step === STEPS[0].key} className="text-xs text-white/40 disabled:opacity-20"><i className="ri-arrow-left-line" /> Bước trước</button><button onClick={() => { const index = STEPS.findIndex((item) => item.key === step); if (index < STEPS.length - 1) setStep(STEPS[index + 1].key); }} disabled={step === STEPS.at(-1)?.key} className="rounded-lg bg-white/[0.06] px-3 py-2 text-xs text-white/70 disabled:opacity-20">Bước tiếp theo <i className="ri-arrow-right-line" /></button></div>
           </section>
 
           <aside className="space-y-4 lg:sticky lg:top-[82px] lg:self-start">
-            <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-4"><div className="flex items-center justify-between"><p className="text-xs font-semibold text-white/60">Tiến độ hoàn thiện</p><strong className={scoreColor(validation.score)}>{validation.score}%</strong></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${validation.score}%` }} /></div><div className="mt-4 space-y-2">{STEPS.map((item) => <button key={item.key} onClick={() => setStep(item.key)} className="flex w-full items-center justify-between text-xs"><span className={step === item.key ? 'text-emerald-300' : 'text-white/45'}>{item.short}</span><span className={issuesByStep[item.key]?.length ? 'text-amber-300' : 'text-emerald-400'}>{issuesByStep[item.key]?.length ? `${issuesByStep[item.key].length} mục` : 'Đạt'}</span></button>)}</div></div>
+            <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-4"><div className="flex items-end justify-between"><div><p className="text-xs font-semibold text-white/60">Điểm sẵn sàng</p><p className={`mt-1 text-3xl font-black ${scoreColor(validation.score)}`}>{validation.score}<span className="text-base text-white/25">/100</span></p></div><div className="text-right text-[11px] leading-5 text-white/35"><p>{validation.issues.filter((item) => item.severity === 'error').length} lỗi bắt buộc</p><p>{validation.issues.filter((item) => item.severity === 'warning').length} cảnh báo</p></div></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className={`h-full rounded-full ${validation.score >= 80 ? 'bg-emerald-500' : validation.score >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${validation.score}%` }} /></div><p className="mt-3 text-[11px] leading-5 text-white/35">Đạt điểm chưa có nghĩa Google chắc chắn index. Hệ thống chỉ cho xuất bản khi không có lỗi chặn và không làm giảm bản đang chạy.</p></div>
             <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-4"><p className="mb-3 text-xs font-semibold text-white/60">Xem trước kết quả</p><div className="rounded-xl bg-white p-3 text-[#202124]"><p className="truncate text-[10px]">{pageUrl.replace('https://', '')}</p><p className="mt-1 line-clamp-2 text-base text-[#1a0dab]">{pageTitle}</p><p className="mt-1 line-clamp-3 text-xs leading-4 text-[#4d5156]">{pageDescription}</p></div></div>
-            <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-4"><p className="text-xs font-semibold text-white/60">Sau khi xuất bản</p><ul className="mt-2 space-y-2 text-[11px] leading-5 text-white/35"><li>• Dữ liệu phim, review và SEO được đồng bộ cùng lúc.</li><li>• HTML Googlebot dùng ngay phiên bản hồ sơ mới, không chờ triển khai lại.</li><li>• Canonical, robots, schema và liên kết nội bộ được kiểm tra trên trang thật.</li><li>• Nếu kiểm tra sau xuất bản thất bại, hệ thống tự giữ trang ở noindex để tránh Google nhận dữ liệu lỗi.</li></ul></div>
+            {(loaded.insights?.search_metric || (loaded.insights?.search_queries?.length ?? 0) > 0) && <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-4"><p className="text-xs font-semibold text-white/60">Tín hiệu Google gần nhất</p>{loaded.insights?.search_metric && <div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-lg bg-white/[0.03] p-2"><strong className="block text-sm text-white/75">{loaded.insights.search_metric.impressions ?? 0}</strong><span className="text-[9px] text-white/30">lượt thấy</span></div><div className="rounded-lg bg-white/[0.03] p-2"><strong className="block text-sm text-white/75">{loaded.insights.search_metric.clicks ?? 0}</strong><span className="text-[9px] text-white/30">lượt nhấp</span></div><div className="rounded-lg bg-white/[0.03] p-2"><strong className="block text-sm text-white/75">{Number(loaded.insights.search_metric.position || 0).toFixed(1)}</strong><span className="text-[9px] text-white/30">vị trí TB</span></div></div>}<div className="mt-3 space-y-1">{loaded.insights?.search_queries?.slice(0, 4).map((item) => <p key={item.query} className="truncate text-[10px] text-cyan-300/65">{item.query} · {item.impressions ?? 0} lượt thấy</p>)}</div></div>}
+            <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-4"><p className="text-xs font-semibold text-white/60">Sau khi xuất bản</p><ul className="mt-2 space-y-2 text-[11px] leading-5 text-white/35"><li>• Dữ liệu phim, review và hồ sơ SEO được đồng bộ cùng lúc.</li><li>• HTML Googlebot được kiểm tra bằng đúng phiên bản hồ sơ vừa xuất bản.</li><li>• Canonical, robots, schema, ảnh và liên kết nội bộ đều phải đạt.</li><li>• Nếu kiểm tra thất bại, hệ thống tự giữ trang ở noindex hoặc khôi phục bản tốt trước đó.</li><li>• Bản tĩnh và sitemap được đưa vào hàng đợi cập nhật sau khi xác minh.</li></ul></div>
           </aside>
         </div>}
       </main>
