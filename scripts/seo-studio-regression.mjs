@@ -89,6 +89,10 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ['store: false', 'AI request is stored unnecessarily'],
   ['fallbackAiSuggestion', 'SEO Studio has no safe fallback when AI is unavailable'],
 ]);
+const aiSchema = files['supabase/functions/admin-seo-studio/index.ts'].split('const AI_SUGGESTION_SCHEMA = {')[1]?.split('function aiPatchFromSuggestion')[0] || '';
+if (!aiSchema || aiSchema.includes('maxLength:')) {
+  throw new Error('AI Structured Outputs schema contains an unsupported maxLength keyword; length must be enforced after generation.');
+}
 expect('supabase/migrations/20260828103000_add_movie_seo_studio.sql', [
   ['enable row level security', 'SEO profile table has no RLS'],
   ["using (status = 'published')", 'drafts are publicly readable'],
