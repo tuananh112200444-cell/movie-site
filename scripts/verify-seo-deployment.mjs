@@ -25,7 +25,9 @@ async function fetchPage(url, { redirect = 'manual' } = {}) {
 const rootResponse = await fetchPage(new URL('/sitemap.xml', base), { redirect: 'follow' });
 const rootXml = await rootResponse.text();
 if (rootResponse.status !== 200 || !rootXml.includes('<sitemapindex')) failures.push(`Root sitemap failed: HTTP ${rootResponse.status}.`);
-if (!allowFunctionFailOpen && !rootResponse.headers.get('x-sitemap-proxy')) failures.push('Root sitemap did not pass through the Pages SEO worker.');
+if (!allowFunctionFailOpen && rootResponse.headers.get('x-sitemap-proxy') !== 'cloudflare-pages-priority-index') {
+  failures.push(`Root sitemap did not pass through the Pages SEO worker (proxy: ${rootResponse.headers.get('x-sitemap-proxy') || 'missing'}).`);
+}
 
 const childLocs = locs(rootXml);
 const expectedChildPaths = [
@@ -51,6 +53,10 @@ for (const childLoc of childLocs) {
   if (response.status !== 200 || !body.trimStart().startsWith('<?xml')) {
     failures.push(`Child sitemap failed: ${new URL(childLoc).pathname} returned HTTP ${response.status}.`);
     continue;
+  }
+  if (!allowFunctionFailOpen && new URL(childLoc).pathname === '/sitemap-seo-studio.xml'
+    && response.headers.get('x-sitemap-proxy') !== 'cloudflare-pages') {
+    failures.push(`SEO Studio sitemap is using a static fail-open response instead of the Pages SEO worker.`);
   }
   for (const url of locs(body)) {
     if (url.startsWith(`${canonicalOrigin}/`)) submittedUrls.add(url);
@@ -90,6 +96,15 @@ async function auditWorker() {
 await Promise.all(Array.from({ length: 10 }, () => auditWorker()));
 
 if (!allowFunctionFailOpen) {
+  const timeResponse = await fetchPage(new URL('/api/time', base), { redirect: 'follow' });
+  const timeBody = await timeResponse.text();
+  if (timeResponse.status !== 200 || !(timeResponse.headers.get('content-type') || '').includes('application/json') || !timeBody.includes('"now"')) {
+    failures.push(`Pages Worker health route is unavailable: /api/time HTTP ${timeResponse.status}.`);
+  }
+  const inspectResponse = await fetchPage(new URL('/internal/seo-studio-inspect?slug=biet-doi-cong-ly-avalanche', base), { redirect: 'manual' });
+  if (inspectResponse.status !== 401 || !(inspectResponse.headers.get('x-robots-tag') || '').toLowerCase().includes('noindex')) {
+    failures.push(`Protected SEO Studio inspection route is unavailable or unsafe: HTTP ${inspectResponse.status}.`);
+  }
   for (const runtimePath of ['/sitemap-movies-ongoing.xml']) {
     const response = await fetchPage(new URL(runtimePath, base), { redirect: 'follow' });
     const body = await response.text();

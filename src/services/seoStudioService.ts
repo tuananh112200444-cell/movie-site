@@ -149,17 +149,20 @@ export interface SeoMovieSearchItem {
 interface AdminResult<T> {
   error?: string;
   validation?: SeoValidationResult;
+  live_audit?: SeoLiveAuditResult;
   [key: string]: unknown;
   data?: T;
 }
 
 export class SeoStudioApiError extends Error {
   validation?: SeoValidationResult;
+  liveAudit?: SeoLiveAuditResult;
 
-  constructor(message: string, validation?: SeoValidationResult) {
+  constructor(message: string, validation?: SeoValidationResult, liveAudit?: SeoLiveAuditResult) {
     super(message);
     this.name = 'SeoStudioApiError';
     this.validation = validation;
+    this.liveAudit = liveAudit;
   }
 }
 
@@ -170,7 +173,7 @@ async function callAdmin<T>(action: string, body: Record<string, unknown>): Prom
     body: JSON.stringify({ action, ...body }),
   });
   const result = await response.json().catch(() => ({})) as AdminResult<T> & T;
-  if (!response.ok || result.error) throw new SeoStudioApiError(result.error || `SEO Studio error ${response.status}`, result.validation);
+  if (!response.ok || result.error) throw new SeoStudioApiError(result.error || `SEO Studio error ${response.status}`, result.validation, result.live_audit);
   return result as T;
 }
 
@@ -182,6 +185,7 @@ export async function searchSeoMovies(query: string): Promise<SeoMovieSearchItem
 export interface SeoStudioLoadResult {
   movie: Record<string, unknown>;
   ai_available?: boolean;
+  worker_status?: { online: boolean; status: number; checked_at: string };
   profile: (PublishedSeoProfile & { review_content?: string; movie_patch?: SeoMoviePatch; status?: SeoProfileStatus; validation_issues?: SeoValidationIssue[] }) | null;
   review: { content?: string; word_count?: number; generated_at?: string; updated_at?: string } | null;
   quality: { eligible_for_index?: boolean; index_tier?: string; quality_score?: number; reasons?: string[]; signals?: string[]; checked_at?: string } | null;

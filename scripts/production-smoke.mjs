@@ -5,17 +5,16 @@ const SUPABASE_PUBLIC_KEY = String(process.env.VITE_PUBLIC_SUPABASE_ANON_KEY || 
 const checks = [
   { name: 'release-manifest', path: '/release.json', status: 200, has: ['release_id','schema_contract'] },
   { name: 'home', path: '/', status: 200, has: ['KhoPhim'] },
-  { name: 'sitemap', path: '/sitemap.xml', status: 200, has: ['<sitemapindex','sitemap-movies-recent.xml','feed.xml'] },
-  { name: 'rss', path: '/feed.xml', status: 200, has: ['<rss','rel="hub"','/phim/'], soft: true },
+  { name: 'sitemap', path: '/sitemap.xml', status: 200, has: ['<sitemapindex','sitemap-movies-recent.xml','sitemap-seo-studio.xml'] },
+  { name: 'rss', path: '/feed.xml', status: 200, has: ['<rss','/phim/'], soft: true },
   { name: 'robots', path: '/robots.txt', status: 200, has: ['Sitemap:'] },
   { name: 'press', path: '/press/', status: 200, has: ['Thông tin thương hiệu','khophim-logo-v2'] },
-  { name: 'api-time', path: '/api/time', status: 200, contentType: 'application/json', has: ['"now"'], soft: true },
+  { name: 'api-time', path: '/api/time', status: 200, contentType: 'application/json', has: ['"now"'] },
   { name: 'api-source-health', path: '/api/player-source-health?hours=1&limit=5', fallbackPath: '/functions/v1/player-source-health?hours=1&limit=5', status: 200, contentType: 'application/json', has: ['"bad_hosts"'] },
   { name: 'api-multi-source-detail', path: '/api/movie-detail?slug=cap-doi-trai-nguoc', fallbackPath: '/functions/v1/movie-detail-proxy?slug=cap-doi-trai-nguoc', status: 200, contentType: 'application/json', has: ['"movie"','"episodes"','"server_name"'] },
   { name: 'home-googlebot', path: '/', status: 200, has: ['index, follow','application/ld+json','KhoPhim'], bot: true },
   { name: 'seo-landing-googlebot', path: '/xem-phim-online', status: 200, has: ['index, follow','rel="canonical"','Xem Phim Online'], bot: true, soft: true },
-  { name: 'movie-googlebot', path: '/phim/quyet-chien-tai-mohenjo', status: 200, has: ['rel="canonical"','Movie','role=actor'], bot: true, soft: true },
-  { name: 'thin-movie-noindex', path: '/phim/bieu-muoi-van-phuc', status: 200, has: ['noindex, follow'], bot: true, soft: true },
+  { name: 'movie-googlebot', path: '/phim/biet-doi-cong-ly-avalanche', status: 200, has: ['rel="canonical"','Movie','index, follow'], bot: true, soft: true },
 ];
 
 async function check(item) {

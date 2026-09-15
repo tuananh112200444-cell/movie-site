@@ -14,6 +14,8 @@ const files = Object.fromEntries(await Promise.all([
   'supabase/migrations/20260828103000_add_movie_seo_studio.sql',
   'supabase/migrations/20260905030000_add_safe_seo_studio_editing.sql',
   'scripts/generate-static-movie-pages.mjs',
+  'scripts/verify-seo-deployment.mjs',
+  'scripts/production-smoke.mjs',
   'functions/[[path]].js',
 ].map(async (file) => [file, await readFile(file, 'utf8')])));
 
@@ -53,10 +55,13 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['Các mục tốt chỉ thay đổi khi bạn tự chọn', 'good SEO fields are not protected from default AI selection'],
   ['Dữ liệu phim đang đạt — không cần sửa', 'already-good movie data is not collapsed by default'],
   ['Gợi ý từ dữ liệu có sẵn', 'SEO Studio disguises its non-AI fallback as AI'],
+  ['SEO Worker đang không chạy trên website thật', 'operator cannot see when the SEO Worker is unavailable'],
+  ['error.liveAudit', 'failed pre-publish live audit is not shown to the operator'],
 ]);
 expect('src/services/seoStudioService.ts', [
   ["callAdmin('publish'", 'missing authenticated publish call'],
   ["callAdmin<SeoAiSuggestionResult>('suggest'", 'missing authenticated AI suggestion call'],
+  ['worker_status?:', 'SEO Studio load result does not expose live Worker status'],
   [".eq('status', 'published')", 'public reader may expose drafts'],
 ]);
 expect('supabase/functions/admin-seo-studio/index.ts', [
@@ -90,7 +95,22 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ['allowedTopicPaths', 'AI can invent internal-link destinations'],
   ['store: false', 'AI request is stored unnecessarily'],
   ['fallbackAiSuggestion', 'SEO Studio has no safe fallback when AI is unavailable'],
+  ['seoWorkerStatus()', 'SEO Studio does not check Worker availability before editorial work'],
+  ['seo_worker_preflight_failed', 'publishing can mutate a good profile while the SEO Worker is unavailable'],
 ]);
+const studioEndpoint = files['supabase/functions/admin-seo-studio/index.ts'];
+if (studioEndpoint.indexOf('const prePublishAudit = await inspectLivePage(payload)') < 0
+  || studioEndpoint.indexOf('const prePublishAudit = await inspectLivePage(payload)') > studioEndpoint.indexOf("db.rpc('publish_movie_seo_profile'")) {
+  throw new Error('SEO Worker preflight must run before the atomic publish RPC.');
+}
+expect('scripts/verify-seo-deployment.mjs', [
+  ["!== 'cloudflare-pages-priority-index'", 'deployment audit accepts a static fallback as a healthy SEO Worker'],
+  ["/internal/seo-studio-inspect?slug=", 'deployment audit does not verify the protected SEO Studio inspection route'],
+  ["/api/time", 'deployment audit does not verify the Pages Worker health route'],
+]);
+if (files['scripts/production-smoke.mjs'].includes("'sitemap-movies-recent.xml','feed.xml'")) {
+  throw new Error('production smoke still requires the runtime-only RSS feed inside the sitemap index.');
+}
 const aiSchema = files['supabase/functions/admin-seo-studio/index.ts'].split('const AI_SUGGESTION_SCHEMA = {')[1]?.split('function aiPatchFromSuggestion')[0] || '';
 if (!aiSchema || aiSchema.includes('maxLength:')) {
   throw new Error('AI Structured Outputs schema contains an unsupported maxLength keyword; length must be enforced after generation.');
