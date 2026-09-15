@@ -901,6 +901,7 @@ Deno.serve(async (req) => {
         profile: profileResult.data,
         review: reviewResult.data,
         quality: qualityResult.data,
+        ai_available: Boolean(OPENAI_API_KEY),
         insights: {
           work_item: workItemResult.error ? null : workItemResult.data,
           inspection: inspectionResult.error ? null : inspectionResult.data,

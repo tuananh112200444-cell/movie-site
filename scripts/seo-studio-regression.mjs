@@ -51,6 +51,8 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['selectedAiFields', 'AI suggestions cannot be reviewed field by field'],
   ['applyAiSuggestion', 'AI suggestions cannot be selectively applied to a draft'],
   ['Các mục tốt chỉ thay đổi khi bạn tự chọn', 'good SEO fields are not protected from default AI selection'],
+  ['Dữ liệu phim đang đạt — không cần sửa', 'already-good movie data is not collapsed by default'],
+  ['Gợi ý từ dữ liệu có sẵn', 'SEO Studio disguises its non-AI fallback as AI'],
 ]);
 expect('src/services/seoStudioService.ts', [
   ["callAdmin('publish'", 'missing authenticated publish call'],

@@ -181,6 +181,7 @@ export async function searchSeoMovies(query: string): Promise<SeoMovieSearchItem
 
 export interface SeoStudioLoadResult {
   movie: Record<string, unknown>;
+  ai_available?: boolean;
   profile: (PublishedSeoProfile & { review_content?: string; movie_patch?: SeoMoviePatch; status?: SeoProfileStatus; validation_issues?: SeoValidationIssue[] }) | null;
   review: { content?: string; word_count?: number; generated_at?: string; updated_at?: string } | null;
   quality: { eligible_for_index?: boolean; index_tier?: string; quality_score?: number; reasons?: string[]; signals?: string[]; checked_at?: string } | null;
