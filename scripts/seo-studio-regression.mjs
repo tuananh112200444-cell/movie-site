@@ -46,9 +46,15 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['isFieldLocked', 'good SEO fields are not locked by default'],
   ['Khôi phục bản đang chạy', 'SEO Studio cannot discard risky changes'],
   ['hasScoreRegression', 'SEO Studio does not warn when the new draft scores worse'],
+  ['Trợ lý AI SEO có kiểm soát', 'missing AI-assisted editorial workflow'],
+  ['AI không tự xuất bản', 'AI workflow does not state the publish boundary'],
+  ['selectedAiFields', 'AI suggestions cannot be reviewed field by field'],
+  ['applyAiSuggestion', 'AI suggestions cannot be selectively applied to a draft'],
+  ['Các mục tốt chỉ thay đổi khi bạn tự chọn', 'good SEO fields are not protected from default AI selection'],
 ]);
 expect('src/services/seoStudioService.ts', [
   ["callAdmin('publish'", 'missing authenticated publish call'],
+  ["callAdmin<SeoAiSuggestionResult>('suggest'", 'missing authenticated AI suggestion call'],
   [".eq('status', 'published')", 'public reader may expose drafts'],
 ]);
 expect('supabase/functions/admin-seo-studio/index.ts', [
@@ -73,6 +79,15 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ["status === 403", 'live inspection does not distinguish an anti-bot block from an SEO content error'],
   ["index_mode: 'noindex'", 'failed live publish does not fail closed'],
   ['remoteValidationIssues', 'publish does not verify duplicate metadata and public resources'],
+  ["action === 'suggest'", 'missing protected AI suggestion action'],
+  ["https://api.openai.com/v1/responses", 'AI suggestion does not use the Responses API'],
+  ["type: 'json_schema'", 'AI output is not constrained by Structured Outputs'],
+  ['AI_EDITABLE_FIELDS', 'AI fields are not explicitly allowlisted'],
+  ["index_mode: baseline.index_mode", 'AI can change the index directive'],
+  ["canonical_path: `/phim/${slug}`", 'AI can change canonical identity'],
+  ['allowedTopicPaths', 'AI can invent internal-link destinations'],
+  ['store: false', 'AI request is stored unnecessarily'],
+  ['fallbackAiSuggestion', 'SEO Studio has no safe fallback when AI is unavailable'],
 ]);
 expect('supabase/migrations/20260828103000_add_movie_seo_studio.sql', [
   ['enable row level security', 'SEO profile table has no RLS'],

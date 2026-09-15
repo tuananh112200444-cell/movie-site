@@ -70,7 +70,7 @@ function readHomeHeroBootstrap(): HomeHeroMovie[] {
         if (popularityDiff !== 0) return popularityDiff;
         return Number(b.year || 0) - Number(a.year || 0);
       })
-      .slice(0, 8);
+      .slice(0, 5);
   } catch {
     return [];
   }

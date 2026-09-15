@@ -184,6 +184,12 @@ export interface SeoStudioLoadResult {
   profile: (PublishedSeoProfile & { review_content?: string; movie_patch?: SeoMoviePatch; status?: SeoProfileStatus; validation_issues?: SeoValidationIssue[] }) | null;
   review: { content?: string; word_count?: number; generated_at?: string; updated_at?: string } | null;
   quality: { eligible_for_index?: boolean; index_tier?: string; quality_score?: number; reasons?: string[]; signals?: string[]; checked_at?: string } | null;
+  insights?: {
+    work_item?: { task_type?: string; status?: string; priority_score?: number; urgency?: string; reason?: string; required_fields?: string[]; evidence?: Record<string, unknown>; due_at?: string; updated_at?: string } | null;
+    inspection?: { verdict?: string; coverage_state?: string; indexing_state?: string; page_fetch_state?: string; user_canonical?: string; google_canonical?: string; last_crawl_time?: string; inspected_at?: string; recommendation?: string } | null;
+    search_metric?: { clicks?: number; impressions?: number; ctr?: number; position?: number; date_start?: string; date_end?: string; collected_at?: string } | null;
+    search_queries?: Array<{ query?: string; clicks?: number; impressions?: number; ctr?: number; position?: number; date_start?: string; date_end?: string; collected_at?: string }>;
+  };
   suggestions: { title: string; description: string; canonical_path: string };
   safe_edit: SeoSafeEditContext;
 }
@@ -198,6 +204,31 @@ export function validateSeoDraft(payload: SeoStudioPayload): Promise<SeoValidati
 
 export function inspectSeoDraft(payload: SeoStudioPayload): Promise<{ validation: SeoValidationResult; live_audit: SeoLiveAuditResult }> {
   return callAdmin('inspect', { payload });
+}
+
+export interface SeoAiEvidence {
+  field: 'focus_keyword' | 'secondary_keywords' | 'seo_title' | 'meta_description' | 'intro_content' | 'review_content' | 'faq' | 'topic_links';
+  fact: string;
+  source_url: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface SeoAiSuggestionResult {
+  ai_available: boolean;
+  model: string | null;
+  mode: 'quick' | 'deep';
+  summary: string;
+  proposed_payload: SeoStudioPayload;
+  validation: SeoValidationResult;
+  changed_fields: SeoAiEvidence['field'][];
+  evidence: SeoAiEvidence[];
+  warnings: string[];
+  preserved_fields: string[];
+  generated_at: string;
+}
+
+export function suggestSeoDraft(movieId: string, slug: string, mode: 'quick' | 'deep'): Promise<SeoAiSuggestionResult> {
+  return callAdmin<SeoAiSuggestionResult>('suggest', { movie_id: movieId, slug, mode });
 }
 
 export function saveSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_version: number; unlocked_fields: string[] }): Promise<{ success: boolean; status: SeoProfileStatus; validation: SeoValidationResult; published_profile_unchanged?: boolean }> {

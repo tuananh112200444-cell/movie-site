@@ -7,7 +7,7 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 // otherwise valid artifact nondeterministically fail. Deterministic source
 // contracts remain covered by system:contracts, watch:test and diagnostics:test.
 const steps = [
-  ['security:secrets'], ['security:supabase'], ['schema:test'], ['seo:audit'], ['seo:upcoming:test'], ['seo:ongoing:test'], ['seo:indexing:test'], ['seo:gsc:test'], ['seo:brain:test'], ['seo:hot:test'], ['seo:people-first:test'], ['seo:category:test'], ['system:contracts'], ['sync:safety:test'], ['type-check'], ['build'],
+  ['security:secrets'], ['security:supabase'], ['schema:test'], ['seo:audit'], ['seo:upcoming:test'], ['seo:ongoing:test'], ['seo:indexing:test'], ['seo:gsc:test'], ['seo:brain:test'], ['seo:hot:test'], ['seo:people-first:test'], ['seo:category:test'], ['seo:studio:test'], ['system:contracts'], ['sync:safety:test'], ['type-check'], ['build'],
   ['home:test'], ['list:test'], ['search:test'], ['movie:data:test'], ['watch:test'], ['diagnostics:test'],
 ];
 const report = { started_at: new Date().toISOString(), status: 'running', steps: [] };

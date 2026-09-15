@@ -4,6 +4,8 @@ import { verifyAdminRequest } from '../_shared/admin-session.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const SEO_INSPECT_SECRET = Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') ?? '';
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
+const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') ?? 'gpt-5.5';
 
 type Severity = 'error' | 'warning' | 'success';
 type ValidationIssue = {
@@ -35,6 +37,21 @@ type SeoPayload = {
   movie_patch?: Record<string, unknown>;
 };
 
+type AiSeoEvidence = {
+  field: string;
+  fact: string;
+  source_url: string;
+  confidence: 'high' | 'medium' | 'low';
+};
+
+type AiSeoSuggestion = {
+  summary: string;
+  patch: Pick<SeoPayload, 'focus_keyword' | 'secondary_keywords' | 'seo_title' | 'meta_description' | 'intro_content' | 'review_content' | 'faq' | 'topic_links'>;
+  evidence: AiSeoEvidence[];
+  warnings: string[];
+  preserved_fields: string[];
+};
+
 type SafeFieldState = {
   status: 'protected' | 'needs_attention' | 'optional' | 'immutable';
   protected: boolean;
@@ -53,6 +70,11 @@ const SAFE_FIELD_PATHS = [
   'movie_patch.category', 'movie_patch.country', 'focus_keyword', 'secondary_keywords',
   'seo_title', 'meta_description', 'og_image_url', 'intro_content', 'review_content',
   'faq', 'topic_links', 'index_mode', 'canonical_path', 'slug',
+] as const;
+
+const AI_EDITABLE_FIELDS = [
+  'focus_keyword', 'secondary_keywords', 'seo_title', 'meta_description',
+  'intro_content', 'review_content', 'faq', 'topic_links',
 ] as const;
 
 function cors(origin: string | null): Record<string, string> {
@@ -538,6 +560,191 @@ async function remoteValidationIssues(
   return issues;
 }
 
+const AI_SUGGESTION_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['summary', 'patch', 'evidence', 'warnings', 'preserved_fields'],
+  properties: {
+    summary: { type: 'string', maxLength: 600 },
+    patch: {
+      type: 'object',
+      additionalProperties: false,
+      required: [...AI_EDITABLE_FIELDS],
+      properties: {
+        focus_keyword: { type: 'string', maxLength: 160 },
+        secondary_keywords: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 160 } },
+        seo_title: { type: 'string', maxLength: 180 },
+        meta_description: { type: 'string', maxLength: 320 },
+        intro_content: { type: 'string', maxLength: 12000 },
+        review_content: { type: 'string', maxLength: 35000 },
+        faq: {
+          type: 'array',
+          maxItems: 8,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['question', 'answer'],
+            properties: {
+              question: { type: 'string', maxLength: 220 },
+              answer: { type: 'string', maxLength: 1200 },
+            },
+          },
+        },
+        topic_links: {
+          type: 'array',
+          maxItems: 8,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['title', 'url', 'anchor', 'description'],
+            properties: {
+              title: { type: 'string', maxLength: 180 },
+              url: { type: 'string', maxLength: 500 },
+              anchor: { type: 'string', maxLength: 180 },
+              description: { type: 'string', maxLength: 320 },
+            },
+          },
+        },
+      },
+    },
+    evidence: {
+      type: 'array',
+      maxItems: 20,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['field', 'fact', 'source_url', 'confidence'],
+        properties: {
+          field: { type: 'string', enum: [...AI_EDITABLE_FIELDS] },
+          fact: { type: 'string', maxLength: 500 },
+          source_url: { type: 'string', maxLength: 700 },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        },
+      },
+    },
+    warnings: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 500 } },
+    preserved_fields: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 80 } },
+  },
+} as const;
+
+function aiPatchFromSuggestion(baseline: SeoPayload, value: unknown): AiSeoSuggestion['patch'] {
+  const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const cleaned = cleanPayload({ ...baseline, ...raw, movie_patch: baseline.movie_patch });
+  return {
+    focus_keyword: cleaned.focus_keyword || '',
+    secondary_keywords: cleaned.secondary_keywords || [],
+    seo_title: cleaned.seo_title || '',
+    meta_description: cleaned.meta_description || '',
+    intro_content: cleaned.intro_content || '',
+    review_content: cleaned.review_content || '',
+    faq: cleaned.faq || [],
+    topic_links: cleaned.topic_links || [],
+  };
+}
+
+function extractOpenAiText(value: unknown): string {
+  const response = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  if (typeof response.output_text === 'string') return response.output_text;
+  if (!Array.isArray(response.output)) return '';
+  for (const item of response.output) {
+    const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    if (!Array.isArray(row.content)) continue;
+    for (const content of row.content) {
+      const part = content && typeof content === 'object' ? content as Record<string, unknown> : {};
+      if (part.type === 'output_text' && typeof part.text === 'string') return part.text;
+    }
+  }
+  return '';
+}
+
+function fallbackAiSuggestion(
+  baseline: SeoPayload,
+  relatedMovies: Array<Record<string, unknown>>,
+): AiSeoSuggestion {
+  const existingLinks = baseline.topic_links || [];
+  const topicLinks = existingLinks.length >= 2 ? existingLinks : relatedMovies.slice(0, 4).map((movie) => ({
+    title: plainText(movie.name, 180),
+    url: `/phim/${text(movie.slug, 180)}`,
+    anchor: `Xem thông tin ${plainText(movie.name, 150)}`,
+    description: movie.year ? `Phim liên quan phát hành năm ${Number(movie.year)}.` : 'Phim có chủ đề liên quan trên KhoPhim.',
+  }));
+  return {
+    summary: 'Máy chủ chưa được cấu hình khóa AI. Hệ thống đã giữ nguyên nội dung hiện có và chỉ gợi ý liên kết từ các phim công khai có sẵn.',
+    patch: { ...aiPatchFromSuggestion(baseline, baseline), topic_links: topicLinks },
+    evidence: topicLinks.map((link) => ({
+      field: 'topic_links',
+      fact: `Trang liên quan có sẵn: ${link.title}.`,
+      source_url: `https://khophim.org${link.url}`,
+      confidence: 'high',
+    })),
+    warnings: ['Chưa có OPENAI_API_KEY nên nội dung biên tập không được AI viết mới.'],
+    preserved_fields: ['slug', 'canonical_path', 'index_mode', 'movie_patch'],
+  };
+}
+
+async function requestAiSuggestion(input: Record<string, unknown>, baseline: SeoPayload): Promise<AiSeoSuggestion> {
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      store: false,
+      max_output_tokens: 9000,
+      instructions: [
+        'Bạn là biên tập viên SEO phim tiếng Việt của KhoPhim.',
+        'Chỉ dùng dữ kiện có trong TRUSTED_CONTEXT. Không suy đoán nguồn phát, ngày chiếu, cốt truyện, diễn viên, đạo diễn hoặc mức độ nổi tiếng.',
+        'Không tự chấm điểm, không dùng lời quảng cáo cảm tính như hay nhất, đỉnh, siêu hay; không nhồi từ khóa và không sao chép mô tả.',
+        'Mục tiêu là nội dung tự nhiên, hữu ích, phân biệt rõ phim và đáp ứng đúng ý định tìm kiếm.',
+        'Giữ nguyên trường đang tốt khi không có lý do cụ thể để sửa. Tuyệt đối không đề xuất thay đổi slug, canonical, index_mode hoặc movie_patch.',
+        'Liên kết nội bộ chỉ được chọn nguyên văn từ related_movies. Nếu dữ kiện không đủ, giữ nội dung hiện tại và nêu cảnh báo.',
+        'Mỗi dữ kiện quan trọng phải có evidence trỏ tới một source_url đã xuất hiện trong TRUSTED_CONTEXT.',
+      ].join(' '),
+      input: `TRUSTED_CONTEXT\n${JSON.stringify(input)}`,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'khophim_seo_suggestion',
+          strict: true,
+          schema: AI_SUGGESTION_SCHEMA,
+        },
+      },
+    }),
+    signal: AbortSignal.timeout(55000),
+  });
+  const responseBody = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const row = responseBody && typeof responseBody === 'object' ? responseBody as Record<string, unknown> : {};
+    const apiError = row.error && typeof row.error === 'object' ? row.error as Record<string, unknown> : {};
+    throw new Error(plainText(apiError.message, 500) || `OpenAI API error ${response.status}`);
+  }
+  const outputText = extractOpenAiText(responseBody);
+  if (!outputText) throw new Error('AI không trả về bản đề xuất có cấu trúc.');
+  const parsed = JSON.parse(outputText) as Record<string, unknown>;
+  const patch = aiPatchFromSuggestion(baseline, parsed.patch);
+  const evidence = Array.isArray(parsed.evidence) ? parsed.evidence.slice(0, 20).flatMap((item) => {
+    const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    const field = text(row.field, 80);
+    const confidence = text(row.confidence, 20);
+    if (!AI_EDITABLE_FIELDS.includes(field as typeof AI_EDITABLE_FIELDS[number])) return [];
+    return [{
+      field,
+      fact: plainText(row.fact, 500),
+      source_url: text(row.source_url, 700),
+      confidence: ['high', 'medium', 'low'].includes(confidence) ? confidence as AiSeoEvidence['confidence'] : 'low',
+    }];
+  }) : [];
+  return {
+    summary: plainText(parsed.summary, 600),
+    patch,
+    evidence,
+    warnings: cleanStringList(parsed.warnings, 12, 500),
+    preserved_fields: cleanStringList(parsed.preserved_fields, 20, 80),
+  };
+}
+
 function decodeHtml(value: string): string {
   return value
     .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
@@ -660,12 +867,16 @@ Deno.serve(async (req) => {
     if (action === 'load') {
       const movieId = text(body.movie_id, 80);
       if (!movieId) return json({ error: 'Missing movie_id' }, 400, headers);
-      const [movieResult, profileResult, reviewResult, qualityResult, draftResult] = await Promise.all([
+      const [movieResult, profileResult, reviewResult, qualityResult, draftResult, workItemResult, inspectionResult, metricResult, queryMetricResult] = await Promise.all([
         db.from('movies').select('id,slug,name,origin_name,title_vi,title_en,content,year,quality,lang,trailer_url,thumb_url,poster_url,actor,director,category,country,is_published,updated_at').eq('id', movieId).maybeSingle(),
         db.from('movie_seo_profiles').select('*').eq('movie_id', movieId).maybeSingle(),
         db.from('movie_reviews').select('content,word_count,generated_at,updated_at').eq('slug', text(body.slug, 180)).maybeSingle(),
         db.from('movie_seo_quality_status').select('eligible_for_index,index_tier,quality_score,reasons,signals,checked_at').eq('movie_id', movieId).maybeSingle(),
         db.from('movie_seo_profile_drafts').select('payload,baseline_version,unlocked_fields,validation_score,validation_issues,updated_at').eq('movie_id', movieId).maybeSingle(),
+        db.from('seo_work_items').select('task_type,status,priority_score,urgency,reason,required_fields,evidence,due_at,updated_at').eq('movie_id', movieId).in('status', ['pending', 'in_progress']).order('priority_score', { ascending: false }).limit(1).maybeSingle(),
+        db.from('seo_url_inspections').select('verdict,coverage_state,indexing_state,page_fetch_state,user_canonical,google_canonical,last_crawl_time,inspected_at,recommendation').eq('movie_id', movieId).maybeSingle(),
+        db.from('seo_search_metrics').select('clicks,impressions,ctr,position,date_start,date_end,collected_at').eq('dimension_type', 'page').ilike('dimension_value', `%/phim/${text(body.slug, 180)}%`).order('collected_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('seo_query_page_metrics').select('query,clicks,impressions,ctr,position,date_start,date_end,collected_at').ilike('page', `%/phim/${text(body.slug, 180)}%`).order('collected_at', { ascending: false }).order('impressions', { ascending: false }).limit(20),
       ]);
       if (movieResult.error) throw movieResult.error;
       if (draftResult.error && draftResult.error.code !== '42P01') throw draftResult.error;
@@ -690,6 +901,12 @@ Deno.serve(async (req) => {
         profile: profileResult.data,
         review: reviewResult.data,
         quality: qualityResult.data,
+        insights: {
+          work_item: workItemResult.error ? null : workItemResult.data,
+          inspection: inspectionResult.error ? null : inspectionResult.data,
+          search_metric: metricResult.error ? null : metricResult.data,
+          search_queries: queryMetricResult.error ? [] : queryMetricResult.data ?? [],
+        },
         suggestions: { title: suggestedTitle, description: suggestedDescription, canonical_path: `/phim/${movie.slug}` },
         safe_edit: {
           baseline,
@@ -699,6 +916,114 @@ Deno.serve(async (req) => {
           draft: serverDraft,
           history_available: Number(profile?.version || 0) > 0,
         },
+      }, 200, headers);
+    }
+
+    if (action === 'suggest') {
+      const movieId = text(body.movie_id, 80);
+      const slug = text(body.slug, 180).toLowerCase();
+      const mode = body.mode === 'deep' ? 'deep' : 'quick';
+      if (!movieId || !slug) return json({ error: 'Missing movie identity' }, 400, headers);
+      const [movieResult, profileResult, reviewResult, qualityResult, workItemResult, inspectionResult, metricResult, queryMetricResult, relatedResult] = await Promise.all([
+        db.from('movies').select('id,slug,name,origin_name,title_vi,title_en,content,year,quality,lang,trailer_url,thumb_url,poster_url,actor,director,category,country,is_published,updated_at').eq('id', movieId).maybeSingle(),
+        db.from('movie_seo_profiles').select('*').eq('movie_id', movieId).maybeSingle(),
+        db.from('movie_reviews').select('content,word_count,generated_at,updated_at').eq('slug', slug).maybeSingle(),
+        db.from('movie_seo_quality_status').select('eligible_for_index,index_tier,quality_score,reasons,signals,checked_at').eq('movie_id', movieId).maybeSingle(),
+        db.from('seo_work_items').select('task_type,status,priority_score,urgency,reason,required_fields,evidence,due_at,updated_at').eq('movie_id', movieId).in('status', ['pending', 'in_progress']).order('priority_score', { ascending: false }).limit(1).maybeSingle(),
+        db.from('seo_url_inspections').select('verdict,coverage_state,indexing_state,page_fetch_state,user_canonical,google_canonical,last_crawl_time,inspected_at,recommendation').eq('movie_id', movieId).maybeSingle(),
+        db.from('seo_search_metrics').select('clicks,impressions,ctr,position,date_start,date_end,collected_at').eq('dimension_type', 'page').ilike('dimension_value', `%/phim/${slug}%`).order('collected_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('seo_query_page_metrics').select('query,clicks,impressions,ctr,position,date_start,date_end,collected_at').ilike('page', `%/phim/${slug}%`).order('collected_at', { ascending: false }).order('impressions', { ascending: false }).limit(mode === 'deep' ? 30 : 12),
+        db.from('movies').select('id,slug,name,origin_name,year,category,country').eq('is_published', true).neq('id', movieId).order('updated_at', { ascending: false }).limit(mode === 'deep' ? 100 : 50),
+      ]);
+      if (movieResult.error || !movieResult.data) throw movieResult.error || new Error('Movie not found');
+      if (text(movieResult.data.slug, 180).toLowerCase() !== slug) return json({ error: 'Movie identity mismatch' }, 409, headers);
+      if (profileResult.error) throw profileResult.error;
+      const movie = movieResult.data as Record<string, unknown>;
+      const profile = profileResult.data && typeof profileResult.data === 'object' ? profileResult.data as Record<string, unknown> : null;
+      const review = reviewResult.data && typeof reviewResult.data === 'object' ? reviewResult.data as Record<string, unknown> : null;
+      const baseline = baselinePayload(movie, profile, review);
+      const baselineValidation = validate(baseline);
+      const movieCategories = new Set(cleanTaxonomy(movie.category).map((item) => item.slug));
+      const movieCountries = new Set(cleanTaxonomy(movie.country).map((item) => item.slug));
+      const relatedMovies = (relatedResult.data ?? []).map((item) => {
+        const row = item as Record<string, unknown>;
+        const categoryOverlap = cleanTaxonomy(row.category).filter((entry) => movieCategories.has(entry.slug)).length;
+        const countryOverlap = cleanTaxonomy(row.country).filter((entry) => movieCountries.has(entry.slug)).length;
+        const yearDistance = Math.abs(Number(row.year || 0) - Number(movie.year || 0));
+        return { ...row, relevance_score: categoryOverlap * 5 + countryOverlap * 2 + (yearDistance <= 2 ? 1 : 0) };
+      }).filter((item) => Number(item.relevance_score) > 0).sort((a, b) => Number(b.relevance_score) - Number(a.relevance_score)).slice(0, 16);
+      const trustedContext = {
+        mode,
+        page_url: `https://khophim.org/phim/${slug}`,
+        current_profile: {
+          ...aiPatchFromSuggestion(baseline, baseline),
+          intro_content: plainText(baseline.intro_content, mode === 'deep' ? 9000 : 4500),
+          review_content: plainText(baseline.review_content, mode === 'deep' ? 18000 : 8000),
+        },
+        current_validation: baselineValidation,
+        protected_fields: fieldStates(baseline, baselineValidation, profile?.status === 'published'),
+        movie_facts: {
+          name: movie.name,
+          title_vi: movie.title_vi,
+          title_en: movie.title_en,
+          origin_name: movie.origin_name,
+          synopsis: plainText(movie.content, mode === 'deep' ? 9000 : 4500),
+          year: movie.year,
+          quality: movie.quality,
+          language: movie.lang,
+          trailer_url: movie.trailer_url,
+          actors: movie.actor,
+          directors: movie.director,
+          categories: movie.category,
+          countries: movie.country,
+          source_url: `https://khophim.org/phim/${slug}`,
+        },
+        seo_brain_task: workItemResult.error ? null : workItemResult.data,
+        google_inspection: inspectionResult.error ? null : inspectionResult.data,
+        google_page_metric: metricResult.error ? null : metricResult.data,
+        google_queries_for_page: queryMetricResult.error ? [] : queryMetricResult.data ?? [],
+        quality_gate: qualityResult.error ? null : qualityResult.data,
+        related_movies: relatedMovies.map((item) => ({
+          name: item.name,
+          origin_name: item.origin_name,
+          year: item.year,
+          categories: item.category,
+          countries: item.country,
+          url: `https://khophim.org/phim/${item.slug}`,
+        })),
+      };
+      const suggestion = OPENAI_API_KEY
+        ? await requestAiSuggestion(trustedContext, baseline)
+        : fallbackAiSuggestion(baseline, relatedMovies);
+      const allowedEvidenceUrls = new Set([
+        `https://khophim.org/phim/${slug}`,
+        ...relatedMovies.map((item) => `https://khophim.org/phim/${item.slug}`),
+      ]);
+      const safeEvidence = suggestion.evidence.filter((item) => allowedEvidenceUrls.has(item.source_url));
+      const allowedTopicPaths = new Set([
+        ...(baseline.topic_links || []).map((item) => safeTopicUrl(item.url)),
+        ...relatedMovies.map((item) => `/phim/${item.slug}`),
+      ].filter(Boolean));
+      const groundedPatch = {
+        ...suggestion.patch,
+        topic_links: (suggestion.patch.topic_links || []).filter((item) => allowedTopicPaths.has(safeTopicUrl(item.url))),
+      };
+      const proposed = cleanPayload({ ...baseline, ...groundedPatch, movie_patch: baseline.movie_patch, slug, canonical_path: `/phim/${slug}`, index_mode: baseline.index_mode });
+      let proposedValidation = validate(proposed);
+      proposedValidation = mergeValidation(proposedValidation, await remoteValidationIssues(db, proposed));
+      const changedFields = AI_EDITABLE_FIELDS.filter((field) => comparable(valueAt(baseline, field)) !== comparable(valueAt(proposed, field)));
+      return json({
+        ai_available: Boolean(OPENAI_API_KEY),
+        model: OPENAI_API_KEY ? OPENAI_MODEL : null,
+        mode,
+        summary: suggestion.summary,
+        proposed_payload: proposed,
+        validation: proposedValidation,
+        changed_fields: changedFields,
+        evidence: safeEvidence,
+        warnings: suggestion.warnings,
+        preserved_fields: Array.from(new Set([...suggestion.preserved_fields, 'slug', 'canonical_path', 'index_mode', 'movie_patch'])),
+        generated_at: new Date().toISOString(),
       }, 200, headers);
     }
 

@@ -97,7 +97,7 @@ async function fetchTopRatedFallback(publicKey) {
     .filter((item) => !/(?:^|[^a-z0-9])ophim(?:[^a-z0-9]|$)|ophim1\.com|opstream|tmdb.?catalog/i.test(`${item.source_site || ''} ${item.source_name || ''}`))
     .map((item) => sanitizeMovie({ ...item, _id: item.id }))
     .filter(isCanonicalMovie)
-    .slice(0, 8);
+    .slice(0, 5);
 }
 
 function providerItems(payload) {
@@ -196,16 +196,34 @@ async function keepExistingFallback(reason) {
   console.warn(`Home fallback refresh unavailable: ${reason}. No valid snapshot could be confirmed.`);
 }
 
+async function normalizeExistingTopRatedFallback() {
+  try {
+    const current = JSON.parse(await readFile(TOP_RATED_OUTPUT_URL, 'utf8'));
+    const movies = (Array.isArray(current?.movies) ? current.movies : [])
+      .filter(isCanonicalMovie)
+      .filter((item) => Number(item.tmdb_vote_average || 0) > 0 && Number(item.tmdb_vote_count || 0) >= 10)
+      .filter((item) => !/(?:^|[^a-z0-9])ophim(?:[^a-z0-9]|$)|ophim1\.com|opstream|tmdb.?catalog/i.test(`${item.source_site || ''} ${item.source_name || ''}`))
+      .sort((a, b) => Number(b.tmdb_vote_average || 0) - Number(a.tmdb_vote_average || 0) || Number(b.tmdb_vote_count || 0) - Number(a.tmdb_vote_count || 0))
+      .slice(0, 5);
+    if (movies.length !== 5) return;
+    await writeFile(TOP_RATED_OUTPUT_URL, `${JSON.stringify({ ...current, movies }, null, 2)}\n`, 'utf8');
+  } catch {
+    // A live refresh below can still recreate the fallback.
+  }
+}
+
+await normalizeExistingTopRatedFallback();
+
 try {
   const envText = await readFile(ENV_URL, 'utf8').catch(() => '');
   const publicKey = envText.match(/^VITE_PUBLIC_SUPABASE_ANON_KEY\s*=\s*["']?([^"'\r\n]+)["']?/m)?.[1]?.trim() ?? '';
   if (!publicKey) throw new Error('missing public Supabase key');
   const verifiedVsmov4K = await fetchVerifiedVsmov4KFallback();
   await writeVerifiedVsmovSection(verifiedVsmov4K);
-  // Keep the initial eight-slide hero fresh even if another homepage shelf
+  // Keep the initial five-slide hero fresh even if another homepage shelf
   // is briefly unavailable and prevents a full fallback refresh.
   const directTopRated = await fetchTopRatedFallback(publicKey);
-  if (directTopRated.length >= 8) {
+  if (directTopRated.length >= 5) {
     await writeFile(TOP_RATED_OUTPUT_URL, `${JSON.stringify({
       status: true,
       source: 'supabase-top-rated-fallback',
