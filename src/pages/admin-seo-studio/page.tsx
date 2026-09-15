@@ -540,6 +540,7 @@ export default function AdminSeoStudioPage() {
       }
     } catch (error) {
       if (error instanceof SeoStudioApiError && error.validation) setValidation(error.validation);
+      if (error instanceof SeoStudioApiError && error.liveAudit) setLiveAudit(error.liveAudit);
       setNotice({ type: 'error', text: error instanceof Error ? error.message : 'Không thể lưu dữ liệu.' });
     } finally { setBusy(''); }
   };
@@ -726,6 +727,7 @@ export default function AdminSeoStudioPage() {
             </div>}
 
             {step === 'technical' && <div className="space-y-5">
+              {loaded.worker_status?.online === false && <div className="rounded-xl border border-red-500/20 bg-red-500/[0.08] p-4 text-xs leading-6 text-red-200"><strong className="block text-sm">SEO Worker đang không chạy trên website thật</strong><span>Tại lúc tải phim, máy chủ kiểm tra trả HTTP {loaded.worker_status.status || 'lỗi mạng'}. Bạn vẫn có thể lưu nháp; hệ thống sẽ chặn xuất bản trước khi thay đổi SEO đang tốt. Dùng “Kiểm tra trang thật” để thử lại sau khi Worker hoạt động.</span></div>}
               <div><label className={labelClass}>Quyền index</label><div className="grid gap-2 sm:grid-cols-3">{[
                 ['auto', 'Tự động', 'Theo cổng chất lượng hệ thống'],
                 ['index', 'Cho phép index', 'Điểm ≥85 và kiểm tra trang thật đạt'],

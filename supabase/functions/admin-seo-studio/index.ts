@@ -513,6 +513,24 @@ async function probeUrl(url: URL, accept: string, timeoutMs = 7000): Promise<{ o
   }
 }
 
+async function seoWorkerStatus(): Promise<{ online: boolean; status: number; checked_at: string }> {
+  const checkedAt = new Date().toISOString();
+  try {
+    const response = await fetch(`https://khophim.org/api/time?seo_studio_health=${Date.now()}`, {
+      headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+      signal: AbortSignal.timeout(5000),
+    });
+    const body = response.status === 200 ? await response.json().catch(() => null) : null;
+    return {
+      online: response.status === 200 && Boolean(body && typeof body === 'object' && 'now' in body),
+      status: response.status,
+      checked_at: checkedAt,
+    };
+  } catch {
+    return { online: false, status: 0, checked_at: checkedAt };
+  }
+}
+
 function mergeValidation(base: ReturnType<typeof validate>, additions: ValidationIssue[]): ReturnType<typeof validate> {
   const issues = [
     ...base.issues.filter((item) => item.code !== 'ready'),
@@ -896,12 +914,14 @@ Deno.serve(async (req) => {
         : null;
       const suggestedTitle = `${movie.name}${movie.year ? ` (${movie.year})` : ''} – Thông Tin Phim | KhoPhim`;
       const suggestedDescription = `${movie.name}${movie.origin_name ? ` (${movie.origin_name})` : ''} – nội dung, diễn viên, trailer, lịch phát hành và thông tin cập nhật tại KhoPhim.`;
+      const workerStatus = await seoWorkerStatus();
       return json({
         movie,
         profile: profileResult.data,
         review: reviewResult.data,
         quality: qualityResult.data,
         ai_available: Boolean(OPENAI_API_KEY),
+        worker_status: workerStatus,
         insights: {
           work_item: workItemResult.error ? null : workItemResult.data,
           inspection: inspectionResult.error ? null : inspectionResult.data,
@@ -1090,6 +1110,23 @@ Deno.serve(async (req) => {
       }
       if (action === 'publish' && payload.index_mode === 'index' && validation.score < 85) {
         return json({ error: 'Muốn cho phép index thủ công, điểm SEO phải đạt ít nhất 85.', validation }, 422, headers);
+      }
+      if (action === 'publish') {
+        const prePublishAudit = await inspectLivePage(payload);
+        if (!prePublishAudit.passed) {
+          const safeValidation = mergeValidation(validation, [{
+            code: 'seo_worker_preflight_failed',
+            severity: 'error',
+            section: 'technical',
+            message: 'Bộ dựng HTML Googlebot chưa hoạt động; không xuất bản hoặc thay đổi quyền index khi trang thật chưa thể xác minh.',
+          }]);
+          return json({
+            error: 'SEO Worker đang không hoạt động hoặc trang thật chưa đạt. Bản SEO đang chạy được giữ nguyên; hãy lưu nháp và kiểm tra lại sau.',
+            validation: safeValidation,
+            live_audit: prePublishAudit,
+            published_profile_unchanged: true,
+          }, 503, headers);
+        }
       }
       const { error: saveError } = await db.from('movie_seo_profile_drafts')
         .upsert({
