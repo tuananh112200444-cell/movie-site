@@ -612,6 +612,15 @@ for (let index = 0; index < movies.length; index += SITEMAP_CHUNK_SIZE) {
 const upcomingSitemapFile = 'sitemap-movies-upcoming.xml';
 await writeFile(path.join('out', upcomingSitemapFile), sitemapXml(upcomingMovies), 'utf8');
 
+const seoStudioMovies = Array.from(new Map(
+  [...movies, ...upcomingMovies]
+    .filter((movie) => movie?.seo_profile?.index_mode === 'index'
+      && Number(movie?.seo_profile?.validation_score || 0) >= 85
+      && movie?.seo_profile?.live_audit?.passed === true)
+    .map((movie) => [String(movie.slug || ''), movie]),
+).values()).filter((movie) => movie.slug);
+await writeFile(path.join('out', 'sitemap-seo-studio.xml'), sitemapXml(seoStudioMovies), 'utf8');
+
 const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap><loc>${SITE_URL}/sitemap-movies-recent.xml</loc></sitemap>
@@ -645,7 +654,8 @@ await writeFile('out/static-movie-pages.json', JSON.stringify({
   preview_count: previewMovies.length,
   bootstrap_count: pageDefinitions.length,
   limit: PAGE_LIMIT,
-  sitemap_files: [...sitemapFiles, upcomingSitemapFile],
+  sitemap_files: [...sitemapFiles, upcomingSitemapFile, 'sitemap-seo-studio.xml'],
+  seo_studio_count: seoStudioMovies.length,
   first_slug: indexableMovies[0]?.slug,
   last_slug: indexableMovies.at(-1)?.slug,
 }, null, 2), 'utf8');

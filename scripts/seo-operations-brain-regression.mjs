@@ -44,6 +44,11 @@ requireText('supabase/functions/admin-seo-studio/index.ts', "from('seo_static_re
 requireText('supabase/functions/seo-static-release/index.ts', 'validDeployHook', 'static release processor accepts arbitrary webhook destinations');
 requireText('supabase/functions/seo-static-release/index.ts', 'SITE_RELEASE_URL', 'static release processor cannot confirm production deployment');
 requireText('supabase/functions/seo-static-release/index.ts', "action: 'awaiting_deploy_hook'", 'missing deploy-hook configuration does not fail safely');
+requireText('supabase/functions/admin-seo-studio/index.ts', "status: 'queued-static'", 'free publish mode does not queue a static Pages release');
+requireText('supabase/functions/admin-seo-studio/index.ts', "mode: 'static-build-pending'", 'static profiles are not marked as pending build verification');
+requireText('supabase/functions/seo-static-release/index.ts', 'verifyStaticPublication', 'static deploy completion is trusted without verifying public HTML and sitemap');
+requireText('supabase/functions/seo-static-release/index.ts', '.limit(50)', 'pending SEO pages are not batched into one free Pages build');
+requireText('supabase/functions/seo-static-release/index.ts', 'static_sitemap_membership', 'static release does not require sitemap membership');
 requireText('supabase/migrations/20260905034453_schedule_seo_static_release.sql', 'process-seo-static-release-requests', 'static release requests are not scheduled');
 
 if (failures.length) {

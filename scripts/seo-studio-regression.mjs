@@ -80,6 +80,8 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['publicDiscovery?.indexable', 'UI reports publish success without confirmed public indexability'],
   ['data-kp-google-ready="true"', 'UI does not distinguish public Google-ready publication from a saved draft'],
   ['public_sitemap_membership', 'UI does not require confirmed sitemap membership before showing Google-ready status'],
+  ['data-kp-static-release-pending="true"', 'static-only publish queue is not visible to the operator'],
+  ['Xếp hàng phát hành tĩnh miễn phí', 'free static-only publish action is not clear'],
   ["loaded.ai_provider === 'gemini'", 'SEO Studio does not disclose the active server-side AI provider'],
 ]);
 expect('src/services/seoStudioService.ts', [
@@ -133,6 +135,8 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ['inspectPublicDiscovery', 'publish success does not verify the public Googlebot URL and sitemap'],
   ['public_sitemap_membership', 'publish success does not require sitemap membership'],
   ["status: payload.index_mode === 'index' ? 'published-indexable'", 'publish response does not distinguish indexable publication from a saved profile'],
+  ["SEO_PUBLISH_MODE", 'SEO Studio cannot switch to free static-only publication'],
+  ["status: 'queued-static'", 'static-only publication is not returned as an asynchronous queue state'],
 ]);
 const studioEndpoint = files['supabase/functions/admin-seo-studio/index.ts'];
 if (studioEndpoint.indexOf('const prePublishAudit = await inspectLivePage(payload)') < 0

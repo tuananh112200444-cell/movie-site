@@ -44,6 +44,49 @@ async function currentReleaseTime(): Promise<number> {
   }
 }
 
+function htmlValue(html: string, pattern: RegExp): string {
+  return String(pattern.exec(html)?.[1] || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
+}
+
+async function verifyStaticPublication(slug: string, version: number): Promise<{ passed: boolean; audit: Record<string, unknown>; error: string | null }> {
+  const url = `https://khophim.org/phim/${encodeURIComponent(slug)}`;
+  const canonical = `https://khophim.org/phim/${slug}`;
+  try {
+    const [pageResponse, sitemapResponse] = await Promise.all([
+      fetch(`${url}?static_release=${version}&check=${Date.now()}`, {
+        headers: { Accept: 'text/html', 'User-Agent': 'Googlebot', 'Cache-Control': 'no-cache' },
+        signal: AbortSignal.timeout(12_000),
+      }),
+      fetch(`https://khophim.org/sitemap-seo-studio.xml?static_release=${version}&check=${Date.now()}`, {
+        headers: { Accept: 'application/xml', 'Cache-Control': 'no-cache' },
+        signal: AbortSignal.timeout(12_000),
+      }),
+    ]);
+    const [html, sitemapXml] = await Promise.all([pageResponse.text(), sitemapResponse.text()]);
+    const marker = htmlValue(html, /data-kp-seo-profile-version=["']([^"']+)["']/i);
+    const canonicalValue = htmlValue(html, /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)
+      || htmlValue(html, /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i);
+    const robots = htmlValue(html, /<meta[^>]+name=["']robots["'][^>]+content=["']([^"']+)["']/i).toLowerCase();
+    const checks = [
+      { code: 'static_http_200', passed: pageResponse.status === 200, value: pageResponse.status },
+      { code: 'static_profile_version', passed: marker === String(version), value: marker },
+      { code: 'static_canonical', passed: canonicalValue === canonical, value: canonicalValue },
+      { code: 'static_robots_index', passed: robots.includes('index') && !robots.includes('noindex'), value: robots },
+      { code: 'static_sitemap_http', passed: sitemapResponse.status === 200, value: sitemapResponse.status },
+      { code: 'static_sitemap_membership', passed: sitemapXml.includes(`<loc>${canonical}</loc>`) },
+    ];
+    const passed = checks.every((check) => check.passed);
+    return {
+      passed,
+      audit: { passed, mode: 'static', checked_at: new Date().toISOString(), url, status: pageResponse.status, checks },
+      error: passed ? null : checks.filter((check) => !check.passed).map((check) => check.code).join(', '),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { passed: false, audit: { passed: false, mode: 'static', checked_at: new Date().toISOString(), url, status: 0, checks: [] }, error: message };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   if (!CRON_SECRET || req.headers.get('x-cron-secret') !== CRON_SECRET) {
@@ -57,7 +100,7 @@ Deno.serve(async (req) => {
   const now = new Date();
   const releaseTime = await currentReleaseTime();
   const { data: processing, error: processingError } = await db.from('seo_static_release_requests')
-    .select('id,requested_at,processing_started_at')
+    .select('id,movie_id,slug,requested_version,requested_at,processing_started_at')
     .eq('status', 'processing')
     .order('processing_started_at', { ascending: true })
     .limit(20);
@@ -69,13 +112,25 @@ Deno.serve(async (req) => {
     const requestedAt = Date.parse(String(item.requested_at || '')) || 0;
     const processingAt = Date.parse(String(item.processing_started_at || item.requested_at || '')) || 0;
     if (releaseTime > requestedAt) {
-      const { error } = await db.from('seo_static_release_requests').update({
-        status: 'deployed',
-        deployed_at: new Date(releaseTime).toISOString(),
-        deployment_url: 'https://khophim.org',
-        error_message: null,
-      }).eq('id', item.id).eq('status', 'processing');
-      if (!error) confirmed += 1;
+      const verification = await verifyStaticPublication(String(item.slug || ''), Number(item.requested_version || 0));
+      if (verification.passed) {
+        const deployedAt = new Date(releaseTime).toISOString();
+        const { error } = await db.from('seo_static_release_requests').update({
+          status: 'deployed',
+          deployed_at: deployedAt,
+          deployment_url: 'https://khophim.org',
+          error_message: null,
+        }).eq('id', item.id).eq('status', 'processing');
+        if (!error) {
+          await Promise.all([
+            db.from('movie_seo_profiles').update({ live_audit: verification.audit, last_audited_at: deployedAt }).eq('movie_id', item.movie_id).eq('version', item.requested_version),
+            db.from('seo_work_items').update({ status: 'completed', completed_at: deployedAt, updated_at: deployedAt }).eq('movie_id', item.movie_id).in('status', ['pending', 'in_progress']),
+          ]);
+          confirmed += 1;
+        }
+      } else {
+        await db.from('seo_static_release_requests').update({ error_message: `Static verification pending: ${verification.error || 'unknown'}`.slice(0, 500) }).eq('id', item.id).eq('status', 'processing');
+      }
     } else if (processingAt && now.getTime() - processingAt > 2 * 60 * 60 * 1000) {
       const { error } = await db.from('seo_static_release_requests').update({
         status: 'pending',
@@ -90,10 +145,9 @@ Deno.serve(async (req) => {
     .select('id,slug,requested_at,requested_version')
     .eq('status', 'pending')
     .order('requested_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(50);
   if (pendingError) return json({ error: pendingError.message }, 500);
-  if (!pending) return json({ ok: true, action: 'idle', confirmed, recovered });
+  if (!pending?.length) return json({ ok: true, action: 'idle', confirmed, recovered });
 
   const deployHook = validDeployHook(DEPLOY_HOOK_URL);
   if (!deployHook) {
@@ -101,20 +155,21 @@ Deno.serve(async (req) => {
       ok: true,
       action: 'awaiting_deploy_hook',
       configured: false,
-      pending_slug: pending.slug,
+      pending_slugs: pending.map((item) => item.slug),
       confirmed,
       recovered,
     });
   }
 
   const claimedAt = new Date().toISOString();
+  const pendingIds = pending.map((item) => item.id);
   const { data: claimed, error: claimError } = await db.from('seo_static_release_requests').update({
     status: 'processing',
     processing_started_at: claimedAt,
     error_message: null,
-  }).eq('id', pending.id).eq('status', 'pending').select('id').maybeSingle();
+  }).in('id', pendingIds).eq('status', 'pending').select('id,slug,requested_version');
   if (claimError) return json({ error: claimError.message }, 500);
-  if (!claimed) return json({ ok: true, action: 'already_claimed', confirmed, recovered });
+  if (!claimed?.length) return json({ ok: true, action: 'already_claimed', confirmed, recovered });
 
   try {
     const response = await fetch(deployHook, {
@@ -122,20 +177,20 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         source: 'khophim-seo-brain',
-        slug: pending.slug,
-        requested_version: pending.requested_version,
+        slugs: claimed.map((item) => item.slug),
+        requested_versions: claimed.map((item) => item.requested_version),
       }),
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) throw new Error(`Cloudflare deploy hook HTTP ${response.status}`);
-    return json({ ok: true, action: 'deployment_triggered', slug: pending.slug, confirmed, recovered });
+    return json({ ok: true, action: 'deployment_triggered', count: claimed.length, slugs: claimed.map((item) => item.slug), confirmed, recovered });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await db.from('seo_static_release_requests').update({
       status: 'pending',
       processing_started_at: null,
       error_message: message.slice(0, 500),
-    }).eq('id', pending.id);
+    }).in('id', claimed.map((item) => item.id));
     return json({ ok: false, action: 'deployment_failed', error: message }, 502);
   }
 });

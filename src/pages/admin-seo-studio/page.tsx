@@ -641,7 +641,9 @@ export default function AdminSeoStudioPage() {
       setNotice({
         type: 'success',
         text: publish
-          ? (publicDiscovery?.indexable && publicDiscovery?.in_sitemap
+          ? (publicDiscovery?.queued
+            ? 'Đã xếp hàng phát hành tĩnh miễn phí. Cloudflare Pages sẽ tạo lại trang phim và sitemap; hệ thống sẽ xác minh sau khi build xong.'
+            : publicDiscovery?.indexable && publicDiscovery?.in_sitemap
             ? 'Đã xuất bản: URL công khai cho phép Google index và đã có trong sitemap SEO Studio.'
             : 'Hồ sơ đã lưu nhưng chưa xác nhận đủ điều kiện Google index; hệ thống không báo hoàn thành.')
           : 'Đã lưu bản nháp riêng; phiên bản SEO đang chạy không bị thay đổi.',
@@ -725,6 +727,8 @@ export default function AdminSeoStudioPage() {
     : workflowStage === 'diagnose' ? STEP_FIELDS.movie : STEP_FIELDS.technical;
   const priorityAction = getPriorityAction(validation, loaded?.worker_status?.online);
   const priorityStep = STEPS.find((item) => item.key === priorityAction.step);
+  const staticPublishMode = loaded?.publish_mode === 'static';
+  const staticRelease = loaded?.static_release;
   const unifiedActionLabel = busy === 'ai'
     ? 'Trợ lý đang làm…'
     : busy === 'inspect'
@@ -737,7 +741,7 @@ export default function AdminSeoStudioPage() {
             ? `Duyệt ${selectedAiFields.length} thay đổi & tiếp tục`
             : !liveAudit?.passed
               ? canPublishForGoogle ? 'Kiểm tra trang thật' : `AI hoàn thiện ${indexReadinessIssues.length} mục`
-              : 'Xuất bản & đưa vào sitemap Google';
+              : staticPublishMode ? 'Xếp hàng phát hành tĩnh miễn phí' : 'Xuất bản & đưa vào sitemap Google';
   const unifiedActionDisabled = Boolean(busy)
     || Boolean(aiSuggestion && !assistantApplied && selectedAiFields.length === 0)
     || Boolean(assistantApplied && liveAudit?.passed && !canPublishForGoogle);
@@ -822,6 +826,8 @@ export default function AdminSeoStudioPage() {
 
           {simpleMode && <section data-kp-unified-seo-workbench="true" className="mx-auto max-w-4xl space-y-4">
             {publishedGoogleReady && !assistantApplied && <div data-kp-google-ready="true" className="rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.08] p-4"><p className="text-sm font-bold text-emerald-200"><i className="ri-google-line" /> Đã xuất bản và sẵn sàng cho Google</p><p className="mt-1 text-xs leading-5 text-white/55">Googlebot nhận đúng phiên bản, URL đang <strong className="text-white/75">index, follow</strong> và đã có trong sitemap SEO Studio. Trạng thái Google đã index sẽ được cập nhật riêng từ Search Console.</p></div>}
+            {staticPublishMode && staticRelease && ['pending', 'processing'].includes(String(staticRelease.status)) && !assistantApplied && <div data-kp-static-release-pending="true" className="rounded-2xl border border-cyan-400/20 bg-cyan-500/[0.07] p-4"><p className="text-sm font-bold text-cyan-200"><i className="ri-timer-line" /> Đang chờ phát hành tĩnh miễn phí</p><p className="mt-1 text-xs leading-5 text-white/55">Hồ sơ phiên bản {staticRelease.requested_version || 'mới'} đã được xếp hàng. Cloudflare Pages đang tạo trang phim và sitemap; thường mất vài phút và không sử dụng quota Worker cho lượt xem tĩnh.</p></div>}
+            {staticPublishMode && staticRelease?.status === 'failed' && !assistantApplied && <div className="rounded-2xl border border-red-400/20 bg-red-500/[0.07] p-4"><p className="text-sm font-bold text-red-200">Phát hành tĩnh chưa thành công</p><p className="mt-1 text-xs leading-5 text-white/55">{staticRelease.error_message || 'Hệ thống sẽ giữ hồ sơ trong trạng thái an toàn và thử lại.'}</p></div>}
             <div className="rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.12] to-cyan-500/[0.05] p-5">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-200">SEO AI Workspace · một luồng duy nhất</p>
               <div className="mt-2 flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold">{payload.movie_patch.name}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">Trợ lý sẽ chuẩn bị toàn bộ phần SEO có thể kiểm chứng. Bạn chỉ duyệt thay đổi và quyết định xuất bản.</p></div><button onClick={() => void handleUnifiedPrimaryAction()} disabled={unifiedActionDisabled} className={`rounded-xl px-4 py-3 text-sm font-bold text-black disabled:opacity-40 ${assistantApplied && liveAudit?.passed ? 'bg-emerald-400' : 'bg-violet-400'}`}><i className={assistantApplied && liveAudit?.passed ? 'ri-send-plane-fill' : 'ri-sparkling-2-line'} /> {unifiedActionLabel}</button></div>
@@ -935,7 +941,7 @@ export default function AdminSeoStudioPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold text-white/70">Kiểm tra trang thật</p><p className="mt-1 text-[11px] text-white/35">Mô phỏng Googlebot và kiểm tra HTTP, canonical, H1, schema, ảnh, liên kết.</p></div><button onClick={() => void handleInspect()} disabled={!!busy} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 disabled:opacity-40">{busy === 'inspect' ? 'Đang kiểm tra...' : 'Kiểm tra trang thật'}</button></div>
                 {liveAudit && <div className="mt-4 space-y-2">{liveAudit.checks.map((check) => <div key={check.code} className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${check.passed ? 'bg-emerald-500/[0.07] text-emerald-300' : 'bg-red-500/[0.08] text-red-300'}`}><i className={check.passed ? 'ri-checkbox-circle-line' : 'ri-close-circle-line'} /><span>{check.message}</span></div>)}</div>}
               </div>
-              <div className="sticky bottom-3 grid gap-3 rounded-2xl border border-white/10 bg-[#080a10]/95 p-3 shadow-2xl backdrop-blur-xl sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white/70 disabled:opacity-40">{busy === 'save' ? 'Đang lưu…' : 'Lưu bản nháp'}</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black disabled:opacity-35">{busy === 'publish' ? 'Đang xuất bản…' : payload.index_mode === 'index' ? 'Xuất bản & đưa vào sitemap Google' : payload.index_mode === 'noindex' ? 'Xuất bản ở chế độ noindex' : 'Xuất bản với quyền index tự động'}</button></div>
+              <div className="sticky bottom-3 grid gap-3 rounded-2xl border border-white/10 bg-[#080a10]/95 p-3 shadow-2xl backdrop-blur-xl sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white/70 disabled:opacity-40">{busy === 'save' ? 'Đang lưu…' : 'Lưu bản nháp'}</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black disabled:opacity-35">{busy === 'publish' ? 'Đang xuất bản…' : staticPublishMode ? 'Xếp hàng phát hành tĩnh miễn phí' : payload.index_mode === 'index' ? 'Xuất bản & đưa vào sitemap Google' : payload.index_mode === 'noindex' ? 'Xuất bản ở chế độ noindex' : 'Xuất bản với quyền index tự động'}</button></div>
               {loaded.profile?.status === 'published' && <div className="flex flex-wrap gap-2"><a href={`/phim/${payload.slug}`} target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-external-link-line" /> Mở trang phim</a><a href="https://search.google.com/search-console/inspect" target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-google-line" /> Mở URL Inspection</a><a href="/sitemap-movies.xml" target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-map-2-line" /> Kiểm tra sitemap</a></div>}
             </div>}
 

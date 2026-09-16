@@ -10,6 +10,7 @@ const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.8-flash';
 const GEMINI_FAST_MODEL = Deno.env.get('GEMINI_FAST_MODEL') ?? 'gemini-3.5-flash-lite';
 const GEMINI_FALLBACK_MODEL = Deno.env.get('GEMINI_FALLBACK_MODEL') ?? 'gemini-2.5-flash-lite';
+const SEO_PUBLISH_MODE = (Deno.env.get('SEO_PUBLISH_MODE') ?? 'static').toLowerCase() === 'worker' ? 'worker' : 'static';
 
 type Severity = 'error' | 'warning' | 'success';
 type ValidationIssue = {
@@ -1067,7 +1068,7 @@ Deno.serve(async (req) => {
     if (action === 'load') {
       const movieId = text(body.movie_id, 80);
       if (!movieId) return json({ error: 'Missing movie_id' }, 400, headers);
-      const [movieResult, profileResult, reviewResult, qualityResult, draftResult, workItemResult, inspectionResult, metricResult, queryMetricResult] = await Promise.all([
+      const [movieResult, profileResult, reviewResult, qualityResult, draftResult, workItemResult, inspectionResult, metricResult, queryMetricResult, releaseResult] = await Promise.all([
         db.from('movies').select('id,slug,name,origin_name,title_vi,title_en,content,year,quality,lang,trailer_url,thumb_url,poster_url,actor,director,category,country,is_published,updated_at').eq('id', movieId).maybeSingle(),
         db.from('movie_seo_profiles').select('*').eq('movie_id', movieId).maybeSingle(),
         db.from('movie_reviews').select('content,word_count,generated_at,updated_at').eq('slug', text(body.slug, 180)).maybeSingle(),
@@ -1077,6 +1078,7 @@ Deno.serve(async (req) => {
         db.from('seo_url_inspections').select('verdict,coverage_state,indexing_state,page_fetch_state,user_canonical,google_canonical,last_crawl_time,inspected_at,recommendation').eq('movie_id', movieId).maybeSingle(),
         db.from('seo_search_metrics').select('clicks,impressions,ctr,position,date_start,date_end,collected_at').eq('dimension_type', 'page').ilike('dimension_value', `%/phim/${text(body.slug, 180)}%`).order('collected_at', { ascending: false }).limit(1).maybeSingle(),
         db.from('seo_query_page_metrics').select('query,clicks,impressions,ctr,position,date_start,date_end,collected_at').ilike('page', `%/phim/${text(body.slug, 180)}%`).order('collected_at', { ascending: false }).order('impressions', { ascending: false }).limit(20),
+        db.from('seo_static_release_requests').select('status,requested_version,requested_at,processing_started_at,deployed_at,deployment_url,error_message').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (movieResult.error) throw movieResult.error;
       if (draftResult.error && draftResult.error.code !== '42P01') throw draftResult.error;
@@ -1104,6 +1106,8 @@ Deno.serve(async (req) => {
         quality: qualityResult.data,
         ai_available: Boolean(GEMINI_API_KEY || OPENAI_API_KEY),
         ai_provider: GEMINI_API_KEY ? 'gemini' : OPENAI_API_KEY ? 'openai' : null,
+        publish_mode: SEO_PUBLISH_MODE,
+        static_release: releaseResult.error ? null : releaseResult.data,
         worker_status: workerStatus,
         insights: {
           work_item: workItemResult.error ? null : workItemResult.data,
@@ -1251,6 +1255,27 @@ Deno.serve(async (req) => {
     if (action === 'inspect') {
       const payload = cleanPayload(body.payload);
       const validation = mergeValidation(validate(payload), await remoteValidationIssues(db, payload));
+      if (SEO_PUBLISH_MODE === 'static') {
+        const blocking = validation.issues.filter((issue) => issue.severity === 'error' || INDEX_READINESS_CODES.has(issue.code));
+        const checkedAt = new Date().toISOString();
+        const liveAudit: LiveAuditResult = {
+          passed: blocking.length === 0 && validation.score >= 85,
+          checked_at: checkedAt,
+          url: `https://khophim.org/phim/${payload.slug}`,
+          status: 0,
+          checks: [
+            {
+              code: 'static_preflight',
+              passed: blocking.length === 0 && validation.score >= 85,
+              message: blocking.length === 0 && validation.score >= 85
+                ? 'Bản nháp đạt cổng phát hành tĩnh; trang công khai và sitemap sẽ được xác minh sau khi Pages build xong.'
+                : `Còn ${blocking.length} mục phải hoàn thiện trước khi xếp hàng phát hành tĩnh.`,
+              value: validation.score,
+            },
+          ],
+        };
+        return json({ validation, live_audit: liveAudit, publish_mode: SEO_PUBLISH_MODE }, 200, headers);
+      }
       const liveAudit = await inspectLivePage(payload);
       const liveIssues = liveAudit.checks
         .filter((check) => !check.passed)
@@ -1315,7 +1340,7 @@ Deno.serve(async (req) => {
           }, 422, headers);
         }
       }
-      if (action === 'publish') {
+      if (action === 'publish' && SEO_PUBLISH_MODE === 'worker') {
         const prePublishAudit = await inspectLivePage(payload);
         if (!prePublishAudit.passed) {
           const safeValidation = mergeValidation(validation, [{
@@ -1350,6 +1375,61 @@ Deno.serve(async (req) => {
       const publishedVersion = publishResult && typeof publishResult === 'object'
         ? (publishResult as Record<string, unknown>).version as string | number | undefined
         : undefined;
+      if (SEO_PUBLISH_MODE === 'static') {
+        const queuedAt = new Date().toISOString();
+        const staticPendingAudit = {
+          passed: true,
+          mode: 'static-build-pending',
+          checked_at: queuedAt,
+          url: `https://khophim.org/phim/${payload.slug}`,
+          status: 0,
+          checks: [{
+            code: 'static_release_queued',
+            passed: true,
+            message: 'Hồ sơ đã qua cổng chất lượng và đang chờ Cloudflare Pages tạo trang tĩnh cùng sitemap.',
+            value: String(publishedVersion || ''),
+          }],
+        };
+        const { error: pendingAuditError } = await db.from('movie_seo_profiles').update({
+          live_audit: staticPendingAudit,
+          last_audited_at: queuedAt,
+          updated_at: queuedAt,
+        }).eq('movie_id', payload.movie_id).eq('version', Number(publishedVersion || 0));
+        if (pendingAuditError) throw pendingAuditError;
+        const { data: pendingRelease, error: pendingReleaseError } = await db.from('seo_static_release_requests')
+          .select('id')
+          .eq('movie_id', payload.movie_id)
+          .eq('status', 'pending')
+          .limit(1)
+          .maybeSingle();
+        if (pendingReleaseError) throw pendingReleaseError;
+        const releasePayload = {
+          movie_id: payload.movie_id,
+          slug: payload.slug,
+          reason: 'seo_profile_static_publish',
+          requested_version: Number(publishedVersion || 0),
+          status: 'pending',
+          requested_at: queuedAt,
+          processing_started_at: null,
+          deployed_at: null,
+          deployment_url: null,
+          error_message: null,
+        };
+        const releaseResult = pendingRelease?.id
+          ? await db.from('seo_static_release_requests').update(releasePayload).eq('id', pendingRelease.id)
+          : await db.from('seo_static_release_requests').insert(releasePayload);
+        if (releaseResult.error) throw releaseResult.error;
+        return json({
+          success: true,
+          status: 'queued-static',
+          publish_mode: SEO_PUBLISH_MODE,
+          validation,
+          live_audit: staticPendingAudit,
+          public_discovery: { indexable: false, in_sitemap: false, queued: true, checked_at: queuedAt },
+          static_release: { status: 'pending', requested_version: Number(publishedVersion || 0), requested_at: queuedAt },
+          result: publishResult,
+        }, 202, headers);
+      }
       // Newly published profiles are deliberately served as noindex until the
       // Googlebot HTML has passed every content/technical check. This closes
       // the failure window where an interrupted audit could otherwise expose
