@@ -656,6 +656,7 @@ const AI_EDITOR_INSTRUCTIONS = [
   'Mục tiêu là nội dung tự nhiên, hữu ích, phân biệt rõ phim và đáp ứng đúng ý định tìm kiếm.',
   'Giữ nguyên trường đang tốt khi không có lý do cụ thể để sửa. Tuyệt đối không đề xuất thay đổi slug, canonical, index_mode hoặc movie_patch.',
   'Liên kết nội bộ chỉ được chọn nguyên văn từ related_movies. Nếu dữ kiện không đủ, giữ nội dung hiện tại và nêu cảnh báo.',
+  'Phải xử lý hết lỗi bắt buộc trong current_validation. Nếu sửa intro_content, viết tối thiểu 120 từ hữu ích; nếu viết review_content, viết tối thiểu 300 từ dựa hoàn toàn trên dữ kiện đã cho; chọn từ 2 đến 6 liên kết thật sự liên quan.',
   'Mỗi dữ kiện quan trọng phải có evidence trỏ tới một source_url đã xuất hiện trong TRUSTED_CONTEXT.',
 ].join(' ');
 

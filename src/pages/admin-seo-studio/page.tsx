@@ -83,6 +83,22 @@ const STEP_FIELDS: Record<StepKey, string[]> = {
   technical: ['index_mode', 'canonical_path', 'slug'],
 };
 
+const VALIDATION_FIELD_MAP: Record<string, string[]> = {
+  missing_name: ['movie_patch.name'], missing_year: ['movie_patch.year'],
+  missing_image: ['movie_patch.thumb_url', 'movie_patch.poster_url', 'og_image_url'],
+  invalid_image_url: ['movie_patch.thumb_url', 'movie_patch.poster_url', 'og_image_url'],
+  image_unreachable: ['movie_patch.thumb_url', 'movie_patch.poster_url', 'og_image_url'],
+  missing_category: ['movie_patch.category'], missing_country: ['movie_patch.country'],
+  missing_people: ['movie_patch.actor', 'movie_patch.director'], missing_keyword: ['focus_keyword'],
+  title_short: ['seo_title'], title_brief: ['seo_title'], title_long: ['seo_title'], duplicate_title: ['seo_title'],
+  description_short: ['meta_description'], description_brief: ['meta_description'], description_long: ['meta_description'],
+  duplicate_description: ['meta_description'], duplicate_secondary_keywords: ['secondary_keywords'],
+  keyword_not_in_title: ['focus_keyword', 'seo_title'], keyword_not_in_copy: ['focus_keyword', 'meta_description', 'intro_content'],
+  thin_intro: ['intro_content'], brief_intro: ['intro_content'], missing_review: ['review_content'], thin_review: ['review_content'],
+  unsupported_rating_claim: ['review_content', 'faq'], thin_faq_answer: ['faq'], subjective_faq_claim: ['faq'], thin_faq: ['faq'],
+  few_internal_links: ['topic_links'], self_topic_link: ['topic_links'], canonical_mismatch: ['canonical_path'], unsafe_index: ['index_mode'],
+};
+
 const inputClass = 'w-full rounded-xl border border-white/10 bg-[#0d1019] px-3.5 py-3 text-sm text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10 placeholder:text-white/20 disabled:cursor-not-allowed disabled:border-emerald-500/10 disabled:bg-emerald-500/[0.035] disabled:text-white/45';
 const labelClass = 'mb-1.5 block text-xs font-semibold text-white/60';
 
@@ -456,11 +472,29 @@ export default function AdminSeoStudioPage() {
     return Object.keys(FIELD_LABELS).filter((field) => comparableField(getPayloadField(payload, field)) !== comparableField(getPayloadField(baselinePayload, field)));
   }, [baselinePayload, payload]);
   const currentErrorCount = validation.issues.filter((issue) => issue.severity === 'error').length;
+  const currentWarningCount = validation.issues.filter((issue) => issue.severity === 'warning').length;
   const baselineErrorCount = baselineValidation.issues.filter((issue) => issue.severity === 'error').length;
   const hasScoreRegression = Boolean(baselinePayload && (validation.score < baselineValidation.score || currentErrorCount > baselineErrorCount));
-  const isFieldLocked = (field: string) => Boolean(fieldStates[field]?.protected && !unlockedFields.includes(field));
-  const protectedCount = Object.values(fieldStates).filter((state) => state.protected).length;
-  const attentionCount = Object.values(fieldStates).filter((state) => state.status === 'needs_attention').length;
+  const currentFieldStates = useMemo(() => {
+    const next = Object.fromEntries(Object.entries(fieldStates).map(([field, state]) => [field, { ...state }]));
+    const attention = new Map<string, string>();
+    for (const issue of validation.issues) {
+      if (issue.severity === 'success') continue;
+      for (const field of VALIDATION_FIELD_MAP[issue.code] || []) if (!attention.has(field)) attention.set(field, issue.message);
+    }
+    for (const [field, state] of Object.entries(next)) {
+      const reason = attention.get(field);
+      if (reason) next[field] = { status: 'needs_attention', protected: false, reason };
+      else if (state.status === 'needs_attention') next[field] = {
+        status: 'protected',
+        protected: !unlockedFields.includes(field),
+        reason: 'Mục này đã được khắc phục trong bản nháp hiện tại.',
+      };
+    }
+    return next;
+  }, [fieldStates, unlockedFields, validation.issues]);
+  const isFieldLocked = (field: string) => Boolean(currentFieldStates[field]?.protected && !unlockedFields.includes(field));
+  const protectedCount = Object.values(currentFieldStates).filter((state) => state.protected).length;
   const canPublish = useMemo(() => !validation.issues.some((issue) => issue.severity === 'error')
     && !hasScoreRegression
     && validation.score >= (payload?.index_mode === 'index' ? 85 : 80), [hasScoreRegression, payload?.index_mode, validation]);
@@ -522,7 +556,7 @@ export default function AdminSeoStudioPage() {
     try {
       const result = await suggestSeoDraft(payload.movie_id, payload.slug, aiMode);
       setAiSuggestion(result);
-      const safeDefaults = result.changed_fields.filter((field) => fieldStates[field]?.status === 'needs_attention');
+      const safeDefaults = result.changed_fields.filter((field) => currentFieldStates[field]?.status === 'needs_attention');
       setSelectedAiFields(safeDefaults);
       const applied = applySuggestionFields(result, safeDefaults);
       setNotice({
@@ -692,13 +726,13 @@ export default function AdminSeoStudioPage() {
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-4">
             <div className="rounded-xl bg-black/20 px-3 py-2"><p className="text-[10px] uppercase text-white/30">Đang bảo vệ</p><strong className="text-sm text-emerald-300">{protectedCount} mục</strong></div>
-            <div className="rounded-xl bg-black/20 px-3 py-2"><p className="text-[10px] uppercase text-white/30">Cần xử lý</p><strong className="text-sm text-amber-300">{attentionCount} mục</strong></div>
+            <div className="rounded-xl bg-black/20 px-3 py-2"><p className="text-[10px] uppercase text-white/30">Lỗi bắt buộc</p><strong className={`text-sm ${currentErrorCount > 0 ? 'text-red-300' : 'text-emerald-300'}`}>{currentErrorCount} lỗi</strong><p className="mt-0.5 text-[9px] text-white/25">{currentWarningCount} khuyến nghị</p></div>
             <div className="rounded-xl bg-black/20 px-3 py-2"><p className="text-[10px] uppercase text-white/30">Đã thay đổi</p><strong className="text-sm text-cyan-300">{changedFields.length} mục</strong></div>
             <div className={`rounded-xl px-3 py-2 ${hasScoreRegression ? 'bg-red-500/10' : 'bg-black/20'}`}><p className="text-[10px] uppercase text-white/30">So với bản đang chạy</p><strong className={`text-sm ${hasScoreRegression ? 'text-red-300' : 'text-emerald-300'}`}>{hasScoreRegression ? 'Đang giảm chất lượng' : 'Không suy giảm'}</strong></div>
           </div>
           {!simpleMode && <div className="mt-3 flex flex-wrap gap-2">
             {activeSafeFields.map((field) => {
-              const state = fieldStates[field];
+              const state = currentFieldStates[field];
               if (!state) return null;
               const changed = changedFields.includes(field);
               const locked = isFieldLocked(field);
@@ -808,7 +842,7 @@ export default function AdminSeoStudioPage() {
                 {aiSuggestion.warnings.length > 0 && <div className="mt-3 space-y-1">{aiSuggestion.warnings.map((warning) => <p key={warning} className="text-[11px] text-amber-300"><i className="ri-error-warning-line" /> {warning}</p>)}</div>}
                 <div className="mt-4 space-y-2">{aiSuggestion.changed_fields.length > 0 ? aiSuggestion.changed_fields.map((field) => {
                   const checked = selectedAiFields.includes(field);
-                  const protectedField = fieldStates[field]?.protected;
+                  const protectedField = currentFieldStates[field]?.protected;
                   return <label key={field} className={`block cursor-pointer rounded-xl border p-3 ${checked ? 'border-violet-400/30 bg-violet-500/[0.08]' : 'border-white/[0.07] bg-white/[0.02]'}`}><div className="flex items-start gap-3"><input type="checkbox" checked={checked} onChange={() => setSelectedAiFields((current) => current.includes(field) ? current.filter((item) => item !== field) : [...current, field])} className="mt-1 accent-violet-500" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><strong className="text-xs text-white/80">{FIELD_LABELS[field]}</strong>{protectedField && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] text-emerald-300">Đang tốt · không chọn sẵn</span>}</div><p className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/35"><span className="text-white/20">Hiện tại:</span> {previewValue(getPayloadField(payload, field))}</p><p className="mt-1 line-clamp-3 text-[11px] leading-5 text-violet-200/70"><span className="text-violet-300">Đề xuất:</span> {previewValue(getPayloadField(aiSuggestion.proposed_payload, field))}</p></div></div></label>;
                 }) : <p className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.06] p-3 text-xs text-emerald-300">AI không tìm thấy thay đổi an toàn nào tốt hơn bản hiện tại.</p>}</div>
                 {aiSuggestion.evidence.length > 0 && <details className="mt-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><summary className="cursor-pointer text-xs font-semibold text-white/55">Dữ kiện AI đã dùng ({aiSuggestion.evidence.length})</summary><div className="mt-3 space-y-2">{aiSuggestion.evidence.map((item, index) => <a key={`${item.field}-${index}`} href={item.source_url} target="_blank" rel="noreferrer" className="block text-[11px] leading-5 text-cyan-300/70 hover:text-cyan-200">{item.fact} · {item.confidence === 'high' ? 'tin cậy cao' : item.confidence === 'medium' ? 'tin cậy vừa' : 'cần kiểm tra lại'}</a>)}</div></details>}
