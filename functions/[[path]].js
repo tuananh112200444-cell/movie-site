@@ -2759,7 +2759,9 @@ async function proxySitemap(pathname, request, context) {
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  const sitemapVersion = '20260903-editorial-cohort-v1';
+  const sitemapVersion = pathname === '/sitemap-movies-upcoming.xml'
+    ? '20260916-upcoming-cohort-parity-v2'
+    : '20260903-editorial-cohort-v1';
   let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies-dynamic') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=5000&v=${sitemapVersion}`;

@@ -29,6 +29,11 @@ requireText(migration, "'20 */6 * * *'", 'TMDB hot/upcoming discovery is not sch
 
 requireText(sitemap, 'hasSeoBase(movie, 120) && hasHttpsTrailer(movie)', 'upcoming sitemap lacks a strict content/trailer gate');
 requireText(sitemap, "eq('index_tier', 'upcoming')", 'upcoming sitemap still scans the entire movie catalogue instead of the eligible tier');
+requireText(sitemap, ".gte('quality_score', 88)", 'upcoming sitemap quality threshold differs from the verified static cohort');
+requireText(sitemap, ".gte('content_length', 350)", 'upcoming sitemap synopsis threshold differs from the verified static cohort');
+requireText(sitemap, "isHighValueCohortMovie(movie, options.mode === 'upcoming')", 'upcoming sitemap rejects its own eligible tier');
+requireText(sitemap, "hasOfficialTrailerUrl(movie.trailer_url)", 'upcoming sitemap accepts arbitrary HTTPS URLs instead of an official trailer');
+requireText(sitemap, 'fetchEligibleUpcomingMovies(Math.max(200, options.outputLimit * 10))', 'upcoming sitemap limits database candidates before the final content filter and misses good pages');
 requireText(sitemap, 'qualityByMovieId.get(movie.id) === true', 'sitemap admits unchecked database movies');
 requireText(sitemap, '.filter((movie) => isUpcoming(movie) || isTrailer(movie))', 'upcoming sitemap is empty or unfiltered');
 if (sitemap.includes('xmlns:video=') || sitemap.includes('<video:video>')) {
@@ -48,6 +53,7 @@ if (worker.includes("'@type': 'VideoObject'") || worker.includes('embedUrl: trai
 }
 requireText(worker, '<h2>Trailer ${escapeHtml(name)}</h2>', 'eligible trailer pages must keep a visible trailer for users');
 requireText(worker, "'sitemap-movies-upcoming.xml'", 'root sitemap index does not submit the static upcoming cohort');
+requireText(worker, '20260916-upcoming-cohort-parity-v2', 'upcoming sitemap cache was not invalidated after the cohort repair');
 if (worker.includes("|| pathname === '/sitemap-movies-upcoming.xml'")) {
   throw new Error('upcoming sitemap is incorrectly retired by the legacy chunk cleanup route');
 }

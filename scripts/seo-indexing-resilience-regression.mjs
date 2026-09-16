@@ -35,9 +35,10 @@ requireText(worker, "!/^(?:undefined|null)$/i.test(id)", 'movie prerender can pu
 requireText(movieSitemap, 'outputLimit: 100', 'recent sitemap is not bounded to the 100-URL cohort');
 requireText(movieSitemap, 'outputLimit: 60', 'ongoing sitemap is not bounded to the 60-URL cohort');
 requireText(movieSitemap, 'outputLimit: 20', 'upcoming sitemap is not bounded to the 20-URL cohort');
-requireText(movieSitemap, 'isHighValueCohortMovie(movie)', 'movie sitemap does not enforce high-value cohort completeness');
+requireText(movieSitemap, "isHighValueCohortMovie(movie, options.mode === 'upcoming')", 'movie sitemap does not enforce high-value cohort completeness for both playable and upcoming tiers');
 requireText(movieSitemap, 'seenContent.has(fingerprint)', 'movie sitemap does not remove exact synopsis duplicates');
-requireText(movieSitemap, "description.length >= 500", 'movie sitemap still exposes thin automatically generated pages');
+requireText(movieSitemap, "description.length >= (upcoming ? 350 : 500)", 'movie sitemap still exposes thin automatically generated pages');
+requireText(movieSitemap, "Number(movie.seo_quality_score || 0) >= (upcoming ? 88 : 85)", 'upcoming sitemap does not enforce its stricter quality tier');
 requireText(movieSitemap, 'hasUsefulPerson(movie.director)', 'movie sitemap does not require useful editorial metadata');
 requireText(movieSitemap, ".order('movie_id', { ascending: true })", 'archive sitemap chunks are not ordered by a stable key');
 requireText(movieSitemap, 'fetchEligibleMovies(5000)', 'archive sitemap does not load the full high-value candidate pool');
