@@ -57,6 +57,10 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['Gợi ý từ dữ liệu có sẵn', 'SEO Studio disguises its non-AI fallback as AI'],
   ['SEO Worker đang không chạy trên website thật', 'operator cannot see when the SEO Worker is unavailable'],
   ['error.liveAudit', 'failed pre-publish live audit is not shown to the operator'],
+  ['Hôm nay chỉ cần làm một việc', 'SEO Studio does not identify one clear next action for a non-technical operator'],
+  ['data-kp-seo-next-action="true"', 'SEO Studio has no stable priority-action surface'],
+  ['getPriorityAction', 'SEO Studio does not prioritize blocking issues before editorial improvements'],
+  ['Chế độ đơn giản', 'SEO Studio cannot hide advanced controls for a focused daily workflow'],
 ]);
 expect('src/services/seoStudioService.ts', [
   ["callAdmin('publish'", 'missing authenticated publish call'],
