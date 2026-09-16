@@ -41,6 +41,8 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['tự giữ trang ở noindex', 'missing fail-closed publish explanation'],
   ['LOCAL_DRAFT_PREFIX', 'SEO Studio does not persist an automatic local draft'],
   ['readNewerLocalDraft', 'SEO Studio cannot restore interrupted edits'],
+  ['setAssistantApplied(restoredHasChanges)', 'restored AI drafts incorrectly restart the workflow at the beginning'],
+  ['restoredHasChanges ? null : result.profile?.live_audit', 'restored draft incorrectly reuses the published version live audit'],
   ['Bản nháp đã tự lưu trên máy này', 'SEO Studio does not show draft persistence status'],
   ["refreshed.profile?.status !== 'published'", 'SEO Studio does not confirm the server publish state'],
   ['data-kp-safe-edit="true"', 'SEO Studio has no visible safe-edit mode'],
