@@ -99,6 +99,12 @@ const VALIDATION_FIELD_MAP: Record<string, string[]> = {
   few_internal_links: ['topic_links'], self_topic_link: ['topic_links'], canonical_mismatch: ['canonical_path'], unsafe_index: ['index_mode'],
 };
 
+const INDEX_READINESS_CODES = new Set([
+  'brief_intro', 'missing_review', 'thin_review', 'few_internal_links',
+  'duplicate_title', 'duplicate_description', 'duplicate_secondary_keywords',
+  'keyword_not_in_title', 'keyword_not_in_copy',
+]);
+
 const inputClass = 'w-full rounded-xl border border-white/10 bg-[#0d1019] px-3.5 py-3 text-sm text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10 placeholder:text-white/20 disabled:cursor-not-allowed disabled:border-emerald-500/10 disabled:bg-emerald-500/[0.035] disabled:text-white/45';
 const labelClass = 'mb-1.5 block text-xs font-semibold text-white/60';
 
@@ -502,6 +508,14 @@ export default function AdminSeoStudioPage() {
   const canPublish = useMemo(() => !validation.issues.some((issue) => issue.severity === 'error')
     && !hasScoreRegression
     && validation.score >= (payload?.index_mode === 'index' ? 85 : 80), [hasScoreRegression, payload?.index_mode, validation]);
+  const indexReadinessIssues = validation.issues.filter((issue) => issue.severity === 'error' || INDEX_READINESS_CODES.has(issue.code));
+  const canPublishForGoogle = canPublish && indexReadinessIssues.length === 0 && validation.score >= 85;
+  const publishedAuditChecks = loaded?.profile?.live_audit?.checks ?? [];
+  const publishedGoogleReady = loaded?.profile?.status === 'published'
+    && loaded.profile.index_mode === 'index'
+    && loaded.profile.live_audit?.passed === true
+    && publishedAuditChecks.some((check) => check.code === 'public_robots_index' && check.passed)
+    && publishedAuditChecks.some((check) => check.code === 'public_sitemap_membership' && check.passed);
 
   const unlockField = (field: string) => {
     if (fieldStates[field]?.status === 'immutable') return;
@@ -551,14 +565,14 @@ export default function AdminSeoStudioPage() {
     return true;
   };
 
-  const handleAiSuggest = async () => {
+  const handleAiSuggest = async (modeOverride?: 'quick' | 'deep') => {
     if (!payload) return;
     setStep('content');
     setBusy('ai');
     setNotice(null);
     setAssistantApplied(false);
     try {
-      const result = await suggestSeoDraft(payload.movie_id, payload.slug, aiMode);
+      const result = await suggestSeoDraft(payload.movie_id, payload.slug, modeOverride ?? aiMode);
       setAiSuggestion(result);
       const safeDefaults = result.changed_fields.filter((field) => currentFieldStates[field]?.status === 'needs_attention');
       setSelectedAiFields(safeDefaults);
@@ -603,18 +617,38 @@ export default function AdminSeoStudioPage() {
 
   const handleSave = async (publish: boolean) => {
     if (!payload) return;
+    if (publish && simpleMode && !canPublishForGoogle) {
+      setNotice({ type: 'error', text: `Chưa thể cho Google index: còn ${indexReadinessIssues.length} mục chất lượng cần hoàn thiện.` });
+      return;
+    }
     setBusy(publish ? 'publish' : 'save');
     setNotice(null);
     try {
-      const safeEdit = { baseline_version: baselineVersion, unlocked_fields: unlockedFields };
-      const result = publish ? await publishSeoDraft(payload, safeEdit) : await saveSeoDraft(payload, safeEdit);
+      const publishPayload = publish && simpleMode && payload.index_mode === 'auto'
+        ? { ...payload, index_mode: 'index' as const }
+        : payload;
+      const safeEdit = {
+        baseline_version: baselineVersion,
+        unlocked_fields: publishPayload.index_mode !== payload.index_mode
+          ? Array.from(new Set([...unlockedFields, 'index_mode']))
+          : unlockedFields,
+      };
+      const result = publish ? await publishSeoDraft(publishPayload, safeEdit) : await saveSeoDraft(payload, safeEdit);
       setValidation(result.validation);
       const publishedAudit = (result as { live_audit?: SeoLiveAuditResult }).live_audit;
+      const publicDiscovery = 'public_discovery' in result ? result.public_discovery : undefined;
       if (publishedAudit) setLiveAudit(publishedAudit);
-      setNotice({ type: 'success', text: publish ? 'Đã xuất bản và xác minh HTML Googlebot, canonical, robots, schema cùng nội dung SEO thành công.' : 'Đã lưu bản nháp riêng; phiên bản SEO đang chạy không bị thay đổi.' });
+      setNotice({
+        type: 'success',
+        text: publish
+          ? (publicDiscovery?.indexable && publicDiscovery?.in_sitemap
+            ? 'Đã xuất bản: URL công khai cho phép Google index và đã có trong sitemap SEO Studio.'
+            : 'Hồ sơ đã lưu nhưng chưa xác nhận đủ điều kiện Google index; hệ thống không báo hoàn thành.')
+          : 'Đã lưu bản nháp riêng; phiên bản SEO đang chạy không bị thay đổi.',
+      });
       if (publish && selected) {
         const refreshed = await loadSeoMovie(selected.id, selected.slug);
-        if (refreshed.profile?.status !== 'published' || refreshed.profile.index_mode !== payload.index_mode) {
+        if (refreshed.profile?.status !== 'published' || refreshed.profile.index_mode !== publishPayload.index_mode) {
           throw new Error('Máy chủ chưa xác nhận đúng trạng thái xuất bản. Bản nháp cục bộ vẫn được giữ an toàn.');
         }
         const refreshedPayload = payloadFromLoad(refreshed);
@@ -666,6 +700,10 @@ export default function AdminSeoStudioPage() {
       applyAiSuggestion();
       return;
     }
+    if (assistantApplied && !canPublishForGoogle) {
+      await handleAiSuggest('quick');
+      return;
+    }
     if (!liveAudit?.passed) {
       await handleInspect();
       return;
@@ -698,11 +736,11 @@ export default function AdminSeoStudioPage() {
           : aiSuggestion && !assistantApplied
             ? `Duyệt ${selectedAiFields.length} thay đổi & tiếp tục`
             : !liveAudit?.passed
-              ? 'Kiểm tra trang thật'
-              : 'Xuất bản SEO';
+              ? canPublishForGoogle ? 'Kiểm tra trang thật' : `AI hoàn thiện ${indexReadinessIssues.length} mục`
+              : 'Xuất bản & đưa vào sitemap Google';
   const unifiedActionDisabled = Boolean(busy)
     || Boolean(aiSuggestion && !assistantApplied && selectedAiFields.length === 0)
-    || Boolean(assistantApplied && liveAudit?.passed && !canPublish);
+    || Boolean(assistantApplied && liveAudit?.passed && !canPublishForGoogle);
 
   return (
     <div className="min-h-screen bg-[#080a10] text-white">
@@ -783,6 +821,7 @@ export default function AdminSeoStudioPage() {
           </section>}
 
           {simpleMode && <section data-kp-unified-seo-workbench="true" className="mx-auto max-w-4xl space-y-4">
+            {publishedGoogleReady && !assistantApplied && <div data-kp-google-ready="true" className="rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.08] p-4"><p className="text-sm font-bold text-emerald-200"><i className="ri-google-line" /> Đã xuất bản và sẵn sàng cho Google</p><p className="mt-1 text-xs leading-5 text-white/55">Googlebot nhận đúng phiên bản, URL đang <strong className="text-white/75">index, follow</strong> và đã có trong sitemap SEO Studio. Trạng thái Google đã index sẽ được cập nhật riêng từ Search Console.</p></div>}
             <div className="rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.12] to-cyan-500/[0.05] p-5">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-200">SEO AI Workspace · một luồng duy nhất</p>
               <div className="mt-2 flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold">{payload.movie_patch.name}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">Trợ lý sẽ chuẩn bị toàn bộ phần SEO có thể kiểm chứng. Bạn chỉ duyệt thay đổi và quyết định xuất bản.</p></div><button onClick={() => void handleUnifiedPrimaryAction()} disabled={unifiedActionDisabled} className={`rounded-xl px-4 py-3 text-sm font-bold text-black disabled:opacity-40 ${assistantApplied && liveAudit?.passed ? 'bg-emerald-400' : 'bg-violet-400'}`}><i className={assistantApplied && liveAudit?.passed ? 'ri-send-plane-fill' : 'ri-sparkling-2-line'} /> {unifiedActionLabel}</button></div>
@@ -896,7 +935,7 @@ export default function AdminSeoStudioPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold text-white/70">Kiểm tra trang thật</p><p className="mt-1 text-[11px] text-white/35">Mô phỏng Googlebot và kiểm tra HTTP, canonical, H1, schema, ảnh, liên kết.</p></div><button onClick={() => void handleInspect()} disabled={!!busy} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 disabled:opacity-40">{busy === 'inspect' ? 'Đang kiểm tra...' : 'Kiểm tra trang thật'}</button></div>
                 {liveAudit && <div className="mt-4 space-y-2">{liveAudit.checks.map((check) => <div key={check.code} className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${check.passed ? 'bg-emerald-500/[0.07] text-emerald-300' : 'bg-red-500/[0.08] text-red-300'}`}><i className={check.passed ? 'ri-checkbox-circle-line' : 'ri-close-circle-line'} /><span>{check.message}</span></div>)}</div>}
               </div>
-              <div className="sticky bottom-3 grid gap-3 rounded-2xl border border-white/10 bg-[#080a10]/95 p-3 shadow-2xl backdrop-blur-xl sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white/70 disabled:opacity-40">{busy === 'save' ? 'Đang lưu…' : 'Lưu bản nháp'}</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black disabled:opacity-35">{busy === 'publish' ? 'Đang xuất bản…' : 'Xuất bản toàn bộ SEO'}</button></div>
+              <div className="sticky bottom-3 grid gap-3 rounded-2xl border border-white/10 bg-[#080a10]/95 p-3 shadow-2xl backdrop-blur-xl sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white/70 disabled:opacity-40">{busy === 'save' ? 'Đang lưu…' : 'Lưu bản nháp'}</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black disabled:opacity-35">{busy === 'publish' ? 'Đang xuất bản…' : payload.index_mode === 'index' ? 'Xuất bản & đưa vào sitemap Google' : payload.index_mode === 'noindex' ? 'Xuất bản ở chế độ noindex' : 'Xuất bản với quyền index tự động'}</button></div>
               {loaded.profile?.status === 'published' && <div className="flex flex-wrap gap-2"><a href={`/phim/${payload.slug}`} target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-external-link-line" /> Mở trang phim</a><a href="https://search.google.com/search-console/inspect" target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-google-line" /> Mở URL Inspection</a><a href="/sitemap-movies.xml" target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-map-2-line" /> Kiểm tra sitemap</a></div>}
             </div>}
 

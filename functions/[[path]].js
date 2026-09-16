@@ -2778,11 +2778,21 @@ async function proxySitemap(pathname, request, context) {
   } else if (movieChunkMatch) {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?page=${movieChunkMatch[1]}&page_size=${EDGE_SITEMAP_CHUNK_SIZE}&v=${sitemapVersion}`;
   }
+  const incomingSitemapUrl = new URL(request.url);
+  const freshToken = String(incomingSitemapUrl.searchParams.get('fresh') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100);
+  const expectedInspectSecret = String(context?.env?.MOVIE_DETAIL_PROXY_SECRET || '');
+  const authorizedFresh = pathname === '/sitemap-seo-studio.xml'
+    && freshToken.length > 0
+    && expectedInspectSecret.length > 0
+    && request.headers.get('X-KhoPhim-SEO-Inspect-Secret') === expectedInspectSecret;
+  const canonicalTarget = target;
+  if (authorizedFresh) target = `${target}${target.includes('?') ? '&' : '?'}fresh=${encodeURIComponent(freshToken)}`;
   const cacheKey = new Request(target, { method: 'GET' });
+  const canonicalCacheKey = new Request(canonicalTarget, { method: 'GET' });
   const staleCacheKey = new Request(`${target}${target.includes('?') ? '&' : '?'}kp_stale=1`, { method: 'GET' });
 
   try {
-    if ((request.method === 'GET' || request.method === 'HEAD') && typeof caches !== 'undefined') {
+    if (!authorizedFresh && (request.method === 'GET' || request.method === 'HEAD') && typeof caches !== 'undefined') {
       const cached = await caches.default.match(cacheKey);
       if (cached) {
         const headers = new Headers(cached.headers);
@@ -2818,7 +2828,7 @@ async function proxySitemap(pathname, request, context) {
       try {
         const candidate = await fetch(target, {
           headers: { 'Accept': 'application/xml', 'User-Agent': request.headers.get('user-agent') || 'KhoPhimBot/1.0' },
-          cf: { cacheTtl: isOngoingSitemap ? 600 : 1800, cacheEverything: true },
+          cf: { cacheTtl: authorizedFresh ? 0 : (isOngoingSitemap ? 600 : 1800), cacheEverything: !authorizedFresh },
           signal: AbortSignal.timeout(upstreamTimeoutMs),
         });
         if (candidate.ok) response = candidate;
@@ -2837,7 +2847,7 @@ async function proxySitemap(pathname, request, context) {
         : 'public, max-age=1800, s-maxage=3600',
     );
     headers.set('X-Sitemap-Proxy', 'cloudflare-pages');
-    headers.set('X-Sitemap-Cache', 'MISS');
+    headers.set('X-Sitemap-Cache', authorizedFresh ? 'FRESH-BYPASS' : 'MISS');
     headers.delete('Set-Cookie');
     headers.delete('Content-Length');
     const movieCount = headers.get('X-Movie-Count');
@@ -2865,10 +2875,12 @@ async function proxySitemap(pathname, request, context) {
         statusText: sitemapResponse.statusText,
         headers: staleHeaders,
       });
-      contextWaitUntil(context, Promise.all([
+      const cacheWrites = [
         caches.default.put(cacheKey, sitemapResponse.clone()),
         caches.default.put(staleCacheKey, staleResponse),
-      ]));
+      ];
+      if (authorizedFresh) cacheWrites.push(caches.default.put(canonicalCacheKey, sitemapResponse.clone()));
+      contextWaitUntil(context, Promise.all(cacheWrites));
     }
     return sitemapResponse;
   } catch (error) {
