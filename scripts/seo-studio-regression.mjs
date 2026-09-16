@@ -155,6 +155,7 @@ expect('src/pages/movie-detail/page.tsx', [
 ]);
 expect('supabase/functions/static-seo-catalog/index.ts', [
   [".from('movie_seo_profiles')", 'static crawler catalogue ignores manual profiles'],
+  ['Trailer/upcoming pages can also have a verified editorial profile', 'static upcoming pages can lag behind a verified SEO Studio publish'],
   ["profile?.index_mode === 'index'", 'manual index approval is not gated'],
   [".eq('live_audit->>passed', 'true')", 'static catalogue accepts profiles that failed the live audit'],
 ]);
