@@ -8,6 +8,8 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') ?? 'gpt-5.5';
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.8-flash';
+const GEMINI_FAST_MODEL = Deno.env.get('GEMINI_FAST_MODEL') ?? 'gemini-3.5-flash-lite';
+const GEMINI_FALLBACK_MODEL = Deno.env.get('GEMINI_FALLBACK_MODEL') ?? 'gemini-2.5-flash-lite';
 
 type Severity = 'error' | 'warning' | 'success';
 type ValidationIssue = {
@@ -706,6 +708,28 @@ function fallbackAiSuggestion(
   baseline: SeoPayload,
   relatedMovies: Array<Record<string, unknown>>,
 ): AiSeoSuggestion {
+  const moviePatch = baseline.movie_patch || {};
+  const name = plainText(moviePatch.name, 120) || plainText(baseline.focus_keyword, 120) || 'Phim';
+  const originName = plainText(moviePatch.origin_name, 120);
+  const year = Number(moviePatch.year || 0);
+  const directors = cleanStringList(moviePatch.director, 4, 120);
+  const actors = cleanStringList(moviePatch.actor, 5, 120);
+  const categories = cleanTaxonomy(moviePatch.category).map((item) => item.name).slice(0, 4);
+  const countries = cleanTaxonomy(moviePatch.country).map((item) => item.name).slice(0, 3);
+  let intro = plainText(baseline.intro_content, 12_000);
+  if (wordCount(intro) < 70) {
+    const verifiedFacts = [
+      year ? `phát hành năm ${year}` : '',
+      categories.length ? `thuộc nhóm ${categories.join(', ')}` : '',
+      countries.length ? `có thông tin sản xuất liên quan tới ${countries.join(', ')}` : '',
+      directors.length ? `do ${directors.join(', ')} đạo diễn` : '',
+      actors.length ? `với các diễn viên ${actors.join(', ')}` : '',
+    ].filter(Boolean).join(', ');
+    intro = plainText(`${intro} ${name}${originName && originName !== name ? ` (${originName})` : ''} ${verifiedFacts}. Trang này tổng hợp nội dung, thông tin đoàn phim và tình trạng phát hành từ dữ liệu đã xác minh của KhoPhim; các chi tiết mới sẽ được cập nhật trên cùng URL khi nguồn chính thức thay đổi.`, 12_000);
+  }
+  const description = plainText(baseline.meta_description, 320).length >= 100
+    ? plainText(baseline.meta_description, 320)
+    : plainText(`Tìm hiểu ${name}${originName && originName !== name ? ` (${originName})` : ''}${year ? `, phim ${year}` : ''}: nội dung, diễn viên, đạo diễn, thể loại và tình trạng phát hành được cập nhật tại KhoPhim.`, 320);
   const existingLinks = baseline.topic_links || [];
   const topicLinks = existingLinks.length >= 2 ? existingLinks : relatedMovies.slice(0, 4).map((movie) => ({
     title: plainText(movie.name, 180),
@@ -714,15 +738,15 @@ function fallbackAiSuggestion(
     description: movie.year ? `Phim liên quan phát hành năm ${Number(movie.year)}.` : 'Phim có chủ đề liên quan trên KhoPhim.',
   }));
   return {
-    summary: 'Máy chủ chưa được cấu hình khóa AI. Hệ thống đã giữ nguyên nội dung hiện có và chỉ gợi ý liên kết từ các phim công khai có sẵn.',
-    patch: { ...aiPatchFromSuggestion(baseline, baseline), topic_links: topicLinks },
+    summary: 'Hệ thống dự phòng đã bổ sung phần còn thiếu bằng dữ kiện phim đã xác minh và liên kết nội bộ có sẵn; không suy đoán thông tin mới.',
+    patch: { ...aiPatchFromSuggestion(baseline, baseline), meta_description: description, intro_content: intro, topic_links: topicLinks },
     evidence: topicLinks.map((link) => ({
       field: 'topic_links',
       fact: `Trang liên quan có sẵn: ${link.title}.`,
       source_url: `https://khophim.org${link.url}`,
       confidence: 'high',
     })),
-    warnings: ['Chưa có GEMINI_API_KEY hoặc OPENAI_API_KEY nên nội dung biên tập không được AI viết mới.'],
+    warnings: ['Đang dùng bản nháp dự phòng dựa trên dữ kiện xác minh; phần nhận xét chuyên sâu không được tự tạo khi AI không phản hồi.'],
     preserved_fields: ['slug', 'canonical_path', 'index_mode', 'movie_patch'],
   };
 }
@@ -798,16 +822,19 @@ async function requestGeminiSuggestion(input: Record<string, unknown>, baseline:
     },
   });
   let lastError = 'Gemini tạm thời chưa phản hồi.';
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const modelCandidates = Array.from(new Set(deepMode
+    ? [GEMINI_MODEL, GEMINI_FAST_MODEL]
+    : [GEMINI_FAST_MODEL, GEMINI_FALLBACK_MODEL]));
+  for (const model of modelCandidates) {
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
         headers: {
           'x-goog-api-key': GEMINI_API_KEY,
           'Content-Type': 'application/json',
         },
         body: requestBody,
-        signal: AbortSignal.timeout(deepMode ? 55000 : 35000),
+        signal: AbortSignal.timeout(deepMode ? 40000 : 25000),
       });
       const responseBody = await response.json().catch(() => ({}));
       if (response.ok) {
@@ -819,14 +846,13 @@ async function requestGeminiSuggestion(input: Record<string, unknown>, baseline:
       const apiError = row.error && typeof row.error === 'object' ? row.error as Record<string, unknown> : {};
       lastError = plainText(apiError.message, 500) || `Gemini API error ${response.status}`;
       const retryable = [429, 500, 502, 503, 504].includes(response.status);
-      if (!retryable || attempt === 2) break;
+      if (!retryable) break;
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
-      if (attempt === 2) break;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
+    await new Promise((resolve) => setTimeout(resolve, 600));
   }
-  throw new Error(`Gemini đang quá tải sau 3 lần thử. Chưa có thay đổi nào được áp dụng. ${lastError}`);
+  throw new Error(`Gemini đang bận sau ${modelCandidates.length} model. ${lastError}`);
 }
 
 function decodeHtml(value: string): string {
@@ -1081,11 +1107,19 @@ Deno.serve(async (req) => {
         })),
       };
       const aiProvider = GEMINI_API_KEY ? 'gemini' : OPENAI_API_KEY ? 'openai' : null;
-      const suggestion = GEMINI_API_KEY
-        ? await requestGeminiSuggestion(trustedContext, baseline)
-        : OPENAI_API_KEY
-          ? await requestOpenAiSuggestion(trustedContext, baseline)
-        : fallbackAiSuggestion(baseline, relatedMovies);
+      let suggestion: AiSeoSuggestion;
+      if (GEMINI_API_KEY) {
+        try {
+          suggestion = await requestGeminiSuggestion(trustedContext, baseline);
+        } catch (error) {
+          suggestion = fallbackAiSuggestion(baseline, relatedMovies);
+          suggestion.warnings.unshift(error instanceof Error ? error.message : String(error));
+        }
+      } else if (OPENAI_API_KEY) {
+        suggestion = await requestOpenAiSuggestion(trustedContext, baseline);
+      } else {
+        suggestion = fallbackAiSuggestion(baseline, relatedMovies);
+      }
       const allowedEvidenceUrls = new Set([
         `https://khophim.org/phim/${slug}`,
         ...relatedMovies.map((item) => `https://khophim.org/phim/${item.slug}`),
