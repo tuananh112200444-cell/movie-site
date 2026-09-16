@@ -53,6 +53,12 @@ function mockFetch(auditPassed) {
     if (url.pathname.endsWith('/functions/v1/movie-seo-prerender-data')) {
       return Response.json({ status: true, movie });
     }
+    if (url.pathname.endsWith('/functions/v1/sitemap-seo-studio')) {
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset><url><loc>https://khophim.org/phim/${slug}</loc></url></urlset>`, {
+        status: 200,
+        headers: { 'Content-Type': 'application/xml; charset=utf-8' },
+      });
+    }
     throw new Error(`Unexpected fetch: ${url}`);
   };
 }
@@ -112,6 +118,18 @@ try {
   assert.equal(authorizedInspection.headers.get('x-seo-studio-inspection'), 'cloudflare-edge-render');
   assert.match(inspectionHtml, /data-kp-seo-profile-version="7"/);
   assert.match(inspectionHtml, /<link rel="canonical" href="https:\/\/khophim\.org\/phim\/seo-studio-edge-test"/);
+
+  const freshSitemap = await onRequest({
+    request: new Request('https://khophim.org/sitemap-seo-studio.xml?fresh=7-0', {
+      headers: { 'X-KhoPhim-SEO-Inspect-Secret': 'integration-secret' },
+    }),
+    env: { MOVIE_DETAIL_PROXY_SECRET: 'integration-secret' },
+    waitUntil: () => undefined,
+  });
+  const freshSitemapXml = await freshSitemap.text();
+  assert.equal(freshSitemap.status, 200);
+  assert.equal(freshSitemap.headers.get('x-sitemap-cache'), 'FRESH-BYPASS');
+  assert.match(freshSitemapXml, new RegExp(`<loc>https://khophim.org/phim/${slug}</loc>`));
 } finally {
   globalThis.fetch = originalFetch;
 }

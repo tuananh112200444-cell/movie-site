@@ -963,6 +963,9 @@ async function inspectPublicDiscovery(payload: SeoPayload, expectedVersion: numb
   const checks: LiveAuditCheck[] = [];
   let status = 0;
   let html = '';
+  let canonical = '';
+  let marker = '';
+  let robots = '';
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const response = await fetch(`${publicUrl}?seo_profile_check=${encodeURIComponent(String(expectedVersion))}&attempt=${attempt}`, {
@@ -971,20 +974,23 @@ async function inspectPublicDiscovery(payload: SeoPayload, expectedVersion: numb
           'User-Agent': 'Googlebot',
           'Cache-Control': 'no-cache',
         },
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(10_000),
       });
       status = response.status;
       html = await response.text();
-      if (status === 200) break;
+      canonical = htmlValue(html, /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["'][^>]*>/i)
+        || htmlValue(html, /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["'][^>]*>/i);
+      marker = htmlValue(html, /data-kp-seo-profile-version=["']([^"']+)["']/i);
+      robots = `${htmlValue(html, /<meta[^>]+name=["']robots["'][^>]+content=["']([^"']*)["'][^>]*>/i)}`.toLowerCase();
+      const robotsReady = expectedIndex
+        ? robots.includes('index') && !robots.includes('noindex')
+        : robots.includes('noindex');
+      if (status === 200 && marker === String(expectedVersion) && canonical === expectedCanonical && robotsReady) break;
     } catch {
       status = 0;
     }
-    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
   }
-  const canonical = htmlValue(html, /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["'][^>]*>/i)
-    || htmlValue(html, /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["'][^>]*>/i);
-  const marker = htmlValue(html, /data-kp-seo-profile-version=["']([^"']+)["']/i);
-  const robots = `${htmlValue(html, /<meta[^>]+name=["']robots["'][^>]+content=["']([^"']*)["'][^>]*>/i)}`.toLowerCase();
   checks.push(
     { code: 'public_http_200', passed: status === 200, message: status === 200 ? 'URL công khai trả HTTP 200 cho Googlebot.' : `URL công khai trả HTTP ${status || 'lỗi mạng'}.`, value: status },
     { code: 'public_profile_version', passed: marker === String(expectedVersion), message: marker === String(expectedVersion) ? `URL công khai nhận hồ sơ phiên bản ${marker}.` : `URL công khai chưa nhận hồ sơ phiên bản ${String(expectedVersion)}.`, value: marker },
@@ -996,21 +1002,28 @@ async function inspectPublicDiscovery(payload: SeoPayload, expectedVersion: numb
 
   let sitemapStatus = 0;
   let sitemapXml = '';
-  try {
-    const sitemapResponse = await fetch(`https://khophim.org/sitemap-seo-studio.xml?fresh=${encodeURIComponent(String(expectedVersion))}`, {
-      headers: {
-        Accept: 'application/xml',
-        'User-Agent': 'KhoPhim-SEO-Studio-Auditor/1.0',
-        'X-KhoPhim-SEO-Inspect-Secret': SEO_INSPECT_SECRET,
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-    sitemapStatus = sitemapResponse.status;
-    sitemapXml = await sitemapResponse.text();
-  } catch {
-    sitemapStatus = 0;
+  let sitemapContainsUrl = false;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const freshToken = `${String(expectedVersion)}-${attempt}`;
+      const sitemapResponse = await fetch(`https://khophim.org/sitemap-seo-studio.xml?fresh=${encodeURIComponent(freshToken)}`, {
+        headers: {
+          Accept: 'application/xml',
+          'User-Agent': 'KhoPhim-SEO-Studio-Auditor/1.0',
+          'X-KhoPhim-SEO-Inspect-Secret': SEO_INSPECT_SECRET,
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+      sitemapStatus = sitemapResponse.status;
+      sitemapXml = await sitemapResponse.text();
+      sitemapContainsUrl = sitemapXml.includes(`<loc>${expectedCanonical}</loc>`);
+      const sitemapReady = sitemapStatus === 200 && (expectedIndex ? sitemapContainsUrl : !sitemapContainsUrl);
+      if (sitemapReady) break;
+    } catch {
+      sitemapStatus = 0;
+    }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
   }
-  const sitemapContainsUrl = sitemapXml.includes(`<loc>${expectedCanonical}</loc>`);
   checks.push(
     { code: 'public_sitemap_http', passed: sitemapStatus === 200, message: sitemapStatus === 200 ? 'Sitemap SEO Studio trả HTTP 200.' : `Sitemap SEO Studio trả HTTP ${sitemapStatus || 'lỗi mạng'}.`, value: sitemapStatus },
     expectedIndex
