@@ -530,6 +530,7 @@ export default function AdminSeoStudioPage() {
     setPayload(next);
     syncTextFields(next);
     setUnlockedFields((current) => Array.from(new Set([...current, ...selectedAiFields])));
+    setLiveAudit(null);
     setAssistantApplied(true);
     setNotice({ type: 'success', text: `Đã áp dụng ${selectedAiFields.length} mục vào bản nháp. Hãy đọc lại, kiểm tra trang thật rồi mới xuất bản.` });
   };
@@ -585,6 +586,9 @@ export default function AdminSeoStudioPage() {
         setCountryText(refreshedPayload.movie_patch.country.map((item) => item.name).join(', '));
         removeLocalValue(`${LOCAL_DRAFT_PREFIX}${payload.movie_id}`);
         setDraftState('saved');
+        setAiSuggestion(null);
+        setSelectedAiFields([]);
+        setAssistantApplied(false);
       }
     } catch (error) {
       if (error instanceof SeoStudioApiError && error.validation) setValidation(error.validation);
@@ -606,6 +610,22 @@ export default function AdminSeoStudioPage() {
   };
   const removeTopic = (index: number) => payload && updatePayload('topic_links', payload.topic_links.filter((_, position) => position !== index));
 
+  const handleUnifiedPrimaryAction = async () => {
+    if (!aiSuggestion && !assistantApplied) {
+      await handleAiSuggest();
+      return;
+    }
+    if (aiSuggestion && !assistantApplied) {
+      applyAiSuggestion();
+      return;
+    }
+    if (!liveAudit?.passed) {
+      await handleInspect();
+      return;
+    }
+    await handleSave(true);
+  };
+
   const pageTitle = payload?.seo_title || 'SEO Title chưa được đặt';
   const pageDescription = payload?.meta_description || 'Meta Description chưa được đặt.';
   const pageUrl = payload ? `https://khophim.org${payload.canonical_path}` : '';
@@ -620,6 +640,22 @@ export default function AdminSeoStudioPage() {
     : workflowStage === 'diagnose' ? STEP_FIELDS.movie : STEP_FIELDS.technical;
   const priorityAction = getPriorityAction(validation, loaded?.worker_status?.online);
   const priorityStep = STEPS.find((item) => item.key === priorityAction.step);
+  const unifiedActionLabel = busy === 'ai'
+    ? 'Trợ lý đang làm…'
+    : busy === 'inspect'
+      ? 'Đang kiểm tra trang thật…'
+      : busy === 'publish'
+        ? 'Đang xuất bản…'
+        : !aiSuggestion && !assistantApplied
+          ? 'Để trợ lý làm toàn bộ'
+          : aiSuggestion && !assistantApplied
+            ? `Duyệt ${selectedAiFields.length} thay đổi & tiếp tục`
+            : !liveAudit?.passed
+              ? 'Kiểm tra trang thật'
+              : 'Xuất bản SEO';
+  const unifiedActionDisabled = Boolean(busy)
+    || Boolean(aiSuggestion && !assistantApplied && selectedAiFields.length === 0)
+    || Boolean(assistantApplied && liveAudit?.passed && !canPublish);
 
   return (
     <div className="min-h-screen bg-[#080a10] text-white">
@@ -702,15 +738,15 @@ export default function AdminSeoStudioPage() {
           {simpleMode && <section data-kp-unified-seo-workbench="true" className="mx-auto max-w-4xl space-y-4">
             <div className="rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.12] to-cyan-500/[0.05] p-5">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-200">SEO AI Workspace · một luồng duy nhất</p>
-              <div className="mt-2 flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold">{payload.movie_patch.name}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">Trợ lý sẽ chuẩn bị toàn bộ phần SEO có thể kiểm chứng. Bạn chỉ duyệt thay đổi và quyết định xuất bản.</p></div><button onClick={() => void handleAiSuggest()} disabled={!!busy || assistantApplied} className="rounded-xl bg-violet-400 px-4 py-3 text-sm font-bold text-black disabled:opacity-40"><i className="ri-sparkling-2-line" /> {busy === 'ai' ? 'Trợ lý đang làm…' : assistantApplied ? 'Bản nháp đã sẵn sàng' : 'Để trợ lý làm toàn bộ'}</button></div>
+              <div className="mt-2 flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold">{payload.movie_patch.name}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">Trợ lý sẽ chuẩn bị toàn bộ phần SEO có thể kiểm chứng. Bạn chỉ duyệt thay đổi và quyết định xuất bản.</p></div><button onClick={() => void handleUnifiedPrimaryAction()} disabled={unifiedActionDisabled} className={`rounded-xl px-4 py-3 text-sm font-bold text-black disabled:opacity-40 ${assistantApplied && liveAudit?.passed ? 'bg-emerald-400' : 'bg-violet-400'}`}><i className={assistantApplied && liveAudit?.passed ? 'ri-send-plane-fill' : 'ri-sparkling-2-line'} /> {unifiedActionLabel}</button></div>
               <div className="mt-5 grid gap-2 sm:grid-cols-3"><div className={`rounded-xl border p-3 ${aiSuggestion ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-black/20'}`}><p className="text-[10px] uppercase text-white/35">1. Trợ lý AI</p><strong className="mt-1 block text-sm">{aiSuggestion ? 'Đã làm bản nháp' : 'Chờ bắt đầu'}</strong></div><div className={`rounded-xl border p-3 ${assistantApplied ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-black/20'}`}><p className="text-[10px] uppercase text-white/35">2. Bạn duyệt</p><strong className="mt-1 block text-sm">{assistantApplied ? 'Đã thêm vào nháp' : 'Chờ bạn xem'}</strong></div><div className={`rounded-xl border p-3 ${liveAudit?.passed ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-black/20'}`}><p className="text-[10px] uppercase text-white/35">3. Kiểm tra & đăng</p><strong className="mt-1 block text-sm">{liveAudit?.passed ? 'Trang thật đã đạt' : 'Chưa kiểm tra'}</strong></div></div>
             </div>
 
             {!aiSuggestion && !assistantApplied && <div className={`rounded-2xl border p-4 ${priorityAction.blocking ? 'border-red-500/25 bg-red-500/[0.07]' : 'border-cyan-500/20 bg-cyan-500/[0.06]'}`}><p className="text-xs font-bold text-cyan-200">AI sẽ ưu tiên việc này</p><p className="mt-1 text-sm text-white/70">{priorityAction.description}</p><p className="mt-2 text-[11px] text-white/35">Các trường tốt đã được khóa, nên AI không thể làm hỏng chúng.</p></div>}
 
-            {aiSuggestion && !assistantApplied && <div className="rounded-2xl border border-white/[0.08] bg-[#10131d] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-white/85">AI đã hoàn thành — bạn chỉ cần duyệt thay đổi</p><p className="mt-1 max-w-2xl text-xs leading-5 text-white/45">{aiSuggestion.summary}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] ${aiSuggestion.validation.score >= baselineValidation.score ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}>Dự kiến {aiSuggestion.validation.score}/100</span></div><div className="mt-4 space-y-2">{aiSuggestion.changed_fields.map((field) => <label key={field} className={`block cursor-pointer rounded-xl border p-3 ${selectedAiFields.includes(field) ? 'border-violet-400/30 bg-violet-500/[0.08]' : 'border-white/[0.07] bg-white/[0.02]'}`}><div className="flex items-start gap-3"><input type="checkbox" checked={selectedAiFields.includes(field)} onChange={() => setSelectedAiFields((current) => current.includes(field) ? current.filter((item) => item !== field) : [...current, field])} className="mt-1 accent-violet-500" /><div className="min-w-0"><strong className="text-xs text-white/80">{FIELD_LABELS[field]}</strong><p className="mt-1 line-clamp-3 text-[11px] leading-5 text-violet-100/70">{previewValue(getPayloadField(aiSuggestion.proposed_payload, field))}</p></div></div></label>)}</div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-white/35">Đã chọn {selectedAiFields.length}/{aiSuggestion.changed_fields.length} mục. Những mục tốt không được chọn sẵn.</p><button onClick={applyAiSuggestion} disabled={selectedAiFields.length === 0} className="rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-black disabled:opacity-30">Thêm vào bản nháp</button></div></div>}
+            {aiSuggestion && !assistantApplied && <div className="rounded-2xl border border-white/[0.08] bg-[#10131d] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-white/85">AI đã hoàn thành — bạn chỉ cần duyệt thay đổi</p><p className="mt-1 max-w-2xl text-xs leading-5 text-white/45">{aiSuggestion.summary}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] ${aiSuggestion.validation.score >= baselineValidation.score ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}>Dự kiến {aiSuggestion.validation.score}/100</span></div><div className="mt-4 space-y-2">{aiSuggestion.changed_fields.map((field) => <label key={field} className={`block cursor-pointer rounded-xl border p-3 ${selectedAiFields.includes(field) ? 'border-violet-400/30 bg-violet-500/[0.08]' : 'border-white/[0.07] bg-white/[0.02]'}`}><div className="flex items-start gap-3"><input type="checkbox" checked={selectedAiFields.includes(field)} onChange={() => setSelectedAiFields((current) => current.includes(field) ? current.filter((item) => item !== field) : [...current, field])} className="mt-1 accent-violet-500" /><div className="min-w-0"><strong className="text-xs text-white/80">{FIELD_LABELS[field]}</strong><p className="mt-1 line-clamp-3 text-[11px] leading-5 text-violet-100/70">{previewValue(getPayloadField(aiSuggestion.proposed_payload, field))}</p></div></div></label>)}</div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-white/35">Đã chọn {selectedAiFields.length}/{aiSuggestion.changed_fields.length} mục. Những mục tốt không được chọn sẵn.</p><button onClick={() => void handleUnifiedPrimaryAction()} disabled={selectedAiFields.length === 0} className="rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-black disabled:opacity-30">{unifiedActionLabel}</button></div></div>}
 
-            {assistantApplied && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5"><p className="text-sm font-bold text-emerald-200">Bản nháp đã được tạo, website công khai chưa thay đổi</p><p className="mt-1 text-xs leading-5 text-white/50">Bây giờ chỉ còn kiểm tra trang thật, rồi bạn mới quyết định xuất bản. Hệ thống vẫn chặn nếu có lỗi hoặc điểm SEO giảm.</p><div className="mt-4 grid gap-2 sm:grid-cols-3"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-bold text-white/80 disabled:opacity-40">Lưu nháp</button><button onClick={() => void handleInspect()} disabled={!!busy} className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-3 py-2.5 text-xs font-bold text-cyan-200 disabled:opacity-40">{busy === 'inspect' ? 'Đang kiểm tra…' : 'Kiểm tra trang thật'}</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-400 px-3 py-2.5 text-xs font-bold text-black disabled:opacity-35">Xuất bản sau khi duyệt</button></div>{liveAudit && <p className={`mt-3 text-xs ${liveAudit.passed ? 'text-emerald-200' : 'text-amber-200'}`}>{liveAudit.passed ? 'Trang thật đã qua kiểm tra.' : 'Trang thật còn mục cần xử lý; hệ thống sẽ không cho phát hành thiếu an toàn.'}</p>}</div>}
+            {assistantApplied && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5"><p className="text-sm font-bold text-emerald-200">Bản nháp đã được tạo, website công khai chưa thay đổi</p><p className="mt-1 text-xs leading-5 text-white/50">Nút hành động chính phía trên sẽ tự chuyển từ “Kiểm tra trang thật” sang “Xuất bản SEO” khi mọi điều kiện đạt.</p><div className="mt-4 grid gap-2 sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-bold text-white/80 disabled:opacity-40">Lưu nháp</button><button onClick={() => void handleUnifiedPrimaryAction()} disabled={unifiedActionDisabled} className={`rounded-xl px-3 py-2.5 text-xs font-bold text-black disabled:opacity-35 ${liveAudit?.passed ? 'bg-emerald-400' : 'bg-cyan-300'}`}>{unifiedActionLabel}</button></div>{liveAudit && <p className={`mt-3 text-xs ${liveAudit.passed ? 'text-emerald-200' : 'text-amber-200'}`}>{liveAudit.passed ? 'Trang thật đã qua kiểm tra — nút “Xuất bản SEO” đã sẵn sàng.' : 'Trang thật còn mục cần xử lý; hệ thống sẽ không cho phát hành thiếu an toàn.'}</p>}</div>}
 
             <button onClick={() => setSimpleMode(false)} className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold text-white/60 hover:text-white">Mở chỉnh sâu khi cần: dữ liệu phim, từ khóa, nội dung và kỹ thuật <i className="ri-arrow-right-line" /></button>
           </section>}
