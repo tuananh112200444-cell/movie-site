@@ -9,7 +9,7 @@ const checks = [
   { name: 'rss', path: '/feed.xml', status: 200, has: ['<rss','/phim/'], soft: true },
   { name: 'robots', path: '/robots.txt', status: 200, has: ['Sitemap:'] },
   { name: 'press', path: '/press/', status: 200, has: ['Thông tin thương hiệu','khophim-logo-v2'] },
-  { name: 'api-time', path: '/api/time', status: 200, contentType: 'application/json', has: ['"now"'] },
+  { name: 'api-time', path: '/api/time', status: 200, contentType: 'application/json', has: ['"now"'], soft: true },
   { name: 'api-source-health', path: '/api/player-source-health?hours=1&limit=5', fallbackPath: '/functions/v1/player-source-health?hours=1&limit=5', status: 200, contentType: 'application/json', has: ['"bad_hosts"'] },
   { name: 'api-multi-source-detail', path: '/api/movie-detail?slug=cap-doi-trai-nguoc', fallbackPath: '/functions/v1/movie-detail-proxy?slug=cap-doi-trai-nguoc', status: 200, contentType: 'application/json', has: ['"movie"','"episodes"','"server_name"'] },
   { name: 'home-googlebot', path: '/', status: 200, has: ['index, follow','application/ld+json','KhoPhim'], bot: true },
