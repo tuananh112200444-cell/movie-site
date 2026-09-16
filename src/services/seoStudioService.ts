@@ -186,6 +186,8 @@ export interface SeoStudioLoadResult {
   movie: Record<string, unknown>;
   ai_available?: boolean;
   ai_provider?: 'gemini' | 'openai' | null;
+  publish_mode?: 'static' | 'worker';
+  static_release?: { status?: 'pending' | 'processing' | 'deployed' | 'failed'; requested_version?: number; requested_at?: string; processing_started_at?: string; deployed_at?: string; deployment_url?: string; error_message?: string } | null;
   worker_status?: { online: boolean; status: number; checked_at: string };
   profile: (PublishedSeoProfile & { review_content?: string; movie_patch?: SeoMoviePatch; status?: SeoProfileStatus; validation_issues?: SeoValidationIssue[] }) | null;
   review: { content?: string; word_count?: number; generated_at?: string; updated_at?: string } | null;
@@ -242,7 +244,7 @@ export function saveSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_ver
   return callAdmin('save', { payload, safe_edit: safeEdit });
 }
 
-export function publishSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_version: number; unlocked_fields: string[] }): Promise<{ success: boolean; status: SeoProfileStatus | 'published-indexable' | 'published-noindex'; validation: SeoValidationResult; result?: Record<string, unknown>; live_audit?: SeoLiveAuditResult; public_discovery?: { indexable: boolean; in_sitemap: boolean; checked_at: string } }> {
+export function publishSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_version: number; unlocked_fields: string[] }): Promise<{ success: boolean; status: SeoProfileStatus | 'published-indexable' | 'published-noindex' | 'queued-static'; publish_mode?: 'static' | 'worker'; validation: SeoValidationResult; result?: Record<string, unknown>; live_audit?: SeoLiveAuditResult; public_discovery?: { indexable: boolean; in_sitemap: boolean; queued?: boolean; checked_at: string }; static_release?: { status: string; requested_version: number; requested_at: string } }> {
   return callAdmin('publish', { payload, safe_edit: safeEdit });
 }
 
