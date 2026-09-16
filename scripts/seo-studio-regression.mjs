@@ -66,7 +66,9 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['bạn chỉ duyệt phần thay đổi', 'SEO Studio does not clearly retain human review before applying AI work'],
   ['data-kp-unified-seo-workbench="true"', 'SEO Studio has no unified daily AI workbench'],
   ['SEO AI Workspace · một luồng duy nhất', 'SEO Studio still presents its primary workflow as disconnected tools'],
-  ['Xuất bản sau khi duyệt', 'unified workbench can publish without a deliberate human review boundary'],
+  ['Nút hành động chính phía trên sẽ tự chuyển', 'unified workbench does not explain its review and publish sequence'],
+  ['Duyệt ${selectedAiFields.length} thay đổi & tiếp tục', 'unified workbench hides the next action after AI finishes'],
+  ["'Xuất bản SEO'", 'unified workbench does not expose a clear publish action after live verification'],
   ["loaded.ai_provider === 'gemini'", 'SEO Studio does not disclose the active server-side AI provider'],
 ]);
 expect('src/services/seoStudioService.ts', [
