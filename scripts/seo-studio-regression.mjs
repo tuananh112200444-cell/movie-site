@@ -42,6 +42,7 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['LOCAL_DRAFT_PREFIX', 'SEO Studio does not persist an automatic local draft'],
   ['readNewerLocalDraft', 'SEO Studio cannot restore interrupted edits'],
   ['setAssistantApplied(restoredHasChanges)', 'restored AI drafts incorrectly restart the workflow at the beginning'],
+  ['Bản nháp đã khôi phục', 'restored AI draft is mislabeled as not started'],
   ['restoredHasChanges ? null : result.profile?.live_audit', 'restored draft incorrectly reuses the published version live audit'],
   ['Bản nháp đã tự lưu trên máy này', 'SEO Studio does not show draft persistence status'],
   ["refreshed.profile?.status !== 'published'", 'SEO Studio does not confirm the server publish state'],
