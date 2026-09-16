@@ -25,8 +25,9 @@ async function fetchPage(url, { redirect = 'manual' } = {}) {
 const rootResponse = await fetchPage(new URL('/sitemap.xml', base), { redirect: 'follow' });
 const rootXml = await rootResponse.text();
 if (rootResponse.status !== 200 || !rootXml.includes('<sitemapindex')) failures.push(`Root sitemap failed: HTTP ${rootResponse.status}.`);
-if (!allowFunctionFailOpen && rootResponse.headers.get('x-sitemap-proxy') !== 'cloudflare-pages-priority-index') {
-  failures.push(`Root sitemap did not pass through the Pages SEO worker (proxy: ${rootResponse.headers.get('x-sitemap-proxy') || 'missing'}).`);
+const rootProxy = rootResponse.headers.get('x-sitemap-proxy') || '';
+if (!allowFunctionFailOpen && !['cloudflare-pages-priority-index', 'cloudflare-pages-static-fallback'].includes(rootProxy)) {
+  failures.push(`Root sitemap has an unexpected proxy marker: ${rootProxy || 'missing'}.`);
 }
 
 const childLocs = locs(rootXml);

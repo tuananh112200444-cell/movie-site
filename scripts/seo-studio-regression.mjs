@@ -104,7 +104,8 @@ if (studioEndpoint.indexOf('const prePublishAudit = await inspectLivePage(payloa
   throw new Error('SEO Worker preflight must run before the atomic publish RPC.');
 }
 expect('scripts/verify-seo-deployment.mjs', [
-  ["!== 'cloudflare-pages-priority-index'", 'deployment audit accepts a static fallback as a healthy SEO Worker'],
+  ["/sitemap-seo-studio.xml'", 'deployment audit does not distinguish the dynamic SEO Studio sitemap from the intentionally static root sitemap'],
+  ["response.headers.get('x-sitemap-proxy') !== 'cloudflare-pages'", 'deployment audit accepts a static fallback as a healthy SEO Studio sitemap'],
   ["/internal/seo-studio-inspect?slug=", 'deployment audit does not verify the protected SEO Studio inspection route'],
   ["/api/time", 'deployment audit does not verify the Pages Worker health route'],
 ]);
