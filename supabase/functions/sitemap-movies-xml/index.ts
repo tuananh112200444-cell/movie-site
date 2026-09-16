@@ -166,6 +166,21 @@ function hasHttpsTrailer(movie: MovieItem): boolean {
   return /^https:\/\//i.test(String(movie.trailer_url || '').trim());
 }
 
+function hasOfficialTrailerUrl(value?: string): boolean {
+  try {
+    const url = new URL(String(value || '').trim());
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (url.protocol !== 'https:') return false;
+    if (host === 'youtu.be') return url.pathname.replace(/^\/+/, '').length >= 6;
+    if (host !== 'youtube.com' && host !== 'm.youtube.com') return false;
+    return url.pathname === '/watch'
+      ? String(url.searchParams.get('v') || '').length >= 6
+      : /^\/(?:embed|shorts)\/[A-Za-z0-9_-]{6,}/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 function hasSeoBase(movie: MovieItem, minimumContentLength: number): boolean {
   const name = String(movie.name || '').trim();
   const image = String(movie.poster_url || movie.thumb_url || '').trim();
@@ -179,7 +194,7 @@ function hasSeoBase(movie: MovieItem, minimumContentLength: number): boolean {
     && year <= new Date().getUTCFullYear() + 2;
 }
 
-function isHighValueCohortMovie(movie: MovieItem): boolean {
+function isHighValueCohortMovie(movie: MovieItem, upcoming = false): boolean {
   const currentYear = new Date().getUTCFullYear();
   const name = String(movie.name || '').trim();
   const originName = String(movie.origin_name || '').trim();
@@ -189,20 +204,21 @@ function isHighValueCohortMovie(movie: MovieItem): boolean {
   const tmdbId = Number(movie.tmdb_id || 0);
   const hasBrokenText = /(?:Ã[^\s<]|Ä[^\s<]|Æ[^\s<]|áº|á»|â€|Â[\u0080-\u00bf])/.test(`${name} ${originName} ${description}`);
   return movie.seo_eligible_for_index === true
-    && movie.seo_index_tier !== 'upcoming'
+    && (upcoming ? movie.seo_index_tier === 'upcoming' : movie.seo_index_tier !== 'upcoming')
     && !movie.superseded_by_movie_id
-    && Number(movie.seo_quality_score || 0) >= 85
+    && Number(movie.seo_quality_score || 0) >= (upcoming ? 88 : 85)
     && name.length >= 2
     && originName.length >= 2
-    && description.length >= 500
+    && description.length >= (upcoming ? 350 : 500)
     && image.length > 0
-    && year >= 1888
+    && year >= (upcoming ? currentYear : 1888)
     && year <= currentYear + 2
     && tmdbId > 0
     && hasUsefulPerson(movie.actor)
     && hasUsefulPerson(movie.director)
     && Array.isArray(movie.category) && movie.category.length > 0
     && Array.isArray(movie.country) && movie.country.length > 0
+    && (!upcoming || hasOfficialTrailerUrl(movie.trailer_url))
     && !hasBrokenText;
 }
 
@@ -396,8 +412,8 @@ async function fetchEligibleUpcomingMovies(limit = 5000): Promise<MovieItem[]> {
     .eq('index_tier', 'upcoming')
     .eq('movies.is_published', true)
     .is('movies.superseded_by_movie_id', null)
-    .gte('quality_score', 85)
-    .gte('content_length', 500)
+    .gte('quality_score', 88)
+    .gte('content_length', 350)
     .not('movies.tmdb_id', 'is', null)
     .order('quality_score', { ascending: false })
     .order('checked_at', { ascending: false })
@@ -594,7 +610,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
   const pages = [1, 2, 3, 4, 5, 6];
   const [supabaseMovies, ...lists] = await Promise.all([
     options.mode === 'upcoming'
-      ? fetchEligibleUpcomingMovies(options.outputLimit)
+      ? fetchEligibleUpcomingMovies(Math.max(200, options.outputLimit * 10))
       : options.mode === 'ongoing'
         ? fetchEligibleOngoingMovies(options.outputLimit)
         : options.mode === 'recent'
@@ -633,7 +649,7 @@ async function buildMovieSitemap(req: Request): Promise<{ xml: string; count: nu
       // This keeps sitemap URLs aligned with the prerender index decision.
       if (!movie.id) return true;
       const qualityEligible = movie.seo_eligible_for_index === true || qualityByMovieId.get(movie.id) === true;
-      if (!qualityEligible || !isHighValueCohortMovie(movie)) return false;
+      if (!qualityEligible || !isHighValueCohortMovie(movie, options.mode === 'upcoming')) return false;
       const fingerprint = contentFingerprint(movie);
       if (!fingerprint || seenContent.has(fingerprint)) return false;
       seenContent.add(fingerprint);
