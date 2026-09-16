@@ -48,7 +48,7 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['isFieldLocked', 'good SEO fields are not locked by default'],
   ['Khôi phục bản đang chạy', 'SEO Studio cannot discard risky changes'],
   ['hasScoreRegression', 'SEO Studio does not warn when the new draft scores worse'],
-  ['Trợ lý AI SEO có kiểm soát', 'missing AI-assisted editorial workflow'],
+  ['Trợ lý AI SEO của bạn', 'missing AI-assisted editorial workflow'],
   ['AI không tự xuất bản', 'AI workflow does not state the publish boundary'],
   ['selectedAiFields', 'AI suggestions cannot be reviewed field by field'],
   ['applyAiSuggestion', 'AI suggestions cannot be selectively applied to a draft'],
@@ -61,6 +61,9 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['data-kp-seo-next-action="true"', 'SEO Studio has no stable priority-action surface'],
   ['getPriorityAction', 'SEO Studio does not prioritize blocking issues before editorial improvements'],
   ['Chế độ đơn giản', 'SEO Studio cannot hide advanced controls for a focused daily workflow'],
+  ['Để trợ lý AI làm bản nháp', 'SEO Studio has no single assistant action from the daily workflow'],
+  ['Trợ lý AI chuẩn bị toàn bộ bản nháp', 'SEO Studio does not make the AI copilot responsible for the full safe draft'],
+  ['bạn chỉ duyệt phần thay đổi', 'SEO Studio does not clearly retain human review before applying AI work'],
   ["loaded.ai_provider === 'gemini'", 'SEO Studio does not disclose the active server-side AI provider'],
 ]);
 expect('src/services/seoStudioService.ts', [
