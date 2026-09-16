@@ -304,6 +304,7 @@ export default function AdminSeoStudioPage() {
   const [aiMode, setAiMode] = useState<'quick' | 'deep'>('deep');
   const [aiSuggestion, setAiSuggestion] = useState<SeoAiSuggestionResult | null>(null);
   const [selectedAiFields, setSelectedAiFields] = useState<string[]>([]);
+  const [assistantApplied, setAssistantApplied] = useState(false);
   const [simpleMode, setSimpleMode] = useState(true);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const validationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -351,6 +352,7 @@ export default function AdminSeoStudioPage() {
       setLoaded(result);
       setAiSuggestion(null);
       setSelectedAiFields([]);
+      setAssistantApplied(false);
       setBaselinePayload(result.safe_edit?.baseline ?? serverPayload);
       const initialValidation = await validateSeoDraft(nextPayload);
       setBaselineValidation(result.safe_edit?.baseline_validation ?? await validateSeoDraft(serverPayload));
@@ -491,6 +493,7 @@ export default function AdminSeoStudioPage() {
     setUnlockedFields([]);
     setValidation(baselineValidation);
     setLiveAudit(loaded?.profile?.live_audit ?? null);
+    setAssistantApplied(false);
     if (selected) removeLocalValue(`${LOCAL_DRAFT_PREFIX}${selected.id}`);
     setDraftState('idle');
     setNotice({ type: 'success', text: 'Đã khôi phục toàn bộ biểu mẫu về phiên bản đang chạy; website công khai không bị thay đổi.' });
@@ -501,6 +504,7 @@ export default function AdminSeoStudioPage() {
     setStep('content');
     setBusy('ai');
     setNotice(null);
+    setAssistantApplied(false);
     try {
       const result = await suggestSeoDraft(payload.movie_id, payload.slug, aiMode);
       setAiSuggestion(result);
@@ -526,6 +530,7 @@ export default function AdminSeoStudioPage() {
     setPayload(next);
     syncTextFields(next);
     setUnlockedFields((current) => Array.from(new Set([...current, ...selectedAiFields])));
+    setAssistantApplied(true);
     setNotice({ type: 'success', text: `Đã áp dụng ${selectedAiFields.length} mục vào bản nháp. Hãy đọc lại, kiểm tra trang thật rồi mới xuất bản.` });
   };
 
@@ -689,11 +694,28 @@ export default function AdminSeoStudioPage() {
         {!payload && <section className="mx-auto mt-20 max-w-xl text-center"><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10"><i className="ri-focus-3-line text-3xl text-emerald-400" /></div><h2 className="text-xl font-bold">Chọn một phim để bắt đầu</h2><p className="mt-2 text-sm leading-6 text-white/40">SEO Studio sẽ tải dữ liệu phim, review, trạng thái index và các tín hiệu chất lượng vào cùng một quy trình.</p></section>}
 
         {payload && loaded && <>
-          <section data-kp-seo-next-action="true" className={`mb-5 rounded-2xl border p-4 ${priorityAction.blocking ? 'border-red-500/25 bg-red-500/[0.07]' : 'border-cyan-500/20 bg-cyan-500/[0.06]'}`}>
+          {!simpleMode && <section data-kp-seo-next-action="true" className={`mb-5 rounded-2xl border p-4 ${priorityAction.blocking ? 'border-red-500/25 bg-red-500/[0.07]' : 'border-cyan-500/20 bg-cyan-500/[0.06]'}`}>
             <div className="flex flex-wrap items-center justify-between gap-4"><div className="min-w-0"><p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${priorityAction.blocking ? 'text-red-300' : 'text-cyan-300'}`}>Hôm nay chỉ cần làm một việc</p><h2 className="mt-1 text-base font-bold">{priorityAction.title}</h2><p className="mt-1 max-w-3xl text-xs leading-5 text-white/55">{priorityAction.description}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => setStep(priorityAction.step)} className={`rounded-xl px-4 py-2.5 text-xs font-bold ${priorityAction.blocking ? 'bg-red-400 text-black' : 'bg-cyan-300 text-black'}`}>Mở {priorityStep?.short || 'việc này'} <i className="ri-arrow-right-line" /></button><button onClick={() => void handleAiSuggest()} disabled={!!busy} className="rounded-xl border border-violet-300/30 bg-violet-500/15 px-4 py-2.5 text-xs font-bold text-violet-100 disabled:opacity-40"><i className="ri-sparkling-2-line" /> Để trợ lý AI làm bản nháp</button></div></div>
             <p className="mt-3 text-[11px] text-white/35">Trợ lý chỉ chuẩn bị phần việc có thể kiểm chứng. Các phần đang tốt được giữ nguyên; bạn xem lại và quyết định áp dụng.</p>
-          </section>
-          <div className={`grid gap-5 ${simpleMode ? 'mx-auto max-w-4xl' : 'lg:grid-cols-[250px_minmax(0,1fr)_310px]'}`}>
+          </section>}
+
+          {simpleMode && <section data-kp-unified-seo-workbench="true" className="mx-auto max-w-4xl space-y-4">
+            <div className="rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.12] to-cyan-500/[0.05] p-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-200">SEO AI Workspace · một luồng duy nhất</p>
+              <div className="mt-2 flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold">{payload.movie_patch.name}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">Trợ lý sẽ chuẩn bị toàn bộ phần SEO có thể kiểm chứng. Bạn chỉ duyệt thay đổi và quyết định xuất bản.</p></div><button onClick={() => void handleAiSuggest()} disabled={!!busy || assistantApplied} className="rounded-xl bg-violet-400 px-4 py-3 text-sm font-bold text-black disabled:opacity-40"><i className="ri-sparkling-2-line" /> {busy === 'ai' ? 'Trợ lý đang làm…' : assistantApplied ? 'Bản nháp đã sẵn sàng' : 'Để trợ lý làm toàn bộ'}</button></div>
+              <div className="mt-5 grid gap-2 sm:grid-cols-3"><div className={`rounded-xl border p-3 ${aiSuggestion ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-black/20'}`}><p className="text-[10px] uppercase text-white/35">1. Trợ lý AI</p><strong className="mt-1 block text-sm">{aiSuggestion ? 'Đã làm bản nháp' : 'Chờ bắt đầu'}</strong></div><div className={`rounded-xl border p-3 ${assistantApplied ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-black/20'}`}><p className="text-[10px] uppercase text-white/35">2. Bạn duyệt</p><strong className="mt-1 block text-sm">{assistantApplied ? 'Đã thêm vào nháp' : 'Chờ bạn xem'}</strong></div><div className={`rounded-xl border p-3 ${liveAudit?.passed ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-black/20'}`}><p className="text-[10px] uppercase text-white/35">3. Kiểm tra & đăng</p><strong className="mt-1 block text-sm">{liveAudit?.passed ? 'Trang thật đã đạt' : 'Chưa kiểm tra'}</strong></div></div>
+            </div>
+
+            {!aiSuggestion && !assistantApplied && <div className={`rounded-2xl border p-4 ${priorityAction.blocking ? 'border-red-500/25 bg-red-500/[0.07]' : 'border-cyan-500/20 bg-cyan-500/[0.06]'}`}><p className="text-xs font-bold text-cyan-200">AI sẽ ưu tiên việc này</p><p className="mt-1 text-sm text-white/70">{priorityAction.description}</p><p className="mt-2 text-[11px] text-white/35">Các trường tốt đã được khóa, nên AI không thể làm hỏng chúng.</p></div>}
+
+            {aiSuggestion && !assistantApplied && <div className="rounded-2xl border border-white/[0.08] bg-[#10131d] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-white/85">AI đã hoàn thành — bạn chỉ cần duyệt thay đổi</p><p className="mt-1 max-w-2xl text-xs leading-5 text-white/45">{aiSuggestion.summary}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] ${aiSuggestion.validation.score >= baselineValidation.score ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}>Dự kiến {aiSuggestion.validation.score}/100</span></div><div className="mt-4 space-y-2">{aiSuggestion.changed_fields.map((field) => <label key={field} className={`block cursor-pointer rounded-xl border p-3 ${selectedAiFields.includes(field) ? 'border-violet-400/30 bg-violet-500/[0.08]' : 'border-white/[0.07] bg-white/[0.02]'}`}><div className="flex items-start gap-3"><input type="checkbox" checked={selectedAiFields.includes(field)} onChange={() => setSelectedAiFields((current) => current.includes(field) ? current.filter((item) => item !== field) : [...current, field])} className="mt-1 accent-violet-500" /><div className="min-w-0"><strong className="text-xs text-white/80">{FIELD_LABELS[field]}</strong><p className="mt-1 line-clamp-3 text-[11px] leading-5 text-violet-100/70">{previewValue(getPayloadField(aiSuggestion.proposed_payload, field))}</p></div></div></label>)}</div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-white/35">Đã chọn {selectedAiFields.length}/{aiSuggestion.changed_fields.length} mục. Những mục tốt không được chọn sẵn.</p><button onClick={applyAiSuggestion} disabled={selectedAiFields.length === 0} className="rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-black disabled:opacity-30">Thêm vào bản nháp</button></div></div>}
+
+            {assistantApplied && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5"><p className="text-sm font-bold text-emerald-200">Bản nháp đã được tạo, website công khai chưa thay đổi</p><p className="mt-1 text-xs leading-5 text-white/50">Bây giờ chỉ còn kiểm tra trang thật, rồi bạn mới quyết định xuất bản. Hệ thống vẫn chặn nếu có lỗi hoặc điểm SEO giảm.</p><div className="mt-4 grid gap-2 sm:grid-cols-3"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-bold text-white/80 disabled:opacity-40">Lưu nháp</button><button onClick={() => void handleInspect()} disabled={!!busy} className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-3 py-2.5 text-xs font-bold text-cyan-200 disabled:opacity-40">{busy === 'inspect' ? 'Đang kiểm tra…' : 'Kiểm tra trang thật'}</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-400 px-3 py-2.5 text-xs font-bold text-black disabled:opacity-35">Xuất bản sau khi duyệt</button></div>{liveAudit && <p className={`mt-3 text-xs ${liveAudit.passed ? 'text-emerald-200' : 'text-amber-200'}`}>{liveAudit.passed ? 'Trang thật đã qua kiểm tra.' : 'Trang thật còn mục cần xử lý; hệ thống sẽ không cho phát hành thiếu an toàn.'}</p>}</div>}
+
+            <button onClick={() => setSimpleMode(false)} className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold text-white/60 hover:text-white">Mở chỉnh sâu khi cần: dữ liệu phim, từ khóa, nội dung và kỹ thuật <i className="ri-arrow-right-line" /></button>
+          </section>}
+
+          {!simpleMode && <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)_310px]">
           {!simpleMode && <aside className="space-y-3 lg:sticky lg:top-[82px] lg:self-start">
             <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-3">
               <div className="mb-3 flex items-center gap-3 border-b border-white/[0.06] pb-3">
@@ -804,7 +826,7 @@ export default function AdminSeoStudioPage() {
             {(loaded.insights?.search_metric || (loaded.insights?.search_queries?.length ?? 0) > 0) && <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-4"><p className="text-xs font-semibold text-white/60">Tín hiệu Google gần nhất</p>{loaded.insights?.search_metric && <div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-lg bg-white/[0.03] p-2"><strong className="block text-sm text-white/75">{loaded.insights.search_metric.impressions ?? 0}</strong><span className="text-[9px] text-white/30">lượt thấy</span></div><div className="rounded-lg bg-white/[0.03] p-2"><strong className="block text-sm text-white/75">{loaded.insights.search_metric.clicks ?? 0}</strong><span className="text-[9px] text-white/30">lượt nhấp</span></div><div className="rounded-lg bg-white/[0.03] p-2"><strong className="block text-sm text-white/75">{Number(loaded.insights.search_metric.position || 0).toFixed(1)}</strong><span className="text-[9px] text-white/30">vị trí TB</span></div></div>}<div className="mt-3 space-y-1">{loaded.insights?.search_queries?.slice(0, 4).map((item) => <p key={item.query} className="truncate text-[10px] text-cyan-300/65">{item.query} · {item.impressions ?? 0} lượt thấy</p>)}</div></div>}
             <div className="rounded-2xl border border-white/[0.07] bg-[#10131d] p-4"><p className="text-xs font-semibold text-white/60">Sau khi xuất bản</p><ul className="mt-2 space-y-2 text-[11px] leading-5 text-white/35"><li>• Dữ liệu phim, review và hồ sơ SEO được đồng bộ cùng lúc.</li><li>• HTML Googlebot được kiểm tra bằng đúng phiên bản hồ sơ vừa xuất bản.</li><li>• Canonical, robots, schema, ảnh và liên kết nội bộ đều phải đạt.</li><li>• Nếu kiểm tra thất bại, hệ thống tự giữ trang ở noindex hoặc khôi phục bản tốt trước đó.</li><li>• Bản tĩnh và sitemap được đưa vào hàng đợi cập nhật sau khi xác minh.</li></ul></div>
           </aside>}
-        </div></>}
+        </div>}</>}
       </main>
     </div>
   );
