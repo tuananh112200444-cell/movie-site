@@ -365,17 +365,21 @@ export default function AdminSeoStudioPage() {
       const nextUnlockedFields = useLocalDraft
         ? localDraft?.unlockedFields ?? []
         : serverDraft?.unlocked_fields ?? [];
+      const nextBaseline = result.safe_edit?.baseline ?? serverPayload;
+      const restoredHasChanges = Object.keys(FIELD_LABELS).some((field) => (
+        comparableField(getPayloadField(nextPayload, field)) !== comparableField(getPayloadField(nextBaseline, field))
+      ));
       setLoaded(result);
       setAiSuggestion(null);
       setSelectedAiFields([]);
-      setAssistantApplied(false);
-      setBaselinePayload(result.safe_edit?.baseline ?? serverPayload);
+      setAssistantApplied(restoredHasChanges);
+      setBaselinePayload(nextBaseline);
       const initialValidation = await validateSeoDraft(nextPayload);
       setBaselineValidation(result.safe_edit?.baseline_validation ?? await validateSeoDraft(serverPayload));
       setFieldStates(result.safe_edit?.fields ?? {});
       setBaselineVersion(result.safe_edit?.baseline_version ?? Number(result.profile?.version || 0));
       setUnlockedFields(nextUnlockedFields);
-      setLiveAudit(result.profile?.live_audit ?? null);
+      setLiveAudit(restoredHasChanges ? null : result.profile?.live_audit ?? null);
       setPayload(nextPayload);
       setSecondaryText(nextPayload.secondary_keywords.join(', '));
       setActorText(nextPayload.movie_patch.actor.join(', '));
