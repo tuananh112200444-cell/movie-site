@@ -786,33 +786,46 @@ async function requestOpenAiSuggestion(input: Record<string, unknown>, baseline:
 }
 
 async function requestGeminiSuggestion(input: Record<string, unknown>, baseline: SeoPayload): Promise<AiSeoSuggestion> {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
-    method: 'POST',
-    headers: {
-      'x-goog-api-key': GEMINI_API_KEY,
-      'Content-Type': 'application/json',
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: AI_EDITOR_INSTRUCTIONS }] },
+    contents: [{ role: 'user', parts: [{ text: `TRUSTED_CONTEXT\n${JSON.stringify(input)}` }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseJsonSchema: AI_SUGGESTION_SCHEMA,
+      maxOutputTokens: 9000,
+      temperature: 0.25,
     },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: AI_EDITOR_INSTRUCTIONS }] },
-      contents: [{ role: 'user', parts: [{ text: `TRUSTED_CONTEXT\n${JSON.stringify(input)}` }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseJsonSchema: AI_SUGGESTION_SCHEMA,
-        maxOutputTokens: 9000,
-        temperature: 0.25,
-      },
-    }),
-    signal: AbortSignal.timeout(55000),
   });
-  const responseBody = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const row = responseBody && typeof responseBody === 'object' ? responseBody as Record<string, unknown> : {};
-    const apiError = row.error && typeof row.error === 'object' ? row.error as Record<string, unknown> : {};
-    throw new Error(plainText(apiError.message, 500) || `Gemini API error ${response.status}`);
+  let lastError = 'Gemini tạm thời chưa phản hồi.';
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'x-goog-api-key': GEMINI_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: requestBody,
+        signal: AbortSignal.timeout(55000),
+      });
+      const responseBody = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const outputText = extractGeminiText(responseBody);
+        if (!outputText) throw new Error('Gemini không trả về bản đề xuất có cấu trúc.');
+        return normalizeAiSuggestion(baseline, JSON.parse(outputText) as Record<string, unknown>);
+      }
+      const row = responseBody && typeof responseBody === 'object' ? responseBody as Record<string, unknown> : {};
+      const apiError = row.error && typeof row.error === 'object' ? row.error as Record<string, unknown> : {};
+      lastError = plainText(apiError.message, 500) || `Gemini API error ${response.status}`;
+      const retryable = [429, 500, 502, 503, 504].includes(response.status);
+      if (!retryable || attempt === 2) break;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (attempt === 2) break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
   }
-  const outputText = extractGeminiText(responseBody);
-  if (!outputText) throw new Error('Gemini không trả về bản đề xuất có cấu trúc.');
-  return normalizeAiSuggestion(baseline, JSON.parse(outputText) as Record<string, unknown>);
+  throw new Error(`Gemini đang quá tải sau 3 lần thử. Chưa có thay đổi nào được áp dụng. ${lastError}`);
 }
 
 function decodeHtml(value: string): string {
