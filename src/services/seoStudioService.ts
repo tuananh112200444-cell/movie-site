@@ -185,6 +185,7 @@ export async function searchSeoMovies(query: string): Promise<SeoMovieSearchItem
 export interface SeoStudioLoadResult {
   movie: Record<string, unknown>;
   ai_available?: boolean;
+  ai_provider?: 'gemini' | 'openai' | null;
   worker_status?: { online: boolean; status: number; checked_at: string };
   profile: (PublishedSeoProfile & { review_content?: string; movie_patch?: SeoMoviePatch; status?: SeoProfileStatus; validation_issues?: SeoValidationIssue[] }) | null;
   review: { content?: string; word_count?: number; generated_at?: string; updated_at?: string } | null;
@@ -220,6 +221,7 @@ export interface SeoAiEvidence {
 
 export interface SeoAiSuggestionResult {
   ai_available: boolean;
+  provider?: 'gemini' | 'openai' | null;
   model: string | null;
   mode: 'quick' | 'deep';
   summary: string;

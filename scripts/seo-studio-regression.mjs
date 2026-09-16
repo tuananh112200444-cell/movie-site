@@ -61,6 +61,7 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['data-kp-seo-next-action="true"', 'SEO Studio has no stable priority-action surface'],
   ['getPriorityAction', 'SEO Studio does not prioritize blocking issues before editorial improvements'],
   ['Chế độ đơn giản', 'SEO Studio cannot hide advanced controls for a focused daily workflow'],
+  ["loaded.ai_provider === 'gemini'", 'SEO Studio does not disclose the active server-side AI provider'],
 ]);
 expect('src/services/seoStudioService.ts', [
   ["callAdmin('publish'", 'missing authenticated publish call'],
@@ -99,6 +100,10 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ['allowedTopicPaths', 'AI can invent internal-link destinations'],
   ['store: false', 'AI request is stored unnecessarily'],
   ['fallbackAiSuggestion', 'SEO Studio has no safe fallback when AI is unavailable'],
+  ["Deno.env.get('GEMINI_API_KEY')", 'SEO Studio cannot use a server-side Gemini key'],
+  ['requestGeminiSuggestion', 'SEO Studio has no Gemini editorial request path'],
+  ["'x-goog-api-key': GEMINI_API_KEY", 'Gemini key is not kept in the server-to-server request header'],
+  ['responseJsonSchema: AI_SUGGESTION_SCHEMA', 'Gemini response is not constrained to the SEO suggestion schema'],
   ['seoWorkerStatus()', 'SEO Studio does not check Worker availability before editorial work'],
   ['seo_worker_preflight_failed', 'publishing can mutate a good profile while the SEO Worker is unavailable'],
 ]);

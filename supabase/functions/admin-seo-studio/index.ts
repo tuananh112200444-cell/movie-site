@@ -6,6 +6,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 const SEO_INSPECT_SECRET = Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') ?? '';
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') ?? 'gpt-5.5';
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.8-flash';
 
 type Severity = 'error' | 'warning' | 'success';
 type ValidationIssue = {
@@ -645,6 +647,16 @@ const AI_SUGGESTION_SCHEMA = {
   },
 } as const;
 
+const AI_EDITOR_INSTRUCTIONS = [
+  'Bạn là biên tập viên SEO phim tiếng Việt của KhoPhim.',
+  'Chỉ dùng dữ kiện có trong TRUSTED_CONTEXT. Không suy đoán nguồn phát, ngày chiếu, cốt truyện, diễn viên, đạo diễn hoặc mức độ nổi tiếng.',
+  'Không tự chấm điểm, không dùng lời quảng cáo cảm tính như hay nhất, đỉnh, siêu hay; không nhồi từ khóa và không sao chép mô tả.',
+  'Mục tiêu là nội dung tự nhiên, hữu ích, phân biệt rõ phim và đáp ứng đúng ý định tìm kiếm.',
+  'Giữ nguyên trường đang tốt khi không có lý do cụ thể để sửa. Tuyệt đối không đề xuất thay đổi slug, canonical, index_mode hoặc movie_patch.',
+  'Liên kết nội bộ chỉ được chọn nguyên văn từ related_movies. Nếu dữ kiện không đủ, giữ nội dung hiện tại và nêu cảnh báo.',
+  'Mỗi dữ kiện quan trọng phải có evidence trỏ tới một source_url đã xuất hiện trong TRUSTED_CONTEXT.',
+].join(' ');
+
 function aiPatchFromSuggestion(baseline: SeoPayload, value: unknown): AiSeoSuggestion['patch'] {
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const cleaned = cleanPayload({ ...baseline, ...raw, movie_patch: baseline.movie_patch });
@@ -675,6 +687,21 @@ function extractOpenAiText(value: unknown): string {
   return '';
 }
 
+function extractGeminiText(value: unknown): string {
+  const response = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const candidates = Array.isArray(response.candidates) ? response.candidates : [];
+  for (const candidate of candidates) {
+    const row = candidate && typeof candidate === 'object' ? candidate as Record<string, unknown> : {};
+    const content = row.content && typeof row.content === 'object' ? row.content as Record<string, unknown> : {};
+    const parts = Array.isArray(content.parts) ? content.parts : [];
+    for (const part of parts) {
+      const item = part && typeof part === 'object' ? part as Record<string, unknown> : {};
+      if (typeof item.text === 'string') return item.text;
+    }
+  }
+  return '';
+}
+
 function fallbackAiSuggestion(
   baseline: SeoPayload,
   relatedMovies: Array<Record<string, unknown>>,
@@ -695,52 +722,12 @@ function fallbackAiSuggestion(
       source_url: `https://khophim.org${link.url}`,
       confidence: 'high',
     })),
-    warnings: ['Chưa có OPENAI_API_KEY nên nội dung biên tập không được AI viết mới.'],
+    warnings: ['Chưa có GEMINI_API_KEY hoặc OPENAI_API_KEY nên nội dung biên tập không được AI viết mới.'],
     preserved_fields: ['slug', 'canonical_path', 'index_mode', 'movie_patch'],
   };
 }
 
-async function requestAiSuggestion(input: Record<string, unknown>, baseline: SeoPayload): Promise<AiSeoSuggestion> {
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      store: false,
-      max_output_tokens: 9000,
-      instructions: [
-        'Bạn là biên tập viên SEO phim tiếng Việt của KhoPhim.',
-        'Chỉ dùng dữ kiện có trong TRUSTED_CONTEXT. Không suy đoán nguồn phát, ngày chiếu, cốt truyện, diễn viên, đạo diễn hoặc mức độ nổi tiếng.',
-        'Không tự chấm điểm, không dùng lời quảng cáo cảm tính như hay nhất, đỉnh, siêu hay; không nhồi từ khóa và không sao chép mô tả.',
-        'Mục tiêu là nội dung tự nhiên, hữu ích, phân biệt rõ phim và đáp ứng đúng ý định tìm kiếm.',
-        'Giữ nguyên trường đang tốt khi không có lý do cụ thể để sửa. Tuyệt đối không đề xuất thay đổi slug, canonical, index_mode hoặc movie_patch.',
-        'Liên kết nội bộ chỉ được chọn nguyên văn từ related_movies. Nếu dữ kiện không đủ, giữ nội dung hiện tại và nêu cảnh báo.',
-        'Mỗi dữ kiện quan trọng phải có evidence trỏ tới một source_url đã xuất hiện trong TRUSTED_CONTEXT.',
-      ].join(' '),
-      input: `TRUSTED_CONTEXT\n${JSON.stringify(input)}`,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'khophim_seo_suggestion',
-          strict: true,
-          schema: AI_SUGGESTION_SCHEMA,
-        },
-      },
-    }),
-    signal: AbortSignal.timeout(55000),
-  });
-  const responseBody = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const row = responseBody && typeof responseBody === 'object' ? responseBody as Record<string, unknown> : {};
-    const apiError = row.error && typeof row.error === 'object' ? row.error as Record<string, unknown> : {};
-    throw new Error(plainText(apiError.message, 500) || `OpenAI API error ${response.status}`);
-  }
-  const outputText = extractOpenAiText(responseBody);
-  if (!outputText) throw new Error('AI không trả về bản đề xuất có cấu trúc.');
-  const parsed = JSON.parse(outputText) as Record<string, unknown>;
+function normalizeAiSuggestion(baseline: SeoPayload, parsed: Record<string, unknown>): AiSeoSuggestion {
   const patch = aiPatchFromSuggestion(baseline, parsed.patch);
   const evidence = Array.isArray(parsed.evidence) ? parsed.evidence.slice(0, 20).flatMap((item) => {
     const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
@@ -761,6 +748,71 @@ async function requestAiSuggestion(input: Record<string, unknown>, baseline: Seo
     warnings: cleanStringList(parsed.warnings, 12, 500),
     preserved_fields: cleanStringList(parsed.preserved_fields, 20, 80),
   };
+}
+
+async function requestOpenAiSuggestion(input: Record<string, unknown>, baseline: SeoPayload): Promise<AiSeoSuggestion> {
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      store: false,
+      max_output_tokens: 9000,
+      instructions: AI_EDITOR_INSTRUCTIONS,
+      input: `TRUSTED_CONTEXT\n${JSON.stringify(input)}`,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'khophim_seo_suggestion',
+          strict: true,
+          schema: AI_SUGGESTION_SCHEMA,
+        },
+      },
+    }),
+    signal: AbortSignal.timeout(55000),
+  });
+  const responseBody = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const row = responseBody && typeof responseBody === 'object' ? responseBody as Record<string, unknown> : {};
+    const apiError = row.error && typeof row.error === 'object' ? row.error as Record<string, unknown> : {};
+    throw new Error(plainText(apiError.message, 500) || `OpenAI API error ${response.status}`);
+  }
+  const outputText = extractOpenAiText(responseBody);
+  if (!outputText) throw new Error('AI không trả về bản đề xuất có cấu trúc.');
+  return normalizeAiSuggestion(baseline, JSON.parse(outputText) as Record<string, unknown>);
+}
+
+async function requestGeminiSuggestion(input: Record<string, unknown>, baseline: SeoPayload): Promise<AiSeoSuggestion> {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
+    method: 'POST',
+    headers: {
+      'x-goog-api-key': GEMINI_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: AI_EDITOR_INSTRUCTIONS }] },
+      contents: [{ role: 'user', parts: [{ text: `TRUSTED_CONTEXT\n${JSON.stringify(input)}` }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseJsonSchema: AI_SUGGESTION_SCHEMA,
+        maxOutputTokens: 9000,
+        temperature: 0.25,
+      },
+    }),
+    signal: AbortSignal.timeout(55000),
+  });
+  const responseBody = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const row = responseBody && typeof responseBody === 'object' ? responseBody as Record<string, unknown> : {};
+    const apiError = row.error && typeof row.error === 'object' ? row.error as Record<string, unknown> : {};
+    throw new Error(plainText(apiError.message, 500) || `Gemini API error ${response.status}`);
+  }
+  const outputText = extractGeminiText(responseBody);
+  if (!outputText) throw new Error('Gemini không trả về bản đề xuất có cấu trúc.');
+  return normalizeAiSuggestion(baseline, JSON.parse(outputText) as Record<string, unknown>);
 }
 
 function decodeHtml(value: string): string {
@@ -920,7 +972,8 @@ Deno.serve(async (req) => {
         profile: profileResult.data,
         review: reviewResult.data,
         quality: qualityResult.data,
-        ai_available: Boolean(OPENAI_API_KEY),
+        ai_available: Boolean(GEMINI_API_KEY || OPENAI_API_KEY),
+        ai_provider: GEMINI_API_KEY ? 'gemini' : OPENAI_API_KEY ? 'openai' : null,
         worker_status: workerStatus,
         insights: {
           work_item: workItemResult.error ? null : workItemResult.data,
@@ -1013,8 +1066,11 @@ Deno.serve(async (req) => {
           url: `https://khophim.org/phim/${item.slug}`,
         })),
       };
-      const suggestion = OPENAI_API_KEY
-        ? await requestAiSuggestion(trustedContext, baseline)
+      const aiProvider = GEMINI_API_KEY ? 'gemini' : OPENAI_API_KEY ? 'openai' : null;
+      const suggestion = GEMINI_API_KEY
+        ? await requestGeminiSuggestion(trustedContext, baseline)
+        : OPENAI_API_KEY
+          ? await requestOpenAiSuggestion(trustedContext, baseline)
         : fallbackAiSuggestion(baseline, relatedMovies);
       const allowedEvidenceUrls = new Set([
         `https://khophim.org/phim/${slug}`,
@@ -1034,8 +1090,9 @@ Deno.serve(async (req) => {
       proposedValidation = mergeValidation(proposedValidation, await remoteValidationIssues(db, proposed));
       const changedFields = AI_EDITABLE_FIELDS.filter((field) => comparable(valueAt(baseline, field)) !== comparable(valueAt(proposed, field)));
       return json({
-        ai_available: Boolean(OPENAI_API_KEY),
-        model: OPENAI_API_KEY ? OPENAI_MODEL : null,
+        ai_available: Boolean(aiProvider),
+        provider: aiProvider,
+        model: aiProvider === 'gemini' ? GEMINI_MODEL : aiProvider === 'openai' ? OPENAI_MODEL : null,
         mode,
         summary: suggestion.summary,
         proposed_payload: proposed,
