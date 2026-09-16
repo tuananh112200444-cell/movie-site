@@ -301,7 +301,7 @@ export default function AdminSeoStudioPage() {
   const [fieldStates, setFieldStates] = useState<Record<string, SeoSafeFieldState>>({});
   const [baselineVersion, setBaselineVersion] = useState(0);
   const [unlockedFields, setUnlockedFields] = useState<string[]>([]);
-  const [aiMode, setAiMode] = useState<'quick' | 'deep'>('deep');
+  const [aiMode, setAiMode] = useState<'quick' | 'deep'>('quick');
   const [aiSuggestion, setAiSuggestion] = useState<SeoAiSuggestionResult | null>(null);
   const [selectedAiFields, setSelectedAiFields] = useState<string[]>([]);
   const [assistantApplied, setAssistantApplied] = useState(false);
@@ -499,6 +499,20 @@ export default function AdminSeoStudioPage() {
     setNotice({ type: 'success', text: 'Đã khôi phục toàn bộ biểu mẫu về phiên bản đang chạy; website công khai không bị thay đổi.' });
   };
 
+  const applySuggestionFields = (suggestion: SeoAiSuggestionResult, fields: string[]): boolean => {
+    if (!payload || fields.length === 0) return false;
+    let next = payload;
+    for (const field of fields) {
+      next = replacePayloadField(next, field, getPayloadField(suggestion.proposed_payload, field));
+    }
+    setPayload(next);
+    syncTextFields(next);
+    setUnlockedFields((current) => Array.from(new Set([...current, ...fields])));
+    setLiveAudit(null);
+    setAssistantApplied(true);
+    return true;
+  };
+
   const handleAiSuggest = async () => {
     if (!payload) return;
     setStep('content');
@@ -510,10 +524,13 @@ export default function AdminSeoStudioPage() {
       setAiSuggestion(result);
       const safeDefaults = result.changed_fields.filter((field) => fieldStates[field]?.status === 'needs_attention');
       setSelectedAiFields(safeDefaults);
+      const applied = applySuggestionFields(result, safeDefaults);
       setNotice({
         type: 'success',
         text: result.ai_available
-          ? `${result.provider === 'gemini' ? 'Gemini' : 'AI'} đã tạo bản đề xuất có kiểm soát. ${safeDefaults.length} mục còn yếu được chọn sẵn; chưa có gì được xuất bản.`
+          ? applied
+            ? `${result.provider === 'gemini' ? 'Gemini' : 'AI'} đã tự điền ${safeDefaults.length} mục còn yếu vào bản nháp. Website công khai chưa thay đổi; hãy đọc lại rồi kiểm tra trang thật.`
+            : `${result.provider === 'gemini' ? 'Gemini' : 'AI'} đã phân tích nhưng không tìm thấy thay đổi an toàn tốt hơn dữ liệu hiện tại.`
           : 'Đã tạo gợi ý an toàn từ dữ liệu có sẵn. Muốn AI viết nội dung, máy chủ cần cấu hình khóa OpenAI.',
       });
     } catch (error) {
@@ -523,15 +540,7 @@ export default function AdminSeoStudioPage() {
 
   const applyAiSuggestion = () => {
     if (!payload || !aiSuggestion || selectedAiFields.length === 0) return;
-    let next = payload;
-    for (const field of selectedAiFields) {
-      next = replacePayloadField(next, field, getPayloadField(aiSuggestion.proposed_payload, field));
-    }
-    setPayload(next);
-    syncTextFields(next);
-    setUnlockedFields((current) => Array.from(new Set([...current, ...selectedAiFields])));
-    setLiveAudit(null);
-    setAssistantApplied(true);
+    applySuggestionFields(aiSuggestion, selectedAiFields);
     setNotice({ type: 'success', text: `Đã áp dụng ${selectedAiFields.length} mục vào bản nháp. Hãy đọc lại, kiểm tra trang thật rồi mới xuất bản.` });
   };
 
@@ -746,7 +755,7 @@ export default function AdminSeoStudioPage() {
 
             {aiSuggestion && !assistantApplied && <div className="rounded-2xl border border-white/[0.08] bg-[#10131d] p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-white/85">AI đã hoàn thành — bạn chỉ cần duyệt thay đổi</p><p className="mt-1 max-w-2xl text-xs leading-5 text-white/45">{aiSuggestion.summary}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] ${aiSuggestion.validation.score >= baselineValidation.score ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}>Dự kiến {aiSuggestion.validation.score}/100</span></div><div className="mt-4 space-y-2">{aiSuggestion.changed_fields.map((field) => <label key={field} className={`block cursor-pointer rounded-xl border p-3 ${selectedAiFields.includes(field) ? 'border-violet-400/30 bg-violet-500/[0.08]' : 'border-white/[0.07] bg-white/[0.02]'}`}><div className="flex items-start gap-3"><input type="checkbox" checked={selectedAiFields.includes(field)} onChange={() => setSelectedAiFields((current) => current.includes(field) ? current.filter((item) => item !== field) : [...current, field])} className="mt-1 accent-violet-500" /><div className="min-w-0"><strong className="text-xs text-white/80">{FIELD_LABELS[field]}</strong><p className="mt-1 line-clamp-3 text-[11px] leading-5 text-violet-100/70">{previewValue(getPayloadField(aiSuggestion.proposed_payload, field))}</p></div></div></label>)}</div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-white/35">Đã chọn {selectedAiFields.length}/{aiSuggestion.changed_fields.length} mục. Những mục tốt không được chọn sẵn.</p><button onClick={() => void handleUnifiedPrimaryAction()} disabled={selectedAiFields.length === 0} className="rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-black disabled:opacity-30">{unifiedActionLabel}</button></div></div>}
 
-            {assistantApplied && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5"><p className="text-sm font-bold text-emerald-200">Bản nháp đã được tạo, website công khai chưa thay đổi</p><p className="mt-1 text-xs leading-5 text-white/50">Nút hành động chính phía trên sẽ tự chuyển từ “Kiểm tra trang thật” sang “Xuất bản SEO” khi mọi điều kiện đạt.</p><div className="mt-4 grid gap-2 sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-bold text-white/80 disabled:opacity-40">Lưu nháp</button><button onClick={() => void handleUnifiedPrimaryAction()} disabled={unifiedActionDisabled} className={`rounded-xl px-3 py-2.5 text-xs font-bold text-black disabled:opacity-35 ${liveAudit?.passed ? 'bg-emerald-400' : 'bg-cyan-300'}`}>{unifiedActionLabel}</button></div>{liveAudit && <p className={`mt-3 text-xs ${liveAudit.passed ? 'text-emerald-200' : 'text-amber-200'}`}>{liveAudit.passed ? 'Trang thật đã qua kiểm tra — nút “Xuất bản SEO” đã sẵn sàng.' : 'Trang thật còn mục cần xử lý; hệ thống sẽ không cho phát hành thiếu an toàn.'}</p>}</div>}
+            {assistantApplied && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5"><p className="text-sm font-bold text-emerald-200">AI đã điền bản nháp, website công khai chưa thay đổi</p><p className="mt-1 text-xs leading-5 text-white/50">Đọc nhanh các mục AI vừa điền bên dưới. Nút hành động sẽ chuyển từ “Kiểm tra trang thật” sang “Xuất bản SEO” khi mọi điều kiện đạt.</p>{aiSuggestion && selectedAiFields.length > 0 && <div className="mt-4 space-y-2">{selectedAiFields.map((field) => <div key={field} className="rounded-xl border border-white/[0.08] bg-black/15 px-3 py-2"><p className="text-[10px] font-bold uppercase text-emerald-200/70">{FIELD_LABELS[field]}</p><p className="mt-1 line-clamp-3 text-[11px] leading-5 text-white/55">{previewValue(getPayloadField(payload, field))}</p></div>)}</div>}<div className="mt-4 grid gap-2 sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-bold text-white/80 disabled:opacity-40">Lưu nháp</button><button onClick={() => void handleUnifiedPrimaryAction()} disabled={unifiedActionDisabled} className={`rounded-xl px-3 py-2.5 text-xs font-bold text-black disabled:opacity-35 ${liveAudit?.passed ? 'bg-emerald-400' : 'bg-cyan-300'}`}>{unifiedActionLabel}</button></div>{liveAudit && <p className={`mt-3 text-xs ${liveAudit.passed ? 'text-emerald-200' : 'text-amber-200'}`}>{liveAudit.passed ? 'Trang thật đã qua kiểm tra — nút “Xuất bản SEO” đã sẵn sàng.' : 'Trang thật còn mục cần xử lý; hệ thống sẽ không cho phát hành thiếu an toàn.'}</p>}</div>}
 
             <button onClick={() => setSimpleMode(false)} className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold text-white/60 hover:text-white">Mở chỉnh sâu khi cần: dữ liệu phim, từ khóa, nội dung và kỹ thuật <i className="ri-arrow-right-line" /></button>
           </section>}

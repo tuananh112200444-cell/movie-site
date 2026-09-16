@@ -786,13 +786,14 @@ async function requestOpenAiSuggestion(input: Record<string, unknown>, baseline:
 }
 
 async function requestGeminiSuggestion(input: Record<string, unknown>, baseline: SeoPayload): Promise<AiSeoSuggestion> {
+  const deepMode = input.mode === 'deep';
   const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: AI_EDITOR_INSTRUCTIONS }] },
     contents: [{ role: 'user', parts: [{ text: `TRUSTED_CONTEXT\n${JSON.stringify(input)}` }] }],
     generationConfig: {
       responseMimeType: 'application/json',
       responseJsonSchema: AI_SUGGESTION_SCHEMA,
-      maxOutputTokens: 9000,
+      maxOutputTokens: deepMode ? 6000 : 3000,
       temperature: 0.25,
     },
   });
@@ -806,7 +807,7 @@ async function requestGeminiSuggestion(input: Record<string, unknown>, baseline:
           'Content-Type': 'application/json',
         },
         body: requestBody,
-        signal: AbortSignal.timeout(55000),
+        signal: AbortSignal.timeout(deepMode ? 55000 : 35000),
       });
       const responseBody = await response.json().catch(() => ({}));
       if (response.ok) {
