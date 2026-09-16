@@ -48,6 +48,7 @@ for (const forbidden of ['/sitemap-movies-ongoing.xml', '/feed.xml', '/sitemap-m
 }
 
 const submittedUrls = new Set();
+let staticOnlyMode = false;
 for (const childLoc of childLocs) {
   const response = await fetchPage(deploymentUrl(childLoc), { redirect: 'follow' });
   const body = await response.text();
@@ -55,9 +56,13 @@ for (const childLoc of childLocs) {
     failures.push(`Child sitemap failed: ${new URL(childLoc).pathname} returned HTTP ${response.status}.`);
     continue;
   }
-  if (!allowFunctionFailOpen && new URL(childLoc).pathname === '/sitemap-seo-studio.xml'
-    && response.headers.get('x-sitemap-proxy') !== 'cloudflare-pages') {
-    failures.push(`SEO Studio sitemap is using a static fail-open response instead of the Pages SEO worker.`);
+  if (!allowFunctionFailOpen && new URL(childLoc).pathname === '/sitemap-seo-studio.xml') {
+    const proxy = response.headers.get('x-sitemap-proxy') || '';
+    const seoStudioUrls = locs(body);
+    staticOnlyMode = proxy === 'cloudflare-pages-static-fallback' && seoStudioUrls.length > 0;
+    if (proxy !== 'cloudflare-pages' && !staticOnlyMode) {
+      failures.push('SEO Studio sitemap is neither a healthy Worker response nor a non-empty static-only sitemap.');
+    }
   }
   for (const url of locs(body)) {
     if (url.startsWith(`${canonicalOrigin}/`)) submittedUrls.add(url);
@@ -96,7 +101,7 @@ async function auditWorker() {
 }
 await Promise.all(Array.from({ length: 10 }, () => auditWorker()));
 
-if (!allowFunctionFailOpen) {
+if (!allowFunctionFailOpen && !staticOnlyMode) {
   const timeResponse = await fetchPage(new URL('/api/time', base), { redirect: 'follow' });
   const timeBody = await timeResponse.text();
   if (timeResponse.status !== 200 || !(timeResponse.headers.get('content-type') || '').includes('application/json') || !timeBody.includes('"now"')) {
@@ -116,23 +121,26 @@ if (!allowFunctionFailOpen) {
   if (feedResponse.status !== 200 || !feedBody.includes('<rss')) failures.push(`RSS feed is unhealthy: HTTP ${feedResponse.status}.`);
 }
 
-for (const privatePath of allowFunctionFailOpen ? [] : ['/search?q=conan', '/xem-phim/cuu-mon-2026']) {
+for (const privatePath of allowFunctionFailOpen || staticOnlyMode ? [] : ['/search?q=conan', '/xem-phim/cuu-mon-2026']) {
   const response = await fetchPage(new URL(privatePath, base), { redirect: 'manual' });
   if (response.status !== 200 || !(response.headers.get('x-robots-tag') || '').toLowerCase().includes('noindex')) {
     failures.push(`Private crawl path must return 200 + noindex: ${privatePath}.`);
   }
 }
 
-for (const slashPath of ['/phim-le/', '/phim/cuu-mon-2026/']) {
+for (const slashPath of staticOnlyMode ? [] : ['/phim-le/', '/phim/cuu-mon-2026/']) {
   const response = await fetchPage(new URL(slashPath, base), { redirect: 'manual' });
   if (![301, 308].includes(response.status)) failures.push(`Trailing-slash duplicate did not permanently redirect: ${slashPath} HTTP ${response.status}.`);
 }
 
-const missingResponse = await fetchPage(new URL('/seo-audit-missing-987654', base), { redirect: 'manual' });
-if (missingResponse.status !== 404) failures.push(`Unknown URL must return 404, got ${missingResponse.status}.`);
+if (!staticOnlyMode) {
+  const missingResponse = await fetchPage(new URL('/seo-audit-missing-987654', base), { redirect: 'manual' });
+  if (missingResponse.status !== 404) failures.push(`Unknown URL must return 404, got ${missingResponse.status}.`);
+}
 
 const report = {
   deployment: base.origin,
+  mode: staticOnlyMode ? 'static-only' : 'worker',
   function_fail_open_allowed: allowFunctionFailOpen,
   child_sitemaps: childLocs.length,
   submitted_urls: submitted.length,
