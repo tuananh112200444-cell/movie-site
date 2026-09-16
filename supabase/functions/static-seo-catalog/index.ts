@@ -160,23 +160,24 @@ Deno.serve(async (req) => {
       .order('slug', { ascending: true })
       .range(offset, offset + limit - 1);
 
-  const profileQuery = upcomingCohort
-    ? Promise.resolve({ data: [], error: null })
-    : supabase
-      .from('movie_seo_profiles')
-      .select(`
-        movie_id,slug,status,index_mode,validation_score,seo_title,meta_description,
-        canonical_path,og_image_url,focus_keyword,secondary_keywords,intro_content,review_content,
-        faq,topic_links,version,live_audit,last_audited_at,updated_at,movies!inner(${MOVIE_FIELDS})
-      `)
-      .eq('status', 'published')
-      .neq('index_mode', 'noindex')
-      .gte('validation_score', 70)
-      .eq('live_audit->>passed', 'true')
-      .eq('movies.is_published', true)
-      .is('movies.superseded_by_movie_id', null)
-      .order('updated_at', { ascending: false })
-      .range(0, 999);
+  // Trailer/upcoming pages can also have a verified editorial profile.  They
+  // must receive it in the static document; otherwise the public HTML would
+  // lag behind an already-audited publish until the title becomes playable.
+  const profileQuery = supabase
+    .from('movie_seo_profiles')
+    .select(`
+      movie_id,slug,status,index_mode,validation_score,seo_title,meta_description,
+      canonical_path,og_image_url,focus_keyword,secondary_keywords,intro_content,review_content,
+      faq,topic_links,version,live_audit,last_audited_at,updated_at,movies!inner(${MOVIE_FIELDS})
+    `)
+    .eq('status', 'published')
+    .neq('index_mode', 'noindex')
+    .gte('validation_score', 70)
+    .eq('live_audit->>passed', 'true')
+    .eq('movies.is_published', true)
+    .is('movies.superseded_by_movie_id', null)
+    .order('updated_at', { ascending: false })
+    .range(0, 999);
 
   const [qualityResult, profileResult] = await Promise.all([
     qualityQuery,
