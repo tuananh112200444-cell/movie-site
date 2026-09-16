@@ -110,6 +110,7 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ['requestGeminiSuggestion', 'SEO Studio has no Gemini editorial request path'],
   ["'x-goog-api-key': GEMINI_API_KEY", 'Gemini key is not kept in the server-to-server request header'],
   ['responseJsonSchema: AI_SUGGESTION_SCHEMA', 'Gemini response is not constrained to the SEO suggestion schema'],
+  ['Gemini đang quá tải sau 3 lần thử', 'Gemini overload does not fail safely after bounded retries'],
   ['seoWorkerStatus()', 'SEO Studio does not check Worker availability before editorial work'],
   ['seo_worker_preflight_failed', 'publishing can mutate a good profile while the SEO Worker is unavailable'],
 ]);
