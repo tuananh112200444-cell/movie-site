@@ -211,7 +211,22 @@ Deno.serve(async (req) => {
     return movie ? [movie] : [];
   });
   const profilesBySlug = new Map(profileItems.map((movie) => [String(movie.slug), movie]));
-  const enrichedQualityItems = qualityItems.map((movie) => profilesBySlug.get(String(movie.slug)) || movie);
+  const enrichedQualityItems = qualityItems.map((movie) => {
+    const profiled = profilesBySlug.get(String(movie.slug));
+    if (!profiled) return movie;
+    // An editorial profile enriches content, but it must never replace the
+    // movie lifecycle. Upcoming pages still need trailer-only markup and must
+    // not advertise WatchAction before an episode exists.
+    return {
+      ...profiled,
+      seo_index_tier: movie.seo_index_tier,
+      seo_freshness_score: movie.seo_freshness_score,
+      seo_checked_at: movie.seo_checked_at,
+      seo_latest_episode_number: movie.seo_latest_episode_number,
+      seo_declared_total_episodes: movie.seo_declared_total_episodes,
+      seo_episode_progress_percent: movie.seo_episode_progress_percent,
+    };
+  });
   const manualItems = profileItems.filter((movie) => {
     const profile = movie.seo_profile as Record<string, unknown> | undefined;
     return profile?.index_mode === 'index' && Number(profile.validation_score || 0) >= 85 && isHighValueStaticMovie(movie);

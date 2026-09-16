@@ -61,6 +61,7 @@ requireText(sitemapGenerator, "'sitemap-movies-upcoming.xml'", 'generated root s
 requireText(staticCatalog, 'UPCOMING_COHORT_LIMIT = 20', 'static upcoming cohort is not capped at 20 movies');
 requireText(staticCatalog, "url.searchParams.get('cohort') === 'upcoming'", 'static catalogue has no dedicated upcoming mode');
 requireText(staticCatalog, 'hasOfficialTrailerUrl(movie.trailer_url)', 'static upcoming cohort accepts untrusted trailer URLs');
+requireText(staticCatalog, 'seo_index_tier: movie.seo_index_tier', 'verified editorial profiles can overwrite the upcoming lifecycle tier');
 requireText(staticPages, "const upcomingSitemapFile = 'sitemap-movies-upcoming.xml'", 'build does not generate a static upcoming sitemap');
 requireText(staticPages, "potentialAction: isUpcoming ? undefined", 'upcoming static pages incorrectly advertise a WatchAction');
 requireText(staticPages, 'data-kp-upcoming=', 'upcoming static HTML has no lifecycle marker');
