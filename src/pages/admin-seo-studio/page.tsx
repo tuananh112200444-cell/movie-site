@@ -508,7 +508,7 @@ export default function AdminSeoStudioPage() {
       setNotice({
         type: 'success',
         text: result.ai_available
-          ? `AI đã tạo bản đề xuất có kiểm soát. ${safeDefaults.length} mục còn yếu được chọn sẵn; chưa có gì được xuất bản.`
+          ? `${result.provider === 'gemini' ? 'Gemini' : 'AI'} đã tạo bản đề xuất có kiểm soát. ${safeDefaults.length} mục còn yếu được chọn sẵn; chưa có gì được xuất bản.`
           : 'Đã tạo gợi ý an toàn từ dữ liệu có sẵn. Muốn AI viết nội dung, máy chủ cần cấu hình khóa OpenAI.',
       });
     } catch (error) {
@@ -728,7 +728,7 @@ export default function AdminSeoStudioPage() {
             {workflowStage === 'create' && <div className="mb-6 space-y-4">
               <div className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.09] to-cyan-500/[0.04] p-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="max-w-2xl"><p className="flex items-center gap-2 text-sm font-bold text-violet-200"><i className="ri-sparkling-2-line" /> Trợ lý AI SEO có kiểm soát</p><p className="mt-1 text-xs leading-5 text-white/45">AI đọc dữ liệu phim, nhiệm vụ của bộ não SEO và tín hiệu Google đang có để tạo bản nháp. AI không được đổi URL chuẩn, dữ liệu nhận diện, quyền index hoặc tự xuất bản.</p>{loaded.ai_available === false && <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.08] px-3 py-2 text-[11px] text-amber-200">AI viết nội dung chưa được cấu hình trên máy chủ. Bạn vẫn có thể nhận gợi ý liên kết từ dữ liệu phim đang có; hệ thống không tự tạo nội dung giả.</p>}</div>
+                  <div className="max-w-2xl"><p className="flex items-center gap-2 text-sm font-bold text-violet-200"><i className="ri-sparkling-2-line" /> Trợ lý AI SEO có kiểm soát</p><p className="mt-1 text-xs leading-5 text-white/45">AI đọc dữ liệu phim, nhiệm vụ của bộ não SEO và tín hiệu Google đang có để tạo bản nháp. AI không được đổi URL chuẩn, dữ liệu nhận diện, quyền index hoặc tự xuất bản.</p>{loaded.ai_available ? <p className="mt-2 text-[11px] text-emerald-300">Đang dùng {loaded.ai_provider === 'gemini' ? 'Gemini' : 'OpenAI'} ở phía máy chủ; khóa không được gửi xuống trình duyệt.</p> : <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.08] px-3 py-2 text-[11px] text-amber-200">AI viết nội dung chưa được cấu hình trên máy chủ. Bạn vẫn có thể nhận gợi ý liên kết từ dữ liệu phim đang có; hệ thống không tự tạo nội dung giả.</p>}</div>
                   <div className="flex gap-2"><button onClick={() => setAiMode('quick')} className={`rounded-lg px-3 py-2 text-xs ${aiMode === 'quick' ? 'bg-white/10 text-white' : 'text-white/40'}`}>Nhanh</button><button onClick={() => setAiMode('deep')} className={`rounded-lg px-3 py-2 text-xs ${aiMode === 'deep' ? 'bg-white/10 text-white' : 'text-white/40'}`}>Kỹ hơn</button></div>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-3"><button onClick={() => void handleAiSuggest()} disabled={!!busy} className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{busy === 'ai' ? 'Đang phân tích…' : loaded.ai_available === false ? 'Gợi ý từ dữ liệu có sẵn' : 'AI tạo bản đề xuất'}</button><span className="text-[11px] text-white/35"><i className="ri-shield-check-line text-emerald-400" /> Chỉ tạo nháp · có so sánh trước/sau · vẫn phải kiểm tra cứng</span></div>
