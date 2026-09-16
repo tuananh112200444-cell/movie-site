@@ -64,6 +64,9 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['Để trợ lý AI làm bản nháp', 'SEO Studio has no single assistant action from the daily workflow'],
   ['Trợ lý AI chuẩn bị toàn bộ bản nháp', 'SEO Studio does not make the AI copilot responsible for the full safe draft'],
   ['bạn chỉ duyệt phần thay đổi', 'SEO Studio does not clearly retain human review before applying AI work'],
+  ['data-kp-unified-seo-workbench="true"', 'SEO Studio has no unified daily AI workbench'],
+  ['SEO AI Workspace · một luồng duy nhất', 'SEO Studio still presents its primary workflow as disconnected tools'],
+  ['Xuất bản sau khi duyệt', 'unified workbench can publish without a deliberate human review boundary'],
   ["loaded.ai_provider === 'gemini'", 'SEO Studio does not disclose the active server-side AI provider'],
 ]);
 expect('src/services/seoStudioService.ts', [
