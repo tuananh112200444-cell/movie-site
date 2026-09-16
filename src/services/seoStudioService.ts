@@ -242,7 +242,7 @@ export function saveSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_ver
   return callAdmin('save', { payload, safe_edit: safeEdit });
 }
 
-export function publishSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_version: number; unlocked_fields: string[] }): Promise<{ success: boolean; status: SeoProfileStatus; validation: SeoValidationResult; result?: Record<string, unknown>; live_audit?: SeoLiveAuditResult }> {
+export function publishSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_version: number; unlocked_fields: string[] }): Promise<{ success: boolean; status: SeoProfileStatus | 'published-indexable' | 'published-noindex'; validation: SeoValidationResult; result?: Record<string, unknown>; live_audit?: SeoLiveAuditResult; public_discovery?: { indexable: boolean; in_sitemap: boolean; checked_at: string } }> {
   return callAdmin('publish', { payload, safe_edit: safeEdit });
 }
 

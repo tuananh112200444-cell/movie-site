@@ -36,7 +36,7 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['Nội dung hữu ích', 'missing content step'],
   ['Cụm chủ đề', 'missing internal-link step'],
   ['Kiểm tra & xuất bản', 'missing publish step'],
-  ['Xuất bản toàn bộ SEO', 'missing atomic publish action'],
+  ['Xuất bản & đưa vào sitemap Google', 'missing atomic publish action'],
   ['Kiểm tra trang thật', 'missing live page inspection workflow'],
   ['tự giữ trang ở noindex', 'missing fail-closed publish explanation'],
   ['LOCAL_DRAFT_PREFIX', 'SEO Studio does not persist an automatic local draft'],
@@ -75,7 +75,11 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['SEO AI Workspace · một luồng duy nhất', 'SEO Studio still presents its primary workflow as disconnected tools'],
   ['Nút hành động sẽ chuyển', 'unified workbench does not explain its review and publish sequence'],
   ['Duyệt ${selectedAiFields.length} thay đổi & tiếp tục', 'unified workbench hides the next action after AI finishes'],
-  ["'Xuất bản SEO'", 'unified workbench does not expose a clear publish action after live verification'],
+  ["'Xuất bản & đưa vào sitemap Google'", 'unified workbench does not expose a clear publish action after live verification'],
+  ['Xuất bản & đưa vào sitemap Google', 'final action does not explain that publication must become discoverable'],
+  ['publicDiscovery?.indexable', 'UI reports publish success without confirmed public indexability'],
+  ['data-kp-google-ready="true"', 'UI does not distinguish public Google-ready publication from a saved draft'],
+  ['public_sitemap_membership', 'UI does not require confirmed sitemap membership before showing Google-ready status'],
   ["loaded.ai_provider === 'gemini'", 'SEO Studio does not disclose the active server-side AI provider'],
 ]);
 expect('src/services/seoStudioService.ts', [
@@ -125,6 +129,10 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ['suggestion = fallbackAiSuggestion', 'Gemini overload leaves the operator without a safe draft'],
   ['seoWorkerStatus()', 'SEO Studio does not check Worker availability before editorial work'],
   ['seo_worker_preflight_failed', 'publishing can mutate a good profile while the SEO Worker is unavailable'],
+  ['INDEX_READINESS_CODES', 'server publish gate allows materially incomplete pages to request index'],
+  ['inspectPublicDiscovery', 'publish success does not verify the public Googlebot URL and sitemap'],
+  ['public_sitemap_membership', 'publish success does not require sitemap membership'],
+  ["status: payload.index_mode === 'index' ? 'published-indexable'", 'publish response does not distinguish indexable publication from a saved profile'],
 ]);
 const studioEndpoint = files['supabase/functions/admin-seo-studio/index.ts'];
 if (studioEndpoint.indexOf('const prePublishAudit = await inspectLivePage(payload)') < 0
@@ -193,6 +201,8 @@ expect('functions/[[path]].js', [
   ['Number(seoProfile.validation_score || 0) >= 85', 'Googlebot manual-index threshold is inconsistent'],
   ["pathname === '/internal/seo-studio-inspect'", 'Cloudflare is missing the authenticated SEO inspection route'],
   ['renderSeoStudioInspection(request, context)', 'SEO inspection route is not connected'],
+  ["pathname === '/sitemap-seo-studio.xml'", 'SEO Studio sitemap has no authenticated fresh verification path'],
+  ["headers.set('X-Sitemap-Cache', authorizedFresh ? 'FRESH-BYPASS' : 'MISS')", 'fresh sitemap verification can be served from stale cache'],
 ]);
 expect('supabase/migrations/20260828170000_complete_movie_seo_studio.sql', [
   ['movie_seo_topic_links', 'missing reciprocal topic edge table'],

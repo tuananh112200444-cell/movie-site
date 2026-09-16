@@ -67,6 +67,12 @@ type SafeEditInput = {
   unlocked_fields: string[];
 };
 
+const INDEX_READINESS_CODES = new Set([
+  'brief_intro', 'missing_review', 'thin_review', 'few_internal_links',
+  'duplicate_title', 'duplicate_description', 'duplicate_secondary_keywords',
+  'keyword_not_in_title', 'keyword_not_in_copy',
+]);
+
 const SAFE_FIELD_PATHS = [
   'movie_patch.name', 'movie_patch.title_vi', 'movie_patch.title_en', 'movie_patch.origin_name',
   'movie_patch.year', 'movie_patch.quality', 'movie_patch.lang', 'movie_patch.trailer_url',
@@ -950,6 +956,76 @@ async function inspectLivePage(
   };
 }
 
+async function inspectPublicDiscovery(payload: SeoPayload, expectedVersion: number | string): Promise<LiveAuditResult> {
+  const publicUrl = `https://khophim.org/phim/${encodeURIComponent(payload.slug)}`;
+  const expectedCanonical = `https://khophim.org/phim/${payload.slug}`;
+  const expectedIndex = payload.index_mode === 'index';
+  const checks: LiveAuditCheck[] = [];
+  let status = 0;
+  let html = '';
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(`${publicUrl}?seo_profile_check=${encodeURIComponent(String(expectedVersion))}&attempt=${attempt}`, {
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+          'User-Agent': 'Googlebot',
+          'Cache-Control': 'no-cache',
+        },
+        signal: AbortSignal.timeout(15_000),
+      });
+      status = response.status;
+      html = await response.text();
+      if (status === 200) break;
+    } catch {
+      status = 0;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+  const canonical = htmlValue(html, /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["'][^>]*>/i)
+    || htmlValue(html, /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["'][^>]*>/i);
+  const marker = htmlValue(html, /data-kp-seo-profile-version=["']([^"']+)["']/i);
+  const robots = `${htmlValue(html, /<meta[^>]+name=["']robots["'][^>]+content=["']([^"']*)["'][^>]*>/i)}`.toLowerCase();
+  checks.push(
+    { code: 'public_http_200', passed: status === 200, message: status === 200 ? 'URL công khai trả HTTP 200 cho Googlebot.' : `URL công khai trả HTTP ${status || 'lỗi mạng'}.`, value: status },
+    { code: 'public_profile_version', passed: marker === String(expectedVersion), message: marker === String(expectedVersion) ? `URL công khai nhận hồ sơ phiên bản ${marker}.` : `URL công khai chưa nhận hồ sơ phiên bản ${String(expectedVersion)}.`, value: marker },
+    { code: 'public_canonical', passed: canonical === expectedCanonical, message: canonical === expectedCanonical ? 'Canonical công khai chính xác.' : `Canonical công khai: ${canonical || 'không có'}.`, value: canonical },
+    expectedIndex
+      ? { code: 'public_robots_index', passed: robots.includes('index') && !robots.includes('noindex'), message: robots.includes('index') && !robots.includes('noindex') ? 'URL công khai cho phép Google index.' : `Robots công khai: ${robots || 'không có'}.`, value: robots }
+      : { code: 'public_robots_noindex', passed: robots.includes('noindex'), message: robots.includes('noindex') ? 'URL công khai giữ noindex đúng yêu cầu.' : `Robots công khai: ${robots || 'không có'}.`, value: robots },
+  );
+
+  let sitemapStatus = 0;
+  let sitemapXml = '';
+  try {
+    const sitemapResponse = await fetch(`https://khophim.org/sitemap-seo-studio.xml?fresh=${encodeURIComponent(String(expectedVersion))}`, {
+      headers: {
+        Accept: 'application/xml',
+        'User-Agent': 'KhoPhim-SEO-Studio-Auditor/1.0',
+        'X-KhoPhim-SEO-Inspect-Secret': SEO_INSPECT_SECRET,
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    sitemapStatus = sitemapResponse.status;
+    sitemapXml = await sitemapResponse.text();
+  } catch {
+    sitemapStatus = 0;
+  }
+  const sitemapContainsUrl = sitemapXml.includes(`<loc>${expectedCanonical}</loc>`);
+  checks.push(
+    { code: 'public_sitemap_http', passed: sitemapStatus === 200, message: sitemapStatus === 200 ? 'Sitemap SEO Studio trả HTTP 200.' : `Sitemap SEO Studio trả HTTP ${sitemapStatus || 'lỗi mạng'}.`, value: sitemapStatus },
+    expectedIndex
+      ? { code: 'public_sitemap_membership', passed: sitemapContainsUrl, message: sitemapContainsUrl ? 'URL đã xuất hiện trong sitemap SEO Studio.' : 'URL chưa xuất hiện trong sitemap SEO Studio.' }
+      : { code: 'public_sitemap_exclusion', passed: !sitemapContainsUrl, message: !sitemapContainsUrl ? 'URL noindex không bị đưa vào sitemap SEO Studio.' : 'URL noindex vẫn đang có trong sitemap SEO Studio.' },
+  );
+  return {
+    passed: checks.every((check) => check.passed),
+    checked_at: new Date().toISOString(),
+    url: publicUrl,
+    status,
+    checks,
+  };
+}
+
 Deno.serve(async (req) => {
   const headers = cors(req.headers.get('origin'));
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
@@ -1217,6 +1293,15 @@ Deno.serve(async (req) => {
       if (action === 'publish' && payload.index_mode === 'index' && validation.score < 85) {
         return json({ error: 'Muốn cho phép index thủ công, điểm SEO phải đạt ít nhất 85.', validation }, 422, headers);
       }
+      if (action === 'publish' && payload.index_mode === 'index') {
+        const indexReadinessIssues = validation.issues.filter((item) => item.severity === 'error' || INDEX_READINESS_CODES.has(item.code));
+        if (indexReadinessIssues.length > 0) {
+          return json({
+            error: `Chưa thể cho Google index: còn ${indexReadinessIssues.length} mục nội dung/từ khóa/liên kết cần hoàn thiện.`,
+            validation,
+          }, 422, headers);
+        }
+      }
       if (action === 'publish') {
         const prePublishAudit = await inspectLivePage(payload);
         if (!prePublishAudit.passed) {
@@ -1308,7 +1393,17 @@ Deno.serve(async (req) => {
       if (!verifiedProfile) throw new Error('Hồ sơ SEO đã thay đổi trong lúc xác minh. Hãy tải lại và xuất bản lại.');
 
       const finalAudit = await inspectLivePage(payload, verifiedVersion, 'final');
-      if (!finalAudit.passed) {
+      const publicDiscovery = finalAudit.passed
+        ? await inspectPublicDiscovery(payload, verifiedVersion)
+        : { passed: false, checked_at: new Date().toISOString(), url: `https://khophim.org/phim/${payload.slug}`, status: 0, checks: [] };
+      const finalVerification: LiveAuditResult = {
+        passed: finalAudit.passed && publicDiscovery.passed,
+        checked_at: publicDiscovery.checked_at,
+        url: finalAudit.url,
+        status: publicDiscovery.status || finalAudit.status,
+        checks: [...finalAudit.checks, ...publicDiscovery.checks],
+      };
+      if (!finalVerification.passed) {
         const failedIssue: ValidationIssue = {
           code: 'post_publish_final_audit_failed',
           severity: 'error',
@@ -1323,7 +1418,7 @@ Deno.serve(async (req) => {
             success: false,
             status: 'rolled-back',
             validation: safeValidation,
-            live_audit: finalAudit,
+            live_audit: finalVerification,
             rollback,
             result: publishResult,
           }, 502, headers);
@@ -1333,8 +1428,8 @@ Deno.serve(async (req) => {
           version: verifiedVersion + 1,
           validation_score: safeValidation.score,
           validation_issues: safeValidation.issues,
-          live_audit: finalAudit,
-          last_audited_at: finalAudit.checked_at,
+          live_audit: finalVerification,
+          last_audited_at: finalVerification.checked_at,
           updated_at: new Date().toISOString(),
         }).eq('movie_id', payload.movie_id).eq('version', verifiedVersion);
         if (failSafeError) throw failSafeError;
@@ -1343,14 +1438,14 @@ Deno.serve(async (req) => {
           success: false,
           status: 'published-safe-noindex',
           validation: safeValidation,
-          live_audit: finalAudit,
+          live_audit: finalVerification,
           result: publishResult,
         }, 502, headers);
       }
 
       const { error: finalAuditSaveError } = await db.from('movie_seo_profiles').update({
-        live_audit: finalAudit,
-        last_audited_at: finalAudit.checked_at,
+        live_audit: finalVerification,
+        last_audited_at: finalVerification.checked_at,
       }).eq('movie_id', payload.movie_id).eq('version', verifiedVersion);
       if (finalAuditSaveError) throw finalAuditSaveError;
       const completedAt = new Date().toISOString();
@@ -1379,7 +1474,18 @@ Deno.serve(async (req) => {
         ? await db.from('seo_static_release_requests').update(releasePayload).eq('id', pendingRelease.id)
         : await db.from('seo_static_release_requests').insert(releasePayload);
       if (releaseResult.error) throw releaseResult.error;
-      return json({ success: true, status: 'published', validation, live_audit: finalAudit, result: { ...((publishResult && typeof publishResult === 'object') ? publishResult : {}), version: verifiedVersion } }, 200, headers);
+      return json({
+        success: true,
+        status: payload.index_mode === 'index' ? 'published-indexable' : 'published-noindex',
+        validation,
+        live_audit: finalVerification,
+        public_discovery: {
+          indexable: payload.index_mode === 'index',
+          in_sitemap: publicDiscovery.checks.some((check) => check.code === 'public_sitemap_membership' && check.passed),
+          checked_at: publicDiscovery.checked_at,
+        },
+        result: { ...((publishResult && typeof publishResult === 'object') ? publishResult : {}), version: verifiedVersion },
+      }, 200, headers);
     }
 
     return json({ error: 'Unknown action' }, 400, headers);
