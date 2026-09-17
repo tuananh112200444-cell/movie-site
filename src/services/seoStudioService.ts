@@ -188,7 +188,7 @@ export interface SeoStudioLoadResult {
   ai_provider?: 'gemini' | 'openai' | null;
   publish_mode?: 'static' | 'worker';
   static_release?: SeoStaticRelease | null;
-  worker_status?: { online: boolean; status: number; checked_at: string };
+  worker_status?: { online: boolean; status: number; checked_at: string; required?: boolean; mode?: 'static' | 'worker' };
   profile: (PublishedSeoProfile & { review_content?: string; movie_patch?: SeoMoviePatch; status?: SeoProfileStatus; validation_issues?: SeoValidationIssue[] }) | null;
   review: { content?: string; word_count?: number; generated_at?: string; updated_at?: string } | null;
   quality: { eligible_for_index?: boolean; index_tier?: string; quality_score?: number; reasons?: string[]; signals?: string[]; checked_at?: string } | null;
