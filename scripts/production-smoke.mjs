@@ -3,7 +3,7 @@ const TIMEOUT = Math.max(3000, Number(process.env.SMOKE_TIMEOUT_MS || 15000));
 const SUPABASE_URL = String(process.env.VITE_PUBLIC_SUPABASE_URL || 'https://ceoxbhsdodllziyxmbqr.supabase.co').replace(/\/$/, '');
 const SUPABASE_PUBLIC_KEY = String(process.env.VITE_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_Juh45t-R83dfgJI0O4_PQw_iYYoU-yh');
 const checks = [
-  { name: 'release-manifest', path: '/release.json', status: 200, has: ['release_id','schema_contract'] },
+  { name: 'release-manifest', path: '/release.json', status: 200, has: ['release_id','app_release_id','content_release_id','schema_contract'] },
   { name: 'home', path: '/', status: 200, has: ['KhoPhim'] },
   { name: 'sitemap', path: '/sitemap.xml', status: 200, has: ['<sitemapindex','sitemap-movies-recent.xml','sitemap-seo-studio.xml'] },
   { name: 'rss', path: '/feed.xml', status: 200, has: ['<rss','/phim/'], soft: true },

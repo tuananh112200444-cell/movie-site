@@ -14,6 +14,7 @@ import {
   type SeoFaqItem,
   type SeoMoviePatch,
   type SeoMovieSearchItem,
+  type SeoReleaseTiming,
   type SeoStudioLoadResult,
   type SeoStudioPayload,
   type SeoTopicLink,
@@ -330,6 +331,7 @@ export default function AdminSeoStudioPage() {
   const [selectedAiFields, setSelectedAiFields] = useState<string[]>([]);
   const [assistantApplied, setAssistantApplied] = useState(false);
   const [simpleMode, setSimpleMode] = useState(true);
+  const [releaseTiming, setReleaseTiming] = useState<SeoReleaseTiming>('nightly');
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const validationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -417,6 +419,7 @@ export default function AdminSeoStudioPage() {
 
   useEffect(() => {
     if (!selected || !['pending', 'processing'].includes(String(loaded?.static_release?.status || ''))) return;
+    if (loaded?.static_release?.status === 'pending' && loaded.static_release.release_lane !== 'urgent') return;
     let cancelled = false;
     const refreshRelease = async () => {
       try {
@@ -663,16 +666,19 @@ export default function AdminSeoStudioPage() {
           ? Array.from(new Set([...unlockedFields, 'index_mode']))
           : unlockedFields,
       };
-      const result = publish ? await publishSeoDraft(publishPayload, safeEdit) : await saveSeoDraft(payload, safeEdit);
+      const result = publish ? await publishSeoDraft(publishPayload, safeEdit, releaseTiming) : await saveSeoDraft(payload, safeEdit);
       setValidation(result.validation);
+      const scheduledNightly = publish && result.status === 'scheduled-nightly';
       const publishedAudit = (result as { live_audit?: SeoLiveAuditResult }).live_audit;
       const publicDiscovery = 'public_discovery' in result ? result.public_discovery : undefined;
       if (publishedAudit) setLiveAudit(publishedAudit);
       setNotice({
         type: 'success',
         text: publish
-          ? (publicDiscovery?.queued
-            ? 'Đã xếp hàng phát hành tĩnh miễn phí. Cloudflare Pages sẽ tạo lại trang phim và sitemap; hệ thống sẽ xác minh sau khi build xong.'
+          ? (scheduledNightly
+            ? 'Đã duyệt và xếp hàng. Bản SEO sẽ được phát hành cùng các phim khác lúc 03:30 sáng; website hiện tại chưa thay đổi.'
+            : publicDiscovery?.queued
+            ? 'Đã xếp hàng ưu tiên. Cloudflare Pages sẽ tạo lại trang phim và sitemap trong vài phút rồi hệ thống tự xác minh.'
             : publicDiscovery?.indexable && publicDiscovery?.in_sitemap
             ? 'Đã xuất bản: URL công khai cho phép Google index và đã có trong sitemap SEO Studio.'
             : 'Hồ sơ đã lưu nhưng chưa xác nhận đủ điều kiện Google index; hệ thống không báo hoàn thành.')
@@ -680,6 +686,15 @@ export default function AdminSeoStudioPage() {
       });
       if (publish && selected) {
         const refreshed = await loadSeoMovie(selected.id, selected.slug);
+        if (scheduledNightly) {
+          setLoaded(refreshed);
+          setBaselinePayload(refreshed.safe_edit.baseline);
+          setBaselineValidation(refreshed.safe_edit.baseline_validation);
+          setFieldStates(refreshed.safe_edit.fields);
+          setBaselineVersion(refreshed.safe_edit.baseline_version);
+          setDraftState('saved');
+          return;
+        }
         if (refreshed.profile?.status !== 'published' || refreshed.profile.index_mode !== publishPayload.index_mode) {
           throw new Error('Máy chủ chưa xác nhận đúng trạng thái xuất bản. Bản nháp cục bộ vẫn được giữ an toàn.');
         }
@@ -715,7 +730,7 @@ export default function AdminSeoStudioPage() {
     setBusy('publish');
     setNotice(null);
     try {
-      const result = await retrySeoStaticRelease(selected.id);
+      const result = await retrySeoStaticRelease(selected.id, 'urgent');
       setLoaded((current) => current ? { ...current, static_release: result.static_release } : current);
       setNotice({ type: 'success', text: 'Đã xếp lại hàng phát hành. Hệ thống sẽ tự kiểm tra trang thật và sitemap sau khi Cloudflare build xong.' });
     } catch (error) {
@@ -787,7 +802,9 @@ export default function AdminSeoStudioPage() {
             ? `Duyệt ${selectedAiFields.length} thay đổi & tiếp tục`
             : !liveAudit?.passed
               ? canPublishForGoogle ? 'Kiểm tra trang thật' : `AI hoàn thiện ${indexReadinessIssues.length} mục`
-              : staticPublishMode ? 'Xếp hàng phát hành tĩnh miễn phí' : 'Xuất bản & đưa vào sitemap Google';
+              : staticPublishMode
+                ? releaseTiming === 'nightly' ? 'Duyệt & xếp hàng 03:30' : 'Phát hành ưu tiên trong vài phút'
+                : 'Xuất bản & đưa vào sitemap Google';
   const unifiedActionDisabled = Boolean(busy)
     || Boolean(aiSuggestion && !assistantApplied && selectedAiFields.length === 0)
     || Boolean(assistantApplied && liveAudit?.passed && !canPublishForGoogle);
@@ -873,12 +890,13 @@ export default function AdminSeoStudioPage() {
           {simpleMode && <section data-kp-unified-seo-workbench="true" className="mx-auto max-w-4xl space-y-4">
             <div data-kp-seo-publication-state="true" className="grid gap-2 sm:grid-cols-4">
               <div className={`rounded-xl border p-3 ${loaded.profile?.status === 'published' ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-black/20'}`}><p className="text-[10px] uppercase text-white/35">1. Hồ sơ SEO</p><strong className="mt-1 block text-sm">{loaded.profile?.status === 'published' ? `Đã lưu bản ${loaded.profile.version || ''}` : 'Chưa xuất bản'}</strong></div>
-              <div className={`rounded-xl border p-3 ${staticRelease?.status === 'deployed' ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : staticRelease?.status === 'failed' ? 'border-red-400/20 bg-red-500/[0.07]' : 'border-cyan-400/20 bg-cyan-500/[0.06]'}`}><p className="text-[10px] uppercase text-white/35">2. Website thật</p><strong className="mt-1 block text-sm">{staticRelease?.status === 'deployed' ? 'Đã lên website' : staticRelease?.status === 'failed' ? 'Phát hành lỗi' : ['pending', 'processing'].includes(String(staticRelease?.status)) ? 'Đang phát hành' : 'Chưa xác minh'}</strong></div>
+              <div className={`rounded-xl border p-3 ${staticRelease?.status === 'deployed' ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : staticRelease?.status === 'failed' ? 'border-red-400/20 bg-red-500/[0.07]' : 'border-cyan-400/20 bg-cyan-500/[0.06]'}`}><p className="text-[10px] uppercase text-white/35">2. Website thật</p><strong className="mt-1 block text-sm">{staticRelease?.status === 'deployed' ? 'Đã lên website' : staticRelease?.status === 'failed' ? 'Phát hành lỗi' : staticRelease?.status === 'pending' && staticRelease.release_lane === 'nightly' ? 'Chờ đợt 03:30' : ['pending', 'processing'].includes(String(staticRelease?.status)) ? 'Đang phát hành' : 'Chưa xác minh'}</strong></div>
               <div className={`rounded-xl border p-3 ${publishedGoogleReady ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : 'border-amber-400/20 bg-amber-500/[0.06]'}`}><p className="text-[10px] uppercase text-white/35">3. Google phát hiện</p><strong className="mt-1 block text-sm">{publishedGoogleReady ? 'Index + sitemap đạt' : 'Chưa đủ bằng chứng'}</strong></div>
               <div className={`rounded-xl border p-3 ${googleIndexed ? 'border-emerald-400/20 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-black/20'}`}><p className="text-[10px] uppercase text-white/35">4. Google index</p><strong className="mt-1 block text-sm">{googleIndexed ? 'Google đã xác nhận' : 'Chưa được xác nhận'}</strong></div>
             </div>
+            {staticPublishMode && <div data-kp-release-timing="true" className="rounded-2xl border border-white/[0.08] bg-[#10131d] p-4"><p className="text-sm font-bold text-white/80">Thời điểm đưa SEO lên website</p><p className="mt-1 text-xs leading-5 text-white/45">Mặc định gom nhiều phim và phát hành một lần lúc 03:30 sáng. Chỉ dùng ưu tiên cho lỗi nghiêm trọng hoặc phim đang tăng tìm kiếm rất nhanh.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><button onClick={() => setReleaseTiming('nightly')} className={`rounded-xl border p-3 text-left ${releaseTiming === 'nightly' ? 'border-emerald-400/35 bg-emerald-500/10' : 'border-white/[0.07] bg-white/[0.02]'}`}><strong className="block text-xs text-emerald-200">Theo lô lúc 03:30 · khuyến nghị</strong><span className="mt-1 block text-[10px] leading-4 text-white/40">Không thay đổi website trong ngày; tiết kiệm lượt build và không làm phiền người xem.</span></button><button onClick={() => setReleaseTiming('urgent')} className={`rounded-xl border p-3 text-left ${releaseTiming === 'urgent' ? 'border-amber-400/35 bg-amber-500/10' : 'border-white/[0.07] bg-white/[0.02]'}`}><strong className="block text-xs text-amber-200">Ưu tiên trong vài phút</strong><span className="mt-1 block text-[10px] leading-4 text-white/40">Dành cho sửa noindex/canonical hoặc phim cực nóng; hệ thống kiểm tra mỗi 10 phút.</span></button></div></div>}
             {publishedGoogleReady && !assistantApplied && <div data-kp-google-ready="true" className="rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.08] p-4"><p className="text-sm font-bold text-emerald-200"><i className="ri-google-line" /> Đã xuất bản và sẵn sàng cho Google</p><p className="mt-1 text-xs leading-5 text-white/55">Googlebot nhận đúng phiên bản, URL đang <strong className="text-white/75">index, follow</strong> và đã có trong sitemap SEO Studio. Trạng thái Google đã index sẽ được cập nhật riêng từ Search Console.</p></div>}
-            {staticPublishMode && staticRelease && ['pending', 'processing'].includes(String(staticRelease.status)) && !assistantApplied && <div data-kp-static-release-pending="true" className="rounded-2xl border border-cyan-400/20 bg-cyan-500/[0.07] p-4"><p className="text-sm font-bold text-cyan-200"><i className="ri-timer-line" /> Đang chờ phát hành tĩnh miễn phí</p><p className="mt-1 text-xs leading-5 text-white/55">Hồ sơ phiên bản {staticRelease.requested_version || 'mới'} đã được xếp hàng. Cloudflare Pages đang tạo trang phim và sitemap; thường mất vài phút và không sử dụng quota Worker cho lượt xem tĩnh.</p></div>}
+            {staticPublishMode && staticRelease && ['pending', 'processing'].includes(String(staticRelease.status)) && !assistantApplied && <div data-kp-static-release-pending="true" className="rounded-2xl border border-cyan-400/20 bg-cyan-500/[0.07] p-4"><p className="text-sm font-bold text-cyan-200"><i className="ri-timer-line" /> {staticRelease.status === 'pending' && staticRelease.release_lane === 'nightly' ? 'Đã duyệt · chờ phát hành lúc 03:30' : 'Đang phát hành tĩnh ưu tiên'}</p><p className="mt-1 text-xs leading-5 text-white/55">{staticRelease.status === 'pending' && staticRelease.release_lane === 'nightly' ? 'Bản SEO đã lưu an toàn nhưng trang công khai chưa thay đổi. Hệ thống sẽ gom cùng các phim đã duyệt khác trong một lượt build ban đêm.' : `Hồ sơ phiên bản ${staticRelease.requested_version || 'mới'} đang được Cloudflare tạo trang phim và sitemap; hệ thống sẽ tự xác minh sau khi build xong.`}</p></div>}
             {staticPublishMode && staticRelease?.status === 'failed' && !assistantApplied && <div className="rounded-2xl border border-red-400/20 bg-red-500/[0.07] p-4"><p className="text-sm font-bold text-red-200">Phát hành tĩnh chưa thành công</p><p className="mt-1 text-xs leading-5 text-white/55">{staticRelease.error_message || 'Trang chưa vượt qua kiểm tra công khai.'}</p><button onClick={() => void handleRetryRelease()} disabled={!!busy || loaded.profile?.index_mode !== 'index'} className="mt-3 rounded-xl bg-red-300 px-3 py-2 text-xs font-bold text-black disabled:opacity-35">{loaded.profile?.index_mode === 'index' ? 'Thử phát hành lại' : 'Xuất bản SEO lại để bật index'}</button></div>}
             <div className="rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.12] to-cyan-500/[0.05] p-5">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-200">SEO AI Workspace · một luồng duy nhất</p>
@@ -981,7 +999,7 @@ export default function AdminSeoStudioPage() {
 
             {step === 'technical' && <div className="space-y-5">
               {loaded.publish_mode === 'worker' && loaded.worker_status?.online === false && <div className="rounded-xl border border-red-500/20 bg-red-500/[0.08] p-4 text-xs leading-6 text-red-200"><strong className="block text-sm">SEO Worker đang không chạy trên website thật</strong><span>Tại lúc tải phim, máy chủ kiểm tra trả HTTP {loaded.worker_status.status || 'lỗi mạng'}. Bạn vẫn có thể lưu nháp; hệ thống sẽ chặn xuất bản trước khi thay đổi SEO đang tốt. Dùng “Kiểm tra trang thật” để thử lại sau khi Worker hoạt động.</span></div>}
-              {loaded.publish_mode === 'static' && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 text-xs leading-6 text-emerald-100"><strong className="block text-sm text-emerald-300">Phát hành SEO tĩnh đang hoạt động</strong><span>Chế độ miễn phí không phụ thuộc Pages Worker. Khi xuất bản, hệ thống sẽ dựng lại trang phim, kiểm tra canonical, robots và sitemap trước khi báo hoàn thành.</span></div>}
+              {loaded.publish_mode === 'static' && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 text-xs leading-6 text-emerald-100"><strong className="block text-sm text-emerald-300">Phát hành SEO tĩnh đang hoạt động</strong><span>Mặc định hệ thống giữ bản đã duyệt trong hàng đợi và phát hành một đợt lúc 03:30 sáng. Khách đang xem phim không bị thông báo, tải lại hoặc gián đoạn.</span><div className="mt-3 grid gap-2 sm:grid-cols-2"><button onClick={() => setReleaseTiming('nightly')} className={`rounded-lg border px-3 py-2 text-left ${releaseTiming === 'nightly' ? 'border-emerald-300/35 bg-emerald-400/10' : 'border-white/10 bg-black/15'}`}><strong className="block">Theo lô 03:30</strong><span className="text-[10px] text-white/45">Khuyến nghị cho công việc hằng ngày</span></button><button onClick={() => setReleaseTiming('urgent')} className={`rounded-lg border px-3 py-2 text-left ${releaseTiming === 'urgent' ? 'border-amber-300/35 bg-amber-400/10' : 'border-white/10 bg-black/15'}`}><strong className="block">Ưu tiên trong vài phút</strong><span className="text-[10px] text-white/45">Chỉ dùng khi thực sự khẩn cấp</span></button></div></div>}
               <div><label className={labelClass}>Quyền index</label><div className="grid gap-2 sm:grid-cols-3">{[
                 ['auto', 'Tự động', 'Theo cổng chất lượng hệ thống'],
                 ['index', 'Cho phép index', 'Điểm ≥85 và kiểm tra trang thật đạt'],
@@ -994,7 +1012,7 @@ export default function AdminSeoStudioPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold text-white/70">Kiểm tra trang thật</p><p className="mt-1 text-[11px] text-white/35">Mô phỏng Googlebot và kiểm tra HTTP, canonical, H1, schema, ảnh, liên kết.</p></div><button onClick={() => void handleInspect()} disabled={!!busy} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 disabled:opacity-40">{busy === 'inspect' ? 'Đang kiểm tra...' : 'Kiểm tra trang thật'}</button></div>
                 {liveAudit && <div className="mt-4 space-y-2">{liveAudit.checks.map((check) => <div key={check.code} className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${check.passed ? 'bg-emerald-500/[0.07] text-emerald-300' : 'bg-red-500/[0.08] text-red-300'}`}><i className={check.passed ? 'ri-checkbox-circle-line' : 'ri-close-circle-line'} /><span>{check.message}</span></div>)}</div>}
               </div>
-              <div className="sticky bottom-3 grid gap-3 rounded-2xl border border-white/10 bg-[#080a10]/95 p-3 shadow-2xl backdrop-blur-xl sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white/70 disabled:opacity-40">{busy === 'save' ? 'Đang lưu…' : 'Lưu bản nháp'}</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black disabled:opacity-35">{busy === 'publish' ? 'Đang xuất bản…' : staticPublishMode ? 'Xếp hàng phát hành tĩnh miễn phí' : payload.index_mode === 'index' ? 'Xuất bản & đưa vào sitemap Google' : payload.index_mode === 'noindex' ? 'Xuất bản ở chế độ noindex' : 'Xuất bản với quyền index tự động'}</button></div>
+              <div className="sticky bottom-3 grid gap-3 rounded-2xl border border-white/10 bg-[#080a10]/95 p-3 shadow-2xl backdrop-blur-xl sm:grid-cols-2"><button onClick={() => void handleSave(false)} disabled={!!busy} className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white/70 disabled:opacity-40">{busy === 'save' ? 'Đang lưu…' : 'Lưu bản nháp'}</button><button onClick={() => void handleSave(true)} disabled={!!busy || !canPublish} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black disabled:opacity-35">{busy === 'publish' ? 'Đang xử lý…' : staticPublishMode ? releaseTiming === 'nightly' ? 'Duyệt & xếp hàng 03:30' : 'Phát hành ưu tiên' : payload.index_mode === 'index' ? 'Xuất bản & đưa vào sitemap Google' : payload.index_mode === 'noindex' ? 'Xuất bản ở chế độ noindex' : 'Xuất bản với quyền index tự động'}</button></div>
               {loaded.profile?.status === 'published' && <div className="flex flex-wrap gap-2"><a href={`/phim/${payload.slug}`} target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-external-link-line" /> Mở trang phim</a><a href="https://search.google.com/search-console/inspect" target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-google-line" /> Mở URL Inspection</a><a href="/sitemap-movies.xml" target="_blank" rel="noreferrer" className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-white/60 hover:text-white"><i className="ri-map-2-line" /> Kiểm tra sitemap</a></div>}
             </div>}
 

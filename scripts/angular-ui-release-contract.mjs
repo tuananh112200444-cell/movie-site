@@ -41,14 +41,17 @@ try {
   const publicRelease = JSON.parse(publicReleaseRaw);
   const outRelease = JSON.parse(outReleaseRaw);
   const htmlRelease = outHtml.match(/<meta name="khophim-release" content="([^"]+)"/)?.[1] || '';
-  if (!publicRelease.release_id || publicRelease.release_id !== outRelease.release_id || publicRelease.release_id !== htmlRelease) {
-    failures.push('Release id must match in public manifest, deploy manifest and HTML meta');
+  if (!publicRelease.release_id || !publicRelease.content_release_id || publicRelease.release_id !== publicRelease.content_release_id) {
+    failures.push('Content release id must remain available for deployment and SEO audit history');
+  }
+  if (!publicRelease.app_release_id || publicRelease.app_release_id !== outRelease.app_release_id || publicRelease.app_release_id !== htmlRelease) {
+    failures.push('App release id must match in public manifest, deploy manifest and HTML meta');
   }
   for (const marker of ['const releaseId = readReleaseId();', 'injectProductionReleaseMeta(releaseId)']) {
     if (!viteSource.includes(marker)) failures.push(`Vite release generation is missing ${marker}`);
   }
   if (/\/assets\/[^"']+\.js\?v=/.test(outHtml)) failures.push('Hashed production modules must not be duplicated with a query-string identity');
-  for (const marker of ['prepareReleaseAssets', 'khophim-release', "content-type", "^\\/xem-phim", "^\\/admin", "focusout", '2 * 60 * 1000']) {
+  for (const marker of ['prepareReleaseAssets', 'khophim-release', 'app_release_id', "content-type", "^\\/xem-phim", "^\\/admin", "focusout", '2 * 60 * 1000', "dismissed || /^\\/xem-phim"]) {
     if (!updaterSource.includes(marker)) failures.push(`UpdateCoordinator is missing ${marker}`);
   }
 } catch (error) {

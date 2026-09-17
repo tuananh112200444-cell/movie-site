@@ -10,8 +10,8 @@ const isPreview = process.env.IS_PREVIEW ? true : false;
 
 function readReleaseId() {
   try {
-    const manifest = JSON.parse(readFileSync(resolve(__dirname, 'public/release.json'), 'utf8')) as { release_id?: string };
-    return String(manifest.release_id || 'development');
+    const manifest = JSON.parse(readFileSync(resolve(__dirname, 'public/release.json'), 'utf8')) as { app_release_id?: string; release_id?: string };
+    return String(manifest.app_release_id || manifest.release_id || 'development');
   } catch {
     return 'development';
   }
