@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 
 type ReleaseManifest = {
   release_id?: string;
+  app_release_id?: string;
+  content_release_id?: string;
   generated_at?: string;
 };
 
@@ -183,7 +185,10 @@ export default function UpdateCoordinator() {
       });
       if (!response.ok) return;
       const manifest = await response.json() as ReleaseManifest;
-      const remoteRelease = String(manifest.release_id || '').trim();
+      // SEO/content-only builds change content_release_id but deliberately
+      // keep app_release_id stable, so active clients are never asked to
+      // reload for a sitemap or movie-metadata update.
+      const remoteRelease = String(manifest.app_release_id || manifest.release_id || '').trim();
       if (!remoteRelease) return;
 
       if (remoteRelease === __KP_RELEASE_ID__) {
@@ -278,7 +283,10 @@ export default function UpdateCoordinator() {
   // The local Vite preview deliberately has a different release id from the
   // generated manifest. Showing an update prompt there obscures the demo and
   // can trigger a pointless reload loop, while production behavior is kept.
-  if (import.meta.env.DEV || !targetRelease || dismissed) return null;
+  // A viewer must never see an application-update prompt while watching.
+  // The pending app release is applied only after navigation leaves the
+  // protected watch route.
+  if (import.meta.env.DEV || !targetRelease || dismissed || /^\/xem-phim(?:\/|$)/.test(location.pathname)) return null;
 
   return (
     <section

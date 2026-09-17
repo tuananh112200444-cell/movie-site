@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 const files = Object.fromEntries(await Promise.all([
   'supabase/migrations/20260905033505_build_seo_operations_brain.sql',
   'supabase/migrations/20260905034453_schedule_seo_static_release.sql',
+  'supabase/migrations/20260917153000_batch_nightly_seo_releases.sql',
   'supabase/functions/gsc-seo-feedback/index.ts',
   'supabase/functions/admin-seo-studio/index.ts',
   'supabase/functions/seo-static-release/index.ts',
@@ -47,7 +48,7 @@ requireText('supabase/functions/seo-static-release/index.ts', "action: 'awaiting
 requireText('supabase/functions/admin-seo-studio/index.ts', "status: 'queued-static'", 'free publish mode does not queue a static Pages release');
 requireText('supabase/functions/admin-seo-studio/index.ts', "mode: 'static-build-pending'", 'static profiles are not marked as pending build verification');
 requireText('supabase/functions/seo-static-release/index.ts', 'verifyStaticPublication', 'static deploy completion is trusted without verifying public HTML and sitemap');
-requireText('supabase/functions/seo-static-release/index.ts', '.limit(50)', 'pending SEO pages are not batched into one free Pages build');
+requireText('supabase/functions/seo-static-release/index.ts', ".limit(mode === 'urgent' ? 10 : 50)", 'pending SEO pages are not batched into one free Pages build');
 requireText('supabase/functions/seo-static-release/index.ts', 'public_sitemap_membership', 'static release does not persist the public sitemap evidence used by SEO Studio');
 requireText('supabase/functions/seo-static-release/index.ts', 'explicitProfileRelease', 'generic radar rebuilds and versioned SEO publishes are not verified separately');
 requireText('supabase/functions/seo-static-release/index.ts', 'VERIFICATION_TIMEOUT_MS', 'a failed public verification can remain processing forever');
@@ -58,6 +59,11 @@ requireText('supabase/functions/admin-seo-studio/index.ts', "action === 'retry_r
 requireText('src/pages/admin-seo-studio/page.tsx', 'data-kp-seo-publication-state="true"', 'operator cannot distinguish profile, website, sitemap and Google index states');
 requireText('src/pages/admin-seo-studio/page.tsx', 'getSeoReleaseStatus', 'pending static publication is not refreshed automatically');
 requireText('supabase/migrations/20260905034453_schedule_seo_static_release.sql', 'process-seo-static-release-requests', 'static release requests are not scheduled');
+requireText('supabase/migrations/20260917153000_batch_nightly_seo_releases.sql', "'30 20 * * *'", 'normal SEO releases are not batched at 03:30 Asia/Ho_Chi_Minh');
+requireText('supabase/migrations/20260917153000_batch_nightly_seo_releases.sql', "'*/10 * * * *'", 'urgent SEO releases do not have a bounded fast lane');
+requireText('supabase/migrations/20260917153000_batch_nightly_seo_releases.sql', 'release_lane', 'release queue does not distinguish nightly and urgent work');
+requireText('supabase/functions/seo-static-release/index.ts', "seo_draft_scheduled", 'nightly processor does not atomically materialize approved drafts before the build');
+requireText('supabase/functions/seo-static-release/index.ts', "mode === 'urgent'", 'urgent processor can trigger normal nightly releases');
 
 if (failures.length) {
   console.error('SEO operations brain regression failed:');

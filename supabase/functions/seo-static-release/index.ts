@@ -163,11 +163,13 @@ Deno.serve(async (req) => {
     return json({ error: 'Missing Supabase environment' }, 500);
   }
 
+  const input = await req.json().catch(() => ({})) as { mode?: unknown };
+  const mode = input.mode === 'urgent' ? 'urgent' : 'nightly';
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const now = new Date();
   const releaseTime = await currentReleaseTime();
   const { data: processing, error: processingError } = await db.from('seo_static_release_requests')
-    .select('id,movie_id,slug,reason,requested_version,requested_at,processing_started_at')
+    .select('id,movie_id,slug,reason,release_lane,requested_version,requested_at,processing_started_at')
     .eq('status', 'processing')
     .order('processing_started_at', { ascending: true })
     .limit(20);
@@ -261,13 +263,15 @@ Deno.serve(async (req) => {
     }
   }
 
-  const { data: pending, error: pendingError } = await db.from('seo_static_release_requests')
-    .select('id,slug,requested_at,requested_version')
-    .eq('status', 'pending')
+  let pendingQuery = db.from('seo_static_release_requests')
+    .select('id,movie_id,slug,reason,release_lane,requested_at,requested_version')
+    .eq('status', 'pending');
+  if (mode === 'urgent') pendingQuery = pendingQuery.eq('release_lane', 'urgent');
+  const { data: pending, error: pendingError } = await pendingQuery
     .order('requested_at', { ascending: true })
-    .limit(50);
+    .limit(mode === 'urgent' ? 10 : 50);
   if (pendingError) return json({ error: pendingError.message }, 500);
-  if (!pending?.length) return json({ ok: true, action: 'idle', confirmed, recovered });
+  if (!pending?.length) return json({ ok: true, action: 'idle', mode, confirmed, recovered });
 
   const deployHook = validDeployHook(DEPLOY_HOOK_URL);
   if (!deployHook) {
@@ -276,18 +280,112 @@ Deno.serve(async (req) => {
       action: 'awaiting_deploy_hook',
       configured: false,
       pending_slugs: pending.map((item) => item.slug),
+      mode,
       confirmed,
       recovered,
     });
   }
 
+  const prepared: Array<{
+    id: number;
+    movie_id: string | null;
+    slug: string | null;
+    reason: string;
+    release_lane: string;
+    requested_at: string;
+    requested_version: number | null;
+  }> = [];
+  for (const item of pending) {
+    if (String(item.reason || '') !== 'seo_draft_scheduled') {
+      prepared.push(item as typeof prepared[number]);
+      continue;
+    }
+    if (!item.movie_id) {
+      await db.from('seo_static_release_requests').update({
+        status: 'failed',
+        error_message: 'Scheduled SEO draft has no movie identity.',
+      }).eq('id', item.id).eq('status', 'pending');
+      continue;
+    }
+    const { data: publishResult, error: publishError } = await db.rpc('publish_movie_seo_profile', {
+      p_movie_id: item.movie_id,
+    });
+    if (publishError) {
+      await db.from('seo_static_release_requests').update({
+        status: 'failed',
+        error_message: `Nightly profile publish failed: ${publishError.message}`.slice(0, 500),
+      }).eq('id', item.id).eq('status', 'pending');
+      continue;
+    }
+    const version = Number(
+      publishResult && typeof publishResult === 'object'
+        ? (publishResult as Record<string, unknown>).version
+        : 0,
+    );
+    if (version < 1) {
+      await db.from('seo_static_release_requests').update({
+        status: 'failed',
+        error_message: 'Nightly profile publish returned no version.',
+      }).eq('id', item.id).eq('status', 'pending');
+      continue;
+    }
+    const publishedAt = new Date().toISOString();
+    const pendingAudit = {
+      passed: true,
+      mode: 'static-build-pending',
+      checked_at: publishedAt,
+      url: `${SITE_URL}/phim/${String(item.slug || '')}`,
+      status: 0,
+      checks: [{
+        code: 'static_release_queued',
+        passed: true,
+        message: 'Hồ sơ đã được xuất bản trong đợt ban đêm và đang chờ Pages tạo HTML cùng sitemap.',
+        value: String(version),
+      }],
+    };
+    const { data: auditedProfile, error: auditError } = await db.from('movie_seo_profiles').update({
+      live_audit: pendingAudit,
+      last_audited_at: publishedAt,
+      updated_at: publishedAt,
+    }).eq('movie_id', item.movie_id).eq('version', version).select('version').maybeSingle();
+    if (auditError || !auditedProfile) {
+      await db.from('seo_static_release_requests').update({
+        status: 'failed',
+        error_message: `Nightly audit staging failed: ${auditError?.message || 'profile version not found'}`.slice(0, 500),
+      }).eq('id', item.id).eq('status', 'pending');
+      continue;
+    }
+    const { error: requestUpdateError } = await db.from('seo_static_release_requests').update({
+      reason: 'seo_profile_static_publish',
+      requested_version: version,
+      error_message: null,
+    }).eq('id', item.id).eq('status', 'pending');
+    if (requestUpdateError) {
+      await db.from('seo_static_release_requests').update({
+        status: 'failed',
+        error_message: `Nightly release preparation failed: ${requestUpdateError.message}`.slice(0, 500),
+      }).eq('id', item.id).eq('status', 'pending');
+      continue;
+    }
+    prepared.push({
+      id: Number(item.id),
+      movie_id: String(item.movie_id),
+      slug: String(item.slug || ''),
+      reason: 'seo_profile_static_publish',
+      release_lane: String(item.release_lane || 'nightly'),
+      requested_at: String(item.requested_at || publishedAt),
+      requested_version: version,
+    });
+  }
+  if (!prepared.length) return json({ ok: true, action: 'nothing_ready', mode, confirmed, recovered });
+
   const claimedAt = new Date().toISOString();
-  const pendingIds = pending.map((item) => item.id);
+  const pendingIds = prepared.map((item) => item.id);
   const { data: claimed, error: claimError } = await db.from('seo_static_release_requests').update({
     status: 'processing',
     processing_started_at: claimedAt,
     error_message: null,
-  }).in('id', pendingIds).eq('status', 'pending').select('id,slug,requested_version');
+  }).in('id', pendingIds).eq('status', 'pending').select('id,slug,release_lane,requested_version');
   if (claimError) return json({ error: claimError.message }, 500);
   if (!claimed?.length) return json({ ok: true, action: 'already_claimed', confirmed, recovered });
 
@@ -303,7 +401,7 @@ Deno.serve(async (req) => {
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) throw new Error(`Cloudflare deploy hook HTTP ${response.status}`);
-    return json({ ok: true, action: 'deployment_triggered', count: claimed.length, slugs: claimed.map((item) => item.slug), confirmed, recovered });
+    return json({ ok: true, action: 'deployment_triggered', mode, count: claimed.length, slugs: claimed.map((item) => item.slug), confirmed, recovered });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await db.from('seo_static_release_requests').update({
@@ -311,6 +409,6 @@ Deno.serve(async (req) => {
       processing_started_at: null,
       error_message: message.slice(0, 500),
     }).in('id', claimed.map((item) => item.id));
-    return json({ ok: false, action: 'deployment_failed', error: message }, 502);
+    return json({ ok: false, action: 'deployment_failed', mode, error: message }, 502);
   }
 });

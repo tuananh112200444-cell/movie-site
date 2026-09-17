@@ -1080,7 +1080,7 @@ Deno.serve(async (req) => {
       if (!movieId) return json({ error: 'Missing movie_id' }, 400, headers);
       const [profileResult, releaseResult, inspectionResult] = await Promise.all([
         db.from('movie_seo_profiles').select('status,index_mode,validation_score,version,live_audit,last_audited_at,published_at,updated_at').eq('movie_id', movieId).maybeSingle(),
-        db.from('seo_static_release_requests').select('reason,status,requested_version,requested_at,processing_started_at,deployed_at,deployment_url,error_message').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(10),
+        db.from('seo_static_release_requests').select('reason,release_lane,status,requested_version,requested_at,processing_started_at,deployed_at,deployment_url,error_message').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(10),
         db.from('seo_url_inspections').select('verdict,coverage_state,indexing_state,page_fetch_state,user_canonical,google_canonical,last_crawl_time,inspected_at,recommendation').eq('movie_id', movieId).maybeSingle(),
       ]);
       if (profileResult.error) throw profileResult.error;
@@ -1100,7 +1100,7 @@ Deno.serve(async (req) => {
       if (!movieId) return json({ error: 'Missing movie_id' }, 400, headers);
       const [profileResult, releaseResult] = await Promise.all([
         db.from('movie_seo_profiles').select('slug,status,index_mode,validation_score,version').eq('movie_id', movieId).maybeSingle(),
-        db.from('seo_static_release_requests').select('id,reason,status,requested_version,requested_at').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(10),
+        db.from('seo_static_release_requests').select('id,reason,release_lane,status,requested_version,requested_at').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(10),
       ]);
       if (profileResult.error || !profileResult.data) throw profileResult.error || new Error('SEO profile not found');
       if (releaseResult.error) throw releaseResult.error;
@@ -1114,10 +1114,12 @@ Deno.serve(async (req) => {
         return json({ error: 'Bản SEO này đã có một lượt phát hành đang chạy.' }, 409, headers);
       }
       const queuedAt = new Date().toISOString();
+      const releaseLane = body.release_timing === 'nightly' ? 'nightly' : 'urgent';
       const releasePayload = {
         movie_id: movieId,
         slug: String(profile.slug || ''),
         reason: 'seo_profile_retry',
+        release_lane: releaseLane,
         requested_version: version,
         status: 'pending',
         requested_at: queuedAt,
@@ -1130,7 +1132,7 @@ Deno.serve(async (req) => {
         ? await db.from('seo_static_release_requests').update(releasePayload).eq('id', selectedRelease.id)
         : await db.from('seo_static_release_requests').insert(releasePayload);
       if (retryResult.error) throw retryResult.error;
-      return json({ success: true, static_release: { status: 'pending', requested_version: version, requested_at: queuedAt } }, 202, headers);
+      return json({ success: true, static_release: { status: 'pending', release_lane: releaseLane, requested_version: version, requested_at: queuedAt } }, 202, headers);
     }
 
     if (action === 'load') {
@@ -1146,7 +1148,7 @@ Deno.serve(async (req) => {
         db.from('seo_url_inspections').select('verdict,coverage_state,indexing_state,page_fetch_state,user_canonical,google_canonical,last_crawl_time,inspected_at,recommendation').eq('movie_id', movieId).maybeSingle(),
         db.from('seo_search_metrics').select('clicks,impressions,ctr,position,date_start,date_end,collected_at').eq('dimension_type', 'page').ilike('dimension_value', `%/phim/${text(body.slug, 180)}%`).order('collected_at', { ascending: false }).limit(1).maybeSingle(),
         db.from('seo_query_page_metrics').select('query,clicks,impressions,ctr,position,date_start,date_end,collected_at').ilike('page', `%/phim/${text(body.slug, 180)}%`).order('collected_at', { ascending: false }).order('impressions', { ascending: false }).limit(20),
-        db.from('seo_static_release_requests').select('reason,status,requested_version,requested_at,processing_started_at,deployed_at,deployment_url,error_message').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(10),
+        db.from('seo_static_release_requests').select('reason,release_lane,status,requested_version,requested_at,processing_started_at,deployed_at,deployment_url,error_message').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(10),
       ]);
       if (movieResult.error) throw movieResult.error;
       if (draftResult.error && draftResult.error.code !== '42P01') throw draftResult.error;
@@ -1448,6 +1450,70 @@ Deno.serve(async (req) => {
       if (saveError) throw saveError;
       if (action === 'save') return json({ success: true, status: 'draft', validation, published_profile_unchanged: true }, 200, headers);
 
+      const releaseTiming = body.release_timing === 'urgent' ? 'urgent' : 'nightly';
+      if (SEO_PUBLISH_MODE === 'static' && releaseTiming === 'nightly') {
+        const queuedAt = new Date().toISOString();
+        const { data: activeRelease, error: activeReleaseError } = await db.from('seo_static_release_requests')
+          .select('id,status')
+          .eq('movie_id', payload.movie_id)
+          .in('status', ['pending', 'processing'])
+          .order('requested_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (activeReleaseError) throw activeReleaseError;
+        if (activeRelease?.status === 'processing') {
+          return json({
+            error: 'Phim đang có một bản phát hành được Cloudflare xử lý. Hãy chờ bản đó hoàn tất trước khi xếp lịch mới.',
+            validation,
+          }, 409, headers);
+        }
+        const releasePayload = {
+          movie_id: payload.movie_id,
+          slug: payload.slug,
+          reason: 'seo_draft_scheduled',
+          release_lane: 'nightly',
+          requested_version: null,
+          status: 'pending',
+          requested_at: queuedAt,
+          processing_started_at: null,
+          deployed_at: null,
+          deployment_url: null,
+          error_message: null,
+        };
+        const queuedRelease = activeRelease?.id
+          ? await db.from('seo_static_release_requests').update(releasePayload).eq('id', activeRelease.id)
+          : await db.from('seo_static_release_requests').insert(releasePayload);
+        if (queuedRelease.error) throw queuedRelease.error;
+        const queuedAudit: LiveAuditResult = {
+          passed: true,
+          checked_at: queuedAt,
+          url: `https://khophim.org/phim/${payload.slug}`,
+          status: 0,
+          checks: [{
+            code: 'nightly_release_queued',
+            passed: true,
+            message: 'Bản SEO đã được duyệt và sẽ phát hành theo lô lúc 03:30 sáng. Trang công khai hiện tại chưa thay đổi.',
+            value: currentVersion + 1,
+          }],
+        };
+        return json({
+          success: true,
+          status: 'scheduled-nightly',
+          publish_mode: SEO_PUBLISH_MODE,
+          validation,
+          live_audit: queuedAudit,
+          published_profile_unchanged: true,
+          public_discovery: { indexable: false, in_sitemap: false, queued: true, checked_at: queuedAt },
+          static_release: {
+            status: 'pending',
+            release_lane: 'nightly',
+            requested_version: null,
+            requested_at: queuedAt,
+            scheduled_for: '03:30 Asia/Ho_Chi_Minh',
+          },
+        }, 202, headers);
+      }
+
       const { data: publishResult, error: publishError } = await db.rpc('publish_movie_seo_profile', { p_movie_id: payload.movie_id });
       if (publishError) throw publishError;
       const publishedVersion = publishResult && typeof publishResult === 'object'
@@ -1485,6 +1551,7 @@ Deno.serve(async (req) => {
           movie_id: payload.movie_id,
           slug: payload.slug,
           reason: 'seo_profile_static_publish',
+          release_lane: 'urgent',
           requested_version: Number(publishedVersion || 0),
           status: 'pending',
           requested_at: queuedAt,
@@ -1504,7 +1571,7 @@ Deno.serve(async (req) => {
           validation,
           live_audit: staticPendingAudit,
           public_discovery: { indexable: false, in_sitemap: false, queued: true, checked_at: queuedAt },
-          static_release: { status: 'pending', requested_version: Number(publishedVersion || 0), requested_at: queuedAt },
+          static_release: { status: 'pending', release_lane: 'urgent', requested_version: Number(publishedVersion || 0), requested_at: queuedAt },
           result: publishResult,
         }, 202, headers);
       }

@@ -204,14 +204,18 @@ export interface SeoStudioLoadResult {
 
 export interface SeoStaticRelease {
   reason?: string;
+  release_lane?: 'nightly' | 'urgent';
   status?: 'pending' | 'processing' | 'deployed' | 'failed' | 'superseded';
-  requested_version?: number;
+  requested_version?: number | null;
   requested_at?: string;
   processing_started_at?: string;
   deployed_at?: string;
   deployment_url?: string;
   error_message?: string;
+  scheduled_for?: string;
 }
+
+export type SeoReleaseTiming = 'nightly' | 'urgent';
 
 export interface SeoReleaseStatusResult {
   profile: SeoStudioLoadResult['profile'];
@@ -262,16 +266,16 @@ export function saveSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_ver
   return callAdmin('save', { payload, safe_edit: safeEdit });
 }
 
-export function publishSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_version: number; unlocked_fields: string[] }): Promise<{ success: boolean; status: SeoProfileStatus | 'published-indexable' | 'published-noindex' | 'queued-static'; publish_mode?: 'static' | 'worker'; validation: SeoValidationResult; result?: Record<string, unknown>; live_audit?: SeoLiveAuditResult; public_discovery?: { indexable: boolean; in_sitemap: boolean; queued?: boolean; checked_at: string }; static_release?: { status: string; requested_version: number; requested_at: string } }> {
-  return callAdmin('publish', { payload, safe_edit: safeEdit });
+export function publishSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_version: number; unlocked_fields: string[] }, releaseTiming: SeoReleaseTiming = 'nightly'): Promise<{ success: boolean; status: SeoProfileStatus | 'published-indexable' | 'published-noindex' | 'queued-static' | 'scheduled-nightly'; publish_mode?: 'static' | 'worker'; validation: SeoValidationResult; result?: Record<string, unknown>; live_audit?: SeoLiveAuditResult; published_profile_unchanged?: boolean; public_discovery?: { indexable: boolean; in_sitemap: boolean; queued?: boolean; checked_at: string }; static_release?: SeoStaticRelease }> {
+  return callAdmin('publish', { payload, safe_edit: safeEdit, release_timing: releaseTiming });
 }
 
 export function getSeoReleaseStatus(movieId: string): Promise<SeoReleaseStatusResult> {
   return callAdmin<SeoReleaseStatusResult>('release_status', { movie_id: movieId });
 }
 
-export function retrySeoStaticRelease(movieId: string): Promise<{ success: boolean; static_release: SeoStaticRelease }> {
-  return callAdmin('retry_release', { movie_id: movieId });
+export function retrySeoStaticRelease(movieId: string, releaseTiming: SeoReleaseTiming = 'urgent'): Promise<{ success: boolean; static_release: SeoStaticRelease }> {
+  return callAdmin('retry_release', { movie_id: movieId, release_timing: releaseTiming });
 }
 
 export async function getPublishedSeoProfile(slug: string): Promise<PublishedSeoProfile | null> {
