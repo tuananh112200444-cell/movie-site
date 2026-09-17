@@ -783,6 +783,16 @@ export default function Home() {
 
       {deferredContentReady ? <Suspense fallback={<div className="editorial-home-shell min-h-[220px] skeleton" />}><>
       <main className="editorial-home-shell">
+        <EditorialSectionFrame number="01" code="NOW SCREENING" tone="cinema">
+          <LazyMovieSection
+            fetchType="type" fetchKey="phim-chieu-rap" limit={compactMobile ? 9 : 18}
+            title="Phim Đang Chiếu Rạp" viewAllLink="/phim-chieu-rap"
+            cols={6} rootMargin="100px" sectionIndex={0} theme="cinematic"
+            movies={homeData['phim-chieu-rap'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
         <Suspense fallback={<div className="mb-10 h-[620px] skeleton" />}>
           <DailyUpdateDemoSection movies={dailyUpdateMovies} loading={homeLoading} compact={homeV2} />
         </Suspense>
@@ -798,22 +808,12 @@ export default function Home() {
             <LazyMovieSection
               fetchType="type" fetchKey="personalized" limit={compactMobile ? 9 : 18}
               title="Dành Cho Bạn" viewAllLink="/phim-moi-nhat"
-              cols={6} rootMargin="100px" sectionIndex={0} theme="trending"
+              cols={6} rootMargin="100px" sectionIndex={1} theme="trending"
               movies={personalizedMovies}
               loading={false}
             />
           </EditorialSectionFrame>
         )}
-
-        <EditorialSectionFrame number="01" code="NOW SCREENING" tone="cinema">
-          <LazyMovieSection
-            fetchType="type" fetchKey="phim-chieu-rap" limit={compactMobile ? 9 : 18}
-            title="Phim Đang Chiếu Rạp" viewAllLink="/phim-chieu-rap"
-            cols={6} rootMargin="100px" sectionIndex={1} theme="cinematic"
-            movies={homeData['phim-chieu-rap'] ?? []}
-            loading={homeLoading}
-          />
-        </EditorialSectionFrame>
 
         <EditorialSectionFrame number="VN" code="VIETNAM FRESH" tone="cinema">
           <DeferredHomeSection minHeight={compactMobile ? 230 : 310}>
