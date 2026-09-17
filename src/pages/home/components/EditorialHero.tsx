@@ -12,7 +12,7 @@ interface EditorialHeroProps {
   variant?: 'editorial' | 'midnight';
 }
 
-const HERO_DISPLAY_LIMIT = 5;
+const HERO_DISPLAY_LIMIT = 8;
 
 function plainText(value?: string) {
   return String(value || '')
@@ -300,7 +300,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
     <section
       className={`editorial-hero${paused ? ' is-paused' : ''}`}
       aria-labelledby="editorial-hero-title"
-      aria-label="5 phim được đánh giá cao nhất"
+      aria-label="8 phim đang chiếu rạp"
       onPointerEnter={(event) => { if (event.pointerType === 'mouse') setPaused(true); }}
       onPointerLeave={(event) => { if (event.pointerType === 'mouse') setPaused(false); }}
       onTouchStart={handleTouchStart}
@@ -324,14 +324,14 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       <div className="editorial-hero-wash" aria-hidden="true" />
 
       <div className="editorial-hero-number" aria-hidden="true">
-        <span>Top rating</span>
+        <span>Đang chiếu rạp</span>
         <strong>{String(safeIndex + 1).padStart(2, '0')}</strong>
       </div>
 
       <div key={`copy-${movie._id || movie.slug}`} className="editorial-hero-copy">
         <p className="editorial-hero-kicker">
           <span aria-hidden="true" />
-          {HERO_DISPLAY_LIMIT} phim được đánh giá cao nhất
+          {HERO_DISPLAY_LIMIT} phim đang chiếu rạp
         </p>
 
         <div className="editorial-hero-meta">
@@ -359,7 +359,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       </div>
 
       {featured.length > 1 && (
-        <div className="editorial-hero-thumbnails" aria-label={`Chọn một trong ${featured.length} phim điểm cao`}>
+        <div className="editorial-hero-thumbnails" aria-label={`Chọn một trong ${featured.length} phim đang chiếu rạp`}>
           {featured.map((thumbnailMovie, index) => (
             <button
               key={thumbnailMovie._id || thumbnailMovie.slug}
@@ -381,11 +381,11 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       <div className="editorial-hero-footer">
         <span>{movie.lang || 'Vietsub'}{movie.episode_current ? ` · ${movie.episode_current}` : ''}</span>
         <div className="editorial-hero-controls" aria-label="Điều khiển phim nổi bật">
-          <button type="button" onClick={() => requestSlide(safeIndex - 1)} aria-label="Phim điểm cao trước">
+          <button type="button" onClick={() => requestSlide(safeIndex - 1)} aria-label="Phim chiếu rạp trước">
             <i className="ri-arrow-left-line" aria-hidden="true" />
           </button>
           <span>{String(safeIndex + 1).padStart(2, '0')} / {String(featured.length).padStart(2, '0')}</span>
-          <button type="button" onClick={() => requestSlide(safeIndex + 1)} aria-label="Phim điểm cao tiếp theo">
+          <button type="button" onClick={() => requestSlide(safeIndex + 1)} aria-label="Phim chiếu rạp tiếp theo">
             <i className="ri-arrow-right-line" aria-hidden="true" />
           </button>
         </div>

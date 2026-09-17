@@ -34,43 +34,11 @@ type HomeHeroMovie = {
 
 function readHomeHeroBootstrap(): HomeHeroMovie[] {
   try {
-    let topRatedMovies: HomeHeroMovie[] = [];
-    try {
-      const topRatedSnapshot = JSON.parse(
-        readFileSync(resolve(__dirname, 'public/top-rated-fallback.json'), 'utf8'),
-      ) as { movies?: HomeHeroMovie[] };
-      topRatedMovies = topRatedSnapshot.movies ?? [];
-    } catch {
-      topRatedMovies = [];
-    }
     const snapshot = JSON.parse(
       readFileSync(resolve(__dirname, 'public/home-fallback.json'), 'utf8'),
     ) as { sections?: Record<string, HomeHeroMovie[]> };
-    const unique = new Map<string, HomeHeroMovie>();
-    const ordered = topRatedMovies.length > 0
-      ? topRatedMovies
-      : Object.values(snapshot.sections ?? {}).flat();
-    ordered.forEach((movie) => {
-      const key = String(movie._id || movie.slug || '').trim();
-      if (!key || !movie.name || !(movie.hero_backdrop_url || movie.thumb_url || movie.hero_poster_url || movie.poster_url)) return;
-      if (Number(movie.tmdb_vote_average || 0) <= 0) return;
-      if (/ophim|opstream|tmdb.?catalog/i.test(`${movie.source_site || ''} ${movie.source_name || ''}`)) return;
-      const current = unique.get(key);
-      if (!current || Number(movie.tmdb_vote_average || 0) > Number(current.tmdb_vote_average || 0)) {
-        unique.set(key, movie);
-      }
-    });
-    return [...unique.values()]
-      .sort((a, b) => {
-        const ratingDiff = Number(b.tmdb_vote_average || 0) - Number(a.tmdb_vote_average || 0);
-        if (ratingDiff !== 0) return ratingDiff;
-        const voteDiff = Number(b.tmdb_vote_count || 0) - Number(a.tmdb_vote_count || 0);
-        if (voteDiff !== 0) return voteDiff;
-        const popularityDiff = Number(b.tmdb_popularity || 0) - Number(a.tmdb_popularity || 0);
-        if (popularityDiff !== 0) return popularityDiff;
-        return Number(b.year || 0) - Number(a.year || 0);
-      })
-      .slice(0, 5);
+    // The first paint must match the cinema shelf exactly, in its source order.
+    return (snapshot.sections?.['phim-chieu-rap'] ?? []).slice(0, 8);
   } catch {
     return [];
   }

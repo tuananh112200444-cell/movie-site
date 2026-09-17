@@ -319,7 +319,7 @@ function hasHomeMovies(sections: Record<string, MovieItem[]>): boolean {
   return Object.values(sections).some((items) => Array.isArray(items) && items.length > 0);
 }
 
-const HERO_MOVIE_LIMIT = 5;
+const HERO_MOVIE_LIMIT = 8;
 const TOP_RATED_MOVIE_LIMIT = 10;
 
 function isRetiredHeroSource(movie: MovieItem): boolean {
@@ -339,9 +339,6 @@ function isHeroEligible(movie: MovieItem): boolean {
   return heroRating(movie) > 0 && Number(movie.tmdb_vote_count || 0) >= 10;
 }
 
-// The opening hero and the "Phim Được Đánh Giá Cao" shelf must be fed by the
-// same ordered list. This prevents the large artwork from promoting a film
-// that does not appear in the ranking immediately below.
 function selectTopRatedMovies(sections: Record<string, MovieItem[]>, limit = TOP_RATED_MOVIE_LIMIT): MovieItem[] {
   const seen = new Set<string>();
   return [
@@ -370,7 +367,9 @@ function selectTopRatedMovies(sections: Record<string, MovieItem[]>, limit = TOP
 }
 
 function selectHeroMovies(sections: Record<string, MovieItem[]>): MovieItem[] {
-  return selectTopRatedMovies(sections, HERO_MOVIE_LIMIT).slice(0, 5);
+  // Keep the main artwork exactly aligned with the first 8 cards in the
+  // "Phim Đang Chiếu Rạp" shelf. Do not reorder or re-rank this list here.
+  return (sections['phim-chieu-rap'] ?? []).slice(0, HERO_MOVIE_LIMIT);
 }
 
 function readBootHeroMovies(): MovieItem[] {
@@ -379,9 +378,8 @@ function readBootHeroMovies(): MovieItem[] {
     if (!node?.textContent) return [];
     const parsed = JSON.parse(node.textContent) as unknown;
     if (!Array.isArray(parsed)) return [];
-    // The build-time snapshot is already the top-rated order. Use it only for
-    // the first paint; live home data replaces it with the exact same 8-card
-    // ranking as soon as the homepage response arrives.
+    // The build-time snapshot is the same cinema order as the shelf. It is
+    // only used for the first paint; live home data refreshes it afterwards.
     return (parsed as MovieItem[]).slice(0, HERO_MOVIE_LIMIT);
   } catch {
     return [];
