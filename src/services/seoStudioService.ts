@@ -187,7 +187,7 @@ export interface SeoStudioLoadResult {
   ai_available?: boolean;
   ai_provider?: 'gemini' | 'openai' | null;
   publish_mode?: 'static' | 'worker';
-  static_release?: { status?: 'pending' | 'processing' | 'deployed' | 'failed'; requested_version?: number; requested_at?: string; processing_started_at?: string; deployed_at?: string; deployment_url?: string; error_message?: string } | null;
+  static_release?: SeoStaticRelease | null;
   worker_status?: { online: boolean; status: number; checked_at: string };
   profile: (PublishedSeoProfile & { review_content?: string; movie_patch?: SeoMoviePatch; status?: SeoProfileStatus; validation_issues?: SeoValidationIssue[] }) | null;
   review: { content?: string; word_count?: number; generated_at?: string; updated_at?: string } | null;
@@ -200,6 +200,24 @@ export interface SeoStudioLoadResult {
   };
   suggestions: { title: string; description: string; canonical_path: string };
   safe_edit: SeoSafeEditContext;
+}
+
+export interface SeoStaticRelease {
+  reason?: string;
+  status?: 'pending' | 'processing' | 'deployed' | 'failed' | 'superseded';
+  requested_version?: number;
+  requested_at?: string;
+  processing_started_at?: string;
+  deployed_at?: string;
+  deployment_url?: string;
+  error_message?: string;
+}
+
+export interface SeoReleaseStatusResult {
+  profile: SeoStudioLoadResult['profile'];
+  static_release: SeoStaticRelease | null;
+  inspection: NonNullable<SeoStudioLoadResult['insights']>['inspection'];
+  google_indexed: boolean;
 }
 
 export function loadSeoMovie(movieId: string, slug: string): Promise<SeoStudioLoadResult> {
@@ -246,6 +264,14 @@ export function saveSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_ver
 
 export function publishSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_version: number; unlocked_fields: string[] }): Promise<{ success: boolean; status: SeoProfileStatus | 'published-indexable' | 'published-noindex' | 'queued-static'; publish_mode?: 'static' | 'worker'; validation: SeoValidationResult; result?: Record<string, unknown>; live_audit?: SeoLiveAuditResult; public_discovery?: { indexable: boolean; in_sitemap: boolean; queued?: boolean; checked_at: string }; static_release?: { status: string; requested_version: number; requested_at: string } }> {
   return callAdmin('publish', { payload, safe_edit: safeEdit });
+}
+
+export function getSeoReleaseStatus(movieId: string): Promise<SeoReleaseStatusResult> {
+  return callAdmin<SeoReleaseStatusResult>('release_status', { movie_id: movieId });
+}
+
+export function retrySeoStaticRelease(movieId: string): Promise<{ success: boolean; static_release: SeoStaticRelease }> {
+  return callAdmin('retry_release', { movie_id: movieId });
 }
 
 export async function getPublishedSeoProfile(slug: string): Promise<PublishedSeoProfile | null> {

@@ -5,6 +5,9 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
 const DEPLOY_HOOK_URL = Deno.env.get('SEO_DEPLOY_HOOK_URL') ?? '';
 const SITE_RELEASE_URL = 'https://khophim.org/release.json';
+const SITE_URL = 'https://khophim.org';
+const VERIFICATION_TIMEOUT_MS = 45 * 60 * 1000;
+const BUILD_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -48,37 +51,101 @@ function htmlValue(html: string, pattern: RegExp): string {
   return String(pattern.exec(html)?.[1] || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
 }
 
-async function verifyStaticPublication(slug: string, version: number): Promise<{ passed: boolean; audit: Record<string, unknown>; error: string | null }> {
-  const url = `https://khophim.org/phim/${encodeURIComponent(slug)}`;
-  const canonical = `https://khophim.org/phim/${slug}`;
-  try {
-    const [pageResponse, sitemapResponse] = await Promise.all([
-      fetch(`${url}?static_release=${version}&check=${Date.now()}`, {
-        headers: { Accept: 'text/html', 'User-Agent': 'Googlebot', 'Cache-Control': 'no-cache' },
-        signal: AbortSignal.timeout(12_000),
-      }),
-      fetch(`https://khophim.org/sitemap-seo-studio.xml?static_release=${version}&check=${Date.now()}`, {
+async function sitemapEvidence(canonical: string, requireSeoStudio: boolean): Promise<{
+  httpPassed: boolean;
+  containsUrl: boolean;
+  checked: string[];
+}> {
+  const cacheBust = Date.now();
+  const studioUrl = `${SITE_URL}/sitemap-seo-studio.xml?static_release=${cacheBust}`;
+  if (requireSeoStudio) {
+    const response = await fetch(studioUrl, {
+      headers: { Accept: 'application/xml', 'Cache-Control': 'no-cache' },
+      signal: AbortSignal.timeout(12_000),
+    });
+    const body = await response.text();
+    return { httpPassed: response.status === 200, containsUrl: body.includes(`<loc>${canonical}</loc>`), checked: [studioUrl] };
+  }
+
+  const rootUrl = `${SITE_URL}/sitemap.xml?static_release=${cacheBust}`;
+  const rootResponse = await fetch(rootUrl, {
+    headers: { Accept: 'application/xml', 'Cache-Control': 'no-cache' },
+    signal: AbortSignal.timeout(12_000),
+  });
+  const rootXml = await rootResponse.text();
+  const childUrls = [...rootXml.matchAll(/<loc>(https:\/\/khophim\.org\/[^<]+\.xml)<\/loc>/gi)]
+    .map((match) => match[1])
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .slice(0, 20);
+  const targets = childUrls.length ? childUrls : [studioUrl];
+  const children = await Promise.all(targets.map(async (target) => {
+    try {
+      const response = await fetch(`${target}${target.includes('?') ? '&' : '?'}static_release=${cacheBust}`, {
         headers: { Accept: 'application/xml', 'Cache-Control': 'no-cache' },
         signal: AbortSignal.timeout(12_000),
-      }),
-    ]);
-    const [html, sitemapXml] = await Promise.all([pageResponse.text(), sitemapResponse.text()]);
+      });
+      return { ok: response.status === 200, body: await response.text() };
+    } catch {
+      return { ok: false, body: '' };
+    }
+  }));
+  return {
+    httpPassed: rootResponse.status === 200 && children.some((item) => item.ok),
+    containsUrl: children.some((item) => item.body.includes(`<loc>${canonical}</loc>`)),
+    checked: [rootUrl, ...targets],
+  };
+}
+
+async function verifyStaticPublication(
+  slug: string,
+  version: number | null,
+  expectedIndex: boolean | null,
+  requireSeoStudioSitemap: boolean,
+): Promise<{ passed: boolean; audit: Record<string, unknown>; error: string | null }> {
+  const url = `${SITE_URL}/phim/${encodeURIComponent(slug)}`;
+  const canonical = `${SITE_URL}/phim/${slug}`;
+  try {
+    const pageResponse = await fetch(`${url}?static_release=${version ?? 'generic'}&check=${Date.now()}`, {
+      headers: { Accept: 'text/html', 'User-Agent': 'Googlebot', 'Cache-Control': 'no-cache' },
+      signal: AbortSignal.timeout(12_000),
+    });
+    const html = await pageResponse.text();
     const marker = htmlValue(html, /data-kp-seo-profile-version=["']([^"']+)["']/i);
     const canonicalValue = htmlValue(html, /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)
       || htmlValue(html, /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i);
     const robots = htmlValue(html, /<meta[^>]+name=["']robots["'][^>]+content=["']([^"']+)["']/i).toLowerCase();
+    const actualIndex = robots.includes('index') && !robots.includes('noindex');
+    const shouldIndex = expectedIndex ?? actualIndex;
+    const sitemap = await sitemapEvidence(canonical, requireSeoStudioSitemap);
     const checks = [
-      { code: 'static_http_200', passed: pageResponse.status === 200, value: pageResponse.status },
-      { code: 'static_profile_version', passed: marker === String(version), value: marker },
-      { code: 'static_canonical', passed: canonicalValue === canonical, value: canonicalValue },
-      { code: 'static_robots_index', passed: robots.includes('index') && !robots.includes('noindex'), value: robots },
-      { code: 'static_sitemap_http', passed: sitemapResponse.status === 200, value: sitemapResponse.status },
-      { code: 'static_sitemap_membership', passed: sitemapXml.includes(`<loc>${canonical}</loc>`) },
+      { code: 'public_http_200', passed: pageResponse.status === 200, value: pageResponse.status },
+      ...(version && version > 0
+        ? [{ code: 'public_profile_version', passed: marker === String(version), value: marker }]
+        : []),
+      { code: 'public_canonical', passed: canonicalValue === canonical, value: canonicalValue },
+      shouldIndex
+        ? { code: 'public_robots_index', passed: actualIndex, value: robots }
+        : { code: 'public_robots_noindex', passed: robots.includes('noindex'), value: robots },
+      { code: 'public_sitemap_http', passed: sitemap.httpPassed, value: sitemap.checked },
+      shouldIndex
+        ? { code: 'public_sitemap_membership', passed: sitemap.containsUrl }
+        : { code: 'public_sitemap_exclusion', passed: !sitemap.containsUrl },
     ];
     const passed = checks.every((check) => check.passed);
     return {
       passed,
-      audit: { passed, mode: 'static', checked_at: new Date().toISOString(), url, status: pageResponse.status, checks },
+      audit: {
+        passed,
+        mode: 'static',
+        phase: 'public-static',
+        indexable: shouldIndex,
+        in_sitemap: sitemap.containsUrl,
+        profile_version: version,
+        checked_at: new Date().toISOString(),
+        url,
+        status: pageResponse.status,
+        checks,
+      },
       error: passed ? null : checks.filter((check) => !check.passed).map((check) => check.code).join(', '),
     };
   } catch (error) {
@@ -100,7 +167,7 @@ Deno.serve(async (req) => {
   const now = new Date();
   const releaseTime = await currentReleaseTime();
   const { data: processing, error: processingError } = await db.from('seo_static_release_requests')
-    .select('id,movie_id,slug,requested_version,requested_at,processing_started_at')
+    .select('id,movie_id,slug,reason,requested_version,requested_at,processing_started_at')
     .eq('status', 'processing')
     .order('processing_started_at', { ascending: true })
     .limit(20);
@@ -111,31 +178,84 @@ Deno.serve(async (req) => {
   for (const item of processing || []) {
     const requestedAt = Date.parse(String(item.requested_at || '')) || 0;
     const processingAt = Date.parse(String(item.processing_started_at || item.requested_at || '')) || 0;
+    const processingAge = processingAt ? now.getTime() - processingAt : 0;
+    const reason = String(item.reason || '');
+    const { data: profile, error: profileError } = await db.from('movie_seo_profiles')
+      .select('version,status,index_mode,validation_score')
+      .eq('movie_id', item.movie_id)
+      .maybeSingle();
+    if (profileError) {
+      await db.from('seo_static_release_requests').update({
+        status: 'failed',
+        error_message: `Cannot load SEO profile: ${profileError.message}`.slice(0, 500),
+      }).eq('id', item.id).eq('status', 'processing');
+      continue;
+    }
+    const explicitProfileRelease = reason.startsWith('seo_profile_') || Number(item.requested_version || 0) > 0;
+    const resolvedVersion = Number(item.requested_version || 0)
+      || (explicitProfileRelease ? Number(profile?.version || 0) : 0);
+    if (explicitProfileRelease && (!profile || profile.status !== 'published' || resolvedVersion < 1)) {
+      await db.from('seo_static_release_requests').update({
+        status: 'failed',
+        error_message: 'Published SEO profile/version is missing; publish the draft again.',
+      }).eq('id', item.id).eq('status', 'processing');
+      continue;
+    }
+    if (explicitProfileRelease && Number(profile?.version || 0) !== resolvedVersion) {
+      await db.from('seo_static_release_requests').update({
+        status: 'superseded',
+        error_message: `Superseded by SEO profile version ${Number(profile?.version || 0)}.`,
+      }).eq('id', item.id).eq('status', 'processing');
+      continue;
+    }
     if (releaseTime > requestedAt) {
-      const verification = await verifyStaticPublication(String(item.slug || ''), Number(item.requested_version || 0));
+      const verification = await verifyStaticPublication(
+        String(item.slug || ''),
+        explicitProfileRelease ? resolvedVersion : null,
+        explicitProfileRelease ? profile?.index_mode === 'index' : null,
+        explicitProfileRelease,
+      );
       if (verification.passed) {
         const deployedAt = new Date(releaseTime).toISOString();
+        if (explicitProfileRelease) {
+          const { data: auditedProfile, error: auditError } = await db.from('movie_seo_profiles').update({
+            live_audit: verification.audit,
+            last_audited_at: deployedAt,
+          }).eq('movie_id', item.movie_id).eq('version', resolvedVersion).select('version').maybeSingle();
+          if (auditError || !auditedProfile) {
+            await db.from('seo_static_release_requests').update({
+              status: 'failed',
+              error_message: `Public verification passed but audit persistence failed: ${auditError?.message || 'profile version not found'}`.slice(0, 500),
+            }).eq('id', item.id).eq('status', 'processing');
+            continue;
+          }
+        }
         const { error } = await db.from('seo_static_release_requests').update({
           status: 'deployed',
+          requested_version: resolvedVersion || null,
           deployed_at: deployedAt,
-          deployment_url: 'https://khophim.org',
+          deployment_url: SITE_URL,
           error_message: null,
         }).eq('id', item.id).eq('status', 'processing');
         if (!error) {
-          await Promise.all([
-            db.from('movie_seo_profiles').update({ live_audit: verification.audit, last_audited_at: deployedAt }).eq('movie_id', item.movie_id).eq('version', item.requested_version),
-            db.from('seo_work_items').update({ status: 'completed', completed_at: deployedAt, updated_at: deployedAt }).eq('movie_id', item.movie_id).in('status', ['pending', 'in_progress']),
-          ]);
+          await db.from('seo_work_items').update({
+            status: 'completed',
+            completed_at: deployedAt,
+            updated_at: deployedAt,
+          }).eq('movie_id', item.movie_id).in('status', ['pending', 'in_progress']);
           confirmed += 1;
         }
       } else {
-        await db.from('seo_static_release_requests').update({ error_message: `Static verification pending: ${verification.error || 'unknown'}`.slice(0, 500) }).eq('id', item.id).eq('status', 'processing');
+        const terminal = processingAge >= VERIFICATION_TIMEOUT_MS;
+        await db.from('seo_static_release_requests').update({
+          status: terminal ? 'failed' : 'processing',
+          error_message: `${terminal ? 'Static verification failed' : 'Static verification pending'}: ${verification.error || 'unknown'}`.slice(0, 500),
+        }).eq('id', item.id).eq('status', 'processing');
       }
-    } else if (processingAt && now.getTime() - processingAt > 2 * 60 * 60 * 1000) {
+    } else if (processingAge > BUILD_TIMEOUT_MS) {
       const { error } = await db.from('seo_static_release_requests').update({
-        status: 'pending',
-        processing_started_at: null,
-        error_message: 'Build confirmation timed out; queued for retry.',
+        status: 'failed',
+        error_message: 'Cloudflare Pages build confirmation timed out. Publish or retry the SEO release.',
       }).eq('id', item.id).eq('status', 'processing');
       if (!error) recovered += 1;
     }
