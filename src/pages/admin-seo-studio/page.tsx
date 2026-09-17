@@ -396,7 +396,10 @@ export default function AdminSeoStudioPage() {
       setCountryText(nextPayload.movie_patch.country.map((item) => item.name).join(', '));
       const nextStep = useLocalDraft
         ? localDraft?.step ?? 'movie'
-        : preferredStep ?? getPriorityAction(initialValidation, result.worker_status?.online).step;
+        : preferredStep ?? getPriorityAction(
+          initialValidation,
+          result.publish_mode === 'worker' ? result.worker_status?.online : true,
+        ).step;
       setStep(nextStep);
       writeLocalJson(LOCAL_SESSION_KEY, { movie, step: nextStep } satisfies LocalSeoSession);
       if (useLocalDraft || serverDraft) {
@@ -765,7 +768,10 @@ export default function AdminSeoStudioPage() {
   const activeSafeFields = workflowStage === 'create'
     ? [...STEP_FIELDS.search, ...STEP_FIELDS.content, ...STEP_FIELDS.links]
     : workflowStage === 'diagnose' ? STEP_FIELDS.movie : STEP_FIELDS.technical;
-  const priorityAction = getPriorityAction(validation, loaded?.worker_status?.online);
+  const priorityAction = getPriorityAction(
+    validation,
+    loaded?.publish_mode === 'worker' ? loaded.worker_status?.online : true,
+  );
   const priorityStep = STEPS.find((item) => item.key === priorityAction.step);
   const staticPublishMode = loaded?.publish_mode === 'static';
   const staticRelease = loaded?.static_release;
@@ -974,7 +980,8 @@ export default function AdminSeoStudioPage() {
             </div>}
 
             {step === 'technical' && <div className="space-y-5">
-              {loaded.worker_status?.online === false && <div className="rounded-xl border border-red-500/20 bg-red-500/[0.08] p-4 text-xs leading-6 text-red-200"><strong className="block text-sm">SEO Worker đang không chạy trên website thật</strong><span>Tại lúc tải phim, máy chủ kiểm tra trả HTTP {loaded.worker_status.status || 'lỗi mạng'}. Bạn vẫn có thể lưu nháp; hệ thống sẽ chặn xuất bản trước khi thay đổi SEO đang tốt. Dùng “Kiểm tra trang thật” để thử lại sau khi Worker hoạt động.</span></div>}
+              {loaded.publish_mode === 'worker' && loaded.worker_status?.online === false && <div className="rounded-xl border border-red-500/20 bg-red-500/[0.08] p-4 text-xs leading-6 text-red-200"><strong className="block text-sm">SEO Worker đang không chạy trên website thật</strong><span>Tại lúc tải phim, máy chủ kiểm tra trả HTTP {loaded.worker_status.status || 'lỗi mạng'}. Bạn vẫn có thể lưu nháp; hệ thống sẽ chặn xuất bản trước khi thay đổi SEO đang tốt. Dùng “Kiểm tra trang thật” để thử lại sau khi Worker hoạt động.</span></div>}
+              {loaded.publish_mode === 'static' && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 text-xs leading-6 text-emerald-100"><strong className="block text-sm text-emerald-300">Phát hành SEO tĩnh đang hoạt động</strong><span>Chế độ miễn phí không phụ thuộc Pages Worker. Khi xuất bản, hệ thống sẽ dựng lại trang phim, kiểm tra canonical, robots và sitemap trước khi báo hoàn thành.</span></div>}
               <div><label className={labelClass}>Quyền index</label><div className="grid gap-2 sm:grid-cols-3">{[
                 ['auto', 'Tự động', 'Theo cổng chất lượng hệ thống'],
                 ['index', 'Cho phép index', 'Điểm ≥85 và kiểm tra trang thật đạt'],

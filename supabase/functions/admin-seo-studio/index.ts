@@ -1167,7 +1167,12 @@ Deno.serve(async (req) => {
         : null;
       const suggestedTitle = `${movie.name}${movie.year ? ` (${movie.year})` : ''} – Thông Tin Phim | KhoPhim`;
       const suggestedDescription = `${movie.name}${movie.origin_name ? ` (${movie.origin_name})` : ''} – nội dung, diễn viên, trailer, lịch phát hành và thông tin cập nhật tại KhoPhim.`;
-      const workerStatus = await seoWorkerStatus();
+      // Static-only publishing deliberately does not depend on Pages
+      // Functions.  Do not report the optional Worker health route as a
+      // failure when the active publisher is the verified static pipeline.
+      const workerStatus = SEO_PUBLISH_MODE === 'worker'
+        ? { ...await seoWorkerStatus(), required: true, mode: 'worker' as const }
+        : { online: true, status: 200, checked_at: new Date().toISOString(), required: false, mode: 'static' as const };
       return json({
         movie,
         profile: profileResult.data,
