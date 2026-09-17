@@ -43,7 +43,9 @@ expect(source.includes('inspection_slugs?:unknown')
     && source.includes('requestedInspectionRank')
     && source.includes('.slice(0,5)')
     && source.includes('if (item.requestedRank > 0) return true;')
-    && source.includes('contentLength < 500 && requestedRank === 0'),
+    && source.includes('contentLength < 500 && requestedRank === 0')
+    && source.includes('!isStrongInspectionCandidate(movie) && requestedRank === 0')
+    && !source.includes(".not('movies.tmdb_id','is',null)"),
   'GSC must support a tightly bounded explicit reinspection request for a priority movie.');
 expect(source.includes("from('seo_hot_movie_candidates').select('matched_slug,demand_score')")
     && source.includes('hotDemandBySlug')

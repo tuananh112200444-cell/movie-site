@@ -424,7 +424,7 @@ Deno.serve(async (req) => {
       {data:known,error:knownError},
       {data:hotCandidates,error:hotCandidateError},
     ] = await Promise.all([
-      supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at,index_tier,quality_score,freshness_score,last_episode_change_at,content_length,movies!inner(id,slug,is_published,superseded_by_movie_id,tmdb_id,actor,director,category,country,year,trailer_url)').eq('eligible_for_index',true).in('index_tier',['ongoing','playable','upcoming']).gte('quality_score',85).gte('content_length',350).eq('movies.is_published',true).is('movies.superseded_by_movie_id',null).not('movies.tmdb_id','is',null).order('quality_score',{ascending:false}).order('movie_updated_at',{ascending:false}).limit(1500),
+      supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at,index_tier,quality_score,freshness_score,last_episode_change_at,content_length,movies!inner(id,slug,is_published,superseded_by_movie_id,tmdb_id,actor,director,category,country,year,trailer_url)').eq('eligible_for_index',true).in('index_tier',['ongoing','playable','upcoming']).gte('quality_score',85).gte('content_length',350).eq('movies.is_published',true).is('movies.superseded_by_movie_id',null).order('quality_score',{ascending:false}).order('movie_updated_at',{ascending:false}).limit(1500),
       supabase.from('seo_url_inspections').select('url,inspected_at').order('inspected_at',{ascending:true}).limit(5000),
       supabase.from('seo_hot_movie_candidates').select('matched_slug,demand_score').eq('active',true).gt('expires_at',new Date().toISOString()).not('matched_slug','is',null).order('demand_score',{ascending:false}).limit(100),
     ]);
@@ -442,9 +442,12 @@ Deno.serve(async (req) => {
       .flatMap(item=>{
         const nested = Array.isArray(item.movies) ? item.movies[0] : item.movies;
         const movie = nested && typeof nested === 'object' ? nested as Record<string,unknown> : null;
-        if (!isStrongInspectionCandidate(movie)) return [];
         const slug = String(movie?.slug || item.slug);
         const requestedRank = requestedInspectionRank.get(slug) || 0;
+        // A manually requested URL has already passed the publishing quality
+        // gate. It must remain inspectable even when an upstream TMDB id is
+        // unavailable; TMDB is enrichment evidence, not a Google requirement.
+        if (!isStrongInspectionCandidate(movie) && requestedRank === 0) return [];
         const tier = String(item.index_tier || '');
         const score = Number(item.quality_score || 0);
         const contentLength = Number(item.content_length || 0);
