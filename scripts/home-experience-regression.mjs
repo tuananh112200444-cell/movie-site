@@ -149,26 +149,22 @@ for (const contract of [
   if (!home.includes(contract)) failures.push(`Homepage first-paint stability contract is missing: ${contract}`);
 }
 for (const contract of [
-  'function isHeroEligible',
-  "'awaiting_playback'",
-  'function isRetiredHeroSource',
-  'function heroRating',
-  'const ratingDiff = heroRating(b) - heroRating(a)',
-  'const voteDiff = Number(b.tmdb_vote_count || 0) - Number(a.tmdb_vote_count || 0)',
-  '.slice(0, 5)',
+  'const HERO_MOVIE_LIMIT = 8',
+  'function selectHeroMovies',
+  "sections['phim-chieu-rap']",
+  '.slice(0, HERO_MOVIE_LIMIT)',
 ]) {
-  if (!home.includes(contract)) failures.push(`KhoPhim top-rated hero ranking is missing: ${contract}`);
+  if (!home.includes(contract)) failures.push(`Homepage cinema hero contract is missing: ${contract}`);
 }
 if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !home.includes("const MOBILE_HOME_SECTIONS = [\n  'top-rated'")) {
   failures.push('Desktop and mobile homepage requests must include the dedicated top-rated rail.');
 }
 for (const contract of [
-  'aria-label="5 phim được đánh giá cao nhất"',
-  '<span>Top rating</span>',
-  'editorial-rating-pill',
+  'aria-label="8 phim đang chiếu rạp"',
+  '<span>Đang chiếu rạp</span>',
   'editorial-hero-thumbnails',
 ]) {
-  if (!editorialHero.includes(contract)) failures.push(`Editorial hero top-rated context is missing: ${contract}`);
+  if (!editorialHero.includes(contract)) failures.push(`Editorial hero cinema context is missing: ${contract}`);
 }
 if (!editorialHero.includes('onReady?: () => void') || !editorialHero.includes('onReady?.();')) {
   failures.push('Editorial hero must release below-fold rendering only after its image is ready.');
@@ -209,8 +205,8 @@ for (const contract of [
 ]) {
   if (!proxy.includes(contract)) failures.push(`Top-rated home data contract is missing: ${contract}`);
 }
-if (!viteConfig.includes('public/top-rated-fallback.json') || !homeFallbackGenerator.includes('TOP_RATED_OUTPUT_URL')) {
-  failures.push('The first hero paint must have a generated top-rated fallback.');
+if (!homeFallbackGenerator.includes('TOP_RATED_OUTPUT_URL')) {
+  failures.push('The dedicated top-rated rail must retain its generated fallback.');
 }
 const topRatedMovies = topRatedFallback.movies ?? [];
 if (topRatedMovies.length !== 5
@@ -220,8 +216,8 @@ if (topRatedMovies.length !== 5
   || topRatedMovies.some((movie, index) => index > 0 && Number(movie.tmdb_vote_average || 0) > Number(topRatedMovies[index - 1].tmdb_vote_average || 0))) {
   failures.push('Top-rated fallback must contain exactly five source-verified movies ordered by TMDb rating.');
 }
-if (!proxy.includes('tmdb.?catalog') || !home.includes('tmdb.?catalog') || !viteConfig.includes('tmdb.?catalog')) {
-  failures.push('Homepage hero must reject unverified TMDB catalogue rows before ranking or bootstrapping.');
+if (!viteConfig.includes("snapshot.sections?.['phim-chieu-rap']") || !viteConfig.includes('.slice(0, 8)')) {
+  failures.push('Homepage hero bootstrap must use the first eight cinema-shelf movies.');
 }
 for (const contract of [
   'function getResponsiveHeroImage',
