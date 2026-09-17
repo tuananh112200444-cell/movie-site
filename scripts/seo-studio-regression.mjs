@@ -82,6 +82,10 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['public_sitemap_membership', 'UI does not require confirmed sitemap membership before showing Google-ready status'],
   ['data-kp-static-release-pending="true"', 'static-only publish queue is not visible to the operator'],
   ['Xếp hàng phát hành tĩnh miễn phí', 'free static-only publish action is not clear'],
+  ['data-kp-seo-publication-state="true"', 'SEO Studio does not separate profile, website, Google discovery and Google index states'],
+  ['getSeoReleaseStatus', 'SEO Studio does not refresh pending static releases automatically'],
+  ['retrySeoStaticRelease', 'SEO Studio does not expose a safe retry for failed static releases'],
+  ["inspection?.verdict === 'PASS'", 'SEO Studio labels Google indexing without Search Console PASS evidence'],
   ["loaded.ai_provider === 'gemini'", 'SEO Studio does not disclose the active server-side AI provider'],
 ]);
 expect('src/services/seoStudioService.ts', [
@@ -137,6 +141,9 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ["status: payload.index_mode === 'index' ? 'published-indexable'", 'publish response does not distinguish indexable publication from a saved profile'],
   ["SEO_PUBLISH_MODE", 'SEO Studio cannot switch to free static-only publication'],
   ["status: 'queued-static'", 'static-only publication is not returned as an asynchronous queue state'],
+  ["payload.index_mode === 'auto'", 'server does not resolve automatic index mode before a verified static publication'],
+  ["action === 'release_status'", 'server does not expose live asynchronous publication status'],
+  ["action === 'retry_release'", 'server does not support a bounded failed-release retry'],
 ]);
 const studioEndpoint = files['supabase/functions/admin-seo-studio/index.ts'];
 if (studioEndpoint.indexOf('const prePublishAudit = await inspectLivePage(payload)') < 0
@@ -145,7 +152,8 @@ if (studioEndpoint.indexOf('const prePublishAudit = await inspectLivePage(payloa
 }
 expect('scripts/verify-seo-deployment.mjs', [
   ["/sitemap-seo-studio.xml'", 'deployment audit does not distinguish the dynamic SEO Studio sitemap from the intentionally static root sitemap'],
-  ["response.headers.get('x-sitemap-proxy') !== 'cloudflare-pages'", 'deployment audit accepts a static fallback as a healthy SEO Studio sitemap'],
+  ["staticOnlyMode = proxy === 'cloudflare-pages-static-fallback' && seoStudioUrls.length > 0", 'deployment audit accepts an empty static fallback as a healthy SEO Studio sitemap'],
+  ['SEO Studio sitemap is neither a healthy Worker response nor a non-empty static-only sitemap.', 'deployment audit does not fail closed for an unusable SEO Studio sitemap'],
   ["/internal/seo-studio-inspect?slug=", 'deployment audit does not verify the protected SEO Studio inspection route'],
   ["/api/time", 'deployment audit does not verify the Pages Worker health route'],
 ]);

@@ -1040,6 +1040,16 @@ async function inspectPublicDiscovery(payload: SeoPayload, expectedVersion: numb
   };
 }
 
+function releaseForProfile(rows: unknown, version: number): Record<string, unknown> | null {
+  const releases = Array.isArray(rows)
+    ? rows.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    : [];
+  return releases.find((item) => Number(item.requested_version || 0) === version && String(item.reason || '').startsWith('seo_profile_'))
+    ?? releases.find((item) => Number(item.requested_version || 0) === version)
+    ?? releases[0]
+    ?? null;
+}
+
 Deno.serve(async (req) => {
   const headers = cors(req.headers.get('origin'));
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
@@ -1065,6 +1075,64 @@ Deno.serve(async (req) => {
       return json({ items: data ?? [] }, 200, headers);
     }
 
+    if (action === 'release_status') {
+      const movieId = text(body.movie_id, 80);
+      if (!movieId) return json({ error: 'Missing movie_id' }, 400, headers);
+      const [profileResult, releaseResult, inspectionResult] = await Promise.all([
+        db.from('movie_seo_profiles').select('status,index_mode,validation_score,version,live_audit,last_audited_at,published_at,updated_at').eq('movie_id', movieId).maybeSingle(),
+        db.from('seo_static_release_requests').select('reason,status,requested_version,requested_at,processing_started_at,deployed_at,deployment_url,error_message').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(10),
+        db.from('seo_url_inspections').select('verdict,coverage_state,indexing_state,page_fetch_state,user_canonical,google_canonical,last_crawl_time,inspected_at,recommendation').eq('movie_id', movieId).maybeSingle(),
+      ]);
+      if (profileResult.error) throw profileResult.error;
+      if (releaseResult.error) throw releaseResult.error;
+      const profile = profileResult.data;
+      const version = Number(profile?.version || 0);
+      return json({
+        profile,
+        static_release: releaseForProfile(releaseResult.data, version),
+        inspection: inspectionResult.error ? null : inspectionResult.data,
+        google_indexed: inspectionResult.data?.verdict === 'PASS',
+      }, 200, headers);
+    }
+
+    if (action === 'retry_release') {
+      const movieId = text(body.movie_id, 80);
+      if (!movieId) return json({ error: 'Missing movie_id' }, 400, headers);
+      const [profileResult, releaseResult] = await Promise.all([
+        db.from('movie_seo_profiles').select('slug,status,index_mode,validation_score,version').eq('movie_id', movieId).maybeSingle(),
+        db.from('seo_static_release_requests').select('id,reason,status,requested_version,requested_at').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(10),
+      ]);
+      if (profileResult.error || !profileResult.data) throw profileResult.error || new Error('SEO profile not found');
+      if (releaseResult.error) throw releaseResult.error;
+      const profile = profileResult.data;
+      const version = Number(profile.version || 0);
+      if (profile.status !== 'published' || profile.index_mode !== 'index' || Number(profile.validation_score || 0) < 85 || version < 1) {
+        return json({ error: 'Hồ sơ chưa đủ điều kiện phát hành lại cho Google. Hãy xuất bản SEO một lần nữa.' }, 422, headers);
+      }
+      const selectedRelease = releaseForProfile(releaseResult.data, version);
+      if (selectedRelease && ['pending', 'processing'].includes(String(selectedRelease.status || ''))) {
+        return json({ error: 'Bản SEO này đã có một lượt phát hành đang chạy.' }, 409, headers);
+      }
+      const queuedAt = new Date().toISOString();
+      const releasePayload = {
+        movie_id: movieId,
+        slug: String(profile.slug || ''),
+        reason: 'seo_profile_retry',
+        requested_version: version,
+        status: 'pending',
+        requested_at: queuedAt,
+        processing_started_at: null,
+        deployed_at: null,
+        deployment_url: null,
+        error_message: null,
+      };
+      const retryResult = selectedRelease?.id
+        ? await db.from('seo_static_release_requests').update(releasePayload).eq('id', selectedRelease.id)
+        : await db.from('seo_static_release_requests').insert(releasePayload);
+      if (retryResult.error) throw retryResult.error;
+      return json({ success: true, static_release: { status: 'pending', requested_version: version, requested_at: queuedAt } }, 202, headers);
+    }
+
     if (action === 'load') {
       const movieId = text(body.movie_id, 80);
       if (!movieId) return json({ error: 'Missing movie_id' }, 400, headers);
@@ -1078,7 +1146,7 @@ Deno.serve(async (req) => {
         db.from('seo_url_inspections').select('verdict,coverage_state,indexing_state,page_fetch_state,user_canonical,google_canonical,last_crawl_time,inspected_at,recommendation').eq('movie_id', movieId).maybeSingle(),
         db.from('seo_search_metrics').select('clicks,impressions,ctr,position,date_start,date_end,collected_at').eq('dimension_type', 'page').ilike('dimension_value', `%/phim/${text(body.slug, 180)}%`).order('collected_at', { ascending: false }).limit(1).maybeSingle(),
         db.from('seo_query_page_metrics').select('query,clicks,impressions,ctr,position,date_start,date_end,collected_at').ilike('page', `%/phim/${text(body.slug, 180)}%`).order('collected_at', { ascending: false }).order('impressions', { ascending: false }).limit(20),
-        db.from('seo_static_release_requests').select('status,requested_version,requested_at,processing_started_at,deployed_at,deployment_url,error_message').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('seo_static_release_requests').select('reason,status,requested_version,requested_at,processing_started_at,deployed_at,deployment_url,error_message').eq('movie_id', movieId).order('requested_at', { ascending: false }).limit(10),
       ]);
       if (movieResult.error) throw movieResult.error;
       if (draftResult.error && draftResult.error.code !== '42P01') throw draftResult.error;
@@ -1093,6 +1161,7 @@ Deno.serve(async (req) => {
       const baseline = baselinePayload(movie, profile, review);
       const baselineValidation = validate(baseline);
       const baselineVersion = Number(profile?.version || 0);
+      const staticRelease = releaseForProfile(releaseResult.error ? [] : releaseResult.data, baselineVersion);
       const serverDraft = draftResult.data && Number(draftResult.data.baseline_version || 0) === baselineVersion
         ? draftResult.data
         : null;
@@ -1107,7 +1176,7 @@ Deno.serve(async (req) => {
         ai_available: Boolean(GEMINI_API_KEY || OPENAI_API_KEY),
         ai_provider: GEMINI_API_KEY ? 'gemini' : OPENAI_API_KEY ? 'openai' : null,
         publish_mode: SEO_PUBLISH_MODE,
-        static_release: releaseResult.error ? null : releaseResult.data,
+        static_release: staticRelease,
         worker_status: workerStatus,
         insights: {
           work_item: workItemResult.error ? null : workItemResult.data,
@@ -1291,6 +1360,10 @@ Deno.serve(async (req) => {
     if (action === 'save' || action === 'publish') {
       const payload = cleanPayload(body.payload);
       const safeEdit = readSafeEditInput(body);
+      if (action === 'publish' && payload.index_mode === 'auto') {
+        payload.index_mode = 'index';
+        safeEdit.unlocked_fields = Array.from(new Set([...safeEdit.unlocked_fields, 'index_mode']));
+      }
       let validation = validate(payload);
       if (!payload.movie_id || !payload.slug) return json({ error: 'Missing movie identity', validation }, 400, headers);
       const [movieResult, profileResult, reviewResult] = await Promise.all([

@@ -48,7 +48,15 @@ requireText('supabase/functions/admin-seo-studio/index.ts', "status: 'queued-sta
 requireText('supabase/functions/admin-seo-studio/index.ts', "mode: 'static-build-pending'", 'static profiles are not marked as pending build verification');
 requireText('supabase/functions/seo-static-release/index.ts', 'verifyStaticPublication', 'static deploy completion is trusted without verifying public HTML and sitemap');
 requireText('supabase/functions/seo-static-release/index.ts', '.limit(50)', 'pending SEO pages are not batched into one free Pages build');
-requireText('supabase/functions/seo-static-release/index.ts', 'static_sitemap_membership', 'static release does not require sitemap membership');
+requireText('supabase/functions/seo-static-release/index.ts', 'public_sitemap_membership', 'static release does not persist the public sitemap evidence used by SEO Studio');
+requireText('supabase/functions/seo-static-release/index.ts', 'explicitProfileRelease', 'generic radar rebuilds and versioned SEO publishes are not verified separately');
+requireText('supabase/functions/seo-static-release/index.ts', 'VERIFICATION_TIMEOUT_MS', 'a failed public verification can remain processing forever');
+requireText('supabase/functions/seo-static-release/index.ts', 'audit persistence failed', 'a release can be marked deployed before its public audit is persisted');
+requireText('supabase/functions/admin-seo-studio/index.ts', "payload.index_mode === 'auto'", 'automatic index mode is not resolved before static publication');
+requireText('supabase/functions/admin-seo-studio/index.ts', "action === 'release_status'", 'SEO Studio cannot refresh an asynchronous release without reloading the draft');
+requireText('supabase/functions/admin-seo-studio/index.ts', "action === 'retry_release'", 'failed static publications have no safe retry path');
+requireText('src/pages/admin-seo-studio/page.tsx', 'data-kp-seo-publication-state="true"', 'operator cannot distinguish profile, website, sitemap and Google index states');
+requireText('src/pages/admin-seo-studio/page.tsx', 'getSeoReleaseStatus', 'pending static publication is not refreshed automatically');
 requireText('supabase/migrations/20260905034453_schedule_seo_static_release.sql', 'process-seo-static-release-requests', 'static release requests are not scheduled');
 
 if (failures.length) {
@@ -57,4 +65,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('SEO operations brain regression passed (25 contracts).');
+console.log('SEO operations brain regression passed.');
