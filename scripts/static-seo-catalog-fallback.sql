@@ -68,7 +68,10 @@ with catalogue as (
       profile.status = 'published'
       and profile.index_mode = 'index'
       and profile.validation_score >= 85
-      and profile.live_audit ->> 'passed' = 'true'
+      and (
+        profile.live_audit ->> 'passed' = 'true'
+        or profile.live_audit ->> 'mode' in ('static-build-pending','static-content-refresh-pending')
+      )
     ) as manually_approved
   from public.movies movie
   left join public.movie_seo_quality_status quality
@@ -82,7 +85,10 @@ with catalogue as (
     and profile.status = 'published'
     and profile.index_mode <> 'noindex'
     and profile.validation_score >= 70
-    and profile.live_audit ->> 'passed' = 'true'
+    and (
+      profile.live_audit ->> 'passed' = 'true'
+      or profile.live_audit ->> 'mode' in ('static-build-pending','static-content-refresh-pending')
+    )
   where movie.is_published = true
     and movie.superseded_by_movie_id is null
 )

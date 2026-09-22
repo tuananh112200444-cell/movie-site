@@ -93,8 +93,9 @@ async function auditWorker() {
         failures.push(`Submitted HTML has the wrong canonical: ${canonicalUrl} -> ${canonicalHref || '(missing)'}.`);
       }
       if (!/<h1\b/i.test(body)) failures.push(`Submitted HTML has no server-rendered H1: ${canonicalUrl}.`);
-      if (/\/phim\//.test(new URL(canonicalUrl).pathname) && !/"@type":"Movie"|"@type":\s*"Movie"/.test(body)) {
-        failures.push(`Submitted movie has no Movie structured data: ${canonicalUrl}.`);
+      if (/\/phim\//.test(new URL(canonicalUrl).pathname)
+        && !/"@type":"(?:Movie|TVSeries)"|"@type":\s*"(?:Movie|TVSeries)"/.test(body)) {
+        failures.push(`Submitted title has no Movie or TVSeries structured data: ${canonicalUrl}.`);
       }
     }
   }

@@ -663,7 +663,7 @@ function isTransientExternalFetchError(error: unknown): boolean {
 
 function isPermanentExternalFetchError(error: unknown): boolean {
   const text = error instanceof Error ? error.message : String(error || '');
-  return /(?:^|\s)(404|410)(?:\s|$)/.test(text);
+  return /(?:^|\s)(404|410)(?:\s|$)|returned non-BLVietsub content/i.test(text);
 }
 
 function buildEntryIndexes(entries: ParsedEntry[]) {

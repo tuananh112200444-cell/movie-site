@@ -5,7 +5,7 @@ import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import { useToast } from '@/components/base/Toast';
 import { persistWatchHistoryProgress, useWatchHistory } from '@/hooks/useWatchHistory';
-import { useResumeWatch } from '@/hooks/useResumeWatch';
+import { useResumeWatch, type ResumeInfo } from '@/hooks/useResumeWatch';
 import { useFavorites } from '@/hooks/useFavorites';
 import MovieDetailHero from './components/MovieDetailHero';
 import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
@@ -23,7 +23,6 @@ import {
   isSpecialEpisode,
   getPosterUrl,
 } from '@/services/movieApi';
-import { runWhenIdle } from '@/utils/performance';
 import {
   isRecentlyBadSourceHost,
   SOURCE_HEALTH_UPDATED_EVENT,
@@ -40,6 +39,7 @@ import {
   staticMovieSourceSlug,
   type StaticMovieBootstrapPayload,
 } from '@/services/staticMovieBootstrap';
+import { runWhenIdle } from '@/utils/performance';
 
 const UserComments = lazy(() => import('./components/UserComments'));
 const MovieReviewSection = lazy(() => import('@/components/feature/MovieReview'));
@@ -365,7 +365,7 @@ export default function MovieDetailPage() {
   const [activeEp, setActiveEp] = useState<EpisodeData | null>(null);
   const [related, setRelated] = useState<MovieItem[]>([]);
   const [relatedSettled, setRelatedSettled] = useState(false);
-  const [resumeInfo, setResumeInfo] = useState<{ time: number; duration: number; progress: number; shouldResume: boolean } | null>(null);
+  const [resumeInfo, setResumeInfo] = useState<ResumeInfo | null>(null);
   const [showResumeBanner, setShowResumeBanner] = useState(false);
   const [initialSeekTime, setInitialSeekTime] = useState(0);
   const [cinemaMode, setCinemaMode] = useState(false);
@@ -373,6 +373,15 @@ export default function MovieDetailPage() {
   const [sourceHealthVersion, setSourceHealthVersion] = useState(0);
   const [viewerRegionVersion, setViewerRegionVersion] = useState(0);
   const isStaticMovieIndexable = staticBootstrap?.indexable === true;
+
+  useEffect(() => {
+    if (!isWatchPage) return;
+    // Start the small player-shell chunk in parallel with movie detail. It was
+    // previously discovered only after the API response, creating another
+    // full network round trip before HLS could even request its manifest.
+    void import('./components/MovieDetailPlayerSection').catch(() => {});
+    void import('./components/LightweightHlsPlayer').catch(() => {});
+  }, [isWatchPage]);
 
   const playerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -453,6 +462,18 @@ export default function MovieDetailPage() {
     resumeCheckedKeyRef.current = resumeKey;
     const info = getResume(slug, activeEp.slug);
     setResumeInfo(info);
+    const isRecentCheckpoint = info.shouldResume
+      && info.savedAt > 0
+      && Date.now() - info.savedAt <= 30 * 60 * 1000;
+    if (isRecentCheckpoint) {
+      // A recent checkpoint represents the same viewing session being
+      // restored after a discarded/reloaded tab. Resume silently instead of
+      // autoplaying from zero and asking the viewer to click a banner.
+      playbackTimeRef.current = info.time;
+      setInitialSeekTime(info.time);
+      setShowResumeBanner(false);
+      return;
+    }
     setShowResumeBanner(info.shouldResume);
   }, [activeEp?.slug, getResume, isWatchPage, slug]);
 
@@ -788,7 +809,7 @@ export default function MovieDetailPage() {
   }, [detailEpisodeLinks]);
 
   useEffect(() => {
-    if (!isWatchPage || !hasEpisodes) return;
+    if (!hasEpisodes) return;
     const firstPlayableEpisode = filteredEpisodes
       .flatMap((server) => server.server_data ?? [])
       .find((ep) => hasPlayableUrl(ep));
@@ -802,13 +823,31 @@ export default function MovieDetailPage() {
         addWarmupHint('preconnect', origin),
       ];
 
-      // An episode can expose both a direct HLS URL and a provider iframe.
-      // Do not download our HLS runtime while the selected iframe downloads
-      // its own player/runtime; load it only for a direct-only episode.
-      if (firstPlayableEpisode.link_m3u8 && !firstPlayableEpisode.link_embed && shouldWarmMoviePlayer()) {
-        runWhenIdle(() => {
-          import('./components/LightweightHlsPlayer').catch(() => {});
-        }, 1800);
+      // PhimAPI exposes a browser-managed iframe beside the same CORS-capable
+      // manifest, but PlayerBox deliberately prefers first-party HLS. Warm the
+      // HLS runtime immediately in that case so the 160 KB library downloads
+      // beside the player shell instead of after it. Keep third-party iframe
+      // routes lean because they load their own runtime.
+      const browserManagedHls = Boolean(
+        firstPlayableEpisode.link_m3u8
+        && (!firstPlayableEpisode.link_embed
+          || /(^|\.)player\.phimapi\.com$/i.test(new URL(firstPlayableEpisode.link_embed).hostname)),
+      );
+      if (browserManagedHls && shouldWarmMoviePlayer()) {
+        if (isWatchPage) {
+          void import('./components/LightweightHlsPlayer').catch(() => {});
+        } else {
+          // On the information page, use idle time to prepare the exact chunks
+          // needed by the Watch button. This removes the application/player
+          // waterfall from the viewer-perceived startup without competing
+          // with the detail page's initial paint.
+          runWhenIdle(() => {
+            void Promise.all([
+              import('./components/MovieDetailPlayerSection'),
+              import('./components/LightweightHlsPlayer'),
+            ]).catch(() => {});
+          }, 700);
+        }
       }
 
       return () => cleanups.forEach((cleanup) => cleanup());
@@ -1359,7 +1398,10 @@ export default function MovieDetailPage() {
                 <h2 id="detail-episodes-title" className="font-black text-white sm:text-lg">Danh sách tập</h2>
                 <p className="mt-0.5 text-xs text-white/60">{detailEpisodeSummary} · mở trong chế độ xem tập trung</p>
               </div>
-              <Link to={withPlaybackPreference(`/xem-phim/${slug ?? ''}`)} className="flex min-h-11 items-center gap-1.5 rounded-xl bg-red-500 px-3 text-xs font-bold text-white touch-manipulation">
+              <Link
+                to={withPlaybackPreference(`/xem-phim/${slug ?? ''}`)}
+                className="flex min-h-11 items-center gap-1.5 rounded-xl bg-red-500 px-3 text-xs font-bold text-white touch-manipulation"
+              >
                 <i className="ri-play-fill" /> Xem phim
               </Link>
             </div>
@@ -1379,13 +1421,13 @@ export default function MovieDetailPage() {
       )}
 
       {isWatchPage && (
-        <div className="cinema-page-container pt-20 sm:pt-24">
-          <div className="movie-watch-topbar mb-3 flex items-center justify-between gap-3 px-3 py-2 sm:px-5 sm:py-3">
+        <div className="watch-heading-shell cinema-page-container pt-3 sm:pt-4">
+          <div className="movie-watch-topbar mb-2 flex items-center justify-between gap-3 px-3 py-2 sm:mb-3 sm:px-5 sm:py-3">
             <div className="min-w-0">
               <Link to={withPlaybackPreference(`/phim/${slug ?? ''}`)} className="inline-flex min-h-11 items-center gap-1 text-xs text-white/55 hover:text-red-300 touch-manipulation">
                 <i className="ri-arrow-left-line" /> Thông tin phim
               </Link>
-              <h1 className="truncate text-lg font-black text-white sm:text-2xl tracking-[-0.02em]">{movie.name}</h1>
+              <h1 className="line-clamp-2 text-base font-black leading-tight text-white sm:line-clamp-1 sm:text-2xl tracking-[-0.02em]">{movie.name}</h1>
               {activeEp && <p className="mt-0.5 flex items-center gap-1.5 text-xs text-white/65"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Đang xem {activeEp.name}</p>}
             </div>
             <button

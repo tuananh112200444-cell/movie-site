@@ -40,7 +40,7 @@
 .ri-10x { font-size: 10em; }
 .ri-fw { text-align: center; width: 1.25em; }
 
-/* Generated from 260 icons referenced by the application. */
+/* Generated from 262 icons referenced by the application. */
 .ri-4k-line:before { content: "\ea04"; }
 .ri-add-circle-line:before { content: "\ea11"; }
 .ri-add-line:before { content: "\ea13"; }
@@ -259,6 +259,7 @@
 .ri-thumb-up-line:before { content: "\f207"; }
 .ri-time-line:before { content: "\f20f"; }
 .ri-timer-flash-line:before { content: "\f214"; }
+.ri-timer-line:before { content: "\f215"; }
 .ri-tools-line:before { content: "\f21b"; }
 .ri-translate-2:before { content: "\f226"; }
 .ri-trophy-fill:before { content: "\f22e"; }
@@ -277,6 +278,7 @@
 .ri-wifi-line:before { content: "\f2c0"; }
 .ri-wifi-off-line:before { content: "\f2c2"; }
 .ri-windows-line:before { content: "\f2c8"; }
+.ri-youtube-fill:before { content: "\f2d4"; }
 .ri-youtube-line:before { content: "\f2d5"; }
 .ri-brain-line:before { content: "\f2f7"; }
 .ri-forward-10-line:before { content: "\f32b"; }

@@ -5050,6 +5050,11 @@ body.tab-hidden .animate-pulse {
 }
 
 @media (max-width: 767px) {
+  .back-to-top {
+    bottom: calc(11rem + env(safe-area-inset-bottom, 0px));
+    right: 1rem;
+  }
+
   .campaign-banner-v2--top {
     min-height: 61px;
     padding: .45rem 1.15rem;
@@ -5282,5 +5287,684 @@ body.tab-hidden .animate-pulse {
   .campaign-banner-mix .campaign-banner-v2__close {
     width: 34px;
     height: 34px;
+  }
+}
+
+/* ================================================================
+   UX CLARITY PASS — demo
+   Preserve all advertising placements while making movie discovery,
+   details and playback the strongest visual layer around them.
+   ================================================================ */
+
+/* A quieter, more consistent section rhythm without removing content. */
+.home-editorial-v4 .editorial-section-frame,
+.home-editorial-v4 .editorial-section-frame:nth-of-type(even) {
+  margin-bottom: clamp(1.4rem, 2.2vw, 2rem);
+  padding: .75rem clamp(.7rem, 1.2vw, 1.1rem) 1.05rem;
+}
+
+.home-editorial-v4 .editorial-section-chrome {
+  margin-bottom: .45rem;
+  opacity: .78;
+}
+
+.home-editorial-v4 .editorial-section-frame::after {
+  font-size: clamp(3.25rem, 6vw, 6.5rem);
+  opacity: .55;
+}
+
+.home-editorial-v4 .editorial-section-frame .movie-section-header {
+  min-height: 3.8rem;
+  padding-left: .75rem;
+}
+
+.home-editorial-v4 .movie-section-title {
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+/* WCAG-readable supporting text. */
+.daily-update-note,
+.editorial-mood-note {
+  color: rgba(255, 255, 255, .64) !important;
+}
+
+/* The application shell already offsets the fixed header. Avoid a second
+   full-screen spacer before movie information and playback. */
+.angular-detail-page.is-watch-mode .watch-heading-shell {
+  padding-top: .65rem !important;
+  padding-bottom: .35rem;
+}
+
+.angular-detail-page.is-watch-mode .cinema-page-container {
+  padding-bottom: 1rem;
+}
+
+.angular-detail-page.is-watch-mode .movie-watch-section {
+  padding-top: 0 !important;
+}
+
+.angular-detail-page.is-watch-mode .movie-player-toolbar {
+  margin-bottom: .55rem;
+}
+
+.angular-detail-page.is-watch-mode .movie-player-frame {
+  box-shadow: 0 18px 52px rgba(0, 0, 0, .42);
+}
+
+@media (max-width: 639px) {
+  /* Home hero: keep the cinematic image while ensuring title and actions fit
+     in one phone viewport below the unchanged campaign banner. */
+  .home-editorial-v4 .editorial-hero,
+  .home-editorial-v4 .editorial-hero-copy,
+  .home-editorial-v4 .editorial-hero-visual {
+    min-height: 510px;
+  }
+
+  .home-editorial-v4 .editorial-hero-copy {
+    justify-content: flex-end;
+    padding: 3.6rem 1rem 5.5rem;
+  }
+
+  .home-editorial-v4 .editorial-hero h2 {
+    max-width: 12ch;
+    -webkit-line-clamp: 3;
+    font-size: clamp(1.8rem, 9vw, 2.2rem);
+    line-height: 1;
+    letter-spacing: -.045em;
+  }
+
+  .home-editorial-v4 .editorial-origin-name {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: .62rem;
+    line-height: 1.5;
+  }
+
+  .home-editorial-v4 .editorial-hero-meta {
+    gap: .35rem .55rem;
+    font-size: .61rem;
+    letter-spacing: .075em;
+  }
+
+  .home-editorial-v4 .editorial-hero-meta > * + *::before {
+    margin-right: .55rem;
+  }
+
+  .home-editorial-v4 .editorial-hero-actions {
+    gap: .75rem;
+    margin-top: .8rem;
+  }
+
+  .home-editorial-v4 .editorial-watch-button {
+    min-height: 44px;
+    padding-inline: 1rem 1.25rem;
+    white-space: nowrap;
+  }
+
+  .home-editorial-v4 .editorial-detail-link {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .home-editorial-v4 .editorial-hero-thumbnails {
+    bottom: 2.55rem;
+  }
+
+  .home-editorial-v4 .editorial-hero-footer {
+    bottom: .55rem;
+  }
+
+  .home-editorial-v4 .editorial-hero-slide {
+    transition-duration: 420ms;
+  }
+
+  .home-editorial-v4 .editorial-hero-slide:first-child.is-active {
+    transition: none;
+  }
+
+  .home-editorial-v4 .editorial-section-frame,
+  .home-editorial-v4 .editorial-section-frame:nth-of-type(even) {
+    margin-bottom: 1.2rem;
+    padding: .55rem .45rem .7rem;
+  }
+
+  .home-editorial-v4 .editorial-section-frame::after {
+    display: none;
+  }
+
+  .home-editorial-v4 .editorial-section-chrome {
+    grid-template-columns: 2.35rem auto minmax(1.5rem, 1fr);
+    margin-bottom: .3rem;
+  }
+
+  .home-editorial-v4 .editorial-section-chrome strong {
+    width: 2rem;
+    height: 1.65rem;
+    font-size: .68rem;
+  }
+
+  .home-editorial-v4 .editorial-section-chrome span {
+    font-size: .48rem;
+    letter-spacing: .15em;
+  }
+
+  .home-editorial-v4 .editorial-section-frame .movie-section-header {
+    min-height: 3.25rem;
+    padding-left: .35rem;
+  }
+
+  .home-editorial-v4 .movie-section-title,
+  .home-editorial-v4 .editorial-section-header h2,
+  .home-editorial-v4 .editorial-mood-section h2 {
+    font-size: clamp(1.3rem, 6.2vw, 1.65rem) !important;
+  }
+
+  /* Mobile movie dossier: poster/CTA and summary share the first row; long
+     metadata and synopsis use the full card width below it. */
+  .angular-detail-page.is-info-mode .movie-detail-hero,
+  .angular-detail-page.is-info-mode .movie-detail-hero-inner {
+    padding-top: .65rem !important;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-breadcrumb {
+    margin-bottom: .6rem;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-hero-card {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: .75rem;
+    padding: .75rem;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-poster-column {
+    grid-column: 1;
+    grid-row: 1;
+    width: 6.5rem;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-poster-column > div:first-child {
+    width: 6.5rem;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-info {
+    display: contents;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-summary {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-summary h1 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    font-size: 1.3rem !important;
+    line-height: 1.08;
+  }
+
+  .angular-detail-page.is-info-mode .mobile-movie-info {
+    margin-top: .55rem;
+    margin-bottom: 0;
+  }
+
+  .angular-detail-page.is-info-mode .mobile-movie-info > div:first-child {
+    min-height: 40px;
+    padding: .45rem .6rem;
+  }
+
+  .angular-detail-page.is-info-mode .mobile-movie-info > div:first-child > div {
+    color: rgba(255, 255, 255, .62);
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-description,
+  .angular-detail-page.is-info-mode .movie-detail-social {
+    grid-column: 1 / -1;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-description {
+    margin-top: .15rem;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-description p {
+    color: rgba(255, 255, 255, .76);
+    font-size: .875rem;
+    line-height: 1.65;
+  }
+
+  .angular-detail-page.is-info-mode .movie-detail-social {
+    margin-top: .4rem;
+    padding-top: .7rem;
+  }
+
+  /* Playback controls stay prominent; duplicated explanatory chrome does not. */
+  .angular-detail-page.is-watch-mode .watch-heading-shell {
+    padding-top: .4rem !important;
+  }
+
+  .angular-detail-page.is-watch-mode .movie-watch-topbar h1 {
+    font-size: 1rem;
+  }
+
+  .angular-detail-page.is-watch-mode .movie-player-heading {
+    display: none;
+  }
+
+  .angular-detail-page.is-watch-mode .movie-player-toolbar {
+    justify-content: flex-end;
+    gap: .35rem;
+    padding: .4rem .45rem !important;
+  }
+
+  .angular-detail-page.is-watch-mode .movie-player-toolbar > div {
+    max-width: calc(100% - 3.25rem);
+  }
+
+  .angular-detail-page.is-watch-mode .movie-player-toolbar button {
+    min-height: 42px;
+  }
+
+  .angular-detail-page.is-watch-mode .movie-player-box {
+    margin-inline: -.25rem;
+  }
+
+  body:has(.angular-detail-page.is-watch-mode) .back-to-top {
+    display: none;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .angular-detail-page.is-watch-mode .navbar-mobile-socials {
+    display: none !important;
+  }
+
+  .angular-detail-page.is-watch-mode .movie-player-frame {
+    box-shadow: none;
+  }
+}
+
+/* ================================================================
+   POCKET CINEMA — dense, angular mobile discovery demo.
+   Ads and desktop layout remain untouched.
+   ================================================================ */
+@media (max-width: 767px) {
+  .home-editorial-v4 .editorial-section-frame {
+    border-color: rgba(255, 255, 255, .13);
+    background:
+      linear-gradient(135deg, var(--section-accent-soft), transparent 38%),
+      #0d1017;
+  }
+
+  .home-editorial-v4 .editorial-section-frame::before {
+    left: 0;
+    right: auto;
+    width: 34%;
+    height: 3px;
+    background: var(--section-accent);
+  }
+
+  .home-editorial-v4 .editorial-section-frame .movie-section-header {
+    border-bottom: 1px solid rgba(255, 255, 255, .09);
+    margin-bottom: .7rem;
+    padding-bottom: .55rem;
+  }
+
+  .home-editorial-v4 .movie-section-title {
+    overflow: visible;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: clamp(1.12rem, 4.8vw, 1.45rem) !important;
+    line-height: 1.16;
+  }
+
+  .home-editorial-v4 .movie-section-viewall {
+    min-height: 38px;
+    padding: .45rem .6rem;
+    border-radius: 2px;
+    font-size: .64rem;
+  }
+
+  .movie-section-mobile-grid.kp-pocket-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: .72rem .48rem !important;
+  }
+
+  .movie-section-mobile-grid.kp-pocket-grid > :nth-child(n + 5),
+  .movie-section-mobile-grid.kp-pocket-rail > :nth-child(n + 5) {
+    display: block !important;
+  }
+
+  .movie-section-mobile-grid.kp-pocket-rail {
+    display: grid !important;
+    grid-auto-flow: column;
+    grid-auto-columns: 30.3%;
+    grid-template-columns: none !important;
+    gap: .48rem !important;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    padding: .1rem .1rem .5rem;
+  }
+
+  .movie-section-mobile-grid.kp-pocket-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .movie-section-mobile-grid.kp-pocket-rail > * {
+    scroll-snap-align: start;
+  }
+
+  .kp-pocket-grid .movie-card-contain,
+  .kp-pocket-rail .movie-card-contain {
+    min-width: 0;
+    border-radius: 2px;
+  }
+
+  .kp-pocket-grid .movie-art-frame,
+  .kp-pocket-rail .movie-art-frame,
+  .kp-vietnam-grid .movie-art-frame,
+  .kp-rated-mini-art {
+    border-radius: 2px !important;
+    clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%) !important;
+  }
+
+  .kp-pocket-grid .movie-card-contain > div,
+  .kp-pocket-rail .movie-card-contain > div {
+    padding: 0;
+  }
+
+  .kp-pocket-grid .kp-card-new,
+  .kp-pocket-rail .kp-card-new,
+  .kp-pocket-grid .kp-card-year,
+  .kp-pocket-rail .kp-card-year {
+    display: none;
+  }
+
+  .kp-pocket-grid .kp-card-badges,
+  .kp-pocket-rail .kp-card-badges {
+    top: .25rem;
+    right: .25rem;
+    left: .25rem;
+  }
+
+  .kp-pocket-grid .kp-card-badges span,
+  .kp-pocket-rail .kp-card-badges span {
+    max-width: 5.2rem;
+    border-radius: 1px;
+    font-size: .53rem;
+    line-height: 1.05;
+    padding: .18rem .24rem;
+  }
+
+  .kp-pocket-grid .kp-card-title,
+  .kp-pocket-rail .kp-card-title {
+    min-height: 2.2rem;
+    font-size: .72rem;
+    line-height: 1.14;
+    color: rgba(255, 255, 255, .94);
+  }
+
+  .kp-pocket-grid .kp-card-facts,
+  .kp-pocket-rail .kp-card-facts {
+    min-height: 1rem;
+    padding-top: .18rem;
+    font-size: .56rem;
+  }
+
+  .kp-pocket-grid .kp-card-facts span,
+  .kp-pocket-rail .kp-card-facts span {
+    font-size: .57rem;
+  }
+
+  .kp-pocket-more {
+    display: flex;
+    width: 100%;
+    min-height: 42px;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    margin-top: .45rem;
+    padding: .55rem .75rem;
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-left: 3px solid var(--section-accent, #f6c453);
+    border-radius: 2px;
+    background: rgba(255, 255, 255, .035);
+    color: rgba(255, 255, 255, .84);
+    font-size: .72rem;
+    font-weight: 800;
+  }
+
+  .kp-pocket-more:focus-visible,
+  .kp-chart-row:focus-visible,
+  .kp-rated-mini:focus-visible {
+    outline: 2px solid #f6c453;
+    outline-offset: 2px;
+  }
+
+  .kp-pocket-swipe {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    margin: .1rem .1rem 0;
+    color: rgba(255, 255, 255, .58);
+    font-size: .61rem;
+    font-weight: 700;
+    letter-spacing: .015em;
+  }
+
+  .home-editorial-v4 .kp-vietnam-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .72rem .48rem !important;
+    overflow: visible;
+    scroll-snap-type: none;
+    padding: .15rem 0 .3rem !important;
+  }
+
+  .kp-vietnam-grid > .home-poster-item {
+    width: 100% !important;
+    min-width: 0;
+    max-width: none;
+    flex: none;
+  }
+
+  .kp-vietnam-grid [aria-label^='Vị trí'] {
+    width: 1.4rem !important;
+    height: 1.4rem !important;
+    border-radius: 2px !important;
+    border-width: 1px;
+    font-size: .7rem !important;
+  }
+
+  .kp-vietnam-grid .absolute.top-2.right-2,
+  .kp-vietnam-grid .absolute.bottom-2.left-2 {
+    top: .25rem;
+    right: .25rem;
+    bottom: auto;
+    left: auto;
+  }
+
+  .kp-vietnam-grid .absolute.bottom-2.left-2 {
+    top: auto;
+    bottom: .25rem;
+    right: auto;
+    left: .25rem;
+  }
+
+  .kp-vietnam-grid .movie-card-contain {
+    border-radius: 2px;
+  }
+
+  .kp-vietnam-grid .home-poster-item p {
+    font-size: .7rem;
+    line-height: 1.15;
+  }
+
+  .kp-vietnam-grid .home-poster-item p + p {
+    display: none;
+  }
+
+  .kp-chart-list {
+    display: grid;
+    gap: .4rem;
+  }
+
+  .kp-chart-row {
+    display: grid;
+    grid-template-columns: 2rem 2.8rem minmax(0, 1fr) 1.5rem;
+    min-height: 4.3rem;
+    align-items: center;
+    gap: .58rem;
+    padding: .34rem .46rem;
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-left: 2px solid rgba(246, 196, 83, .65);
+    border-radius: 2px;
+    background: #12151c;
+    color: #fff;
+  }
+
+  .kp-chart-row:first-child {
+    border-color: rgba(246, 196, 83, .48);
+    background: linear-gradient(90deg, rgba(246, 196, 83, .12), #12151c 42%);
+  }
+
+  .kp-chart-rank {
+    color: #f6c453;
+    font-size: 1.15rem;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.06em;
+  }
+
+  .kp-chart-art {
+    position: relative;
+    display: grid;
+    width: 2.8rem;
+    height: 3.55rem;
+    place-items: center;
+    overflow: hidden;
+    background: #20232b;
+    clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 0 100%);
+  }
+
+  .kp-chart-art img,
+  .kp-rated-mini-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .kp-chart-copy {
+    display: grid;
+    min-width: 0;
+    gap: .25rem;
+  }
+
+  .kp-chart-title {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: .76rem;
+    font-weight: 850;
+    line-height: 1.18;
+  }
+
+  .kp-chart-meta {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: .4rem;
+    color: rgba(255, 255, 255, .62);
+    font-size: .6rem;
+  }
+
+  .kp-chart-quality {
+    padding: .1rem .2rem;
+    background: rgba(255, 255, 255, .1);
+    color: #fff;
+  }
+
+  .kp-chart-arrow {
+    color: rgba(255, 255, 255, .52);
+    font-size: 1rem;
+  }
+
+  .kp-rated-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .72rem .48rem;
+  }
+
+  .kp-rated-mini {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    color: #fff;
+  }
+
+  .kp-rated-mini-art {
+    position: relative;
+    display: grid;
+    aspect-ratio: 2 / 3;
+    place-items: center;
+    overflow: hidden;
+    background: #20232b;
+  }
+
+  .kp-rated-mini-rank,
+  .kp-rated-mini-quality {
+    position: absolute;
+    top: .25rem;
+    padding: .16rem .25rem;
+    background: #f6c453;
+    color: #17120a;
+    font-size: .65rem;
+    font-weight: 950;
+    line-height: 1;
+  }
+
+  .kp-rated-mini-rank { left: .25rem; }
+  .kp-rated-mini-quality { right: .25rem; background: rgba(5, 7, 11, .86); color: #fff; font-size: .56rem; }
+
+  .kp-rated-mini-title {
+    display: -webkit-box;
+    min-height: 2.1rem;
+    overflow: hidden;
+    margin-top: .35rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: .72rem;
+    font-weight: 800;
+    line-height: 1.18;
+  }
+
+  .tone-ranking .editorial-section-content > section > div:first-child,
+  .tone-rated .editorial-section-content > div > section > div:first-child {
+    border-radius: 2px;
+    padding: .8rem;
+    box-shadow: none;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .movie-section-mobile-grid.kp-pocket-grid,
+  .home-editorial-v4 .kp-vietnam-grid,
+  .kp-rated-mini-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .movie-section-mobile-grid.kp-pocket-rail {
+    grid-auto-columns: 22.5%;
   }
 }

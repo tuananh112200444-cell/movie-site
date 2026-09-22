@@ -52,7 +52,7 @@ test.beforeEach(async ({ page }) => {
   });
 
   await page.route('**/functions/v1/admin-seo-studio', async (route) => {
-    const body = JSON.parse(route.request().postData() || '{}') as { action?: string; payload?: Record<string, unknown> };
+    const body = JSON.parse(route.request().postData() || '{}') as { action?: string; mode?: string; payload?: Record<string, unknown> };
     let response: unknown = {};
     if (body.action === 'search') response = { items: [movie] };
     if (body.action === 'load') {
@@ -78,6 +78,58 @@ test.beforeEach(async ({ page }) => {
       };
     }
     if (body.action === 'validate') response = { score: 100, issues: [{ code: 'ready', severity: 'success', section: 'technical', message: 'Trang đã sẵn sàng xuất bản và index.' }] };
+    if (body.action === 'suggest' && body.mode === 'deep') response = {
+      ai_available: true,
+      provider: 'gemini',
+      model: 'gemini-test',
+      mode: 'deep',
+      summary: 'Đã xác minh và bổ sung dữ liệu phim còn thiếu trước khi viết SEO.',
+      proposed_payload: {
+        ...basePayload,
+        movie_patch: {
+          ...basePayload.movie_patch,
+          actor: ['Tom Holland', 'Zendaya'],
+          country: [{ id: 'US', name: 'Âu Mỹ', slug: 'au-my' }],
+        },
+      },
+      validation: { score: 100, issues: [{ code: 'ready', severity: 'success', section: 'technical', message: 'Nội dung và tài nguyên đã qua cổng xuất bản.' }] },
+      changed_fields: ['movie_patch.actor', 'movie_patch.country'],
+      evidence: [],
+      warnings: [],
+      completion: { complete: true, repaired_in_second_pass: false, remaining_issues: [], ai_fixable_remaining: [], requires_data_enrichment: [], limitations: [] },
+      fact_enrichment: {
+        patch: { actor: ['Tom Holland', 'Zendaya'], country: [{ id: 'US', name: 'Âu Mỹ', slug: 'au-my' }] },
+        verified_fields: ['movie_patch.actor', 'movie_patch.country'],
+        unresolved_fields: [],
+        sources: ['TMDB khớp tên và năm phát hành'],
+        tmdb_status: 'verified',
+        message: 'Đã xác minh và bổ sung 2 trường dữ liệu phim vào bản nháp.',
+      },
+      preserved_fields: ['slug', 'canonical_path', 'index_mode', 'movie_patch'],
+      generated_at: '2026-09-17T00:00:00Z',
+    };
+    if (body.action === 'suggest' && body.mode !== 'deep') response = {
+      ai_available: true,
+      provider: 'gemini',
+      model: 'gemini-test',
+      mode: 'quick',
+      summary: 'Đã sửa mô tả nhưng review vẫn chưa đủ dữ kiện để hoàn tất an toàn.',
+      proposed_payload: { ...basePayload, meta_description: 'Người Nhện: Khởi Đầu Mới – nội dung, diễn viên, đạo diễn, trailer và thông tin phát hành được cập nhật tại KhoPhim.', review_content: 'Bản nhận xét còn ngắn.' },
+      validation: { score: 97, issues: [{ code: 'thin_review', severity: 'warning', section: 'content', message: 'Review đang ngắn; nên bổ sung nhận xét thực sự hữu ích.' }] },
+      changed_fields: ['meta_description', 'review_content'],
+      evidence: [],
+      warnings: ['AI vẫn còn 1 mục có thể cải thiện; hệ thống không đánh dấu hoàn thành.'],
+      completion: {
+        complete: false,
+        repaired_in_second_pass: true,
+        remaining_issues: [{ code: 'thin_review', severity: 'warning', section: 'content', message: 'Review đang ngắn; nên bổ sung nhận xét thực sự hữu ích.' }],
+        ai_fixable_remaining: ['thin_review'],
+        requires_data_enrichment: [],
+        limitations: ['AI vẫn còn 1 mục có thể cải thiện; hệ thống không đánh dấu hoàn thành.'],
+      },
+      preserved_fields: ['slug', 'canonical_path', 'index_mode', 'movie_patch'],
+      generated_at: '2026-09-17T00:00:00Z',
+    };
     if (body.action === 'inspect') response = {
       validation: { score: 100, issues: [{ code: 'ready', severity: 'success', section: 'technical', message: 'Nội dung và tài nguyên đã qua cổng xuất bản.' }] },
       live_audit: {
@@ -110,7 +162,13 @@ test.beforeEach(async ({ page }) => {
         },
         updated_at: '2026-08-28T01:00:00Z',
       };
-      response = { success: true, status: 'published', validation: { score: 100, issues: [] }, result: { slug: movie.slug } };
+      response = {
+        success: true,
+        status: 'published-indexable',
+        validation: { score: 100, issues: [] },
+        result: { slug: movie.slug },
+        public_discovery: { indexable: true, in_sitemap: true, checked_at: '2026-08-28T01:00:00Z' },
+      };
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
   });
@@ -121,35 +179,68 @@ test('SEO Studio hoàn thành quy trình chọn phim, chỉnh sửa và xuất b
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   await page.goto('/admin/seo-studio', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'SEO Studio' })).toBeVisible();
+  const closeCampaignBanner = page.getByRole('button', { name: 'Đóng banner catfish' });
+  if (await closeCampaignBanner.isVisible()) await closeCampaignBanner.click();
 
   const search = page.getByPlaceholder('Nhập tên phim, tên gốc hoặc slug...');
   await search.fill('Spider-Man');
   await expect(page.getByRole('button', { name: /Người Nhện: Khởi Đầu Mới/ })).toBeVisible();
   await page.getByRole('button', { name: /Người Nhện: Khởi Đầu Mới/ }).click();
 
-  await expect(page.getByRole('button', { name: /1. Dữ liệu phim/ })).toBeVisible();
-  await page.getByRole('button', { name: /2. Hiển thị Google/ }).click();
-  await expect(page.getByText('SEO Title *')).toBeVisible();
-  await expect(page.getByText('Spider-Man: Khởi Đầu Mới (2026) – Thông Tin Phim | KhoPhim').first()).toBeVisible();
-
-  await page.getByRole('button', { name: /3. Nội dung hữu ích/ }).click();
+  await page.locator('[data-testid="campaign-catfish"]').evaluateAll((elements) => elements.forEach((element) => element.remove()));
+  await page.getByRole('button', { name: /Mở chỉnh sâu khi cần/ }).click();
+  await expect(page.getByRole('button', { name: /1. Chẩn đoán/ })).toBeVisible();
+  await page.getByRole('button', { name: /2. AI & biên tập/ }).click();
   const intro = page.getByPlaceholder('Giới thiệu phim bằng nội dung do bạn biên soạn...');
   const restoredIntro = `${movie.content} Bản nháp tự động phải tồn tại sau khi trang tải lại.`;
+  if (await intro.isDisabled()) await page.getByRole('button', { name: 'Mở sửa' }).first().click();
   await intro.fill(restoredIntro);
   await expect(page.getByText('Bản nháp đã tự lưu trên máy này')).toBeVisible();
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByText('Đã khôi phục bản nháp an toàn; hồ sơ đang chạy vẫn được giữ nguyên.')).toBeVisible();
+  const reloadedCampaignBanner = page.getByRole('button', { name: 'Đóng banner catfish' });
+  if (await reloadedCampaignBanner.isVisible()) await reloadedCampaignBanner.click();
+  await page.locator('[data-testid="campaign-catfish"]').evaluateAll((elements) => elements.forEach((element) => element.remove()));
+  await page.getByRole('button', { name: /Mở chỉnh sâu khi cần/ }).click();
   await expect(page.getByPlaceholder('Giới thiệu phim bằng nội dung do bạn biên soạn...')).toHaveValue(restoredIntro);
 
-  await page.getByRole('button', { name: /5. Kiểm tra & xuất bản/ }).click();
-  await expect(page.getByText('Điểm sẵn sàng xuất bản')).toBeVisible();
+  await page.getByRole('button', { name: /3. Kiểm tra & xuất bản/ }).click();
+  await expect(page.getByText('Điểm sẵn sàng')).toBeVisible();
+  await page.getByRole('button', { name: /Cho phép index/ }).click();
   await page.getByRole('button', { name: 'Kiểm tra trang thật', exact: true }).click();
   await expect(page.getByText('Trang thật, canonical, schema, ảnh và liên kết đã qua kiểm tra trước xuất bản.')).toBeVisible();
   await expect(page.getByText('Trang phim trả về HTTP 200.')).toBeVisible();
-  await page.getByRole('button', { name: 'Xuất bản toàn bộ SEO' }).click();
-  await expect(page.getByText('Đã xuất bản và xác minh HTML Googlebot, canonical, robots, schema cùng nội dung SEO thành công.')).toBeVisible();
+  await page.getByRole('button', { name: 'Xuất bản & đưa vào sitemap Google' }).click();
+  await expect(page.getByText('Đã xuất bản: URL công khai cho phép Google index và đã có trong sitemap SEO Studio.')).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   expect(overflow).toBe(false);
   expect(runtimeErrors).toEqual([]);
+});
+
+test('SEO Studio không báo hoàn thành khi AI vẫn để lại cảnh báo có thể sửa', async ({ page }) => {
+  await page.goto('/admin/seo-studio', { waitUntil: 'domcontentloaded' });
+  const search = page.getByPlaceholder('Nhập tên phim, tên gốc hoặc slug...');
+  await search.fill('Spider-Man');
+  await page.getByRole('button', { name: /Người Nhện: Khởi Đầu Mới/ }).click();
+  await page.locator('[data-testid="campaign-catfish"]').evaluateAll((elements) => elements.forEach((element) => element.remove()));
+  await page.getByRole('button', { name: /Để trợ lý làm toàn bộ/ }).click();
+  await expect(page.getByText('AI chưa hoàn tất — còn 1 mục cần xử lý')).toBeVisible();
+  await expect(page.getByText('Review đang ngắn; nên bổ sung nhận xét thực sự hữu ích.')).toBeVisible();
+  await expect(page.getByText(/AI đã hoàn thành — bạn chỉ cần duyệt thay đổi/)).toHaveCount(0);
+});
+
+test('SEO Studio tự áp dụng dữ kiện phim đã được xác minh vào bản nháp riêng', async ({ page }) => {
+  await page.goto('/admin/seo-studio', { waitUntil: 'domcontentloaded' });
+  const search = page.getByPlaceholder('Nhập tên phim, tên gốc hoặc slug...');
+  await search.fill('Spider-Man');
+  await page.getByRole('button', { name: /Người Nhện: Khởi Đầu Mới/ }).click();
+  await page.locator('[data-testid="campaign-catfish"]').evaluateAll((elements) => elements.forEach((element) => element.remove()));
+  await page.getByRole('button', { name: /Mở chỉnh sâu khi cần/ }).click();
+  await page.getByRole('button', { name: /2. AI & biên tập/ }).click();
+  await page.getByRole('button', { name: 'Chuyên sâu' }).click();
+  await page.getByRole('button', { name: /Trợ lý AI chuẩn bị toàn bộ bản nháp/ }).click();
+  await expect(page.getByText('Đã xác minh và bổ sung 2 trường dữ liệu phim vào bản nháp.')).toBeVisible();
+  await expect(page.getByText(/Tom Holland, Zendaya/).first()).toBeVisible();
+  await expect(page.getByText(/Âu Mỹ/).first()).toBeVisible();
 });

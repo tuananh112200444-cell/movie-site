@@ -4,11 +4,17 @@ const read = (file) => fs.readFileSync(file, 'utf8');
 const failures = [];
 
 const migration = read('supabase/migrations/20260723033000_upgrade_upcoming_movie_seo_brain.sql');
+const staleTrailerRepair = read('supabase/migrations/20260920173000_reconcile_stale_trailer_playback.sql');
 const sitemap = read('supabase/functions/sitemap-movies-xml/index.ts');
 const prerenderData = read('supabase/functions/movie-seo-prerender-data/index.ts');
 const worker = read('functions/[[path]].js');
 const gsc = read('supabase/functions/gsc-seo-feedback/index.ts');
 const tmdb = read('supabase/functions/sync-tmdb-catalog/index.ts');
+const cinemaTrailers = read('supabase/functions/sync-vietnam-cinema-trailers/index.ts');
+const cinemaSchedule = read('supabase/migrations/20260920191500_schedule_fresh_cinema_trailer_discovery.sql');
+const trailerSchedulerRepair = read('supabase/migrations/20260920193000_repair_trailer_scheduler_secret.sql');
+const trailerSchedulerActivation = read('supabase/migrations/20260920194000_activate_trailer_discovery_jobs.sql');
+const watchIntentGate = read('supabase/migrations/20260920201000_align_seo_gate_with_watch_intent.sql');
 const sitemapGenerator = read('scripts/generate-sitemap-index.mjs');
 const staticCatalog = read('supabase/functions/static-seo-catalog/index.ts');
 const staticPages = read('scripts/generate-static-movie-pages.mjs');
@@ -26,6 +32,10 @@ requireText(migration, 'greatest(coalesce(episode_number, 0)::integer, 1)', 'pla
 requireText(migration, 'reconcile_movie_after_movie_episode_change', 'episode tables do not trigger lifecycle reconciliation');
 requireText(migration, "'*/30 * * * *'", 'SEO quality coverage is not refreshed at least twice per hour');
 requireText(migration, "'20 */6 * * *'", 'TMDB hot/upcoming discovery is not scheduled throughout the day');
+requireText(staleTrailerRepair, 'reconcile_stale_trailer_playback', 'stale trailer/playable records do not have a targeted repair function');
+requireText(staleTrailerRepair, 'public.get_movie_playable_max_episode(m.id) > 0', 'stale trailer repair does not verify playable episodes before promotion');
+requireText(staleTrailerRepair, 'public.reconcile_movie_release_state(item.id)', 'stale trailer repair does not reuse the shared release-state truth');
+requireText(staleTrailerRepair, "'7-59/10 * * * *'", 'stale trailer repair is not scheduled frequently enough');
 
 requireText(sitemap, 'hasSeoBase(movie, 120) && hasHttpsTrailer(movie)', 'upcoming sitemap lacks a strict content/trailer gate');
 requireText(sitemap, "eq('index_tier', 'upcoming')", 'upcoming sitemap still scans the entire movie catalogue instead of the eligible tier');
@@ -59,11 +69,11 @@ if (worker.includes("|| pathname === '/sitemap-movies-upcoming.xml'")) {
 }
 requireText(sitemapGenerator, "'sitemap-movies-upcoming.xml'", 'generated root sitemap omits the static upcoming cohort');
 requireText(staticCatalog, 'UPCOMING_COHORT_LIMIT = 20', 'static upcoming cohort is not capped at 20 movies');
-requireText(staticCatalog, "url.searchParams.get('cohort') === 'upcoming'", 'static catalogue has no dedicated upcoming mode');
+requireText(staticCatalog, "const upcomingCohort = requestedCohort === 'upcoming';", 'static catalogue has no dedicated upcoming mode');
 requireText(staticCatalog, 'hasOfficialTrailerUrl(movie.trailer_url)', 'static upcoming cohort accepts untrusted trailer URLs');
 requireText(staticCatalog, 'seo_index_tier: movie.seo_index_tier', 'verified editorial profiles can overwrite the upcoming lifecycle tier');
 requireText(staticPages, "const upcomingSitemapFile = 'sitemap-movies-upcoming.xml'", 'build does not generate a static upcoming sitemap');
-requireText(staticPages, "potentialAction: isUpcoming ? undefined", 'upcoming static pages incorrectly advertise a WatchAction');
+requireText(staticPages, "potentialAction: canAdvertiseWatch ?", 'upcoming or editorial information pages incorrectly advertise a WatchAction');
 requireText(staticPages, 'data-kp-upcoming=', 'upcoming static HTML has no lifecycle marker');
 
 requireText(gsc, 'Promise.allSettled', 'one Search Console subsystem failure still aborts all SEO feedback');
@@ -71,6 +81,26 @@ requireText(gsc, "tier === 'upcoming'", 'GSC inspection does not prioritize newl
 requireText(gsc, '/429|403|disabled/i', 'GSC inspection can repeatedly hammer a disabled or throttled API');
 requireText(tmdb, "language: 'vi-VN'", 'TMDB discovery does not request Vietnamese metadata');
 requireText(tmdb, "include_video_language: 'vi,en,null'", 'TMDB discovery does not request trailer language fallbacks');
+requireText(tmdb, "import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';", 'TMDB discovery does not import its Edge Function server runtime');
+requireText(tmdb, 'const SYNC_SECRETS = [', 'TMDB discovery does not accept the scheduler secret');
+requireText(cinemaTrailers, "const SOURCE_ORIGIN = 'https://moveek.com'", 'Cinema trailer discovery has no public Vietnamese cinema catalogue source');
+requireText(cinemaTrailers, "import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';", 'Cinema trailer discovery does not import its Edge Function server runtime');
+requireText(cinemaTrailers, 'const SYNC_SECRETS = [', 'Cinema trailer discovery does not accept the scheduler secret');
+requireText(cinemaTrailers, 'data-video-url', 'Cinema trailer discovery does not verify the official trailer published on the source page');
+requireText(cinemaTrailers, 'https://www.youtube.com/watch?v=${videoId}', 'Cinema trailer discovery must store a canonical official YouTube trailer URL');
+requireText(cinemaTrailers, "status: 'trailer'", 'Cinema trailer discoveries are not classified as trailer pages');
+requireText(cinemaTrailers, 'schedule_type: null', 'Cinema trailer discovery incorrectly uses the episodic schedule field');
+requireText(cinemaTrailers, "source_site: 'moveek-cinema'", 'Cinema trailer discoveries have no traceable source identity');
+requireText(cinemaTrailers, "if (existing && hasPlayableEvidence(existing)) return 'skipped';", 'Cinema trailer discovery can overwrite a playable movie with a trailer record');
+requireText(cinemaSchedule, "'sync-vietnam-cinema-trailers'", 'Vietnamese cinema trailer discovery is not scheduled');
+requireText(cinemaSchedule, "'7 */2 * * *'", 'Vietnamese cinema trailer discovery does not refresh frequently enough');
+requireText(cinemaSchedule, "'sync-tmdb-catalog-daily'", 'TMDB discovery scheduler is not restored when missing');
+requireText(trailerSchedulerRepair, 'VIETNAM_CINEMA_TRAILER_SECRET', 'Trailer scheduler has no dedicated shared secret');
+requireText(trailerSchedulerRepair, "'sync-vietnam-cinema-trailers'", 'Trailer scheduler secret repair does not update the cinema job');
+requireText(trailerSchedulerActivation, 'active := true', 'Trailer discovery jobs can remain paused after repair');
+requireText(watchIntentGate, "if content_len < 120 then issues := array_append(issues, 'thin_content'); end if;", 'watch-intent SEO gate does not retain a meaningful content floor');
+requireText(watchIntentGate, "tier := case when eligible and ongoing_candidate then 'ongoing' when eligible then 'playable' else 'blocked' end;", 'watch-intent SEO gate does not classify qualified public pages as indexable');
+requireText(watchIntentGate, "q.reasons @> array['missing_trailer']", 'existing trailer-blocked pages are not rechecked after the policy change');
 
 console.log(JSON.stringify({
   status: failures.length ? 'failed' : 'passed',

@@ -33,6 +33,38 @@ function validDeployHook(value: string): URL | null {
   }
 }
 
+function edgeWaitUntil(promise: Promise<unknown>): void {
+  try {
+    const runtime = globalThis as unknown as {
+      EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+    };
+    if (runtime.EdgeRuntime?.waitUntil) {
+      runtime.EdgeRuntime.waitUntil(promise);
+    } else {
+      void promise;
+    }
+  } catch {
+    void promise;
+  }
+}
+
+async function queueGoogleCoverageCheck(slugs: string[]): Promise<void> {
+  if (!CRON_SECRET || !SUPABASE_URL) return;
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/gsc-seo-feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-cron-secret': CRON_SECRET,
+    },
+    // The feedback worker independently validates the pages and retains a
+    // bounded quota. Passing a few newly released slugs only gives the fresh
+    // pages first place in that existing queue; it never claims an index.
+    body: JSON.stringify({ inspection_limit: 50, inspection_slugs: slugs.slice(0, 5) }),
+    signal: AbortSignal.timeout(150_000),
+  });
+  if (!response.ok) throw new Error(`GSC feedback HTTP ${response.status}`);
+}
+
 async function currentReleaseTime(): Promise<number> {
   try {
     const response = await fetch(`${SITE_RELEASE_URL}?check=${Date.now()}`, {
@@ -169,7 +201,7 @@ Deno.serve(async (req) => {
   const now = new Date();
   const releaseTime = await currentReleaseTime();
   const { data: processing, error: processingError } = await db.from('seo_static_release_requests')
-    .select('id,movie_id,slug,reason,release_lane,requested_version,requested_at,processing_started_at')
+    .select('id,movie_id,slug,reason,release_lane,requested_version,requested_at,processing_started_at,automatic_retry_count,next_retry_at')
     .eq('status', 'processing')
     .order('processing_started_at', { ascending: true })
     .limit(20);
@@ -177,6 +209,7 @@ Deno.serve(async (req) => {
 
   let confirmed = 0;
   let recovered = 0;
+  const confirmedSlugs: string[] = [];
   for (const item of processing || []) {
     const requestedAt = Date.parse(String(item.requested_at || '')) || 0;
     const processingAt = Date.parse(String(item.processing_started_at || item.requested_at || '')) || 0;
@@ -210,7 +243,12 @@ Deno.serve(async (req) => {
       }).eq('id', item.id).eq('status', 'processing');
       continue;
     }
-    if (releaseTime > requestedAt) {
+    // The release manifest is a fast signal, but edge-to-edge cache/challenge
+    // behaviour can temporarily hide it from Supabase. After a short settling
+    // window, verify the actual HTML/version/robots/sitemap directly instead
+    // of leaving a valid deployment stuck in processing.
+    const mayVerifyPublicArtifact = releaseTime > requestedAt || processingAge >= 2 * 60_000;
+    if (mayVerifyPublicArtifact) {
       const verification = await verifyStaticPublication(
         String(item.slug || ''),
         explicitProfileRelease ? resolvedVersion : null,
@@ -238,6 +276,7 @@ Deno.serve(async (req) => {
           deployed_at: deployedAt,
           deployment_url: SITE_URL,
           error_message: null,
+          next_retry_at: null,
         }).eq('id', item.id).eq('status', 'processing');
         if (!error) {
           await db.from('seo_work_items').update({
@@ -246,30 +285,49 @@ Deno.serve(async (req) => {
             updated_at: deployedAt,
           }).eq('movie_id', item.movie_id).in('status', ['pending', 'in_progress']);
           confirmed += 1;
+          if (item.slug) confirmedSlugs.push(String(item.slug));
         }
       } else {
         const terminal = processingAge >= VERIFICATION_TIMEOUT_MS;
+        const retryCount = Number(item.automatic_retry_count || 0);
         await db.from('seo_static_release_requests').update({
           status: terminal ? 'failed' : 'processing',
           error_message: `${terminal ? 'Static verification failed' : 'Static verification pending'}: ${verification.error || 'unknown'}`.slice(0, 500),
+          next_retry_at: terminal && retryCount < 3
+            ? new Date(now.getTime() + Math.min(60,15 * (2 ** retryCount)) * 60_000).toISOString()
+            : null,
         }).eq('id', item.id).eq('status', 'processing');
       }
     } else if (processingAge > BUILD_TIMEOUT_MS) {
       const { error } = await db.from('seo_static_release_requests').update({
         status: 'failed',
         error_message: 'Cloudflare Pages build confirmation timed out. Publish or retry the SEO release.',
+        next_retry_at: Number(item.automatic_retry_count || 0) < 3
+          ? new Date(now.getTime() + Math.min(60,15 * (2 ** Number(item.automatic_retry_count || 0))) * 60_000).toISOString()
+          : null,
       }).eq('id', item.id).eq('status', 'processing');
       if (!error) recovered += 1;
     }
   }
 
+  // Start the coverage evidence loop only after the public HTML and the
+  // static sitemap have both passed verification. This is intentionally after
+  // the deployment itself, not merely after the 03:30 draft approval time.
+  if (confirmedSlugs.length) {
+    edgeWaitUntil(queueGoogleCoverageCheck([...new Set(confirmedSlugs)]).catch(() => undefined));
+  }
+
   let pendingQuery = db.from('seo_static_release_requests')
-    .select('id,movie_id,slug,reason,release_lane,requested_at,requested_version')
-    .eq('status', 'pending');
+    .select('id,movie_id,slug,reason,release_lane,requested_at,requested_version,automatic_retry_count,next_retry_at')
+    .eq('status', 'pending')
+    .or(`next_retry_at.is.null,next_retry_at.lte.${now.toISOString()}`);
   if (mode === 'urgent') pendingQuery = pendingQuery.eq('release_lane', 'urgent');
   const { data: pending, error: pendingError } = await pendingQuery
     .order('requested_at', { ascending: true })
-    .limit(mode === 'urgent' ? 10 : 50);
+    // One Pages build already regenerates the whole approved profile sitemap,
+    // so claim the full bounded batch instead of starting five overlapping
+    // deployments for fifty small SEO changes.
+    .limit(50);
   if (pendingError) return json({ error: pendingError.message }, 500);
   if (!pending?.length) return json({ ok: true, action: 'idle', mode, confirmed, recovered });
 
@@ -294,6 +352,8 @@ Deno.serve(async (req) => {
     release_lane: string;
     requested_at: string;
     requested_version: number | null;
+    automatic_retry_count: number;
+    next_retry_at: string | null;
   }> = [];
   for (const item of pending) {
     if (String(item.reason || '') !== 'seo_draft_scheduled') {
@@ -331,7 +391,7 @@ Deno.serve(async (req) => {
     }
     const publishedAt = new Date().toISOString();
     const pendingAudit = {
-      passed: true,
+      passed: false,
       mode: 'static-build-pending',
       checked_at: publishedAt,
       url: `${SITE_URL}/phim/${String(item.slug || '')}`,
@@ -375,6 +435,8 @@ Deno.serve(async (req) => {
       release_lane: String(item.release_lane || 'nightly'),
       requested_at: String(item.requested_at || publishedAt),
       requested_version: version,
+      automatic_retry_count: Number(item.automatic_retry_count || 0),
+      next_retry_at: item.next_retry_at ? String(item.next_retry_at) : null,
     });
   }
   if (!prepared.length) return json({ ok: true, action: 'nothing_ready', mode, confirmed, recovered });
@@ -385,7 +447,8 @@ Deno.serve(async (req) => {
     status: 'processing',
     processing_started_at: claimedAt,
     error_message: null,
-  }).in('id', pendingIds).eq('status', 'pending').select('id,slug,release_lane,requested_version');
+    next_retry_at: null,
+  }).in('id', pendingIds).eq('status', 'pending').select('id,slug,release_lane,requested_version,automatic_retry_count');
   if (claimError) return json({ error: claimError.message }, 500);
   if (!claimed?.length) return json({ ok: true, action: 'already_claimed', confirmed, recovered });
 
@@ -404,11 +467,19 @@ Deno.serve(async (req) => {
     return json({ ok: true, action: 'deployment_triggered', mode, count: claimed.length, slugs: claimed.map((item) => item.slug), confirmed, recovered });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await db.from('seo_static_release_requests').update({
-      status: 'pending',
-      processing_started_at: null,
-      error_message: message.slice(0, 500),
-    }).in('id', claimed.map((item) => item.id));
+    await Promise.all(claimed.map(async (item) => {
+      const nextRetryCount = Number(item.automatic_retry_count || 0) + 1;
+      const canRetry = nextRetryCount <= 3;
+      await db.from('seo_static_release_requests').update({
+        status: canRetry ? 'pending' : 'failed',
+        processing_started_at: null,
+        automatic_retry_count: nextRetryCount,
+        next_retry_at: canRetry
+          ? new Date(Date.now() + Math.min(60,15 * (2 ** (nextRetryCount - 1))) * 60_000).toISOString()
+          : null,
+        error_message: `${message}${canRetry ? `; automatic retry ${nextRetryCount}/3 scheduled` : '; automatic retry limit reached'}`.slice(0, 500),
+      }).eq('id', item.id);
+    }));
     return json({ ok: false, action: 'deployment_failed', mode, error: message }, 502);
   }
 });

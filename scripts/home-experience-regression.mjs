@@ -22,6 +22,7 @@ const slugEncoder = await readFile('src/utils/slugEncoder.ts', 'utf8');
 const top10 = await readFile('src/pages/home/components/Top10TodaySection.tsx', 'utf8');
 const topRated = await readFile('src/pages/home/components/TopRatedSection.tsx', 'utf8');
 const vietnamSection = await readFile('src/pages/home/components/TopCinemaMoviesSection.tsx', 'utf8');
+const trailerSection = await readFile('src/pages/home/components/TrailerMoviesSection.tsx', 'utf8');
 const mobileSwipeHint = await readFile('src/pages/home/components/MobileSwipeHint.tsx', 'utf8');
 const globalCss = await readFile('src/index.css', 'utf8');
 const imagePreloader = await readFile('src/utils/imagePreloader.ts', 'utf8');
@@ -486,11 +487,14 @@ if (!trending.includes('Mới cập nhật &amp; đang hot') || !trending.includ
 if (!mobileSwipeHint.includes('Vuốt ngang để xem thêm phim') || !mobileSwipeHint.includes('ChevronsRight')) {
   failures.push('Mobile movie rails must retain a clear swipe affordance.');
 }
+if (!vietnamSection.includes('kp-vietnam-grid') || !vietnamSection.includes('Xem thêm ${Math.min(3, movies.length - 6)} phim Việt')) {
+  failures.push('Vietnam mobile shelf must show six compact posters with an explicit way to reveal more.');
+}
 for (const [label, source] of [
   ['vietnam', vietnamSection],
   ['trending', trending],
 ]) {
-  if (!source.includes('<MobileSwipeHint visible={canScrollRight} />') || !source.includes('vuốt ngang để xem thêm')) {
+  if (label === 'trending' && (!source.includes('<MobileSwipeHint visible={canScrollRight} />') || !source.includes('vuốt ngang để xem thêm'))) {
     failures.push(`${label} mobile rail must explain that more movies are available horizontally.`);
   }
   if (!source.includes("addEventListener('scroll'") || !source.includes('ResizeObserver')) {
@@ -562,7 +566,7 @@ const fourKShelfEnd = home.indexOf('</EditorialSectionFrame>', fourKShelfStart);
 const fourKShelf = fourKShelfStart >= 0 && fourKShelfEnd > fourKShelfStart
   ? home.slice(fourKShelfStart, fourKShelfEnd)
   : '';
-if (!fourKShelf.includes('sectionIndex={3}') || !fourKShelf.includes('limit={compactMobile ? 6 : 12}') || fourKShelf.includes('eager')) {
+if (!fourKShelf.includes('sectionIndex={3}') || !fourKShelf.includes('limit={compactMobile ? 9 : 12}') || !fourKShelf.includes('mobileLayout="rail"') || fourKShelf.includes('eager')) {
   failures.push('The offscreen 4K shelf must keep its content while mounting progressively near the viewport.');
 }
 const animeShelfStart = home.indexOf('fetchKey="hoat-hinh"');
@@ -570,7 +574,7 @@ const animeShelfEnd = home.indexOf('</EditorialSectionFrame>', animeShelfStart);
 const animeShelf = animeShelfStart >= 0 && animeShelfEnd > animeShelfStart
   ? home.slice(animeShelfStart, animeShelfEnd)
   : '';
-if (!animeShelf.includes('limit={compactMobile ? 6 : 12}')) {
+if (!animeShelf.includes('limit={compactMobile ? 9 : 12}') || !animeShelf.includes('mobileLayout="rail"')) {
   failures.push('The anime shelf must stay within two desktop rows and a compact mobile list.');
 }
 if (home.includes('HomeAngularIndex') || home.includes('MOBILE_CATEGORY_LINKS') || globalCss.includes('home-angular-index')) {
@@ -624,12 +628,15 @@ if (
 ) {
   failures.push('Top 10 UI must explain its automated watch-worthy ranking.');
 }
-if (!top10.includes('grid-cols-2')
+if (!top10.includes('kp-chart-list')
+  || !top10.includes('RankingMobileRow')
+  || !top10.includes('mobileExpanded ? 10 : 5')
+  || !top10.includes('grid-cols-2')
   || !top10.includes('lg:grid-cols-5')
   || !top10.includes("{ preferredAspect: 'landscape' }")
   || top10.includes('overflow-x-auto')
   || top10.includes('MobileSwipeHint')) {
-  failures.push('Top 10 must use a readable two-column phone grid and five-column desktop grid with landscape artwork.');
+  failures.push('Top 10 must use compact ranked rows on phones and a five-column desktop grid.');
 }
 if (!topRated.includes('grid-cols-2')
   || !topRated.includes('lg:grid-cols-5')
@@ -639,6 +646,16 @@ if (!topRated.includes('grid-cols-2')
   || topRated.includes('getVoteCount')
   || topRated.includes('Math.random()')) {
   failures.push('Top-rated movies must use a truthful responsive portrait grid without fabricated scores or vote counts.');
+}
+if (!trailerSection.includes('function hasOfficialYouTubeTrailer')
+  || !trailerSection.includes('function hasPlayableEpisodeLabel')
+  || !trailerSection.includes('function isVerifiedTrailerMovie')
+  || !trailerSection.includes('!hasPlayableEpisodeLabel(movie)')
+  || !trailerSection.includes('hasOfficialYouTubeTrailer(movie.trailer_url)')) {
+  failures.push('Homepage trailer shelf must only show official trailer-only/upcoming movies and reject playable movies.');
+}
+if (trailerSection.includes('getHotScore') || trailerSection.includes('ri-fire-fill')) {
+  failures.push('Homepage trailer shelf must not display fabricated hot scores.');
 }
 if (!home.includes('<TopRatedSection initialMovies={topRatedMovies} loading={homeLoading}')
   || /!compactMobile\s*&&\s*<>\s*\n\s*<EditorialSectionFrame number="05"/.test(home)) {

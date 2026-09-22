@@ -31,13 +31,13 @@ export default function MovieSeoProfileContent({ slug, movieName, defaultNoIndex
     return () => { active = false; };
   }, [initialProfile, slug]);
 
+  // The public static document is the source of truth for indexability.
+  // A pending audit means "verify this release", not "remove a previously
+  // approved editorial page from Google". Never let hydration silently
+  // replace an indexable server response with a noindex meta tag.
   const effectiveNoIndex = !profile
     ? defaultNoIndex
-    : profile.index_mode === 'noindex' || profile.live_audit?.passed !== true
-      ? true
-      : profile.index_mode === 'index' && profile.validation_score >= 85
-        ? false
-        : defaultNoIndex;
+    : defaultNoIndex || profile.index_mode !== 'index' || profile.validation_score < 85;
 
   const faqSchema = useMemo(() => {
     if (!profile?.faq?.length) return null;

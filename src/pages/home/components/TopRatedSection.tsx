@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Award, ChevronRight, ImageOff, Play, Sparkles, Star } from 'lucide-react';
 import { useImageFallback } from '../../../hooks/useImageFallback';
@@ -161,40 +161,42 @@ function RatedCardSkeleton() {
   );
 }
 
-export default function TopRatedSection({ initialMovies = [], loading = false, limit = 10 }: TopRatedSectionProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [triggered, setTriggered] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || triggered) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setTriggered(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '240px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [triggered]);
+function RatedMobileCard({ movie, rank }: RatedCardProps) {
+  const { primary, fallback } = getPortraitImagePaths(movie);
+  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
+    primary, fallback, false, 360, 84, { preferredAspect: 'portrait' },
+  );
 
   return (
-    <div
-      ref={ref}
-      className="[contain-intrinsic-size:0_1500px] lg:[contain-intrinsic-size:0_820px]"
-      style={{ contentVisibility: 'auto' }}
+    <Link
+      to={`/phim/${encodeURIComponent(movie.slug || '')}`}
+      className="kp-rated-mini"
+      onClick={() => trackMovieClick(movie.slug || '', movie.name || '', 'home')}
     >
-      {triggered ? <TopRatedContent initialMovies={initialMovies} loading={loading} limit={limit} /> : <TopRatedSkeleton limit={limit} />}
-    </div>
+      <span className="kp-rated-mini-art">
+        {!loaded && !hasError && <span className="skeleton absolute inset-0" aria-hidden="true" />}
+        {hasError ? <ImageOff className="h-6 w-6 text-white/30" aria-hidden="true" /> : (
+          <img src={currentSrc} alt="" loading="lazy" decoding="async" onLoad={onLoad} onError={onError} className={loaded ? 'opacity-100' : 'opacity-0'} />
+        )}
+        <span className="kp-rated-mini-rank" aria-hidden="true">{String(rank).padStart(2, '0')}</span>
+        {movie.quality && <span className="kp-rated-mini-quality">{movie.quality}</span>}
+      </span>
+      <span className="kp-rated-mini-title">{movie.name}</span>
+    </Link>
   );
+}
+
+export default function TopRatedSection({ initialMovies = [], loading = false, limit = 10 }: TopRatedSectionProps) {
+  // DeferredHomeSection already mounts this component only near the viewport.
+  // A second zero-height IntersectionObserver here could never intersect on
+  // mobile and silently removed the complete rated shelf.
+  return <TopRatedContent initialMovies={initialMovies} loading={loading} limit={limit} />;
 }
 
 function TopRatedContent({ initialMovies = [], loading: parentLoading = false, limit = 10 }: TopRatedSectionProps) {
   const [movies, setMovies] = useState<MovieItem[]>(initialMovies.slice(0, limit));
   const [loading, setLoading] = useState(parentLoading && initialMovies.length === 0);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
 
   useEffect(() => {
     if (initialMovies.length > 0) {
@@ -217,9 +219,25 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false, l
     }
 
     if (!import.meta.env.DEV) {
-      setMovies([]);
-      setLoading(false);
-      return;
+      let cancelled = false;
+      setLoading(true);
+      fetch('/top-rated-fallback.json', { cache: 'default' })
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error('top-rated fallback unavailable')))
+        .then((payload: { movies?: MovieItem[] }) => {
+          if (cancelled) return;
+          const fallbackMovies = (payload.movies ?? [])
+            .filter((movie) => movie.slug && movie.name && (movie.poster_url || movie.thumb_url))
+            .slice(0, limit);
+          setMovies(fallbackMovies);
+          preloadMoviePosters(fallbackMovies.slice(0, 4), getImageUrl, {
+            batchSize: 2,
+            delayBetweenBatches: 250,
+            delayBetweenImages: 40,
+          });
+        })
+        .catch(() => { if (!cancelled) setMovies([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+      return () => { cancelled = true; };
     }
 
     setLoading(true);
@@ -287,7 +305,20 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false, l
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 lg:gap-4" aria-label={`${limit} phim được KhoPhim đánh giá cao`}>
+      <div className="kp-rated-mini-grid md:hidden" aria-label="Phim được KhoPhim đánh giá cao trên điện thoại">
+        {loading
+          ? Array.from({ length: 6 }).map((_, index) => <div key={index} className="kp-rated-mini-art skeleton" aria-hidden="true" />)
+          : movies.slice(0, mobileExpanded ? limit : 6).map((movie, index) => (
+              <RatedMobileCard key={movie._id || movie.slug} movie={movie} rank={index + 1} />
+            ))}
+      </div>
+      {!loading && movies.length > 6 && (
+        <button type="button" className="kp-pocket-more mt-2 md:hidden" onClick={() => setMobileExpanded((value) => !value)} aria-expanded={mobileExpanded}>
+          {mobileExpanded ? 'Thu gọn' : `Xem thêm ${Math.min(limit - 6, movies.length - 6)} phim đề cử`}
+          <i className={mobileExpanded ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} aria-hidden="true" />
+        </button>
+      )}
+      <div className="hidden grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid lg:grid-cols-5 lg:gap-4" aria-label={`${limit} phim được KhoPhim đánh giá cao`}>
         {loading
           ? Array.from({ length: limit }).map((_, index) => <RatedCardSkeleton key={index} />)
           : movies.slice(0, limit).map((movie, index) => (
@@ -295,16 +326,5 @@ function TopRatedContent({ initialMovies = [], loading: parentLoading = false, l
             ))}
       </div>
     </section>
-  );
-}
-
-function TopRatedSkeleton({ limit = 10 }: { limit?: number }) {
-  return (
-    <div className="mb-8 md:mb-12">
-      <div className="mb-4 h-[116px] rounded-2xl border border-white/[0.05] bg-white/[0.025] skeleton sm:h-[128px] lg:rounded-3xl" />
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 lg:gap-4">
-        {Array.from({ length: limit }).map((_, index) => <RatedCardSkeleton key={index} />)}
-      </div>
-    </div>
   );
 }

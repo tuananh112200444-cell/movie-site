@@ -75,7 +75,7 @@ interface Props {
   trailerEmbedUrl: string | null;
   onSelectEp: (ep: EpisodeData, seekTime?: number) => void;
   onTimeUpdate?: (time: number, duration: number) => void;
-  resumeInfo: { time: number; duration: number; progress: number; shouldResume: boolean } | null;
+  resumeInfo: { time: number; duration: number; progress: number; savedAt?: number; shouldResume: boolean } | null;
   showResumeBanner: boolean;
   onResume: () => void;
   onRestart: () => void;
@@ -448,10 +448,10 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
           <div className="fixed inset-0 z-[100] bg-black pointer-events-none" aria-hidden="true" />
         )}
 
-        <div className={`mb-6 sm:mb-8 ${cinemaMode ? 'relative z-[101]' : ''}`}>
+        <div className={`mb-4 sm:mb-5 ${cinemaMode ? 'relative z-[101]' : ''}`}>
           {/* Tabs */}
-          <div className="movie-watch-topbar mb-3 flex items-center gap-2 px-3 py-3 sm:mb-4 sm:px-4 lg:px-5 flex-wrap">
-            <div className="mr-auto flex min-w-[210px] items-center gap-2.5">
+          <div className="movie-player-toolbar movie-watch-topbar mb-2 flex items-center gap-2 px-2.5 py-2 sm:mb-3 sm:px-4 lg:px-5 flex-wrap">
+            <div className="movie-player-heading mr-auto flex min-w-[210px] items-center gap-2.5">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/12 text-red-300">
                 <i className="ri-play-circle-line text-lg" />
               </span>
@@ -759,7 +759,6 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                           key={idx}
                           onClick={() => onSwitchServer(idx)}
                           aria-pressed={isActive}
-                          aria-label={`${friendlyName}, ${srv.server_data?.length ?? 0} tập`}
                           className={`flex h-12 lg:h-14 items-center gap-2 rounded-xl border px-3 text-left transition-all cursor-pointer active:scale-[0.99] ${
                             isActive
                               ? 'bg-white text-[#11131b] border-white shadow-lg shadow-white/10'

@@ -825,9 +825,9 @@ export default function Home() {
 
         <EditorialSectionFrame number="4K" code="ULTRA HD" tone="cinema">
           <LazyMovieSection
-            fetchType="type" fetchKey="vsmov-4k" limit={compactMobile ? 6 : 12}
+            fetchType="type" fetchKey="vsmov-4k" limit={compactMobile ? 9 : 12}
             title="Phim 4K Siêu Nét" viewAllLink="/phim-4k"
-            cols={6} rootMargin="240px" sectionIndex={3} theme="cinematic"
+            cols={6} rootMargin="240px" sectionIndex={3} theme="cinematic" mobileLayout="rail"
             movies={homeData['vsmov-4k'] ?? []}
             loading={homeLoading}
           />
@@ -852,9 +852,9 @@ export default function Home() {
 
         <EditorialSectionFrame number="BL" code="QUEER UNIVERSE" tone="mood">
           <LazyMovieSection
-            fetchType="type" fetchKey="queer-universe" limit={compactMobile ? 6 : 12}
+            fetchType="type" fetchKey="queer-universe" limit={compactMobile ? 9 : 12}
             title="Phim GL / Bách Hợp Mới Nhất" viewAllLink={QUEER_PORTAL_PATH}
-            cols={6} rootMargin="120px" sectionIndex={4} theme="trending"
+            cols={6} rootMargin="120px" sectionIndex={4} theme="trending" mobileLayout="rail"
             movies={queerMovies}
             loading={queerLoading}
           />
@@ -880,9 +880,9 @@ export default function Home() {
 
         <EditorialSectionFrame number="07" code="ANIME ARCHIVE" tone="anime">
           <LazyMovieSection
-            fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 6 : 12}
+            fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 9 : 12}
             title="Kho Tàng Anime Mới Nhất" viewAllLink="/hoat-hinh"
-            cols={6} rootMargin="160px" sectionIndex={7} theme="anime"
+            cols={6} rootMargin="160px" sectionIndex={7} theme="anime" mobileLayout="rail"
             movies={homeData['hoat-hinh'] ?? []}
             loading={homeLoading}
           />
@@ -892,7 +892,7 @@ export default function Home() {
           <LazyMovieSection
             fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 15}
             title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
-            cols={5} rootMargin="160px" sectionIndex={8} theme="trending"
+            cols={5} rootMargin="160px" sectionIndex={8} theme="trending" mobileLayout="rail"
             movies={homeData['phim-bo'] ?? []}
             loading={homeLoading}
           />
@@ -901,7 +901,7 @@ export default function Home() {
           <LazyMovieSection
             fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 15}
             title="Phim Lẻ Đang Hot" viewAllLink="/phim-le"
-            cols={5} rootMargin="160px" sectionIndex={9} theme="cinematic"
+            cols={5} rootMargin="160px" sectionIndex={9} theme="cinematic" mobileLayout="rail"
             movies={homeData['phim-le'] ?? []}
             loading={homeLoading}
           />
@@ -911,7 +911,7 @@ export default function Home() {
           <LazyMovieSection
             fetchType="country" fetchKey="au-my" limit={compactMobile ? 9 : 18}
             title="Phim Âu Mỹ" viewAllLink="/phim-au-my"
-            cols={6} rootMargin="160px" sectionIndex={10} theme="hollywood"
+            cols={6} rootMargin="160px" sectionIndex={10} theme="hollywood" mobileLayout="rail"
             movies={homeData['au-my'] ?? []}
             loading={homeLoading}
           />
@@ -920,7 +920,7 @@ export default function Home() {
           <LazyMovieSection
             fetchType="country" fetchKey="trung-quoc" limit={compactMobile ? 9 : 18}
             title="Phim Trung Quốc" viewAllLink="/phim-trung-quoc"
-            cols={6} rootMargin="160px" sectionIndex={11} theme="oriental"
+            cols={6} rootMargin="160px" sectionIndex={11} theme="oriental" mobileLayout="rail"
             movies={homeData['trung-quoc'] ?? []}
             loading={homeLoading}
           />
@@ -929,7 +929,7 @@ export default function Home() {
           <LazyMovieSection
             fetchType="country" fetchKey="han-quoc" limit={compactMobile ? 9 : 18}
             title="Phim Hàn Quốc" viewAllLink="/phim-han-quoc"
-            cols={6} rootMargin="160px" sectionIndex={12} theme="kdrama"
+            cols={6} rootMargin="160px" sectionIndex={12} theme="kdrama" mobileLayout="rail"
             movies={homeData['han-quoc'] ?? []}
             loading={homeLoading}
           />
@@ -938,7 +938,7 @@ export default function Home() {
           <LazyMovieSection
             fetchType="country" fetchKey="thai-lan" limit={compactMobile ? 9 : 18}
             title="Phim Thái Lan" viewAllLink="/phim-thai-lan"
-            cols={6} rootMargin="160px" sectionIndex={13} theme="tropical"
+            cols={6} rootMargin="160px" sectionIndex={13} theme="tropical" mobileLayout="rail"
             movies={homeData['thai-lan'] ?? []}
             loading={homeLoading}
           />

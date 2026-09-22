@@ -17,6 +17,10 @@ const queerHome = fs.readFileSync('src/pages/home/components/QueerUniverseHome.t
 const queerHero = fs.readFileSync('src/pages/home/components/QueerUniverseHero.tsx', 'utf8');
 const home = fs.readFileSync('src/pages/home/page.tsx', 'utf8');
 const checks = [
+  [source.includes("const BASE = 'https://www.glvietsubz.net'") && source.includes('glvietsub(?:z)?'), 'GLVietsub sync must use the current domain while accepting legacy source URLs'],
+  [source.includes('source_url: entry.sourceUrl, showtimes: entry.sourceUrl'), 'Existing GLVietsub movies must migrate their stored source URL to the current domain'],
+  [movieApi.includes("'glvietsub-weirdo-101-the-series': 'blvietsub-1764-luc-hap-dan-giua-chung-ta-weirdo-101-2026'")
+    && movieApi.includes('mergeQueerDetailWithSources(quickPlayable, sibling, null)'), 'Verified Weirdo GL/BL siblings must merge at read time while the database repair is pending'],
   [source.includes("const SOURCE = 'glvietsub'"), 'GLVietsub source identity is missing'],
   [source.includes("action: 'doo_player_ajax'"), 'Dooplay player resolver is missing'],
   [source.includes('consecutiveFailures >= 3'), 'GLVietsub circuit breaker is missing'],

@@ -1,7 +1,9 @@
 {
-  "release_id": "20260911030605-9854aa0ecbe3-dirty",
-  "generated_at": "2026-09-11T03:06:05.575Z",
-  "commit": "9854aa0ecbe3",
+  "release_id": "20260921170522-2d8263799cba-dirty",
+  "app_release_id": "app-a9403f3e7657181f",
+  "content_release_id": "20260921170522-2d8263799cba-dirty",
+  "generated_at": "2026-09-21T17:05:22.689Z",
+  "commit": "2d8263799cba",
   "dirty": true,
   "schema_contract": "20260719-ops-seo-v1",
   "components": {
