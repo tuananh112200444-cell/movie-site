@@ -2,7 +2,16 @@ import { readFile } from 'node:fs/promises';
 
 const base = new URL(process.argv[2] || 'https://khophim.org');
 const preview = base.hostname.endsWith('.pages.dev');
-const sitemap = await readFile('out/sitemap-seo-studio.xml','utf8');
+const liveSitemap = process.argv.includes('--live-sitemap');
+const sitemap = liveSitemap
+  ? await fetch(new URL('/sitemap-seo-studio.xml',base),{
+      headers:{'user-agent':'Googlebot/2.1','cache-control':'no-cache'},
+      signal:AbortSignal.timeout(30000),
+    }).then((response)=>{
+      if (!response.ok) throw new Error(`Live SEO sitemap HTTP ${response.status}`);
+      return response.text();
+    })
+  : await readFile('out/sitemap-seo-studio.xml','utf8');
 const urls = [...sitemap.matchAll(/<loc>(https:\/\/khophim\.org\/phim\/[^<]+)<\/loc>/g)]
   .map((match) => match[1]);
 const unique = [...new Set(urls)];
@@ -44,5 +53,5 @@ async function worker() {
 }
 
 await Promise.all(Array.from({length:6},()=>worker()));
-console.log(JSON.stringify({base:base.origin,previewHeaderNoindexExpected:preview,approvedUrls:unique.length,checkedDocuments:unique.length*2,issues},null,2));
+console.log(JSON.stringify({base:base.origin,sitemapSource:liveSitemap?'live':'artifact',previewHeaderNoindexExpected:preview,approvedUrls:unique.length,checkedDocuments:unique.length*2,issues},null,2));
 if (unique.length === 0 || issues.length) process.exitCode=1;
