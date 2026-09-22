@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useCallback, useRef } from 'react';
+import { memo, useState, useCallback, useRef } from 'react';
 import { useImageFallback } from '../../hooks/useImageFallback';
 import { Link } from 'react-router-dom';
 import type { MovieItem } from '../../types/movie';
@@ -113,7 +113,9 @@ function DefaultCard({ movie, priority, contextLabel }: MovieCardProps) {
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const rating  = useMemo(() => (7 + Math.abs(movie.name.charCodeAt(0) % 3) * 0.5).toFixed(1), [movie.name]);
+  const rating = Number.isFinite(movie.tmdb_vote_average) && Number(movie.tmdb_vote_average) > 0
+    ? Number(movie.tmdb_vote_average).toFixed(1)
+    : null;
   const altText = buildAlt(movie);
   const isNew   = isNewMovie(movie);
   const displayTime = getDisplayTime(movie);
@@ -239,10 +241,10 @@ function DefaultCard({ movie, priority, contextLabel }: MovieCardProps) {
                 <span className={`max-w-[3.9rem] truncate text-[9px] md:text-[11px] font-semibold ${epText.cls}`}>{epText.label}</span>
               </>
             )}
-            <span className="ml-auto flex items-center gap-0.5 flex-shrink-0">
+            {rating && <span className="ml-auto flex items-center gap-0.5 flex-shrink-0">
               <i className="ri-star-fill text-amber-400/70 text-[8px] md:text-[9px]" />
               <span className="text-[9px] md:text-[11px] text-white/40 font-semibold">{rating}</span>
-            </span>
+            </span>}
           </div>
           <div className="hidden items-center gap-1.5 pt-2 opacity-0 transition-opacity duration-200 md:flex md:group-hover:opacity-100">
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-black">
@@ -279,7 +281,9 @@ function DefaultCardV2({ movie, priority, contextLabel }: MovieCardProps) {
     { preferredAspect: 'portrait' },
   );
   const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rating = useMemo(() => (7 + Math.abs(movie.name.charCodeAt(0) % 3) * 0.5).toFixed(1), [movie.name]);
+  const rating = Number.isFinite(movie.tmdb_vote_average) && Number(movie.tmdb_vote_average) > 0
+    ? Number(movie.tmdb_vote_average).toFixed(1)
+    : null;
   const altText = buildAlt(movie);
   const isNew = isNewMovie(movie);
   const displayTime = getDisplayTime(movie);
@@ -342,9 +346,9 @@ function DefaultCardV2({ movie, priority, contextLabel }: MovieCardProps) {
 
           <div className="pointer-events-none absolute inset-0 z-[2] bg-[linear-gradient(180deg,rgba(0,0,0,0.12)_0%,rgba(0,0,0,0)_34%,rgba(0,0,0,0.12)_68%,rgba(0,0,0,0.72)_100%)]" />
 
-          <div className="absolute left-1.5 right-1.5 top-1.5 z-[3] flex items-start justify-between gap-1 sm:left-2 sm:right-2 sm:top-2">
+          <div className="kp-card-badges absolute left-1.5 right-1.5 top-1.5 z-[3] flex items-start justify-between gap-1 sm:left-2 sm:right-2 sm:top-2">
             <div className="flex min-w-0 flex-col gap-1">
-              {isNew && <span className="w-fit rounded-md bg-gradient-to-r from-red-500 to-red-600 px-1.5 py-0.5 text-[9px] font-black leading-none tracking-wide text-white shadow-sm ring-1 ring-white/10">Mới</span>}
+              {isNew && <span className="kp-card-new w-fit rounded-md bg-gradient-to-r from-red-500 to-red-600 px-1.5 py-0.5 text-[9px] font-black leading-none tracking-wide text-white shadow-sm ring-1 ring-white/10">Mới</span>}
               <MovieCountdown movie={movie} />
               {getEpisodeBadge(movie.episode_current)}
             </div>
@@ -382,19 +386,19 @@ function DefaultCardV2({ movie, priority, contextLabel }: MovieCardProps) {
         </div>
 
         <div className="mt-2 flex min-h-[68px] flex-col px-0.5 pb-1 sm:mt-2 md:min-h-[78px]">
-          <p className="min-h-[32px] text-[12px] font-bold leading-snug text-white/92 line-clamp-2 transition-colors duration-200 group-hover:text-white sm:min-h-[36px] sm:text-[13px] md:min-h-[39px] md:text-[14px] xl:text-[14.5px]">
+          <p className="kp-card-title min-h-[32px] text-[12px] font-bold leading-snug text-white/92 line-clamp-2 transition-colors duration-200 group-hover:text-white sm:min-h-[36px] sm:text-[13px] md:min-h-[39px] md:text-[14px] xl:text-[14.5px]">
             {title}
           </p>
           <p className="mt-0.5 hidden min-h-[15px] truncate text-[10.5px] font-medium text-white/36 sm:block md:min-h-[18px] md:text-[12px]">
             {origin && origin !== title ? origin : '\u00a0'}
           </p>
-          <div className="mt-auto flex min-h-[21px] items-center gap-1.5 pt-1 md:min-h-[22px] md:gap-2">
-            {movie.year && <span className="rounded-md bg-white/[0.055] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white/55 md:text-[11px]">{movie.year}</span>}
+          <div className="kp-card-facts mt-auto flex min-h-[21px] items-center gap-1.5 pt-1 md:min-h-[22px] md:gap-2">
+            {movie.year && <span className="kp-card-year rounded-md bg-white/[0.055] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white/55 md:text-[11px]">{movie.year}</span>}
             {epText && <span className={`min-w-0 truncate text-[10px] font-bold md:text-[11px] ${epText.cls}`}>{epText.label}</span>}
-            <span className="ml-auto flex shrink-0 items-center gap-1">
+            {rating && <span className="ml-auto flex shrink-0 items-center gap-1">
               <i className="ri-star-fill text-[9px] text-amber-400/75 md:text-[10px]" />
               <span className="text-[10px] font-bold text-white/50 md:text-[11px]">{rating}</span>
-            </span>
+            </span>}
           </div>
         </div>
       </div>

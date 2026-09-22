@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 const files = Object.fromEntries(await Promise.all([
   'src/pages/admin-seo-studio/page.tsx',
   'src/components/base/SEO.tsx',
+  'src/components/feature/MovieSeoProfileContent.tsx',
   'src/services/seoStudioService.ts',
   'src/components/feature/MovieSeoProfileContent.tsx',
   'src/pages/movie-detail/page.tsx',
@@ -75,7 +76,7 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['Lỗi bắt buộc', 'SEO Studio still presents stale baseline issues as current blocking errors'],
   ['data-kp-unified-seo-workbench="true"', 'SEO Studio has no unified daily AI workbench'],
   ['SEO AI Workspace · một luồng duy nhất', 'SEO Studio still presents its primary workflow as disconnected tools'],
-  ['Nút hành động sẽ chuyển', 'unified workbench does not explain its review and publish sequence'],
+  ['Nút hành động chỉ chuyển', 'unified workbench does not explain its review and publish sequence'],
   ['Duyệt ${selectedAiFields.length} thay đổi & tiếp tục', 'unified workbench hides the next action after AI finishes'],
   ["'Xuất bản & đưa vào sitemap Google'", 'unified workbench does not expose a clear publish action after live verification'],
   ['Xuất bản & đưa vào sitemap Google', 'final action does not explain that publication must become discoverable'],
@@ -127,13 +128,21 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ["index_mode: baseline.index_mode", 'AI can change the index directive'],
   ["canonical_path: `/phim/${slug}`", 'AI can change canonical identity'],
   ['allowedTopicPaths', 'AI can invent internal-link destinations'],
+  ['publicMoviePathsFromSitemaps', 'AI internal-link candidates are not constrained to the public sitemap'],
+  ['verifiedPublicRelatedMovies', 'AI internal-link candidates are not verified against the public website'],
+  ['probePublicIndexableHtmlPath', 'AI can still suggest a 404, noindex or non-canonical internal page'],
+  ['verifiedExistingTopicLinks', 'AI can preserve a broken internal link from an older draft'],
+  ['submittedDraft', 'AI does not receive the current private draft it is expected to repair'],
   ['store: false', 'AI request is stored unnecessarily'],
   ['fallbackAiSuggestion', 'SEO Studio has no safe fallback when AI is unavailable'],
   ["Deno.env.get('GEMINI_API_KEY')", 'SEO Studio cannot use a server-side Gemini key'],
   ['requestGeminiSuggestion', 'SEO Studio has no Gemini editorial request path'],
   ["'x-goog-api-key': GEMINI_API_KEY", 'Gemini key is not kept in the server-to-server request header'],
   ['responseJsonSchema: AI_SUGGESTION_SCHEMA', 'Gemini response is not constrained to the SEO suggestion schema'],
-  ['Phải xử lý hết lỗi bắt buộc trong current_validation', 'AI is not instructed to resolve the current blocking validation errors'],
+  ['Phải xử lý hết cả lỗi và cảnh báo trong current_validation', 'AI is not instructed to resolve current errors and warnings'],
+  ['assistantCompletion', 'SEO Studio can still claim AI completion while fixable issues remain'],
+  ['firstPassRemaining', 'AI output is not checked for a bounded second repair pass'],
+  ['applyDeterministicEditorialConstraints', 'deterministic title and description limits are not enforced'],
   ["gemini-3.5-flash-lite", 'quick SEO drafts do not use the low-latency Gemini model'],
   ['modelCandidates', 'Gemini overload has no bounded model fallback'],
   ['suggestion = fallbackAiSuggestion', 'Gemini overload leaves the operator without a safe draft'],
@@ -193,11 +202,14 @@ expect('src/components/base/SEO.tsx', [
 expect('src/pages/movie-detail/page.tsx', [
   ['<MovieSeoProfileContent', 'movie page is not connected to the published profile'],
 ]);
+expect('src/components/feature/MovieSeoProfileContent.tsx', [
+  ["defaultNoIndex || profile.index_mode !== 'index'", 'hydration may silently turn an approved static SEO page back to noindex'],
+]);
 expect('supabase/functions/static-seo-catalog/index.ts', [
   [".from('movie_seo_profiles')", 'static crawler catalogue ignores manual profiles'],
   ['Trailer/upcoming pages can also have a verified editorial profile', 'static upcoming pages can lag behind a verified SEO Studio publish'],
   ["profile?.index_mode === 'index'", 'manual index approval is not gated'],
-  [".eq('live_audit->>passed', 'true')", 'static catalogue accepts profiles that failed the live audit'],
+  ["const manuallyApproved = profile?.status === 'published'", 'static catalogue does not separate editorial SEO approval from playback audit state'],
 ]);
 expect('scripts/generate-static-movie-pages.mjs', [
   ['profile?.seo_title', 'static HTML ignores custom SEO title'],
@@ -206,12 +218,22 @@ expect('scripts/generate-static-movie-pages.mjs', [
   ['data-kp-seo-profile-version', 'static fail-open HTML lacks the SEO profile version marker'],
   ['profile?.review_content', 'static fail-open HTML omits the editorial review'],
   ['kp-static-movie-data', 'static movie HTML does not embed the fast information bootstrap'],
+  ['Approved SEO profile parity failed', 'static release can silently omit approved SEO profiles'],
 ]);
 expect('supabase/functions/sitemap-seo-studio/index.ts', [
   [".eq('index_mode', 'index')", 'manual sitemap includes non-approved URLs'],
   [".gte('validation_score', 85)", 'manual sitemap lacks quality threshold'],
-  [".eq('live_audit->>passed', 'true')", 'manual sitemap accepts profiles that failed the live audit'],
+  [".is('movies.superseded_by_movie_id', null)", 'manual sitemap accepts superseded canonical movies'],
 ]);
+if (files['supabase/functions/sitemap-seo-studio/index.ts'].includes(".eq('live_audit->>passed', 'true')")) {
+  throw new Error('A new approved SEO profile cannot enter the sitemap until after a verification that itself checks sitemap membership.');
+}
+if (files['supabase/functions/sitemap-seo-studio/index.ts'].includes(".eq('movies.is_published', true)")) {
+  throw new Error('Manual sitemap is still gated on playback catalogue publication.');
+}
+if (files['supabase/functions/static-seo-catalog/index.ts'].includes(".eq('movies.is_published', true)\n    .is('movies.superseded_by_movie_id'")) {
+  throw new Error('Approved static SEO profiles are still gated on playback catalogue publication.');
+}
 expect('functions/[[path]].js', [
   ["pathname === '/sitemap-seo-studio.xml'", 'Cloudflare does not route the SEO Studio sitemap'],
   ['fetchPublishedMovieSeoProfile(slug)', 'Googlebot prerender does not read the live published profile'],

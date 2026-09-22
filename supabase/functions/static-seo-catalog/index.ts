@@ -71,7 +71,6 @@ function isHighValueStaticMovie(movie: Record<string, unknown>, upcoming = false
   const currentYear = new Date().getUTCFullYear();
   const manuallyApproved = profile?.status === 'published'
     && profile?.index_mode === 'index'
-    && (profile?.live_audit as Record<string, unknown> | undefined)?.passed === true
     && Number(profile?.validation_score || 0) >= 85;
   const requiredContentLength = upcoming
     ? UPCOMING_MIN_CONTENT_LENGTH
@@ -125,7 +124,9 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const upcomingCohort = url.searchParams.get('cohort') === 'upcoming';
+  const requestedCohort = url.searchParams.get('cohort') || 'playable';
+  const upcomingCohort = requestedCohort === 'upcoming';
+  const profileCohort = requestedCohort === 'profiles';
   const offset = Math.max(0, Math.floor(Number(url.searchParams.get('offset') || 0)));
   const maxLimit = upcomingCohort ? UPCOMING_COHORT_LIMIT : MAX_PAGE_SIZE;
   const limit = Math.min(maxLimit, Math.max(1, Math.floor(Number(url.searchParams.get('limit') || maxLimit))));
@@ -163,24 +164,24 @@ Deno.serve(async (req) => {
   // Trailer/upcoming pages can also have a verified editorial profile.  They
   // must receive it in the static document; otherwise the public HTML would
   // lag behind an already-audited publish until the title becomes playable.
-  const profileQuery = supabase
+  let profileQuery = supabase
     .from('movie_seo_profiles')
     .select(`
       movie_id,slug,status,index_mode,validation_score,seo_title,meta_description,
       canonical_path,og_image_url,focus_keyword,secondary_keywords,intro_content,review_content,
       faq,topic_links,version,live_audit,last_audited_at,updated_at,movies!inner(${MOVIE_FIELDS})
-    `)
+    `, { count: 'exact' })
     .eq('status', 'published')
-    .neq('index_mode', 'noindex')
-    .gte('validation_score', 70)
-    .eq('live_audit->>passed', 'true')
-    .eq('movies.is_published', true)
+    .eq('index_mode', 'index')
+    .gte('validation_score', 85)
     .is('movies.superseded_by_movie_id', null)
-    .order('updated_at', { ascending: false })
-    .range(0, 999);
+    .order('updated_at', { ascending: false });
+  profileQuery = profileCohort
+    ? profileQuery.range(offset, offset + limit - 1)
+    : profileQuery.range(0, 999);
 
   const [qualityResult, profileResult] = await Promise.all([
-    qualityQuery,
+    profileCohort ? Promise.resolve({ data: [], error: null }) : qualityQuery,
     profileQuery,
   ]);
 
@@ -234,18 +235,26 @@ Deno.serve(async (req) => {
   const merged = new Map<string, Record<string, unknown>>();
   for (const movie of enrichedQualityItems) merged.set(String(movie.slug), movie);
   for (const movie of manualItems) merged.set(String(movie.slug), movie);
-  const items = Array.from(merged.values());
+  // The editorial profile is the SEO publication decision. Do not drop an
+  // approved URL because the separate playback catalogue hides its movie.
+  // The artifact verifier will reject a profile with incomplete HTML.
+  const items = profileCohort
+    ? profileItems
+    : Array.from(merged.values());
 
   return json(req, {
     status: true,
-    cohort: upcomingCohort ? 'upcoming' : 'playable',
+    cohort: profileCohort ? 'profiles' : upcomingCohort ? 'upcoming' : 'playable',
     offset,
     limit,
     count: items.length,
     // Pagination follows the raw quality rows read, not the filtered output.
     // A page may contain fewer high-value movies while later pages still have
     // valid candidates.
-    has_more: (data ?? []).length === limit,
+    has_more: profileCohort
+      ? offset + (profileResult.data ?? []).length < Number(profileResult.count || 0)
+      : (data ?? []).length === limit,
+    ...(profileCohort ? { total_profiles: profileResult.count ?? null } : {}),
     items,
   });
 });

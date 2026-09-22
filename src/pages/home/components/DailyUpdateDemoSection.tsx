@@ -133,7 +133,6 @@ function UpdateRow({ movie }: { movie: MovieItem }) {
     <Link
       to={movieDetailUrl(movie.slug)}
       className="group relative flex min-h-[108px] items-center gap-3 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 transition-[border-color,background-color,transform] hover:border-white/15 hover:bg-white/[0.045] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 md:hover:-translate-y-0.5"
-      aria-label={`${movie.name}, ${episodeLabel(movie)}, cập nhật ${timeLabel(timestamp)}`}
     >
       <UpdatePoster movie={movie} />
       <span className="min-w-0 flex-1">
@@ -278,7 +277,7 @@ export default function DailyUpdateDemoSection({
             aria-pressed={filter === item.key}
             className={`min-h-10 shrink-0 rounded-full px-3 text-[11px] font-black transition-colors sm:px-4 sm:text-xs ${filter === item.key ? 'bg-white text-black' : 'border border-white/10 bg-white/[0.04] text-white/50 hover:text-white'}`}
           >
-            {item.label} <span className={filter === item.key ? 'text-black/50' : 'text-white/25'}>{counts[item.key]}</span>
+            {item.label} <span className={filter === item.key ? 'text-black/70' : 'text-white/45'}>{counts[item.key]}</span>
           </button>
         ))}
       </div>
@@ -298,7 +297,7 @@ export default function DailyUpdateDemoSection({
       </div>
 
       <div className="flex flex-col gap-3 border-t border-white/[0.07] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
-        <p className="text-[10px] leading-5 text-white/35">Thời gian và trạng thái tập được lấy từ dữ liệu cập nhật thực tế của từng phim.</p>
+        <p className="daily-update-note text-[10px] leading-5 text-white/35">Thời gian và trạng thái tập được lấy từ dữ liệu cập nhật thực tế của từng phim.</p>
         <Link to="/phim-moi-cap-nhat" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4 text-xs font-black text-white transition-colors hover:bg-white/10">
           Xem toàn bộ cập nhật <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </Link>

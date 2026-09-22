@@ -2219,8 +2219,11 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
   const actors = personNames(Array.isArray(movie.actor) ? movie.actor.map(repairMojibakeText) : [], 12);
   const directors = personNames(Array.isArray(movie.director) ? movie.director.map(repairMojibakeText) : [], 8);
   const sourceLabel = movieDataSourceLabel(movie);
-  const isTrailerOnly = isTrailerOnlyMovie(movie);
-  const isUpcoming = isUpcomingMovie(movie);
+  // A published editorial profile owns the information-page lifecycle.
+  // Trailer/upcoming flags belong to playback metadata and must not turn the
+  // approved SEO page into a trailer-only or upcoming page.
+  const isTrailerOnly = !seoProfile && isTrailerOnlyMovie(movie);
+  const isUpcoming = !seoProfile && isUpcomingMovie(movie);
   const hasPlayableEpisode = hasPlayableMovieEvidence(movie);
   const trailerEmbedUrl = getTrailerEmbedUrl(movie.trailer_url);
   const qualityTier = String(movie.seo_index_tier || '');
@@ -2759,9 +2762,11 @@ async function proxySitemap(pathname, request, context) {
   }
 
   const movieChunkMatch = /^\/sitemap-movies-(\d+)\.xml$/.exec(pathname);
-  const sitemapVersion = pathname === '/sitemap-movies-upcoming.xml'
-    ? '20260916-upcoming-cohort-parity-v2'
-    : '20260903-editorial-cohort-v1';
+  const sitemapVersion = pathname === '/sitemap-seo-studio.xml'
+    ? '20260922-editorial-seo-independent-v1'
+    : pathname === '/sitemap-movies-upcoming.xml'
+      ? '20260916-upcoming-cohort-parity-v2'
+      : '20260903-editorial-cohort-v1';
   let target = `${SUPABASE_FUNCTION_BASE}/sitemap-index?v=${sitemapVersion}`;
   if (pathname === '/sitemap-movies-dynamic') {
     target = `${SUPABASE_FUNCTION_BASE}/sitemap-movies-xml?recent=1&page_size=5000&v=${sitemapVersion}`;
@@ -5622,12 +5627,12 @@ export async function onRequest(context) {
 
   const userAgent = request.headers.get('user-agent') || '';
   const publicMovieMatch = /^\/phim\/([^/?#]+)\/?$/.exec(pathname);
-  if (publicMovieMatch && !isBot(userAgent)) {
+  if (publicMovieMatch) {
     const slug = decodeURIComponent(publicMovieMatch[1]);
-    // Users receive the same static-first document as crawlers. React reads
-    // its embedded bootstrap and refreshes episodes in the background, so a
-    // slow catalogue API can no longer replace useful movie information with
-    // a multi-second skeleton or a false 404.
+    // The verified static document is authoritative for both users and
+    // Googlebot. This prevents an old dynamic profile/audit cache from
+    // reintroducing noindex while a new SEO release is being confirmed.
+    // React refreshes playback separately; the SEO page does not need it.
     const staticMovieDocument = await getStaticMovieDocument(context, request, slug);
     if (staticMovieDocument) return staticMovieDocument;
   }
@@ -5641,9 +5646,9 @@ export async function onRequest(context) {
       // Cloudflare rebuild or a global cache purge.
       const profileLookup = await fetchPublishedMovieSeoProfile(slug);
       if (profileLookup.profile) {
-        const profileVersion = String(
-          profileLookup.profile.version || profileLookup.profile.updated_at || Date.now(),
-        ).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 100);
+        const profileVersion = `${String(profileLookup.profile.version || '0')}-${String(
+          profileLookup.profile.live_audit?.checked_at || profileLookup.profile.updated_at || Date.now(),
+        )}`.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 100);
         const profileCacheKey = new Request(`${SITE_URL}/__seo-studio-prerender/${profileVersion}/phim/${encodeURIComponent(slug)}`, { method: 'GET' });
         const profileStaleKey = new Request(`${SITE_URL}/__seo-studio-prerender-stale/${profileVersion}/phim/${encodeURIComponent(slug)}`, { method: 'GET' });
         const cachedProfileResponse = await getCachedPrerender(profileCacheKey, request);

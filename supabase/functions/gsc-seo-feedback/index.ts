@@ -421,14 +421,20 @@ Deno.serve(async (req) => {
     const staleBefore = Date.now()-72*3600000;
     const [
       {data:eligible,error:candidateError},
+      {data:publishedProfiles,error:publishedProfilesError},
       {data:known,error:knownError},
       {data:hotCandidates,error:hotCandidateError},
     ] = await Promise.all([
       supabase.from('movie_seo_quality_status').select('movie_id,slug,movie_updated_at,index_tier,quality_score,freshness_score,last_episode_change_at,content_length,movies!inner(id,slug,is_published,superseded_by_movie_id,tmdb_id,actor,director,category,country,year,trailer_url)').eq('eligible_for_index',true).in('index_tier',['ongoing','playable','upcoming']).gte('quality_score',85).gte('content_length',350).eq('movies.is_published',true).is('movies.superseded_by_movie_id',null).order('quality_score',{ascending:false}).order('movie_updated_at',{ascending:false}).limit(1500),
+      // A manually published SEO profile is a deliberate editorial decision.
+      // Keep it in the automatic inspection loop even if enrichment fields
+      // (for example TMDB cast data) are still incomplete.
+      supabase.from('movie_seo_profiles').select('movie_id,slug,validation_score,published_at,updated_at,movies!inner(id,slug,superseded_by_movie_id)').eq('status','published').eq('index_mode','index').gte('validation_score',85).eq('live_audit->>passed','true').is('movies.superseded_by_movie_id',null).order('updated_at',{ascending:false}).limit(500),
       supabase.from('seo_url_inspections').select('url,inspected_at').order('inspected_at',{ascending:true}).limit(5000),
       supabase.from('seo_hot_movie_candidates').select('matched_slug,demand_score').eq('active',true).gt('expires_at',new Date().toISOString()).not('matched_slug','is',null).order('demand_score',{ascending:false}).limit(100),
     ]);
     if (candidateError) throw candidateError;
+    if (publishedProfilesError) throw publishedProfilesError;
     if (knownError) throw knownError;
     if (hotCandidateError) throw hotCandidateError;
     const inspectedAt = new Map((known || []).map(item=>[String(item.url),Date.parse(String(item.inspected_at || '')) || 0]));
@@ -438,7 +444,7 @@ Deno.serve(async (req) => {
       if (!slug) continue;
       hotDemandBySlug.set(slug,Math.max(hotDemandBySlug.get(slug) || 0,Number(candidate.demand_score || 0)));
     }
-    const candidateRows = (eligible || [])
+    const qualityCandidates = (eligible || [])
       .flatMap(item=>{
         const nested = Array.isArray(item.movies) ? item.movies[0] : item.movies;
         const movie = nested && typeof nested === 'object' ? nested as Record<string,unknown> : null;
@@ -468,16 +474,59 @@ Deno.serve(async (req) => {
           updatedAt:Date.parse(String(item.movie_updated_at || '')) || 0,
           requestedRank,
           hotDemand:hotDemandBySlug.get(slug) || 0,
+          profilePriority:false,
         }];
-      })
+      });
+    const profileCandidates = (publishedProfiles || []).flatMap(item=>{
+      const nested = Array.isArray(item.movies) ? item.movies[0] : item.movies;
+      const movie = nested && typeof nested === 'object' ? nested as Record<string,unknown> : null;
+      const slug = String(movie?.slug || item.slug || '').trim();
+      if (!slug) return [];
+      return [{
+        id:String(item.movie_id),
+        slug,
+        // Published profiles are canonical watch pages, never a separate
+        // trailer-only destination. The priority affects inspection only.
+        tier:'playable',
+        score:Number(item.validation_score || 0),
+        freshness:100,
+        episodeChangedAt:0,
+        // A profile edit is newer evidence than its first publication date.
+        // Using published_at first caused refreshed profiles to be skipped
+        // unless they were one of the five explicitly requested slugs.
+        updatedAt:Date.parse(String(item.updated_at || item.published_at || '')) || 0,
+        requestedRank:requestedInspectionRank.get(slug) || 0,
+        hotDemand:hotDemandBySlug.get(slug) || 0,
+        profilePriority:true,
+      }];
+    });
+    const mergedCandidates = new Map<string,typeof qualityCandidates[number]>();
+    for (const candidate of [...qualityCandidates,...profileCandidates]) {
+      const current = mergedCandidates.get(candidate.slug);
+      if (!current) {
+        mergedCandidates.set(candidate.slug,candidate);
+        continue;
+      }
+      mergedCandidates.set(candidate.slug,{
+        ...current,
+        ...candidate,
+        requestedRank:Math.max(current.requestedRank,candidate.requestedRank),
+        hotDemand:Math.max(current.hotDemand,candidate.hotDemand),
+        profilePriority:current.profilePriority || candidate.profilePriority,
+        updatedAt:Math.max(current.updatedAt,candidate.updatedAt),
+      });
+    }
+    const candidateRows = [...mergedCandidates.values()]
       .filter(item=>{
         if (item.requestedRank > 0) return true;
         const lastInspection = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(item.slug)}`) || 0;
+        if (item.profilePriority) return lastInspection < staleBefore || item.updatedAt > lastInspection;
         if (lastInspection < staleBefore) return true;
         return item.tier === 'ongoing' && item.episodeChangedAt > lastInspection;
       })
       .sort((a,b)=>{
         if (a.requestedRank !== b.requestedRank) return b.requestedRank - a.requestedRank;
+        if (a.profilePriority !== b.profilePriority) return Number(b.profilePriority) - Number(a.profilePriority);
         const lastA = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(a.slug)}`) || 0;
         const lastB = inspectedAt.get(`${SITE_URL}/phim/${encodeURIComponent(b.slug)}`) || 0;
         const ongoingChangeA = Number(a.tier === 'ongoing' && a.episodeChangedAt > lastA);
@@ -522,6 +571,12 @@ Deno.serve(async (req) => {
         query_pages_collected:queryPageMetrics.length,
         seo_brain:brainResult || null,
         seo_brain_error:brainError?.message || null,
+        candidate_counts:{
+          quality:qualityCandidates.length,
+          published_profiles:profileCandidates.length,
+          merged:mergedCandidates.size,
+          selected:candidateRows.length,
+        },
       },
     }).eq('id',run.id);
     return json({
@@ -538,6 +593,12 @@ Deno.serve(async (req) => {
       ga4_error:ga4Error || null,
       analytics_errors:analyticsErrors.slice(0,4),
       inspection_errors:inspectionErrors.slice(0,10),
+      candidate_counts:{
+        quality:qualityCandidates.length,
+        published_profiles:profileCandidates.length,
+        merged:mergedCandidates.size,
+        selected:candidateRows.length,
+      },
       seo_brain:brainResult || null,
       seo_brain_error:brainError?.message || null,
     },success ? 200 : 502,headers);

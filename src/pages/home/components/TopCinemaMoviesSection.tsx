@@ -7,7 +7,6 @@ import type { MovieItem } from '../../../types/movie';
 import { HOME_POSTER_ITEM_CLASS } from './homePosterSizing';
 import { useImageFallback } from '../../../hooks/useImageFallback';
 import { movieDetailUrl } from '../../../utils/slugEncoder';
-import MobileSwipeHint from './MobileSwipeHint';
 
 function timeAgo(dateStr: string): string {
   if (!dateStr) return '';
@@ -88,8 +87,9 @@ export default function VietnamMoviesSection({ fallbackMovies = EMPTY_VIETNAM_MO
   const scrollFrameRef = useRef<number | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const visibleMovies = movies.slice(0, isDesktop ? 20 : 10);
+  const visibleMovies = movies.slice(0, isDesktop ? 20 : mobileExpanded ? 9 : 6);
 
   /* ── Dedicated, server-proxied KKPhim Vietnam feed ── */
   useEffect(() => {
@@ -181,7 +181,6 @@ export default function VietnamMoviesSection({ fallbackMovies = EMPTY_VIETNAM_MO
 
       {/* ── Slider ── */}
       <div className="home-rail-frame relative group/slider">
-        <MobileSwipeHint visible={canScrollRight} />
         {/* Prev */}
         <button
           onClick={() => scroll('left')}
@@ -225,7 +224,7 @@ export default function VietnamMoviesSection({ fallbackMovies = EMPTY_VIETNAM_MO
         <div
           ref={sliderRef}
           aria-label="Danh sách phim Việt Nam mới cập nhật, vuốt ngang để xem thêm"
-          className="home-rail-scroll flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-smooth pb-8 pt-2 px-0.5 md:gap-3 lg:gap-4 xl:gap-5"
+          className="home-rail-scroll kp-vietnam-grid flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-smooth pb-8 pt-2 px-0.5 md:gap-3 lg:gap-4 xl:gap-5"
           style={{ scrollbarWidth: 'none' }}
         >
           {visibleMovies.map((movie, index) => (
@@ -237,6 +236,12 @@ export default function VietnamMoviesSection({ fallbackMovies = EMPTY_VIETNAM_MO
           ))}
         </div>
       </div>
+      {!isDesktop && movies.length > 6 && (
+        <button type="button" className="kp-pocket-more md:hidden" onClick={() => setMobileExpanded((value) => !value)} aria-expanded={mobileExpanded}>
+          {mobileExpanded ? 'Thu gọn' : `Xem thêm ${Math.min(3, movies.length - 6)} phim Việt`}
+          <i className={mobileExpanded ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
@@ -439,7 +444,7 @@ function SectionHeader({ count = 0 }: { count?: number }) {
           <span className="text-[10px] text-white/30 -mt-0.5">Phim Việt Nam mới cập nhật, dữ liệu trực tiếp từ KKPhim</span>
         </div>
         <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full uppercase tracking-wide">
-          Top {count}
+          {count} phim
         </span>
         <span className="flex items-center gap-1 text-[10px] text-green-400">
           <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMoviesByType } from '../../../hooks/useMovies';
 import { getFeaturedUrl, getPosterUrl } from '../../../services/movieApi';
@@ -31,26 +31,20 @@ export default function TrailerMoviesSection() {
 function TrailerContent() {
   const { movies, loading } = useMoviesByType('phim-sap-chieu', 1, 1, 'modified.time');
 
+  const trailerMovies = useMemo(
+    () => movies.filter(isVerifiedTrailerMovie).slice(0, 14),
+    [movies],
+  );
+
   useEffect(() => {
-    if (movies.length > 0) {
-      preloadMoviePosters(movies.slice(0, 14), getFeaturedUrl, {
+    if (trailerMovies.length > 0) {
+      preloadMoviePosters(trailerMovies, getFeaturedUrl, {
         batchSize: 4,
         delayBetweenBatches: 300,
         delayBetweenImages: 30,
       });
     }
-  }, [movies]);
-
-  /* Ưu tiên phim "Trailer" / đang cập nhật lên trước */
-  const trailerMovies = [...movies]
-    .sort((a, b) => {
-      const aIsTrailer = isTrailer(a.episode_current);
-      const bIsTrailer = isTrailer(b.episode_current);
-      if (aIsTrailer && !bIsTrailer) return -1;
-      if (!aIsTrailer && bIsTrailer) return 1;
-      return 0;
-    })
-    .slice(0, 14);
+  }, [trailerMovies]);
 
   if (loading) return <SectionSkeleton />;
   if (trailerMovies.length === 0) return null;
@@ -63,11 +57,11 @@ function TrailerContent() {
           <div className="w-1 h-5 bg-orange-500 rounded-full" />
           <h3 className="text-base md:text-lg font-bold gradient-heading-warm flex items-center gap-2 truncate">
             <i className="ri-film-line text-orange-400" />
-            Phim Đang Cập Nhật – Chỉ Có Trailer
+            Trailer Mới & Phim Sắp Chiếu
           </h3>
           <span className="hidden sm:flex items-center gap-1 text-[10px] font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full uppercase">
             <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse inline-block" />
-            Sắp Ra Mắt
+            Trailer Chính Thức
           </span>
         </div>
         <Link
@@ -96,15 +90,22 @@ function TrailerContent() {
   );
 }
 
-function isTrailer(ep?: string): boolean {
-  if (!ep) return true;
-  const s = ep.toLowerCase().trim();
-  return s === 'trailer' || s === '' || s === 'đang cập nhật';
+function hasOfficialYouTubeTrailer(value?: string): boolean {
+  const url = String(value ?? '').trim();
+  return /^https:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?[^#\s]*v=|embed\/|shorts\/)|youtu\.be\/)[A-Za-z0-9_?&=./%-]+/i.test(url);
 }
 
-function getHotScore(rank: number): string {
-  const scores = [9.8, 9.6, 9.5, 9.3, 9.1, 8.9, 8.7, 8.5, 8.3, 8.1, 7.9, 7.7, 7.5, 7.3];
-  return (scores[rank] ?? 7.0).toFixed(1);
+function hasPlayableEpisodeLabel(movie: Movie): boolean {
+  const label = `${movie.episode_current ?? ''} ${movie.status ?? ''}`.toLowerCase();
+  if (Number(movie.current_episode ?? 0) > 0) return true;
+  if (/(hoàn tất|hoan tat|tập\s*\d+|tap\s*\d+|\d+\s*\/\s*\d+)/i.test(label)) return true;
+  return false;
+}
+
+function isVerifiedTrailerMovie(movie: Movie): boolean {
+  const lifecycle = `${movie.episode_current ?? ''} ${movie.status ?? ''} ${movie.schedule_type ?? ''}`.toLowerCase();
+  const isTrailerOnly = /(trailer|teaser|sắp chiếu|sap chieu|upcoming)/i.test(lifecycle);
+  return isTrailerOnly && !hasPlayableEpisodeLabel(movie) && hasOfficialYouTubeTrailer(movie.trailer_url);
 }
 
 interface TrailerCardProps { movie: Movie; rank: number }
@@ -204,10 +205,10 @@ function TrailerCard({ movie, rank }: TrailerCardProps) {
           </div>
         </div>
 
-        {/* Hot score bottom-right */}
+        {/* Official trailer badge bottom-right */}
         <div className="absolute bottom-2 right-2 z-[12]">
-          <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-400 bg-black/70 px-1.5 py-0.5 rounded-md">
-            <i className="ri-fire-fill text-[9px]" /> {getHotScore(rank - 1)}
+          <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-300 bg-black/70 px-1.5 py-0.5 rounded-md">
+            <i className="ri-youtube-fill text-[9px]" /> Official
           </span>
         </div>
 

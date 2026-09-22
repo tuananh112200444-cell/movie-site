@@ -42,13 +42,21 @@ requireText('src/pages/admin-seo-studio/page.tsx', "requestedTask === 'fix_techn
 
 requireText('supabase/functions/admin-seo-studio/index.ts', "status: 'completed'", 'successful publishing does not complete the work item');
 requireText('supabase/functions/admin-seo-studio/index.ts', "from('seo_static_release_requests')", 'publishing does not request a static artifact refresh');
+requireText('supabase/functions/seo-static-release/index.ts', 'queueGoogleCoverageCheck', 'a verified static SEO publication does not automatically start the Google coverage evidence loop');
+requireText('supabase/functions/seo-static-release/index.ts', 'confirmedSlugs', 'Google coverage feedback is not limited to a wall-clock guess before the Pages deployment is actually verified');
+if (files['supabase/functions/seo-static-release/index.ts'].includes("db.rpc('movie_has_usable_persisted_playback'")) {
+  failures.push('Static SEO publication is still blocked by the separate playback system.');
+}
+requireText('supabase/functions/seo-static-release/index.ts', 'automatic_retry_count', 'static SEO releases do not have a bounded automatic retry policy');
+requireText('supabase/functions/seo-static-release/index.ts', 'next_retry_at', 'static SEO retries do not use bounded exponential backoff');
+requireText('supabase/functions/seo-static-release/index.ts', 'processingAge >= 2 * 60_000', 'static verification depends entirely on a release manifest that may be hidden by edge caching');
 requireText('supabase/functions/seo-static-release/index.ts', 'validDeployHook', 'static release processor accepts arbitrary webhook destinations');
 requireText('supabase/functions/seo-static-release/index.ts', 'SITE_RELEASE_URL', 'static release processor cannot confirm production deployment');
 requireText('supabase/functions/seo-static-release/index.ts', "action: 'awaiting_deploy_hook'", 'missing deploy-hook configuration does not fail safely');
 requireText('supabase/functions/admin-seo-studio/index.ts', "status: 'queued-static'", 'free publish mode does not queue a static Pages release');
 requireText('supabase/functions/admin-seo-studio/index.ts', "mode: 'static-build-pending'", 'static profiles are not marked as pending build verification');
 requireText('supabase/functions/seo-static-release/index.ts', 'verifyStaticPublication', 'static deploy completion is trusted without verifying public HTML and sitemap');
-requireText('supabase/functions/seo-static-release/index.ts', ".limit(mode === 'urgent' ? 10 : 50)", 'pending SEO pages are not batched into one free Pages build');
+requireText('supabase/functions/seo-static-release/index.ts', '.limit(50)', 'pending SEO pages are not batched into one free Pages build');
 requireText('supabase/functions/seo-static-release/index.ts', 'public_sitemap_membership', 'static release does not persist the public sitemap evidence used by SEO Studio');
 requireText('supabase/functions/seo-static-release/index.ts', 'explicitProfileRelease', 'generic radar rebuilds and versioned SEO publishes are not verified separately');
 requireText('supabase/functions/seo-static-release/index.ts', 'VERIFICATION_TIMEOUT_MS', 'a failed public verification can remain processing forever');

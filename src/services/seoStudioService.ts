@@ -251,15 +251,31 @@ export interface SeoAiSuggestionResult {
   summary: string;
   proposed_payload: SeoStudioPayload;
   validation: SeoValidationResult;
-  changed_fields: SeoAiEvidence['field'][];
+  changed_fields: string[];
   evidence: SeoAiEvidence[];
   warnings: string[];
+  completion?: {
+    complete: boolean;
+    repaired_in_second_pass: boolean;
+    remaining_issues: SeoValidationIssue[];
+    ai_fixable_remaining: string[];
+    requires_data_enrichment: string[];
+    limitations: string[];
+  };
+  fact_enrichment?: {
+    patch: Partial<SeoMoviePatch> & { content?: string; tmdb_id?: number; tmdb_media_type?: 'movie' | 'tv' };
+    verified_fields: string[];
+    unresolved_fields: string[];
+    sources: string[];
+    tmdb_status: 'verified' | 'not_configured' | 'not_matched' | 'not_needed' | 'error';
+    message: string;
+  };
   preserved_fields: string[];
   generated_at: string;
 }
 
-export function suggestSeoDraft(movieId: string, slug: string, mode: 'quick' | 'deep'): Promise<SeoAiSuggestionResult> {
-  return callAdmin<SeoAiSuggestionResult>('suggest', { movie_id: movieId, slug, mode });
+export function suggestSeoDraft(movieId: string, slug: string, mode: 'quick' | 'deep', payload?: SeoStudioPayload): Promise<SeoAiSuggestionResult> {
+  return callAdmin<SeoAiSuggestionResult>('suggest', { movie_id: movieId, slug, mode, payload });
 }
 
 export function saveSeoDraft(payload: SeoStudioPayload, safeEdit: { baseline_version: number; unlocked_fields: string[] }): Promise<{ success: boolean; status: SeoProfileStatus; validation: SeoValidationResult; published_profile_unchanged?: boolean }> {

@@ -1,5 +1,6 @@
 ﻿import { Link } from 'react-router-dom';
 import MovieCard from '../../../components/base/MovieCard';
+import { useState } from 'react';
 import type { Movie } from '../../../types/movie';
 import { useScrollReveal } from '../../../hooks/useScrollReveal';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
@@ -18,6 +19,7 @@ interface MovieSectionProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   prioritizeFirstRow?: boolean;
+  mobileLayout?: 'grid' | 'rail';
   /** Visual theme â€” each section gets a unique look */
   theme?:
     | 'cinematic'
@@ -279,8 +281,10 @@ export default function MovieSection({
   cols = 6,
   rows = 1,
   prioritizeFirstRow = false,
+  mobileLayout = 'grid',
   theme = 'cinematic',
 }: MovieSectionProps) {
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const sectionRef = useScrollReveal<HTMLElement>();
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const t = getTheme(theme);
@@ -289,6 +293,9 @@ export default function MovieSection({
   // LazyMovieSection has already applied the section's explicit limit. Do not
   // silently reduce a requested 15–18 card desktop shelf to twelve items.
   const displayMovies = movies;
+  const mobileMovies = mobileLayout === 'rail'
+    ? displayMovies.slice(0, 12)
+    : displayMovies.slice(0, mobileExpanded ? 9 : 6);
 
   if (loading && movies.length === 0) {
     return (
@@ -302,7 +309,7 @@ export default function MovieSection({
           <div className="h-8 w-20 skeleton rounded-md flex-shrink-0" />
         </div>
         {!isDesktop ? (
-          <div className="movie-section-mobile-grid grid grid-cols-2 gap-x-2.5 gap-y-4 pb-2 sm:grid-cols-3 md:hidden">
+          <div className="movie-section-mobile-grid kp-pocket-grid grid grid-cols-2 gap-x-2.5 gap-y-4 pb-2 sm:grid-cols-3 md:hidden">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i}>
                 <div className="aspect-[2/3] skeleton rounded-lg" />
@@ -397,7 +404,7 @@ export default function MovieSection({
       </div>
 
       {/* Anime gets an editorial mosaic instead of another identical poster shelf. */}
-      {theme === 'anime' ? (
+      {theme === 'anime' && isDesktop ? (
         <div className="anime-editorial-mosaic relative overflow-hidden rounded-2xl border border-sky-400/15 bg-[radial-gradient(circle_at_10%_0%,rgba(56,189,248,0.13),transparent_34%),linear-gradient(135deg,rgba(14,24,43,0.96),rgba(8,10,16,0.96))] p-2.5 shadow-[0_28px_80px_-60px_rgba(56,189,248,0.9)] md:p-4">
           <div className="pointer-events-none absolute right-3 top-1 text-[44px] font-black tracking-[-0.08em] text-white/[0.025] md:text-[84px]">
             ANIME
@@ -423,8 +430,12 @@ export default function MovieSection({
           )}
         </div>
       ) : !isDesktop ? (
-        <div className="movie-section-mobile-grid grid grid-cols-2 gap-x-2.5 gap-y-[1.125rem] pb-2 sm:grid-cols-3 md:hidden">
-          {displayMovies.slice(0, 6).map((movie, index) => (
+        <>
+        <div
+          className={`movie-section-mobile-grid kp-pocket-${mobileLayout} grid grid-cols-2 gap-x-2.5 gap-y-[1.125rem] pb-2 sm:grid-cols-3 md:hidden`}
+          aria-label={`${title}: ${mobileMovies.length} phim`}
+        >
+          {mobileMovies.map((movie, index) => (
             <div
               key={`${movie._id}-mobile-${index}`}
               className="min-w-0"
@@ -437,6 +448,21 @@ export default function MovieSection({
             </div>
           ))}
         </div>
+        {mobileLayout === 'grid' && displayMovies.length > 6 && (
+          <button
+            type="button"
+            className="kp-pocket-more md:hidden"
+            onClick={() => setMobileExpanded((value) => !value)}
+            aria-expanded={mobileExpanded}
+          >
+            <span>{mobileExpanded ? 'Thu gọn' : `Xem thêm ${Math.min(3, displayMovies.length - 6)} phim`}</span>
+            <i className={mobileExpanded ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} aria-hidden="true" />
+          </button>
+        )}
+        {mobileLayout === 'rail' && displayMovies.length > 3 && (
+          <p className="kp-pocket-swipe md:hidden">Vuốt ngang để khám phá thêm <i className="ri-arrow-right-line" aria-hidden="true" /></p>
+        )}
+        </>
       ) : (
         <div
           className="movie-section-desktop-grid reveal hidden gap-x-4 gap-y-7 pb-8 pt-2.5 md:grid lg:gap-x-5 lg:gap-y-8"

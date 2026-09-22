@@ -13,6 +13,7 @@ const checks = [
   ['legacy source discovery stays bounded and series-only', /\['phim-bo', 'series', 'tvshows', 'hoathinh'\][\s\S]{0,400}\.slice\(0, cappedLimit\)/],
   ['exactly resolved legacy series cannot starve behind current-source rows', /legacyResolvedIds\.add\(item\.movie\.id\)[\s\S]{0,700}legacyResolvedIds\.has\(movie\.movie\.id\) \? 20000 : 0/],
   ['legacy discovery falls back from disabled AJAX to HTML search', /searchUrl\.searchParams\.set\('s', keywords\[0\]\)[\s\S]{0,180}parseWordPressMovieUrlsFromHtml/],
+  ['unrelated pages are treated as permanent source drift', /returned non-BLVietsub content/],
   ['legacy mapping accepts only exact historical or title slug', /getLegacyBlvietsubSlug[\s\S]{0,1600}exactSlugKeys\.has\(candidateSlug\)/],
   ['repair updates numeric total and display total together', /update\.episode_total = `\$\{mergedTotal\} Tập`[\s\S]{0,160}update\.total_episodes = mergedTotal/],
   ['WordPress root movie URLs are supported', /parts\[0\]\?\.toLowerCase\(\) === 'phim' \? parts\[1\] : parts\.length === 1 \? parts\[0\]/],

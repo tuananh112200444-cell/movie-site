@@ -189,6 +189,41 @@ Deno.serve(async (req) => {
     decodeURIComponent(slug),
   ].filter(Boolean)));
 
+  // The SEO publication decision belongs to the approved profile, not to
+  // the playback catalogue. A movie may be hidden from watch lists while its
+  // information page remains published and indexable.
+  for (const variant of variants) {
+    const { data: profile, error: profileError } = await supabase
+      .from('movie_seo_profiles')
+      .select('movie_id,validation_score')
+      .eq('slug', variant)
+      .eq('status', 'published')
+      .eq('index_mode', 'index')
+      .eq('live_audit->>passed', 'true')
+      .gte('validation_score', 85)
+      .maybeSingle();
+    if (profileError) return json({ status: false, message: profileError.message }, 503);
+    if (!profile) continue;
+    const { data: approvedMovie, error: movieError } = await supabase
+      .from('movies')
+      .select(MOVIE_FIELDS)
+      .eq('id', profile.movie_id)
+      .is('superseded_by_movie_id', null)
+      .maybeSingle();
+    if (movieError) return json({ status: false, message: movieError.message }, 503);
+    if (approvedMovie?.slug) {
+      return json({
+        status: true,
+        movie: {
+          ...approvedMovie,
+          seo_eligible_for_index: true,
+          seo_index_tier: 'editorial',
+          seo_quality_score: Number(profile.validation_score || 0),
+        },
+      });
+    }
+  }
+
   // Every sitemap movie already has a row in movie_seo_quality_status. Read
   // the movie and its persisted SEO decision in one joined request. The old
   // path required one movie lookup plus three extra episode/quality queries,

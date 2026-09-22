@@ -72,7 +72,7 @@ function MobileMovieInfo({ movie }: { movie: MovieDetail }) {
   if (!items.length) return null;
 
   return (
-    <div className="sm:hidden bg-white/[0.03] border border-white/[0.06] rounded-xl mb-2 overflow-hidden">
+    <div className="mobile-movie-info sm:hidden bg-white/[0.03] border border-white/[0.06] rounded-xl mb-2 overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2">
         {items.slice(0, 2).map((it, i) => (
           <div key={i} className="flex items-center gap-1 text-[10px] text-white/40 truncate">
@@ -364,7 +364,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
         noIndex={noIndex}
       />
 
-      <div className="movie-detail-hero relative pt-16">
+      <div className="movie-detail-hero relative pt-3 sm:pt-8">
         <div className="movie-detail-backdrop absolute inset-x-0 top-0 overflow-hidden h-[290px] sm:h-[430px] md:h-[520px]">
           <img
             src={thumb}
@@ -380,9 +380,9 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
           <div className="absolute inset-0 bg-gradient-to-b from-[#090b12]/30 via-[#0b0e16]/75 to-[#090c13]" />
         </div>
 
-        <div className="relative max-w-[1760px] mx-auto px-3 sm:px-4 pt-8 sm:pt-16 pb-5 sm:pb-10">
+        <div className="movie-detail-hero-inner relative max-w-[1760px] mx-auto px-3 sm:px-4 pt-3 sm:pt-10 pb-4 sm:pb-8">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-1.5 mb-3 sm:mb-4 flex-wrap">
+          <div className="movie-detail-breadcrumb flex items-center gap-1.5 mb-3 sm:mb-4 flex-wrap">
             <Link to="/" className="text-white/30 text-xs hover:text-white/60">Trang chủ</Link>
             <i className="ri-arrow-right-s-line text-white/20 text-xs" />
             {movie.category?.[0] && (
@@ -396,7 +396,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
 
           <div className="movie-detail-hero-card flex flex-row gap-3 sm:gap-8 rounded-2xl sm:rounded-[28px] border border-white/[0.08] bg-[#0b0f18]/75 p-3 sm:p-6 backdrop-blur-md">
             {/* Poster */}
-            <div className="flex-shrink-0">
+            <div className="movie-detail-poster-column flex-shrink-0">
               <div className="relative w-24 sm:w-40 md:w-52 rounded-xl sm:rounded-2xl overflow-hidden bg-[#1a1d27] shadow-2xl shadow-black/50 ring-1 ring-white/10" style={{ aspectRatio: '2/3' }}>
                 <img
                   src={posterFallback.currentSrc || poster}
@@ -442,7 +442,8 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
             </div>
 
             {/* Info */}
-            <div className="flex-1 min-w-0">
+            <div className="movie-detail-info flex-1 min-w-0">
+              <div className="movie-detail-summary">
               <h1 className="text-white font-black text-lg sm:text-3xl md:text-4xl leading-tight mb-0.5 sm:mb-1 line-clamp-2 sm:line-clamp-none tracking-[-0.025em]">{displayTitle}</h1>
               {displayOrigin && <p className="text-white/55 text-xs sm:text-sm mb-2 sm:mb-3 line-clamp-1">{displayOrigin}</p>}
               {displayChinese && displayChinese !== displayTitle && displayChinese !== displayOrigin && (
@@ -478,6 +479,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
               <MovieCountdown movie={movie} variant="hero" />
 
               <MobileMovieInfo movie={movie} />
+              </div>
 
               {/* Desktop info */}
               <div className="hidden sm:grid grid-cols-2 gap-x-6 gap-y-1.5 mb-3 text-sm">
@@ -523,7 +525,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
               </div>
 
               {cleanContent && (
-                <div className="mt-1 sm:mt-2">
+                <div className="movie-detail-description mt-1 sm:mt-2">
                   <p className={`text-white/70 text-xs sm:text-sm leading-[1.7] sm:leading-relaxed ${showDesc ? '' : 'line-clamp-3'}`}>{cleanContent}</p>
                   {cleanContent.length > 150 && (
                     <button onClick={() => setShowDesc((v) => !v)}
@@ -535,7 +537,7 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
                 </div>
               )}
 
-              <div className="mt-3 sm:mt-4 pt-3 border-t border-white/[0.06]">
+              <div className="movie-detail-social mt-3 sm:mt-4 pt-3 border-t border-white/[0.06]">
                 <SocialShare title={displayTitle} url={`${SITE_URL}/phim/${slug}`} />
               </div>
             </div>

@@ -259,7 +259,7 @@ test('player: nguồn trang bị chặn tự chuyển sang nguồn phát đượ
 
 test('player: khôi phục tiến độ xem sau khi mở lại trang', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('kp_resume_v1', JSON.stringify({
-    'e2e-player__tap-1': { time: 125, duration: 500, savedAt: Date.now() },
+    'e2e-player__tap-1': { time: 125, duration: 500, savedAt: Date.now() - 2 * 60 * 60 * 1000 },
   })));
   await mockMovieDetail(page, e2eMovie([
     { server_name: 'KhoPhim', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media.example.test/good.mp4' }] },
@@ -278,10 +278,30 @@ test('player: khôi phục tiến độ xem sau khi mở lại trang', async ({ 
   await expect.poll(() => video.evaluate((element) => Math.round((element as HTMLVideoElement).currentTime))).toBe(125);
 });
 
+test('player: tab vừa tải lại tự khôi phục checkpoint gần nhất', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('kp_resume_v1', JSON.stringify({
+    'e2e-player__tap-1': { time: 42, duration: 1800, savedAt: Date.now() },
+  })));
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'KhoPhim', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media.example.test/good.mp4' }] },
+  ]));
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+  const video = page.locator('video').first();
+  await expect(video).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('Tiếp tục xem dở')).toHaveCount(0);
+  await expect(video).toHaveAttribute('data-resume-at', '42');
+  await video.evaluate((element) => {
+    const media = element as HTMLVideoElement;
+    Object.defineProperty(media, 'duration', { configurable: true, value: 1800 });
+    media.dispatchEvent(new Event('loadedmetadata'));
+  });
+  await expect.poll(() => video.evaluate((element) => Math.round((element as HTMLVideoElement).currentTime))).toBe(42);
+});
+
 test('player: đổi nguồn giữa phim giữ nguyên thời gian đang xem', async ({ page }) => {
   await mockMovieDetail(page, e2eMovie([
-    { server_name: 'Nguồn A', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media.example.test/a.mp4' }] },
-    { server_name: 'Nguồn B', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media.example.test/b.mp4' }] },
+    { server_name: 'Nguồn A', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media-a.example.test/a.mp4' }] },
+    { server_name: 'Nguồn B', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media-b.example.test/b.mp4' }] },
   ]));
   await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
   const firstVideo = page.locator('video').first();
@@ -297,11 +317,12 @@ test('player: đổi nguồn giữa phim giữ nguyên thời gian đang xem', a
     return Math.round(resume['e2e-player__tap-1']?.time || 0);
   })).toBe(180);
 
-  await page.getByRole('button', { name: 'Đổi nguồn', exact: false }).click();
+  const sourceToggle = page.getByRole('button', { name: 'Đổi nguồn', exact: false });
+  if (await sourceToggle.count()) await sourceToggle.click();
   const backupButton = page.getByRole('button', { name: 'Dự phòng 2, 1 tập', exact: true });
   await expect(backupButton).toBeVisible();
   await backupButton.click();
-  await expect(page.locator('video').first()).toHaveAttribute('src', /media\.example\.test\/b\.mp4/);
+  await expect(page.locator('video').first()).toHaveAttribute('src', /media-b\.example\.test\/b\.mp4/);
   await page.waitForTimeout(100);
   const switchedVideo = page.locator('video').first();
   await expect(switchedVideo).toHaveAttribute('data-resume-at', '180');

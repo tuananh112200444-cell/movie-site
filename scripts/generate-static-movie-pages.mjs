@@ -13,6 +13,13 @@ const UPCOMING_PAGE_LIMIT = 20;
 const MIN_EXPECTED_UPCOMING_MOVIES = 5;
 const BUILD_CACHE_BUSTER = Date.now().toString(36);
 
+function profileReadyForStaticBuild(profile) {
+  if (!profile || typeof profile !== 'object') return false;
+  return profile.status === 'published'
+    && profile.index_mode === 'index'
+    && Number(profile.validation_score || 0) >= 85;
+}
+
 async function loadDotEnv() {
   const text = await readFile('.env', 'utf8').catch(() => '');
   const values = {};
@@ -204,6 +211,9 @@ function renderMoviePage(movie, assetTags, options = {}) {
   const name = stripHtml(movie.name || movie.title_vi || movie.origin_name || slug.replace(/-/g, ' '));
   const originName = stripHtml(movie.origin_name || movie.title_original || movie.title_en || '');
   const isUpcoming = movie.seo_index_tier === 'upcoming';
+  // An editorial information page can be available before any verified video
+  // source. Do not claim a WatchAction or link to a dead player in static HTML.
+  const canAdvertiseWatch = !profile && !isUpcoming;
   const title = truncate(stripHtml(profile?.seo_title || '') || (isUpcoming
     ? `${name}${movie.year ? ` (${movie.year})` : ''} - Trailer & Thông Tin | KhoPhim`
     : `${name}${movie.year ? ` (${movie.year})` : ''} - Xem phim ${movie.lang || movie.quality || 'HD'} | KhoPhim`), 68);
@@ -268,7 +278,7 @@ function renderMoviePage(movie, assetTags, options = {}) {
     actor: actors.map((actor) => ({ '@type': 'Person', name: actor })),
     director: directors.map((director) => ({ '@type': 'Person', name: director })),
     inLanguage: 'vi-VN',
-    potentialAction: isUpcoming ? undefined : { '@type': 'WatchAction', target: watchUrl },
+    potentialAction: canAdvertiseWatch ? { '@type': 'WatchAction', target: watchUrl } : undefined,
   };
   const breadcrumbSchema = {
     '@context': 'https://schema.org',
@@ -295,7 +305,7 @@ function renderMoviePage(movie, assetTags, options = {}) {
     movie.year && `<span>Năm ${escapeHtml(movie.year)}</span>`,
     movie.quality && `<span>${escapeHtml(movie.quality)}</span>`,
     movie.lang && `<span>${escapeHtml(movie.lang)}</span>`,
-    !isUpcoming && movie.episode_current && `<span>${escapeHtml(movie.episode_current)}</span>`,
+    canAdvertiseWatch && movie.episode_current && `<span>${escapeHtml(movie.episode_current)}</span>`,
   ].filter(Boolean).join(' · ');
   const topicLinks = (Array.isArray(profile?.topic_links) ? profile.topic_links : [])
     .filter((item) => item?.url && item?.title)
@@ -350,10 +360,13 @@ function renderMoviePage(movie, assetTags, options = {}) {
         ${directors.length ? `<p>Đạo diễn: ${escapeHtml(directors.join(', '))}</p>` : ''}
         ${actors.length ? `<p>Diễn viên: ${escapeHtml(actors.join(', '))}</p>` : ''}
         ${isUpcoming && trailerEmbed ? `<section aria-labelledby="movie-trailer-heading"><h2 id="movie-trailer-heading">Trailer ${escapeHtml(name)}</h2><iframe src="${escapeHtml(trailerEmbed)}" title="Trailer ${escapeHtml(name)}" loading="lazy" width="720" height="405" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe><p>Nguồn phát đầy đủ chưa có. KhoPhim sẽ cập nhật ngay trên URL này khi phim chính thức phát hành.</p></section>` : ''}
+        ${profile && trailerEmbed ? `<section aria-labelledby="movie-trailer-heading"><h2 id="movie-trailer-heading">Trailer ${escapeHtml(name)}</h2><iframe src="${escapeHtml(trailerEmbed)}" title="Trailer ${escapeHtml(name)}" loading="lazy" width="720" height="405" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></section>` : ''}
         ${topicLinks ? `<nav aria-label="Bài viết liên quan"><h2>Khám phá thêm về ${escapeHtml(name)}</h2><ul>${topicLinks}</ul></nav>` : ''}
         ${reviewContent ? `<section aria-labelledby="movie-review-heading"><h2 id="movie-review-heading">Đánh giá ${escapeHtml(name)}</h2><p>${escapeHtml(reviewContent)}</p></section>` : ''}
         ${faqItems.length ? `<section><h2>Câu hỏi thường gặp về ${escapeHtml(name)}</h2>${faqItems.map((item) => `<h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p>`).join('')}</section>` : ''}
-        <p>${isUpcoming
+        <p>${profile
+          ? `Trang thông tin phim ${escapeHtml(name)} đã có trên KhoPhim.`
+          : isUpcoming
           ? `<a href="${escapeHtml(movie.trailer_url)}" rel="noopener noreferrer">Xem trailer ${escapeHtml(name)}</a>`
           : `<a href="/xem-phim/${encodeURIComponent(slug)}">Xem ${escapeHtml(name)}</a>`}</p>
         <div class="kp-static-clear"></div>
@@ -388,13 +401,14 @@ async function fetchCatalog({ cohort = 'playable', pageLimit = PAGE_LIMIT, fallb
   const seen = new Set();
   const seenContent = new Set();
   const requestPageSize = Math.min(API_PAGE_SIZE, pageLimit);
+  let expectedProfileCount = null;
 
   let edgeUnavailable = false;
   for (let offset = 0; items.length < pageLimit; offset += requestPageSize) {
     const url = new URL(`${supabaseUrl}/functions/v1/static-seo-catalog`);
     url.searchParams.set('offset', String(offset));
     url.searchParams.set('limit', String(requestPageSize));
-    if (cohort === 'upcoming') url.searchParams.set('cohort', 'upcoming');
+    if (cohort !== 'playable') url.searchParams.set('cohort', cohort);
     // A release must see movies that have just passed the SEO quality gate;
     // do not reuse the edge's stale catalogue snapshot from an earlier build.
     url.searchParams.set('build', BUILD_CACHE_BUSTER);
@@ -417,12 +431,15 @@ async function fetchCatalog({ cohort = 'playable', pageLimit = PAGE_LIMIT, fallb
       break;
     }
     const rows = Array.isArray(payload.items) ? payload.items : [];
+    if (cohort === 'profiles' && Number.isInteger(payload.total_profiles)) {
+      expectedProfileCount = payload.total_profiles;
+    }
     for (const movie of rows) {
       const slug = String(movie?.slug || '').trim();
       if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || seen.has(slug)) continue;
       const contentFingerprint = stripHtml(movie?.seo_profile?.intro_content || movie?.content || '')
         .toLocaleLowerCase('vi-VN');
-      if (!contentFingerprint || seenContent.has(contentFingerprint)) continue;
+      if (!contentFingerprint || (cohort !== 'profiles' && seenContent.has(contentFingerprint))) continue;
       seen.add(slug);
       seenContent.add(contentFingerprint);
       items.push(movie);
@@ -431,7 +448,12 @@ async function fetchCatalog({ cohort = 'playable', pageLimit = PAGE_LIMIT, fallb
     console.log(`[static-seo] fetched ${items.length}/${pageLimit} ${cohort} movies`);
     if (payload.has_more === false) break;
   }
-  if (!edgeUnavailable) return items;
+  if (!edgeUnavailable) {
+    if (cohort === 'profiles' && expectedProfileCount !== null && items.length !== expectedProfileCount) {
+      throw new Error(`Approved SEO profile mismatch: source ${expectedProfileCount}, static catalogue ${items.length}.`);
+    }
+    return items;
+  }
 
   console.warn('[static-seo] Edge catalogue unavailable; reading the linked database without changing it.');
   try {
@@ -452,6 +474,9 @@ async function fetchCatalog({ cohort = 'playable', pageLimit = PAGE_LIMIT, fallb
     if (start < 0 || end < start) throw new Error('Supabase CLI returned no JSON result.');
     const payload = JSON.parse(output.slice(start, end + 1));
     const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    const fallbackProfileCount = cohort === 'profiles'
+      ? Number(rows[0]?.seo_profile_total ?? rows.length)
+      : null;
     const deduplicated = [];
     const fallbackSeen = new Set();
     const fallbackSeenContent = new Set();
@@ -460,13 +485,16 @@ async function fetchCatalog({ cohort = 'playable', pageLimit = PAGE_LIMIT, fallb
       if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || fallbackSeen.has(slug)) continue;
       const contentFingerprint = stripHtml(movie?.seo_profile?.intro_content || movie?.content || '')
         .toLocaleLowerCase('vi-VN');
-      if (!contentFingerprint || fallbackSeenContent.has(contentFingerprint)) continue;
+      if (!contentFingerprint || (cohort !== 'profiles' && fallbackSeenContent.has(contentFingerprint))) continue;
       fallbackSeen.add(slug);
       fallbackSeenContent.add(contentFingerprint);
       deduplicated.push(movie);
       if (deduplicated.length >= pageLimit) break;
     }
     console.log(`[static-seo] linked database returned ${deduplicated.length} ${cohort} movies`);
+    if (cohort === 'profiles' && deduplicated.length !== fallbackProfileCount) {
+      throw new Error(`Approved SEO profile mismatch: linked database ${fallbackProfileCount}, static catalogue ${deduplicated.length}.`);
+    }
     return deduplicated;
   } catch (error) {
     throw new Error(`static-seo-catalog and linked database fallback both failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -507,7 +535,28 @@ if (!/type=["']module["']/.test(assetTags) || !/rel=["']stylesheet["']/.test(ass
   throw new Error('Built index is missing entry script or stylesheet tags.');
 }
 
-const movies = await fetchCatalog();
+const catalogueMovies = await fetchCatalog();
+const profileMovies = await fetchCatalog({
+  cohort: 'profiles',
+  pageLimit: Math.min(PAGE_LIMIT, 8_000),
+  fallbackFile: 'scripts/static-seo-profile-catalog-fallback.sql',
+});
+for (const movie of profileMovies) {
+  const profile = movie?.seo_profile;
+  if (!profileReadyForStaticBuild(profile)) {
+    throw new Error(`Approved SEO profile is incomplete in the static catalogue: ${String(movie?.slug || '(missing slug)')}.`);
+  }
+  const canonicalSlug = String(movie?.slug || '');
+  if (String(profile?.canonical_path || '') !== `/phim/${canonicalSlug}`) {
+    throw new Error(`Approved SEO profile has a mismatched canonical: ${canonicalSlug}.`);
+  }
+  if (!stripHtml(movie?.content || '') || !String(profile?.og_image_url || movie?.poster_url || movie?.thumb_url || '').trim()) {
+    throw new Error(`Approved SEO profile lacks indexable content or image: ${canonicalSlug}.`);
+  }
+}
+const movies = Array.from(new Map(
+  [...catalogueMovies, ...profileMovies].map((movie) => [String(movie.slug || ''), movie]),
+).values()).filter((movie) => movie?.slug);
 const rawUpcomingMovies = await fetchCatalog({
   cohort: 'upcoming',
   pageLimit: UPCOMING_PAGE_LIMIT,
@@ -616,9 +665,15 @@ const seoStudioMovies = Array.from(new Map(
   [...movies, ...upcomingMovies]
     .filter((movie) => movie?.seo_profile?.index_mode === 'index'
       && Number(movie?.seo_profile?.validation_score || 0) >= 85
-      && movie?.seo_profile?.live_audit?.passed === true)
+      && profileReadyForStaticBuild(movie?.seo_profile))
     .map((movie) => [String(movie.slug || ''), movie]),
 ).values()).filter((movie) => movie.slug);
+const expectedProfileSlugs = new Set(profileMovies.map((movie) => canonicalSlugFor(movie.slug)));
+const sitemapProfileSlugs = new Set(seoStudioMovies.map((movie) => canonicalSlugFor(movie.slug)));
+const missingSeoProfiles = [...expectedProfileSlugs].filter((slug) => !sitemapProfileSlugs.has(slug));
+if (missingSeoProfiles.length || sitemapProfileSlugs.size !== expectedProfileSlugs.size) {
+  throw new Error(`Approved SEO profile parity failed: ${missingSeoProfiles.join(', ') || 'unexpected extra sitemap URLs'}.`);
+}
 await writeFile(path.join('out', 'sitemap-seo-studio.xml'), sitemapXml(seoStudioMovies), 'utf8');
 
 const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>

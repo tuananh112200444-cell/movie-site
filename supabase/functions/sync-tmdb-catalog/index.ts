@@ -1,11 +1,17 @@
 ﻿import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY') ?? '';
 const TMDB_READ_ACCESS_TOKEN = Deno.env.get('TMDB_READ_ACCESS_TOKEN') ?? '';
-const CRON_SECRET = Deno.env.get('TMDB_CATALOG_SECRET') ?? Deno.env.get('CRON_SECRET') ?? Deno.env.get('SYNC_SECRET') ?? '';
+const SYNC_SECRETS = [
+  Deno.env.get('CRON_SECRET'),
+  Deno.env.get('TMDB_CATALOG_SECRET'),
+  Deno.env.get('VIETNAM_CINEMA_TRAILER_SECRET'),
+  Deno.env.get('SYNC_SECRET'),
+].filter((value): value is string => Boolean(value));
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
 const CORS_HEADERS = {
@@ -427,8 +433,8 @@ serve(async (req) => {
 
   const url = new URL(req.url);
   const providedSecret = url.searchParams.get('secret') || req.headers.get('x-sync-secret') || '';
-  if (!CRON_SECRET) return jsonResponse({ error: 'Sync authentication is not configured' }, 503);
-  if (providedSecret !== CRON_SECRET) return jsonResponse({ error: 'Unauthorized' }, 401);
+  if (SYNC_SECRETS.length === 0) return jsonResponse({ error: 'Sync authentication is not configured' }, 503);
+  if (!SYNC_SECRETS.includes(providedSecret)) return jsonResponse({ error: 'Unauthorized' }, 401);
 
   const startedAt = Date.now();
   const body = await req.json().catch(() => ({})) as Record<string, unknown>;

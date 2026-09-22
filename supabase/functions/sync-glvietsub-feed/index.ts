@@ -4,7 +4,8 @@ import { findCanonicalMovieByIdentity, retireSourceMovieDuplicate } from '../_sh
 import { resolveLocalizedMovieTitles } from '../_shared/tmdb-title-localization.ts';
 import { resolveSourceTitleFields } from '../../../scripts/source-title-localization.mjs';
 
-const BASE = 'https://www.glvietsub.net';
+const BASE = 'https://www.glvietsubz.net';
+const GLVIETSUB_HOST_PATTERN = '(?:www\\.)?glvietsub(?:z)?\\.net';
 const SOURCE = 'glvietsub';
 const TMDB_READ_ACCESS_TOKEN = Deno.env.get('TMDB_READ_ACCESS_TOKEN') || '';
 const CORS = {
@@ -79,8 +80,9 @@ async function fetchText(url: string, timeout = 18_000, init: RequestInit = {}) 
 function discoverDetailUrls(html: string, limit: number): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
-  for (const match of html.matchAll(/href=["'](https:\/\/www\.glvietsub\.net\/(?:phim-bo|phim-le)\/[^"'#?]+)["']/gi)) {
-    const value = decode(match[1]).replace(/\/$/, '');
+  const pattern = new RegExp(`href=["'](https:\\/\\/${GLVIETSUB_HOST_PATTERN}\\/(?:phim-bo|phim-le)\\/[^"'#?]+)["']`, 'gi');
+  for (const match of html.matchAll(pattern)) {
+    const value = canonicalGlvietsubUrl(match[1]);
     if (seen.has(value)) continue;
     seen.add(value);
     urls.push(value);
@@ -90,8 +92,19 @@ function discoverDetailUrls(html: string, limit: number): string[] {
 }
 
 function discoverSitemapUrls(xml: string): string[] {
-  return Array.from(xml.matchAll(/<loc>(https:\/\/www\.glvietsub\.net\/(?:phim-bo|phim-le)\/[^<]+)<\/loc>/gi))
-    .map((match) => decode(match[1]).replace(/\/$/, ''));
+  const pattern = new RegExp(`<loc>(https:\\/\\/${GLVIETSUB_HOST_PATTERN}\\/(?:phim-bo|phim-le)\\/[^<]+)<\\/loc>`, 'gi');
+  return Array.from(xml.matchAll(pattern)).map((match) => canonicalGlvietsubUrl(match[1]));
+}
+
+function canonicalGlvietsubUrl(value: string): string {
+  const decoded = decode(value).trim();
+  try {
+    const url = new URL(decoded, BASE);
+    if (/^(?:www\.)?glvietsub(?:z)?\.net$/i.test(url.hostname)) url.hostname = 'www.glvietsubz.net';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return decoded.replace(/\/$/, '');
+  }
 }
 
 function episodeLinks(html: string): Array<{
@@ -101,8 +114,9 @@ function episodeLinks(html: string): Array<{
     url: string; number: number; raw: boolean; special: boolean; label: string; slug: string;
   }> = [];
   const byUrl = new Map<string, typeof values[number]>();
-  for (const match of html.matchAll(/<a[^>]+href=["'](https:\/\/www\.glvietsub\.net\/xem-phim\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
-    const url = decode(match[1]).replace(/\/$/, '');
+  const pattern = new RegExp(`<a[^>]+href=["'](https:\\/\\/${GLVIETSUB_HOST_PATTERN}\\/xem-phim\\/[^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>`, 'gi');
+  for (const match of html.matchAll(pattern)) {
+    const url = canonicalGlvietsubUrl(match[1]);
     const sourceSlug = url.split('/').filter(Boolean).at(-1) || '';
     const regularMatch = sourceSlug.match(/-tap-(\d+)$/i);
     const special = /-tap-dac-biet(?:-|$)/i.test(sourceSlug);
@@ -393,13 +407,14 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
   } else {
     const nextCurrent = Math.max(Number(movie.current_episode || 0), Number(entry.currentEpisode || 0));
     const update: Record<string, unknown> = { last_synced_at: now };
-    if (movie.source_site === SOURCE) Object.assign(update, {
+  if (movie.source_site === SOURCE) Object.assign(update, {
       name: entry.name, origin_name: entry.originName, content: entry.content,
       title_vi: entry.titleVi || '',
       thumb_url: entry.image, poster_url: entry.image, category: entry.category, country: entry.country,
       episode_current: `Tập ${nextCurrent}`, current_episode: nextCurrent,
       total_episodes: Math.max(Number(movie.total_episodes || 0), Number(entry.expectedEpisodes || 0), nextCurrent),
       episode_total: String(Math.max(Number(entry.expectedEpisodes || 0), nextCurrent)),
+      source_url: entry.sourceUrl, showtimes: entry.sourceUrl,
       is_published: nextCurrent > 0,
     });
     const currentTitleEn = String(movie.title_en || '').trim();
@@ -587,6 +602,8 @@ async function storeEntry(db: ReturnType<typeof createClient>, entry: Record<str
     poster_url: entry.image,
     category: entry.category,
     country: entry.country,
+    source_url: entry.sourceUrl,
+    showtimes: entry.sourceUrl,
     is_published: hasPlayableEpisode,
   });
 

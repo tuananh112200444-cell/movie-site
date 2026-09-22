@@ -21,6 +21,7 @@ interface Props {
   subtitleUrl?: string;
   autoPlay?: boolean;
   initialTime?: number;
+  fastFailoverAvailable?: boolean;
   onTimeUpdate?: (time: number, duration: number) => void;
   onEnded?: () => void;
   onVideoEnded?: () => void;
@@ -64,6 +65,8 @@ const STALL_MIN_PROGRESS_SECONDS = 0.05;
 const REPEATED_STALL_WINDOW_MS = 90_000;
 const MAX_REPEATED_SHORT_STALLS = 4;
 const MIN_FATAL_STALL_MS = 45_000;
+const SINGLE_VARIANT_STALL_FAILOVER_MS = 12_000;
+const SINGLE_VARIANT_NETWORK_RETRIES = 2;
 const RECOVERY_COOLDOWN_MS = 12_000;
 const STABLE_PLAYBACK_SECONDS = 30;
 // Five-minute samples retain long-watch evidence without turning every active
@@ -211,6 +214,7 @@ export default function LightweightHlsPlayer({
   subtitleUrl = '',
   autoPlay = true,
   initialTime = 0,
+  fastFailoverAvailable = false,
   onTimeUpdate,
   onEnded,
   onVideoEnded,
@@ -253,6 +257,7 @@ export default function LightweightHlsPlayer({
   const stableReportedRef = useRef(false);
   const heartbeatBucketRef = useRef(0);
   const initialTimeRef = useRef(finitePlaybackTime(initialTime));
+  const fastFailoverAvailableRef = useRef(fastFailoverAvailable);
   const appliedExternalSeekRef = useRef<{ src: string; time: number } | null>(null);
   const userSeekActiveRef = useRef(false);
   const activeSeekTargetRef = useRef(0);
@@ -295,6 +300,10 @@ export default function LightweightHlsPlayer({
   // Callback identity changes must never rebuild MediaSource. Keep the latest
   // handlers in a ref so parent renders (progress, countdowns, health UI) are
   // completely independent from the HLS lifecycle.
+  useEffect(() => {
+    fastFailoverAvailableRef.current = fastFailoverAvailable;
+  }, [fastFailoverAvailable]);
+
   useEffect(() => {
     callbacksRef.current = {
       onTimeUpdate,
@@ -545,6 +554,11 @@ export default function LightweightHlsPlayer({
       const playbackProfile = getPlaybackProfile();
       const hls = new Hls({
         enableWorker: true,
+        // Append fetch chunks while a large MPEG-TS fragment is still
+        // downloading. Several providers publish a 1.5-3 MB first segment;
+        // waiting for the complete file added 15-20 seconds to cold start on
+        // weak links even though enough bytes for the first frame had arrived.
+        progressive: true,
         lowLatencyMode: false,
         maxBufferLength: playbackProfile.maxBufferLength,
         maxMaxBufferLength: playbackProfile.maxMaxBufferLength,
@@ -637,14 +651,26 @@ export default function LightweightHlsPlayer({
               buffered_ahead: getBufferedAhead(video),
               error_message: details,
             });
+            const stalledFor = stallStartedAtRef.current > 0
+              ? Date.now() - stallStartedAtRef.current
+              : 0;
+            const singleVariantNeedsFailover = fastFailoverAvailableRef.current
+              && hls.levels.length <= 1
+              && nonFatalNetworkRetryRef.current >= SINGLE_VARIANT_NETWORK_RETRIES
+              && getBufferedAhead(video) < 0.75
+              && stalledFor >= SINGLE_VARIANT_STALL_FAILOVER_MS;
             if (
+              singleVariantNeedsFailover || (
               nonFatalNetworkRetryRef.current >= MAX_NON_FATAL_NETWORK_RETRIES &&
               getBufferedAhead(video) < 0.75 &&
               stallStartedAtRef.current > 0 &&
               Date.now() - stallStartedAtRef.current >= MIN_FATAL_STALL_MS
+              )
             ) {
               setHasError(true);
-              setErrorMsg('Nguồn phim phản hồi chậm');
+              setErrorMsg(singleVariantNeedsFailover
+                ? 'Nguồn 1080p không ổn định, đang chuyển nguồn...'
+                : 'Nguồn phim phản hồi chậm');
               callbacksRef.current.onPlayerIssue?.({
                 event_type: 'hls_fatal',
                 playback_time: video.currentTime,
@@ -851,13 +877,21 @@ export default function LightweightHlsPlayer({
 
       streamRecoveryRef.current += 1;
       const repeatedStalls = repeatedStallTimesRef.current.length >= MAX_REPEATED_SHORT_STALLS;
+      const singleVariantNeedsFailover = fastFailoverAvailableRef.current
+        && hls.levels.length <= 1
+        && stalledFor >= SINGLE_VARIANT_STALL_FAILOVER_MS
+        && getBufferedAhead(video) < 0.25;
       if (
+        singleVariantNeedsFailover || (
         streamRecoveryRef.current > MAX_STREAM_RECOVERY_ATTEMPTS &&
         stalledFor >= MIN_FATAL_STALL_MS &&
         (repeatedStalls || getBufferedAhead(video) < 0.25)
+        )
       ) {
         setHasError(true);
-        setErrorMsg('Nguồn phim phản hồi chậm');
+        setErrorMsg(singleVariantNeedsFailover
+          ? 'Nguồn 1080p không ổn định, đang chuyển nguồn...'
+          : 'Nguồn phim phản hồi chậm');
         callbacksRef.current.onPlayerIssue?.({
           event_type: 'stall_fatal',
           playback_time: video.currentTime,
@@ -1612,7 +1646,7 @@ export default function LightweightHlsPlayer({
               <div className="relative">
                 <button
                   onClick={() => { setShowQualityMenu((value) => !value); setShowSpeedMenu(false); }}
-                  aria-label="Chọn chất lượng"
+                  aria-label={`Chọn chất lượng, hiện tại ${selectedLevel < 0 ? 'Auto' : `${levels.find((level) => level.index === selectedLevel)?.height || ''}p`}`}
                   title="Chọn chất lượng"
                   className="h-11 min-w-12 px-2.5 rounded-lg text-xs font-bold text-white/90 hover:text-white hover:bg-white/15 border border-white/20 transition-all cursor-pointer"
                 >

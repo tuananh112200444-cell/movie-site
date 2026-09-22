@@ -15,12 +15,11 @@ Deno.serve(async (req) => {
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const { data, error } = await db
     .from('movie_seo_profiles')
-    .select('slug,og_image_url,updated_at,live_audit,last_audited_at,movies!inner(name,poster_url,thumb_url,is_published)')
+    .select('slug,og_image_url,updated_at,live_audit,last_audited_at,movies!inner(name,poster_url,thumb_url,superseded_by_movie_id)')
     .eq('status', 'published')
     .eq('index_mode', 'index')
     .gte('validation_score', 85)
-    .eq('live_audit->>passed', 'true')
-    .eq('movies.is_published', true)
+    .is('movies.superseded_by_movie_id', null)
     .order('updated_at', { ascending: false })
     .limit(5000);
   if (error) return new Response(error.message, { status: 503 });

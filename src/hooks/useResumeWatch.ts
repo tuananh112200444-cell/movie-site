@@ -13,11 +13,10 @@ import { useCallback } from 'react';
 
 const STORAGE_KEY = 'kp_resume_v1';
 const MAX_ENTRIES = 200;
-/** Không lưu nếu còn < 5% hoặc > 95% (coi như đã xem xong / chưa xem) */
-const MIN_PCT = 0.05;
+/** Một checkpoint ngắn vẫn phải cứu được tab vừa bị trình duyệt tải lại. */
 const MAX_PCT = 0.95;
-/** Không lưu nếu thời gian < 30 giây */
-const MIN_SECONDS = 30;
+const MIN_SECONDS = 15;
+const MIN_REMAINING_SECONDS = 30;
 
 interface ResumeEntry {
   time: number;
@@ -53,6 +52,8 @@ export interface ResumeInfo {
   duration: number;
   /** Phần trăm đã xem (0–1) */
   progress: number;
+  /** Thời điểm checkpoint gần nhất, dùng để phân biệt phục hồi tab và lần xem mới. */
+  savedAt: number;
   /** Có nên hiện banner "Tiếp tục xem" không */
   shouldResume: boolean;
 }
@@ -63,14 +64,17 @@ export function useResumeWatch() {
     const store = loadStore();
     const entry = store[makeKey(movieSlug, epSlug)];
     if (!entry || entry.time < MIN_SECONDS) {
-      return { time: 0, duration: 0, progress: 0, shouldResume: false };
+      return { time: 0, duration: 0, progress: 0, savedAt: 0, shouldResume: false };
     }
     const pct = entry.duration > 0 ? entry.time / entry.duration : 0;
     return {
       time: entry.time,
       duration: entry.duration,
       progress: pct,
-      shouldResume: pct >= MIN_PCT && pct <= MAX_PCT,
+      savedAt: Number(entry.savedAt || 0),
+      shouldResume: entry.time >= MIN_SECONDS
+        && entry.duration - entry.time >= MIN_REMAINING_SECONDS
+        && pct <= MAX_PCT,
     };
   }, []);
 
@@ -132,7 +136,10 @@ export function useResumeWatch() {
           time: entry.time,
           duration: entry.duration,
           progress: pct,
-          shouldResume: pct >= MIN_PCT && pct <= MAX_PCT,
+          savedAt: Number(entry.savedAt || 0),
+          shouldResume: entry.time >= MIN_SECONDS
+            && entry.duration - entry.time >= MIN_REMAINING_SECONDS
+            && pct <= MAX_PCT,
           epSlug,
         };
       }

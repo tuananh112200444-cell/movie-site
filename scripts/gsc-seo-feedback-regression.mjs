@@ -51,6 +51,16 @@ expect(source.includes("from('seo_hot_movie_candidates').select('matched_slug,de
     && source.includes('hotDemandBySlug')
     && source.includes('if (a.hotDemand !== b.hotDemand)'),
   'GSC must prioritize quality-approved movies with current hot-demand evidence.');
+expect(source.includes("from('movie_seo_profiles')")
+    && source.includes(".eq('status','published')")
+    && source.includes('profilePriority:true')
+    && source.includes('if (item.profilePriority) return lastInspection < staleBefore || item.updatedAt > lastInspection;'),
+  'Every live-audited, published SEO profile must automatically re-enter the bounded Google inspection queue.');
+expect(!source.includes(".eq('live_audit->>passed','true').eq('movies.is_published',true)"),
+  'Google feedback for verified editorial pages must not depend on playback catalogue publication.');
+expect(source.includes("item.updated_at || item.published_at")
+    && source.includes('candidate_counts'),
+  'Updated SEO profiles must outrank their original publication timestamp and expose queue diagnostics.');
 
 if (failures.length) {
   console.error('GSC SEO feedback regression failed:');

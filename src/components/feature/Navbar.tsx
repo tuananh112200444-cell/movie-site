@@ -94,20 +94,26 @@ export default function Navbar() {
     const header = headerRef.current;
     if (!header) return undefined;
 
-    const updateHeaderHeight = () => {
-      const height = Math.ceil(header.getBoundingClientRect().height);
+    let lastHeight = 0;
+    const commitHeaderHeight = (rawHeight: number) => {
+      const height = Math.ceil(rawHeight);
+      if (!height || height === lastHeight) return;
+      lastHeight = height;
       document.documentElement.style.setProperty('--kp-header-height', `${height}px`);
     };
 
-    updateHeaderHeight();
+    // Read layout once for the initial value. Subsequent updates use the size
+    // supplied by ResizeObserver instead of forcing another synchronous layout.
+    commitHeaderHeight(header.offsetHeight);
 
-    const observer = new ResizeObserver(updateHeaderHeight);
+    const observer = new ResizeObserver(([entry]) => {
+      const borderBox = entry.borderBoxSize?.[0];
+      commitHeaderHeight(borderBox?.blockSize || entry.contentRect.height);
+    });
     observer.observe(header);
-    window.addEventListener('resize', updateHeaderHeight);
 
     return () => {
       observer.disconnect();
-      window.removeEventListener('resize', updateHeaderHeight);
       document.documentElement.style.removeProperty('--kp-header-height');
     };
   }, []);
@@ -415,7 +421,7 @@ export default function Navbar() {
               <div className="w-px h-4 bg-white/[0.08] mx-1" />
             </div>
 
-            <div className="hidden min-[640px]:flex lg:hidden items-center gap-0.5">
+            <div className="navbar-mobile-socials hidden min-[640px]:flex lg:hidden items-center gap-0.5">
               {SOCIAL_LINKS.map(({ href, brand, icon, title, mobileColor }) => {
                 return (
                 <a

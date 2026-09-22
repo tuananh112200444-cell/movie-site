@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Flame, ImageOff, Play, Sparkles, Trophy } from 'lucide-react';
 import { useImageFallback } from '../../../hooks/useImageFallback';
-import { fetchTop10TodayMovies, getLandscapeImagePaths } from '../../../services/movieApi';
+import { fetchTop10TodayMovies, getLandscapeImagePaths, getPortraitImagePaths } from '../../../services/movieApi';
 import type { MovieItem } from '../../../types/movie';
 import { trackMovieClick } from '../../../utils/analytics';
 
@@ -157,6 +157,38 @@ function RankingSkeleton() {
   );
 }
 
+function RankingMobileRow({ movie, rank }: RankingCardProps) {
+  const { primary, fallback } = getPortraitImagePaths(movie);
+  const { currentSrc, loaded, hasError, onLoad, onError } = useImageFallback(
+    primary, fallback, false, 180, 82, { preferredAspect: 'portrait' },
+  );
+  const episode = getEpisodeBadge(movie.episode_current);
+
+  return (
+    <Link
+      to={`/phim/${encodeURIComponent(movie.slug || '')}`}
+      className="kp-chart-row"
+      onClick={() => trackMovieClick(movie.slug || '', movie.name || '', 'home')}
+    >
+      <span className="kp-chart-rank" aria-hidden="true">{String(rank).padStart(2, '0')}</span>
+      <span className="kp-chart-art">
+        {!loaded && !hasError && <span className="skeleton absolute inset-0" aria-hidden="true" />}
+        {hasError ? <ImageOff className="h-5 w-5 text-white/35" aria-hidden="true" /> : (
+          <img src={currentSrc} alt="" loading="lazy" decoding="async" onLoad={onLoad} onError={onError} className={loaded ? 'opacity-100' : 'opacity-0'} />
+        )}
+      </span>
+      <span className="kp-chart-copy">
+        <span className="kp-chart-title">{movie.name}</span>
+        <span className="kp-chart-meta">
+          {episode || 'Đang xem nhiều'}
+          {movie.quality && <span className="kp-chart-quality">{movie.quality}</span>}
+        </span>
+      </span>
+      <span className="kp-chart-arrow" aria-hidden="true"><i className="ri-arrow-right-up-line" /></span>
+    </Link>
+  );
+}
+
 interface Top10TodaySectionProps {
   initialMovies?: MovieItem[];
   loading?: boolean;
@@ -174,6 +206,7 @@ export default function Top10TodaySection({
 }: Top10TodaySectionProps) {
   const [movies, setMovies] = useState<MovieItem[]>(initialMovies.slice(0, 10));
   const [loading, setLoading] = useState(parentLoading && initialMovies.length === 0);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -236,7 +269,20 @@ export default function Top10TodaySection({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 lg:gap-4" aria-label="Bảng xếp hạng 10 phim hôm nay">
+      <div className="kp-chart-list md:hidden" aria-label="Bảng xếp hạng 10 phim hôm nay">
+        {loading
+          ? Array.from({ length: 5 }).map((_, index) => <div className="kp-chart-row skeleton" key={index} aria-hidden="true" />)
+          : movies.slice(0, mobileExpanded ? 10 : 5).map((movie, index) => (
+              <RankingMobileRow key={movie._id || movie.slug} movie={movie} rank={index + 1} />
+            ))}
+        {!loading && movies.length > 5 && (
+          <button type="button" className="kp-pocket-more" onClick={() => setMobileExpanded((value) => !value)} aria-expanded={mobileExpanded}>
+            {mobileExpanded ? 'Thu gọn bảng xếp hạng' : 'Xem đủ 10 phim'}
+            <i className={mobileExpanded ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      <div className="hidden grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid lg:grid-cols-5 lg:gap-4" aria-label="Bảng xếp hạng 10 phim hôm nay trên máy tính">
         {loading
           ? Array.from({ length: 10 }).map((_, index) => <RankingSkeleton key={index} />)
           : movies.slice(0, 10).map((movie, index) => (

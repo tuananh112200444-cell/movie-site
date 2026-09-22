@@ -1,7 +1,7 @@
 {
   "status": true,
   "source": "supabase-top-rated-fallback",
-  "generated_at": "2026-09-15T14:23:55.792Z",
+  "generated_at": "2026-09-21T17:05:14.806Z",
   "movies": [
     {
       "id": "7b7662d6-7852-4735-becf-bcf34731afbb",
@@ -226,40 +226,35 @@
     {
       "id": "3f7f06cf-c3b3-4947-a2eb-cc66f0d88bca",
       "slug": "huan-luyen-vien-ted-lasso-phan-1",
-      "name": "Huấn Luyện Viên Ted Lasso (Phần 1)",
-      "origin_name": "Ted Lasso (Season 1)",
-      "poster_url": "https://phimimg.com/upload/vod/20250812-1/2c58a16a46085121a25b7431bd4d9355.jpg",
-      "thumb_url": "https://phimimg.com/upload/vod/20250812-1/5854021f914f00224905b22fa616e097.jpg",
+      "name": "Huấn Luyện Viên Ted Lasso - Phần 1",
+      "origin_name": "Ted Lasso - Season 1",
+      "poster_url": "https://vsmov.com/storage/images/nE94ejEbzNCU48bW1oju0dqBONz.jpg",
+      "thumb_url": "https://vsmov.com/storage/images/oX7QdfiQEbyvIvpKgJHRCgbrLdK.jpg",
       "hero_backdrop_url": null,
       "hero_poster_url": null,
       "episode_current": "Hoàn Tất (10/10)",
       "episode_total": "10",
       "current_episode": 10,
       "total_episodes": 10,
-      "quality": "FHD",
+      "quality": "HD",
       "lang": "Vietsub",
       "year": 2020,
       "type": "series",
       "category": [
         {
-          "id": "37a7b38b6184a5ebd3c43015aa20709d",
+          "id": 15,
           "name": "Chính Kịch",
           "slug": "chinh-kich"
         },
         {
-          "id": "ba6fd52e5a3aca80eaaf1a3b50a182db",
-          "name": "Hài Hước",
-          "slug": "hai-huoc"
-        },
-        {
-          "id": "a7b065b92ad356387ef2e075dee66529",
-          "name": "Tâm Lý",
-          "slug": "tam-ly"
+          "id": 20,
+          "name": "Hài",
+          "slug": "hai"
         }
       ],
       "country": [
         {
-          "id": "74d9fa92f4dea9ecea8fc2233dc7921a",
+          "id": 7,
           "name": "Âu Mỹ",
           "slug": "au-my"
         }

@@ -754,6 +754,28 @@ export default function PlayerBox({
       : episode?.link_m3u8 || directVideoSrc || hlsSrc;
     return getSourceHost(activeUrl || episode?.link_m3u8 || episode?.link_embed || '');
   }, [directVideoSrc, effectivePlayerMode, embedSrc, episode?.link_embed, episode?.link_m3u8, hlsSrc]);
+  const hasPositionPreservingFallback = useMemo(() => {
+    if (!episode) return false;
+    const { servers } = buildFallbackServersAvoidingHost(
+      allServers,
+      activeServer,
+      activeSourceHost,
+      episode,
+    );
+    const activeAudioType = getServerAudioType(allServers[activeServer]);
+    return servers.some((server) => {
+      const candidateAudioType = getServerAudioType(server);
+      if (
+        activeAudioType !== 'other'
+        && activeAudioType !== 'khophim'
+        && candidateAudioType !== activeAudioType
+      ) return false;
+      return (server.server_data ?? []).some((candidate) =>
+        isSameLogicalEpisode(candidate, episode)
+        && Boolean(candidate.link_m3u8 || (candidate.link_embed && isDirectVideo(candidate.link_embed)))
+      );
+    });
+  }, [activeServer, activeSourceHost, allServers, episode]);
   useEffect(() => {
     const origins = Array.from(new Set([
       getUrlOrigin(hlsSrc),
@@ -831,6 +853,24 @@ export default function PlayerBox({
   useEffect(() => {
     if (directVideoRef.current) directVideoRef.current.playbackRate = directVideoSpeed;
   }, [directVideoSpeed, directVideoSrc]);
+
+  useEffect(() => {
+    if (effectivePlayerMode !== 'video') return;
+    const video = directVideoRef.current;
+    const target = finitePlaybackTime(manualReloadTime ?? effectiveInitialTime);
+    if (!video || target <= 0) return;
+    const restore = () => {
+      if (Number.isFinite(video.duration) && target < video.duration - 2) {
+        video.currentTime = target;
+      }
+    };
+    if (video.readyState >= 1) {
+      restore();
+      return;
+    }
+    video.addEventListener('loadedmetadata', restore, { once: true });
+    return () => video.removeEventListener('loadedmetadata', restore);
+  }, [directVideoSrc, effectiveInitialTime, effectivePlayerMode, manualReloadTime]);
 
   useEffect(() => {
     directVideoRecoveryAttemptsRef.current = 0;
@@ -1026,8 +1066,22 @@ export default function PlayerBox({
     const audioCompatiblePairs = activeAudioType === 'other' || activeAudioType === 'khophim'
       ? remainingPairs
       : remainingPairs.filter(({ server }) => getServerAudioType(server) === activeAudioType);
-    const remainingServerIndices = audioCompatiblePairs.map(({ originalIndex }) => originalIndex);
-    const remainingServers = audioCompatiblePairs.map(({ server }) => server);
+    const positionPreservingPairs = audioCompatiblePairs
+      .map(({ originalIndex, server }) => ({
+        originalIndex,
+        server: {
+          ...server,
+          server_data: (server.server_data ?? []).filter((candidate) =>
+            Boolean(candidate.link_m3u8 || (candidate.link_embed && isDirectVideo(candidate.link_embed)))
+          ),
+        },
+      }))
+      .filter(({ server }) => (server.server_data ?? []).length > 0);
+    const preferredPairs = lastPlaybackTimeRef.current > 0 && positionPreservingPairs.length > 0
+      ? positionPreservingPairs
+      : audioCompatiblePairs;
+    const remainingServerIndices = preferredPairs.map(({ originalIndex }) => originalIndex);
+    const remainingServers = preferredPairs.map(({ server }) => server);
     const fallback = pickBestEpisodeByScore(remainingServers, episode?.slug);
     if (fallback) {
       const target = fallback.episode;
@@ -1535,6 +1589,7 @@ export default function PlayerBox({
               src={hlsSrc}
               title={movieTitle}
               initialTime={manualReloadTime ?? effectiveInitialTime}
+              fastFailoverAvailable={hasPositionPreservingFallback}
               onTimeUpdate={(time, duration) => {
                 if (Number.isFinite(time)) lastPlaybackTimeRef.current = Math.max(0, time);
                 onTimeUpdate?.(time, duration);
