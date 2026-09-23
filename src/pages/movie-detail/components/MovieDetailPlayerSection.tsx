@@ -270,6 +270,11 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
       });
       return counts;
     }, [selectableServerOptions]);
+    const hasAudioTypeChoices = [
+      serverTypeCounts.vietsub,
+      serverTypeCounts.thuyetminh,
+      serverTypeCounts.longtieng,
+    ].filter((count) => count > 0).length > 1;
 
     /* Auto-switch to episodes tab when user selects an episode while on trailer tab */
     useEffect(() => {
@@ -694,7 +699,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     </div>
                   )}
 
-                  {(showSourceOptions || episodes.length === 1) && <>
+                  {(showSourceOptions || episodes.length === 1 || hasAudioTypeChoices) && <>
                   {/* Type filter tabs */}
                   <div className="overflow-x-auto px-3 pt-3 sm:px-4 lg:px-5 lg:pt-4">
                   <div className="flex w-max gap-1.5 sm:w-auto sm:flex-wrap lg:gap-2">
@@ -737,6 +742,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                   </div>
                   </div>
 
+                  {(showSourceOptions || episodes.length === 1) && (
                   <div className="grid grid-cols-1 gap-2 px-3 py-3 sm:grid-cols-2 sm:px-4 lg:grid-cols-3 lg:gap-2.5 lg:px-5 lg:pb-5 2xl:grid-cols-4">
                     {selectableServerOptions
                       .filter(({ typeKey }) => serverTypeTab === 'all' || typeKey === serverTypeTab)
@@ -783,6 +789,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                       );
                     })}
                   </div>
+                  )}
                   </>}
                 </div>
               )}

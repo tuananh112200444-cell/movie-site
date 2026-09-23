@@ -334,6 +334,18 @@ test('player: đổi nguồn giữa phim giữ nguyên thời gian đang xem', a
   await expect.poll(() => switchedVideo.evaluate((element) => Math.round((element as HTMLVideoElement).currentTime))).toBe(180);
 });
 
+test('player mobile: thanh chọn thuyết minh vẫn hiện khi nguồn chi tiết đang thu gọn', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chrome', 'Chỉ áp dụng cho điện thoại');
+  await mockMovieDetail(page, e2eMovie([
+    { server_name: 'Vietsub', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media-vietsub.example.test/video.mp4' }] },
+    { server_name: 'Thuyết Minh', server_data: [{ name: 'Tập 1', slug: 'tap-1', link_embed: 'https://media-thuyetminh.example.test/video.mp4' }] },
+  ]));
+  await page.goto('/xem-phim/e2e-player/tap-1', { waitUntil: 'domcontentloaded' });
+
+  await expect(page.getByRole('button', { name: /Thuyết Minh \(1\)/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('button', { name: 'Dự phòng 2, 1 tập', exact: true })).toHaveCount(0);
+});
+
 test('xem tiếp mobile: giữ đúng trang khi fullscreen, phát và lưu tiến độ', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chrome', 'Chỉ áp dụng cho điện thoại');
   await page.addInitScript(() => {
