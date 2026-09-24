@@ -191,6 +191,7 @@ if (!cloudflareFunction.includes('cloudflare-pages-empty-quality-fallback')
 for (const legacySeoPath of [
   '/phim/tham-tu-lung-danh-conan-25-nang-dau-halloween',
   '/phim/kisskh-goblin',
+  '/phim/gia-dinh-la-so-mot-phan-1',
   '/phim/toi-yeu-los-angeles',
 ]) {
   if (!cloudflareFunction.includes(legacySeoPath)) {
