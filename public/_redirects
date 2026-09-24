@@ -8,6 +8,11 @@
 # Functions are unavailable and Cloudflare falls through to static assets.
 /phim/nguoi-nhen-khoi-dau-moi /phim/spider-man-brand-new-day-2026 301
 
+# High Kick VSMOV duplicate has only scattered episodes through 147. Preserve
+# Google links by taking viewers to the verified complete 166-episode record.
+/phim/gia-dinh-la-so-mot-phan-1 /phim/gia-dinh-la-so-1-phan-1 301
+/xem-phim/gia-dinh-la-so-mot-phan-1/tap-166 /xem-phim/gia-dinh-la-so-1-phan-1/tap-166 301
+
 # React Router fallbacks are explicit so unknown URLs keep a real HTTP 404 via
 # public/404.html instead of becoming indexable soft-404 SPA documents.
 # Known catalogue routes must remain usable when Pages Functions temporarily
