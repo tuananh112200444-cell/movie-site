@@ -36,6 +36,12 @@ const LEGACY_MOVIE_REDIRECTS = new Map([
   ['/phim/tham-tu-lung-danh-conan-25-nang-dau-halloween', '/phim/tham-tu-lung-danh-conan-nang-dau-halloween'],
   ['/phim/kisskh-goblin', '/phim/nu-hon-cua-yeu-tinh'],
   ['/phim/nguoi-nhen-khoi-dau-moi', '/phim/spider-man-brand-new-day-2026'],
+  // This VSMOV duplicate only contains scattered episodes through 147. Keep
+  // Google's historical detail URL on the verified 166-episode canonical row.
+  ['/phim/gia-dinh-la-so-mot-phan-1', '/phim/gia-dinh-la-so-1-phan-1'],
+]);
+const LEGACY_WATCH_SLUG_REDIRECTS = new Map([
+  ['gia-dinh-la-so-mot-phan-1', 'gia-dinh-la-so-1-phan-1'],
 ]);
 const REMOVED_MOVIE_PATHS = new Set([
   '/phim/toi-yeu-los-angeles',
@@ -5429,6 +5435,14 @@ export async function onRequest(context) {
   if (legacyMovieTarget) {
     url.search = '';
     return canonicalRedirect(url, legacyMovieTarget);
+  }
+  const legacyWatchMatch = /^\/xem-phim\/([^/]+)(\/.*)?$/i.exec(cleanRequestPath);
+  if (legacyWatchMatch) {
+    const canonicalSlug = LEGACY_WATCH_SLUG_REDIRECTS.get(decodeURIComponent(legacyWatchMatch[1]).toLowerCase());
+    if (canonicalSlug) {
+      url.search = '';
+      return canonicalRedirect(url, `/xem-phim/${canonicalSlug}${legacyWatchMatch[2] || ''}`);
+    }
   }
   if (REMOVED_MOVIE_PATHS.has(cleanRequestPath)) {
     return renderMovieGone(cleanRequestPath);
