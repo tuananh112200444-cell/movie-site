@@ -2118,6 +2118,11 @@ async function fetchPublishedMovieSeoProfile(slug) {
   incomingUrl.searchParams.set('target_path', `eq./phim/${cleanSlug}`);
   incomingUrl.searchParams.set('order', 'updated_at.desc');
   incomingUrl.searchParams.set('limit', '12');
+  const outgoingUrl = new URL(`${SUPABASE_REST_BASE}/movie_seo_topic_links`);
+  outgoingUrl.searchParams.set('select', 'source_slug,title,anchor,description,target_path,link_origin,updated_at');
+  outgoingUrl.searchParams.set('source_slug', `eq.${cleanSlug}`);
+  outgoingUrl.searchParams.set('order', 'link_origin.asc,updated_at.desc');
+  outgoingUrl.searchParams.set('limit', '12');
   const headers = {
     apikey: SUPABASE_PUBLIC_KEY,
     Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
@@ -2135,19 +2140,35 @@ async function fetchPublishedMovieSeoProfile(slug) {
     const profile = Array.isArray(rows) && rows[0] && typeof rows[0] === 'object' ? rows[0] : null;
     if (!profile) return { profile: null, unavailable: false };
     let incomingLinks = [];
+    let outgoingLinks = [];
     try {
-      const incomingResponse = await fetch(incomingUrl.toString(), {
-        headers,
-        signal: AbortSignal.timeout(3500),
-      });
+      const [incomingResponse,outgoingResponse] = await Promise.all([
+        fetch(incomingUrl.toString(),{headers,signal:AbortSignal.timeout(3500)}),
+        fetch(outgoingUrl.toString(),{headers,signal:AbortSignal.timeout(3500)}),
+      ]);
       if (incomingResponse.ok) {
         const incomingRows = await incomingResponse.json();
         if (Array.isArray(incomingRows)) incomingLinks = incomingRows;
       }
+      if (outgoingResponse.ok) {
+        const outgoingRows = await outgoingResponse.json();
+        if (Array.isArray(outgoingRows)) outgoingLinks = outgoingRows;
+      }
     } catch {
-      // Incoming cluster links enrich discovery but never make the movie page unavailable.
+      // Cluster links enrich discovery but never make the movie page unavailable.
     }
-    return { profile: { ...profile, incoming_links: incomingLinks }, unavailable: false };
+    const mergedTopicLinks = new Map();
+    for (const item of [...(Array.isArray(profile.topic_links)?profile.topic_links:[]),...outgoingLinks]) {
+      const target = String(item?.url || item?.target_path || '').trim();
+      if (!target.startsWith('/phim/') || target === `/phim/${cleanSlug}`) continue;
+      mergedTopicLinks.set(target,{
+        title:String(item.title || item.anchor || '').trim(),
+        url:target,
+        anchor:String(item.anchor || item.title || '').trim(),
+        description:String(item.description || '').trim(),
+      });
+    }
+    return { profile: { ...profile, topic_links:[...mergedTopicLinks.values()].slice(0,12), incoming_links: incomingLinks }, unavailable: false };
   } catch {
     return { profile: null, unavailable: true };
   }

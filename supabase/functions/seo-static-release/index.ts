@@ -441,6 +441,11 @@ Deno.serve(async (req) => {
   }
   if (!prepared.length) return json({ ok: true, action: 'nothing_ready', mode, confirmed, recovered });
 
+  // Refresh contextual clusters before the build so every new approved page
+  // enters the site graph immediately instead of waiting for a later crawl.
+  const { error: clusterError } = await db.rpc('refresh_movie_seo_topic_clusters',{p_links_per_movie:4});
+  if (clusterError) return json({error:`SEO topic cluster refresh failed: ${clusterError.message}`},500);
+
   const claimedAt = new Date().toISOString();
   const pendingIds = prepared.map((item) => item.id);
   const { data: claimed, error: claimError } = await db.from('seo_static_release_requests').update({

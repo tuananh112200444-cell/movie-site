@@ -87,6 +87,22 @@ function profileMovie(row: Record<string, unknown>): Record<string, unknown> | n
   const nested = Array.isArray(row.movies) ? row.movies[0] : row.movies;
   if (!nested || typeof nested !== 'object') return null;
   const movie = nested as Record<string, unknown>;
+  const topicLinks = new Map<string,Record<string,unknown>>();
+  for (const item of [
+    ...(Array.isArray(row.topic_links) ? row.topic_links : []),
+    ...(Array.isArray(row.persisted_topic_links) ? row.persisted_topic_links : []),
+  ]) {
+    if (!item || typeof item !== 'object') continue;
+    const link = item as Record<string,unknown>;
+    const target = String(link.url || link.target_path || '').trim();
+    if (!target.startsWith('/phim/') || target === `/phim/${String(row.slug || '')}`) continue;
+    topicLinks.set(target,{
+      title:String(link.title || link.anchor || '').trim(),
+      url:target,
+      anchor:String(link.anchor || link.title || '').trim(),
+      description:String(link.description || '').trim(),
+    });
+  }
   const profile = {
     status: row.status,
     index_mode: row.index_mode,
@@ -98,7 +114,7 @@ function profileMovie(row: Record<string, unknown>): Record<string, unknown> | n
     focus_keyword: row.focus_keyword,
     secondary_keywords: row.secondary_keywords,
     faq: row.faq,
-    topic_links: row.topic_links,
+    topic_links: [...topicLinks.values()].slice(0,12),
     review_content: row.review_content,
     version: Number(row.version || 0),
     live_audit: row.live_audit,
@@ -189,6 +205,28 @@ Deno.serve(async (req) => {
   if (profileResult.error && profileResult.error.code !== '42P01') {
     return json(req, { status: false, message: profileResult.error.message }, 503);
   }
+  const profileRows = (profileResult.data ?? []) as unknown as Array<Record<string,unknown>>;
+  const profileMovieIds = profileRows.map((row)=>String(row.movie_id || '')).filter(Boolean);
+  const persistedLinksByMovie = new Map<string,Array<Record<string,unknown>>>();
+  if (profileMovieIds.length) {
+    const linkResult = await supabase.from('movie_seo_topic_links')
+      .select('source_movie_id,target_path,title,anchor,description,link_origin,updated_at')
+      .in('source_movie_id',profileMovieIds)
+      .order('link_origin',{ascending:true})
+      .order('updated_at',{ascending:false})
+      .limit(Math.min(6000,profileMovieIds.length*12));
+    if (linkResult.error && linkResult.error.code !== '42P01') {
+      return json(req,{status:false,message:linkResult.error.message},503);
+    }
+    for (const raw of linkResult.data ?? []) {
+      const row = raw as unknown as Record<string,unknown>;
+      const movieId = String(row.source_movie_id || '');
+      if (!movieId) continue;
+      const links = persistedLinksByMovie.get(movieId) ?? [];
+      links.push(row);
+      persistedLinksByMovie.set(movieId,links);
+    }
+  }
   const data = qualityResult.data;
   const qualityItems = (qualityResult.data ?? []).flatMap((row) => {
     const raw = row as unknown as Record<string, unknown>;
@@ -207,8 +245,12 @@ Deno.serve(async (req) => {
       seo_episode_progress_percent: Number(raw.episode_progress_percent || 0),
     }];
   });
-  const profileItems = (profileResult.data ?? []).flatMap((row) => {
-    const movie = profileMovie(row as unknown as Record<string, unknown>);
+  const profileItems = profileRows.flatMap((row) => {
+    const movieId = String(row.movie_id || '');
+    const movie = profileMovie({
+      ...row,
+      persisted_topic_links:persistedLinksByMovie.get(movieId) ?? [],
+    });
     return movie ? [movie] : [];
   });
   const profilesBySlug = new Map(profileItems.map((movie) => [String(movie.slug), movie]));
