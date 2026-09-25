@@ -367,6 +367,17 @@ Deno.serve(async (req) => {
       }).eq('id', item.id).eq('status', 'pending');
       continue;
     }
+    const { data: draftQuality, error: draftQualityError } = await db.from('movie_seo_profile_drafts')
+      .select('quality_rules_version,quality_breakdown,intent_map,content_fingerprint,quality_evaluated_at')
+      .eq('movie_id', item.movie_id)
+      .maybeSingle();
+    if (draftQualityError || Number(draftQuality?.quality_rules_version || 0) < 2) {
+      await db.from('seo_static_release_requests').update({
+        status: 'failed',
+        error_message: 'Scheduled draft has not passed SEO quality V2. Reopen it in SEO Studio and approve the current validation result.',
+      }).eq('id', item.id).eq('status', 'pending');
+      continue;
+    }
     const { data: publishResult, error: publishError } = await db.rpc('publish_movie_seo_profile', {
       p_movie_id: item.movie_id,
     });
@@ -406,6 +417,11 @@ Deno.serve(async (req) => {
     const { data: auditedProfile, error: auditError } = await db.from('movie_seo_profiles').update({
       live_audit: pendingAudit,
       last_audited_at: publishedAt,
+      quality_rules_version: Number(draftQuality.quality_rules_version || 2),
+      quality_breakdown: draftQuality.quality_breakdown || {},
+      intent_map: draftQuality.intent_map || {},
+      content_fingerprint: draftQuality.content_fingerprint || null,
+      quality_evaluated_at: draftQuality.quality_evaluated_at || publishedAt,
       updated_at: publishedAt,
     }).eq('movie_id', item.movie_id).eq('version', version).select('version').maybeSingle();
     if (auditError || !auditedProfile) {

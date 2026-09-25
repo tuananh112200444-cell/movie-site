@@ -436,6 +436,7 @@ export default function AdminSeoStudioPage() {
           ...current,
           profile: status.profile ?? current.profile,
           static_release: status.static_release,
+          indexing_pipeline: status.indexing_pipeline ?? current.indexing_pipeline,
           insights: { ...current.insights, inspection: status.inspection ?? current.insights?.inspection },
         } : current);
         if (!assistantApplied && status.profile?.live_audit) setLiveAudit(status.profile.live_audit);
@@ -808,6 +809,8 @@ export default function AdminSeoStudioPage() {
   const priorityStep = STEPS.find((item) => item.key === priorityAction.step);
   const staticPublishMode = loaded?.publish_mode === 'static';
   const staticRelease = loaded?.static_release;
+  const studioQuality = loaded?.quality_v2;
+  const indexingPipeline = loaded?.indexing_pipeline;
   const unifiedActionLabel = busy === 'ai'
     ? 'Trợ lý đang làm…'
     : busy === 'inspect'
@@ -1026,7 +1029,7 @@ export default function AdminSeoStudioPage() {
                 ['noindex', 'Không index', 'Ẩn khỏi kết quả tìm kiếm'],
               ].map(([value, title, desc]) => <button disabled={isFieldLocked('index_mode')} key={value} onClick={() => updatePayload('index_mode', value as SeoStudioPayload['index_mode'])} className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-40 ${payload.index_mode === value ? 'border-emerald-400/40 bg-emerald-500/10' : 'border-white/[0.07] bg-white/[0.02]'}`}><strong className="block text-xs text-white/80">{title}</strong><span className="mt-1 block text-[10px] leading-4 text-white/30">{desc}</span></button>)}</div></div>
               <div><label className={labelClass}>Canonical cố định</label><input readOnly className={`${inputClass} cursor-not-allowed text-white/45`} value={payload.canonical_path} /></div>
-              <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] uppercase text-white/30">Cổng SEO hiện tại</p><p className={`mt-1 text-sm font-bold ${loaded.quality?.eligible_for_index ? 'text-emerald-400' : 'text-amber-300'}`}>{loaded.quality?.eligible_for_index ? 'Đủ điều kiện' : 'Chưa đủ'}</p></div><div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] uppercase text-white/30">Tầng index</p><p className="mt-1 text-sm font-bold text-white/75">{loaded.quality?.index_tier || 'Chưa kiểm tra'}</p></div><div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] uppercase text-white/30">Điểm hệ thống</p><p className="mt-1 text-sm font-bold text-white/75">{loaded.quality?.quality_score ?? 0}/100</p></div></div>
+              <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] uppercase text-white/30">Cổng SEO Studio V{studioQuality?.rules_version ?? loaded.profile?.quality_rules_version ?? 1}</p><p className={`mt-1 text-sm font-bold ${studioQuality?.passed ? 'text-emerald-400' : 'text-amber-300'}`}>{studioQuality?.passed ? 'Đạt chất lượng' : 'Cần hoàn thiện'}</p></div><div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] uppercase text-white/30">Trạng thái Google</p><p className={`mt-1 text-sm font-bold ${indexingPipeline?.google_confirmed ? 'text-cyan-300' : 'text-white/75'}`}>{indexingPipeline?.label || 'Chưa xuất bản'}</p></div><div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><p className="text-[10px] uppercase text-white/30">Điểm hồ sơ hiện tại</p><p className="mt-1 text-sm font-bold text-white/75">{studioQuality?.score ?? validation.score}/100</p></div></div>
               <div><h3 className="mb-3 text-sm font-bold">Kết quả kiểm tra SEO Studio</h3><div className="space-y-2">{validation.issues.map((issue) => <IssueBadge key={`${issue.code}-${issue.section}`} issue={issue} />)}</div></div>
               <div className="rounded-2xl border border-white/[0.08] bg-[#0b0e16] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold text-white/70">Kiểm tra trang thật</p><p className="mt-1 text-[11px] text-white/35">Mô phỏng Googlebot và kiểm tra HTTP, canonical, H1, schema, ảnh, liên kết.</p></div><button onClick={() => void handleInspect()} disabled={!!busy} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 disabled:opacity-40">{busy === 'inspect' ? 'Đang kiểm tra...' : 'Kiểm tra trang thật'}</button></div>

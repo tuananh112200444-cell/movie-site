@@ -17,7 +17,8 @@ function profileReadyForStaticBuild(profile) {
   if (!profile || typeof profile !== 'object') return false;
   return profile.status === 'published'
     && profile.index_mode === 'index'
-    && Number(profile.validation_score || 0) >= 85;
+    && Number(profile.validation_score || 0) >= 85
+    && profile.quality_v2_passed !== false;
 }
 
 async function loadDotEnv() {
@@ -89,8 +90,9 @@ function taxonomyLinks(value, kind) {
       const href = kind === 'genre'
         ? `/the-loai/${encodeURIComponent(slug)}`
         : `/filter?country=${encodeURIComponent(slug)}`;
+      const anchor = kind === 'genre' ? `Xem phim ${item.name}` : `Phim ${item.name}`;
       return slug
-        ? `<a href="${href}">${escapeHtml(item.name)}</a>`
+        ? `<a href="${href}">${escapeHtml(anchor)}</a>`
         : `<span>${escapeHtml(item.name)}</span>`;
     })
     .join(' · ');
@@ -200,6 +202,13 @@ function movieDescription(movie) {
   return truncate(parts.join(' '), 155);
 }
 
+function hasPlayableMovieEvidence(movie) {
+  const currentEpisode = Number(movie.current_episode || movie.seo_latest_episode_number || 0);
+  const episode = stripHtml(movie.episode_current || '').toLowerCase();
+  if (/trailer|sắp chiếu|sap chieu|chưa có tập|chua co tap/.test(episode)) return false;
+  return currentEpisode > 0 || /\bfull\b|hoàn tất|hoan tat|tập\s*\d+|tap\s*\d+/.test(episode);
+}
+
 function renderMoviePage(movie, assetTags, options = {}) {
   const slug = String(options.canonicalSlug || movie.slug || '').trim();
   const sourceSlug = String(options.sourceSlug || movie.slug || slug).trim();
@@ -210,10 +219,11 @@ function renderMoviePage(movie, assetTags, options = {}) {
   const canonical = `${SITE_URL}${canonicalPath === `/phim/${slug}` ? canonicalPath : `/phim/${encodeURIComponent(slug)}`}`;
   const name = stripHtml(movie.name || movie.title_vi || movie.origin_name || slug.replace(/-/g, ' '));
   const originName = stripHtml(movie.origin_name || movie.title_original || movie.title_en || '');
-  const isUpcoming = movie.seo_index_tier === 'upcoming';
-  // An editorial information page can be available before any verified video
-  // source. Do not claim a WatchAction or link to a dead player in static HTML.
-  const canAdvertiseWatch = !profile && !isUpcoming;
+  const isUpcoming = !profile && movie.seo_index_tier === 'upcoming';
+  // Editorial publication and playback are separate. The information page can
+  // be indexed without a stream, while WatchAction is emitted only when the
+  // catalogue contains verified episode evidence.
+  const canAdvertiseWatch = hasPlayableMovieEvidence(movie);
   const title = truncate(stripHtml(profile?.seo_title || '') || (isUpcoming
     ? `${name}${movie.year ? ` (${movie.year})` : ''} - Trailer & Thông Tin | KhoPhim`
     : `${name}${movie.year ? ` (${movie.year})` : ''} - Xem phim ${movie.lang || movie.quality || 'HD'} | KhoPhim`), 68);
@@ -251,6 +261,11 @@ function renderMoviePage(movie, assetTags, options = {}) {
       faq: Array.isArray(profile.faq) ? profile.faq : [],
       topic_links: Array.isArray(profile.topic_links) ? profile.topic_links : [],
       validation_score: Number(profile.validation_score || 0),
+      quality_rules_version: Number(profile.quality_rules_version || 1),
+      quality_breakdown: profile.quality_breakdown || {},
+      intent_map: profile.intent_map || {},
+      content_fingerprint: profile.content_fingerprint || null,
+      quality_evaluated_at: profile.quality_evaluated_at || null,
       version: profile.version,
       live_audit: profile.live_audit || null,
       last_audited_at: profile.last_audited_at,
@@ -325,6 +340,7 @@ function renderMoviePage(movie, assetTags, options = {}) {
     <meta name="kp-static-movie" content="${escapeHtml(slug)}">
     <meta name="kp-static-movie-source" content="${escapeHtml(sourceSlug)}">
     <meta name="kp-static-movie-indexable" content="${indexable ? 'true' : 'false'}">
+    ${profile ? `<meta name="kp-seo-quality-version" content="${escapeHtml(Number(profile.quality_rules_version || 1))}">` : ''}
     <link rel="canonical" href="${canonical}">
     <link rel="preload" as="image" href="${escapeHtml(poster)}" fetchpriority="high">
     <meta property="og:title" content="${escapeHtml(title)}">
@@ -365,7 +381,9 @@ function renderMoviePage(movie, assetTags, options = {}) {
         ${reviewContent ? `<section aria-labelledby="movie-review-heading"><h2 id="movie-review-heading">Đánh giá ${escapeHtml(name)}</h2><p>${escapeHtml(reviewContent)}</p></section>` : ''}
         ${faqItems.length ? `<section><h2>Câu hỏi thường gặp về ${escapeHtml(name)}</h2>${faqItems.map((item) => `<h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p>`).join('')}</section>` : ''}
         <p>${profile
-          ? `Trang thông tin phim ${escapeHtml(name)} đã có trên KhoPhim.`
+          ? canAdvertiseWatch
+            ? `<a href="/xem-phim/${encodeURIComponent(slug)}">Xem ${escapeHtml(name)}</a>`
+            : `Trang thông tin ${escapeHtml(name)} được cập nhật trên KhoPhim; nút xem sẽ xuất hiện khi hệ thống xác minh được tập phim.`
           : isUpcoming
           ? `<a href="${escapeHtml(movie.trailer_url)}" rel="noopener noreferrer">Xem trailer ${escapeHtml(name)}</a>`
           : `<a href="/xem-phim/${encodeURIComponent(slug)}">Xem ${escapeHtml(name)}</a>`}</p>

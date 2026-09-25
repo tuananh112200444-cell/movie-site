@@ -125,6 +125,18 @@ export interface PublishedSeoProfile {
   faq: SeoFaqItem[];
   topic_links: SeoTopicLink[];
   validation_score: number;
+  quality_rules_version?: number;
+  quality_breakdown?: Record<string, number>;
+  intent_map?: {
+    primary?: string;
+    aliases?: string[];
+    watch?: string[];
+    entities?: string[];
+    topics?: string[];
+    demand?: string[];
+  };
+  content_fingerprint?: string | null;
+  quality_evaluated_at?: string | null;
   version?: number;
   live_audit?: SeoLiveAuditResult | null;
   last_audited_at?: string;
@@ -192,6 +204,16 @@ export interface SeoStudioLoadResult {
   profile: (PublishedSeoProfile & { review_content?: string; movie_patch?: SeoMoviePatch; status?: SeoProfileStatus; validation_issues?: SeoValidationIssue[] }) | null;
   review: { content?: string; word_count?: number; generated_at?: string; updated_at?: string } | null;
   quality: { eligible_for_index?: boolean; index_tier?: string; quality_score?: number; reasons?: string[]; signals?: string[]; checked_at?: string } | null;
+  quality_v2?: {
+    rules_version: number;
+    score: number;
+    passed: boolean;
+    breakdown: Record<string, number>;
+    intent_map: NonNullable<PublishedSeoProfile['intent_map']>;
+    content_fingerprint: string;
+    evaluated_at: string;
+  } | null;
+  indexing_pipeline?: { stage: string; label: string; google_confirmed: boolean };
   insights?: {
     work_item?: { task_type?: string; status?: string; priority_score?: number; urgency?: string; reason?: string; required_fields?: string[]; evidence?: Record<string, unknown>; due_at?: string; updated_at?: string } | null;
     inspection?: { verdict?: string; coverage_state?: string; indexing_state?: string; page_fetch_state?: string; user_canonical?: string; google_canonical?: string; last_crawl_time?: string; inspected_at?: string; recommendation?: string } | null;
@@ -222,6 +244,7 @@ export interface SeoReleaseStatusResult {
   static_release: SeoStaticRelease | null;
   inspection: NonNullable<SeoStudioLoadResult['insights']>['inspection'];
   google_indexed: boolean;
+  indexing_pipeline?: { stage: string; label: string; google_confirmed: boolean };
 }
 
 export function loadSeoMovie(movieId: string, slug: string): Promise<SeoStudioLoadResult> {
@@ -298,7 +321,7 @@ export async function getPublishedSeoProfile(slug: string): Promise<PublishedSeo
   if (!slug) return null;
   const { data, error } = await supabase
     .from('movie_seo_profiles')
-    .select('movie_id,slug,focus_keyword,secondary_keywords,seo_title,meta_description,canonical_path,og_image_url,index_mode,intro_content,review_content,faq,topic_links,validation_score,version,live_audit,last_audited_at,published_at,updated_at')
+    .select('movie_id,slug,focus_keyword,secondary_keywords,seo_title,meta_description,canonical_path,og_image_url,index_mode,intro_content,review_content,faq,topic_links,validation_score,quality_rules_version,quality_breakdown,intent_map,content_fingerprint,quality_evaluated_at,version,live_audit,last_audited_at,published_at,updated_at')
     .eq('slug', slug)
     .eq('status', 'published')
     .maybeSingle();

@@ -102,7 +102,7 @@ for (const [pattern, message] of [
   ['buildVerifiedKeywordPlan', 'AI has no verified keyword-planning layer'],
   ['keyword_plan: keywordPlan', 'AI does not receive the verified keyword plan'],
   ["lifecycle: 'watch'", 'AI does not use the site-wide watch-intent policy'],
-  ['xem phim ${shortName}', 'AI does not create watch-intent keywords'],
+  ['buildSeoIntentMap(movie, requestedFocus, observedQueries)', 'AI does not create verified watch/entity/topic intent clusters'],
   ['applyVerifiedKeywordPlan', 'AI keyword plan is not enforced before publication'],
   ["field === 'focus_keyword' && plainText(source.focus_keyword, 160)", 'AI can still replace a stable focus keyword'],
   ['payload.focus_keyword = currentBaseline.focus_keyword', 'older AI drafts cannot recover their stable focus keyword'],

@@ -2109,7 +2109,7 @@ async function fetchPublishedMovieSeoProfile(slug) {
   const cleanSlug = String(slug || '').trim();
   if (!cleanSlug) return { profile: null, unavailable: false };
   const profileUrl = new URL(`${SUPABASE_REST_BASE}/movie_seo_profiles`);
-  profileUrl.searchParams.set('select', 'movie_id,slug,status,focus_keyword,secondary_keywords,seo_title,meta_description,canonical_path,og_image_url,index_mode,intro_content,review_content,faq,topic_links,validation_score,published_at,updated_at,version,live_audit,last_audited_at');
+  profileUrl.searchParams.set('select', 'movie_id,slug,status,focus_keyword,secondary_keywords,seo_title,meta_description,canonical_path,og_image_url,index_mode,intro_content,review_content,faq,topic_links,validation_score,published_at,updated_at,version,live_audit,last_audited_at,quality_rules_version,quality_breakdown,intent_map,content_fingerprint,quality_evaluated_at');
   profileUrl.searchParams.set('slug', `eq.${cleanSlug}`);
   profileUrl.searchParams.set('status', 'eq.published');
   profileUrl.searchParams.set('limit', '1');
@@ -2158,8 +2158,18 @@ async function fetchPublishedMovieSeoProfile(slug) {
       // Cluster links enrich discovery but never make the movie page unavailable.
     }
     const mergedTopicLinks = new Map();
-    for (const item of [...(Array.isArray(profile.topic_links)?profile.topic_links:[]),...outgoingLinks]) {
-      const target = String(item?.url || item?.target_path || '').trim();
+    for (const item of (Array.isArray(profile.topic_links) ? profile.topic_links : [])) {
+      const target = String(item?.url || '').trim();
+      if (!target.startsWith('/') || target.startsWith('//') || target === `/phim/${cleanSlug}`) continue;
+      mergedTopicLinks.set(target,{
+        title:String(item.title || item.anchor || '').trim(),
+        url:target,
+        anchor:String(item.anchor || item.title || '').trim(),
+        description:String(item.description || '').trim(),
+      });
+    }
+    for (const item of outgoingLinks) {
+      const target = String(item?.target_path || '').trim();
       if (!target.startsWith('/phim/') || target === `/phim/${cleanSlug}`) continue;
       mergedTopicLinks.set(target,{
         title:String(item.title || item.anchor || '').trim(),
@@ -2418,7 +2428,7 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
   ];
   const genreLinks = genreItems.slice(0, 4)
     .map((genre) => genre.slug
-      ? `<a href="${SITE_URL}/the-loai/${escapeHtml(genre.slug)}">${escapeHtml(genre.name)}</a>`
+      ? `<a href="${SITE_URL}/the-loai/${escapeHtml(genre.slug)}">${escapeHtml(`Xem phim ${genre.name}`)}</a>`
       : `<span>${escapeHtml(genre.name)}</span>`)
     .join('');
   const countryCanonicalPaths = new Map([
@@ -2452,7 +2462,7 @@ function renderMoviePrerender(pathname, movie, slug, relatedMovies = []) {
     return `<li><a href="${SITE_URL}/phim/${encodeURIComponent(sourceSlug)}">${escapeHtml(label)}</a>${note ? ` <span>${escapeHtml(note)}</span>` : ''}</li>`;
   }).filter(Boolean).join('');
   const body = `${origin ? `<p>${escapeHtml(origin)}</p>` : ''}
-    ${seoProfile ? `<span data-kp-seo-profile-version="${escapeHtml(String(seoProfile.version || seoProfile.updated_at || 'published'))}" hidden></span>` : ''}
+    ${seoProfile ? `<span data-kp-seo-profile-version="${escapeHtml(String(seoProfile.version || seoProfile.updated_at || 'published'))}" data-kp-seo-quality-version="${escapeHtml(String(seoProfile.quality_rules_version || 1))}" hidden></span>` : ''}
     ${titleVariants.length ? `<p>Tên khác: ${titleVariants.map(escapeHtml).join(', ')}</p>` : ''}
     <img src="${escapeHtml(poster)}" alt="${escapeHtml(name)}">
     <p>${escapeHtml(isUpcoming ? 'Phim sắp chiếu' : isTrailerOnly ? 'Trailer và thông tin phim' : isOngoing ? 'Phim đang chiếu và cập nhật tập mới' : isFreshUpdate ? 'Phim mới cập nhật tập mới' : 'Xem phim online')}</p>
