@@ -2,6 +2,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { verifyAdminRequest } from '../_shared/admin-session.ts';
 import { applyDeterministicEditorialConstraints } from '../_shared/seo-editorial-constraints.ts';
 import {
+  SEO_QUALITY_RULES_VERSION,
+  buildSeoIntentMap,
+  evaluateSeoQualityV2,
+  type SeoQualityV2Result,
+} from '../_shared/seo-quality-v2.ts';
+import {
   missingMovieFactFields,
   patchFromDatabaseConsensus,
   patchFromVerifiedDatabaseCandidate,
@@ -74,6 +80,7 @@ type VerifiedKeywordPlan = {
   secondary_keywords: string[];
   allowed_intents: string[];
   lifecycle: 'watch';
+  clusters: ReturnType<typeof buildSeoIntentMap>;
 };
 
 type SafeFieldState = {
@@ -100,6 +107,8 @@ const INDEX_READINESS_CODES = new Set([
   'brief_intro', 'few_internal_links',
   'duplicate_title', 'duplicate_description', 'duplicate_secondary_keywords',
   'keyword_not_in_title', 'keyword_not_in_copy',
+  'v2_watch_intent', 'v2_alias_coverage', 'v2_topic_intent',
+  'v2_intro_depth', 'v2_review_depth', 'v2_content_depth', 'v2_template_copy',
 ]);
 
 const SAFE_FIELD_PATHS = [
@@ -124,6 +133,9 @@ const AI_REPAIRABLE_ISSUE_CODES = new Set([
   'missing_review', 'thin_review', 'unsupported_rating_claim',
   'thin_faq_answer', 'subjective_faq_claim', 'thin_faq',
   'few_internal_links', 'self_topic_link', 'image_unreachable',
+  'v2_watch_intent', 'v2_alias_coverage', 'v2_topic_intent',
+  'v2_intro_depth', 'v2_review_depth', 'v2_content_depth', 'v2_template_copy',
+  'v2_supporting_entities',
 ]);
 
 const DATA_ENRICHMENT_ISSUE_CODES = new Set([
@@ -578,6 +590,21 @@ const ISSUE_FIELD_MAP: Record<string, string[]> = {
   self_topic_link: ['topic_links'],
   canonical_mismatch: ['canonical_path'],
   unsafe_index: ['index_mode'],
+  v2_primary_intent: ['focus_keyword'],
+  v2_title_identity: ['seo_title'],
+  v2_watch_intent: ['secondary_keywords', 'seo_title', 'meta_description', 'intro_content'],
+  v2_alias_coverage: ['secondary_keywords', 'intro_content', 'faq'],
+  v2_topic_intent: ['secondary_keywords', 'intro_content', 'topic_links'],
+  v2_intro_depth: ['intro_content'],
+  v2_review_depth: ['review_content'],
+  v2_content_depth: ['intro_content', 'review_content'],
+  v2_template_copy: ['review_content'],
+  v2_people_evidence: ['movie_patch.actor', 'movie_patch.director'],
+  v2_identity_evidence: ['movie_patch.country', 'movie_patch.year'],
+  v2_source_evidence: ['movie_patch.name'],
+  v2_topic_links: ['topic_links'],
+  v2_supporting_entities: ['faq', 'movie_patch.actor', 'movie_patch.director'],
+  v2_unsupported_claim: ['review_content', 'faq'],
 };
 
 function fieldsForIssue(code: string): string[] {
@@ -670,28 +697,26 @@ function uniqueVerifiedKeywords(values: unknown[], limit = 6): string[] {
   }).slice(0, limit);
 }
 
-function buildVerifiedKeywordPlan(movie: Record<string, unknown>, requestedFocus?: string): VerifiedKeywordPlan {
-  const aliases = uniqueVerifiedKeywords([
-    movie.name,
-    movie.title_vi,
-    movie.title_en,
-    movie.origin_name,
-    movie.title_original,
-  ], 8);
-  const focus = plainText(requestedFocus, 160) || aliases[0] || 'Phim';
-  const year = Number(movie.year || 0);
-  const shortName = aliases.find((value) => normalizeKeyword(value) !== normalizeKeyword(focus)) || focus;
-  const intentKeywords = [`xem phim ${shortName}`, `${shortName} vietsub`, `${shortName} thuyết minh`, `${shortName} full`];
+function buildVerifiedKeywordPlan(
+  movie: Record<string, unknown>,
+  requestedFocus?: string,
+  observedQueries: unknown[] = [],
+): VerifiedKeywordPlan {
+  const clusters = buildSeoIntentMap(movie, requestedFocus, observedQueries);
+  const focus = clusters.primary;
   const secondary = uniqueVerifiedKeywords([
-    ...aliases.filter((value) => normalizeKeyword(value) !== normalizeKeyword(focus)),
-    year ? `${focus} ${year}` : '',
-    ...intentKeywords,
-  ], 6);
+    ...clusters.aliases.filter((value) => normalizeKeyword(value) !== normalizeKeyword(focus)),
+    ...clusters.watch,
+    ...clusters.entities,
+    ...clusters.topics,
+    ...clusters.demand,
+  ], 12);
   return {
     focus_keyword: focus,
     secondary_keywords: secondary,
     lifecycle: 'watch',
-    allowed_intents: ['xem phim', 'vietsub', 'thuyết minh', 'full', 'nội dung phim'],
+    allowed_intents: ['xem phim', 'vietsub', 'thuyết minh', 'full', 'nội dung phim', 'diễn viên', 'đạo diễn', 'thể loại', 'quốc gia'],
+    clusters,
   };
 }
 
@@ -702,7 +727,7 @@ function applyVerifiedKeywordPlan(payload: SeoPayload, plan: VerifiedKeywordPlan
   return {
     ...payload,
     focus_keyword: focus,
-    secondary_keywords: uniqueVerifiedKeywords([...plan.secondary_keywords, ...existing], 6),
+    secondary_keywords: uniqueVerifiedKeywords([...plan.secondary_keywords, ...existing], 12),
   };
 }
 
@@ -969,7 +994,7 @@ function mergeValidation(base: ReturnType<typeof validate>, additions: Validatio
   const unique = Array.from(new Map(issues.map((item) => [`${item.code}:${item.message}`, item])).values());
   const errorCount = unique.filter((item) => item.severity === 'error').length;
   const warningCount = unique.filter((item) => item.severity === 'warning').length;
-  const score = Math.max(0, Math.min(100, 100 - errorCount * 14 - warningCount * 3));
+  const score = Math.min(base.score, Math.max(0, Math.min(100, 100 - errorCount * 14 - warningCount * 3)));
   if (errorCount === 0) unique.push({
     code: 'ready',
     severity: 'success',
@@ -977,6 +1002,23 @@ function mergeValidation(base: ReturnType<typeof validate>, additions: Validatio
     message: score >= 85 ? 'Nội dung và tài nguyên đã qua cổng xuất bản.' : 'Không có lỗi chặn; nên xử lý thêm cảnh báo.',
   });
   return { score, issues: unique };
+}
+
+function mergeQualityV2(base: ReturnType<typeof validate>, quality: SeoQualityV2Result): ReturnType<typeof validate> {
+  const merged = mergeValidation(base, quality.issues as ValidationIssue[]);
+  const score = Math.min(merged.score, quality.score);
+  const issues = merged.issues.filter((item) => item.code !== 'ready');
+  if (!issues.some((item) => item.severity === 'error')) {
+    issues.push({
+      code: 'ready',
+      severity: 'success',
+      section: 'technical',
+      message: score >= 85
+        ? `Nội dung đạt cổng SEO V${quality.rules_version}; tiếp tục kiểm tra trang thật trước khi xuất bản.`
+        : `Không có lỗi kỹ thuật chặn nhưng chất lượng V${quality.rules_version} mới đạt ${score}/100.`,
+    });
+  }
+  return { score, issues };
 }
 
 async function remoteValidationIssues(
@@ -1079,9 +1121,9 @@ const AI_EDITOR_INSTRUCTIONS = [
   'Bạn là biên tập viên SEO phim tiếng Việt của KhoPhim.',
   'Chỉ dùng dữ kiện có trong TRUSTED_CONTEXT. Không suy đoán nguồn phát, ngày chiếu, cốt truyện, diễn viên, đạo diễn hoặc mức độ nổi tiếng.',
   'Không tự chấm điểm, không dùng lời quảng cáo cảm tính như hay nhất, đỉnh, siêu hay; không nhồi từ khóa và không sao chép mô tả.',
-  'TRUSTED_CONTEXT có keyword_plan đã xác minh. Mọi trang phim của KhoPhim được tối ưu theo ý định xem phim ngay. Dùng đúng một từ khóa chính, chọn tối đa 6 từ khóa liên quan không trùng nhau từ keyword_plan, và phân bổ tự nhiên các biến thể tên phim vào SEO Title, Meta Description, giới thiệu và FAQ.',
+  'TRUSTED_CONTEXT có keyword_plan đã xác minh theo các cụm aliases, watch, entities, topics và demand. Mọi trang phim của KhoPhim được tối ưu theo ý định xem phim ngay. Dùng đúng một từ khóa chính, chọn tối đa 12 từ khóa liên quan không trùng nhau từ keyword_plan, và phân bổ tự nhiên các biến thể tên phim vào SEO Title, Meta Description, giới thiệu và FAQ.',
   'Luôn ưu tiên các cụm “xem phim”, “vietsub”, “thuyết minh” hoặc “full” từ keyword_plan; không dùng các cụm “trailer”, “sắp chiếu”, “lịch chiếu”, “chưa có tập” hay “chưa có nguồn”. Tuy nhiên không tự bịa số tập, máy chủ, chất lượng video hoặc ngày phát hành.',
-  'Mục tiêu là nội dung tự nhiên, hữu ích, phân biệt rõ phim và đáp ứng đúng ý định tìm kiếm.',
+  'Mục tiêu là nội dung tự nhiên, hữu ích, phân biệt rõ phim và đáp ứng đúng ý định tìm kiếm. Phải phủ ít nhất một cụm watch và một cụm topics hoặc demand khi dữ kiện cho phép; không được nhét tất cả cụm vào cùng một đoạn.',
   'Giữ nguyên trường đang tốt khi không có lý do cụ thể để sửa. Tuyệt đối không đề xuất thay đổi slug, canonical, index_mode hoặc movie_patch.',
   'Liên kết nội bộ chỉ được chọn nguyên văn từ related_movies. Nếu dữ kiện không đủ, giữ nội dung hiện tại và nêu cảnh báo.',
   'Phải xử lý hết cả lỗi và cảnh báo trong current_validation thuộc các trường được phép sửa. Meta Description phải từ 100 đến 160 ký tự và kết thúc thành câu hoàn chỉnh. SEO Title nên từ 32 đến 68 ký tự.',
@@ -1171,7 +1213,7 @@ function fallbackAiSuggestion(
     summary: 'Hệ thống dự phòng đã bổ sung phần còn thiếu bằng dữ kiện phim đã xác minh, kế hoạch từ khóa xem phim thống nhất và liên kết nội bộ có sẵn.',
     patch: {
       ...aiPatchFromSuggestion(baseline, baseline),
-      secondary_keywords: uniqueVerifiedKeywords([...(baseline.secondary_keywords || []), ...keywordPlan.secondary_keywords], 6),
+      secondary_keywords: uniqueVerifiedKeywords([...(baseline.secondary_keywords || []), ...keywordPlan.secondary_keywords], 12),
       meta_description: description,
       intro_content: intro,
       topic_links: topicLinks,
@@ -1478,6 +1520,29 @@ function releaseForProfile(rows: unknown, version: number): Record<string, unkno
     ?? null;
 }
 
+function indexingPipelineState(
+  profile: Record<string, unknown> | null | undefined,
+  release: Record<string, unknown> | null | undefined,
+  inspection: Record<string, unknown> | null | undefined,
+) {
+  const verdict = String(inspection?.verdict || '');
+  const coverage = String(inspection?.coverage_state || '');
+  if (verdict === 'PASS') return { stage: 'indexed', label: 'Google đã lập chỉ mục', google_confirmed: true };
+  if (inspection?.last_crawl_time) return { stage: 'crawled_not_indexed', label: 'Google đã crawl, chưa lập chỉ mục', google_confirmed: true };
+  if (/discovered|phát hiện/i.test(coverage)) return { stage: 'discovered', label: 'Google đã phát hiện URL', google_confirmed: true };
+  const releaseStatus = String(release?.status || '');
+  if (releaseStatus === 'processing') return { stage: 'deploying', label: 'Cloudflare đang phát hành', google_confirmed: false };
+  if (releaseStatus === 'pending') return { stage: 'scheduled', label: release?.release_lane === 'nightly' ? 'Đã xếp lịch phát hành 03:30' : 'Đang chờ phát hành ưu tiên', google_confirmed: false };
+  const liveAudit = profile?.live_audit && typeof profile.live_audit === 'object' ? profile.live_audit as Record<string, unknown> : null;
+  const checks = Array.isArray(liveAudit?.checks) ? liveAudit.checks as Array<Record<string, unknown>> : [];
+  const inSitemap = checks.some((check) => check.code === 'public_sitemap_membership' && check.passed === true);
+  if (profile?.status === 'published' && liveAudit?.passed === true && inSitemap) {
+    return { stage: 'submitted_sitemap', label: 'Đã xuất bản và có trong sitemap; đang chờ Google', google_confirmed: false };
+  }
+  if (profile?.status === 'published') return { stage: 'published', label: 'Đã xuất bản; chưa có xác nhận từ Google', google_confirmed: false };
+  return { stage: 'draft', label: 'Bản nháp nội bộ', google_confirmed: false };
+}
+
 Deno.serve(async (req) => {
   const headers = cors(req.headers.get('origin'));
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
@@ -1515,11 +1580,14 @@ Deno.serve(async (req) => {
       if (releaseResult.error) throw releaseResult.error;
       const profile = profileResult.data;
       const version = Number(profile?.version || 0);
+      const staticRelease = releaseForProfile(releaseResult.data, version);
+      const inspection = inspectionResult.error ? null : inspectionResult.data;
       return json({
         profile,
-        static_release: releaseForProfile(releaseResult.data, version),
-        inspection: inspectionResult.error ? null : inspectionResult.data,
+        static_release: staticRelease,
+        inspection,
         google_indexed: inspectionResult.data?.verdict === 'PASS',
+        indexing_pipeline: indexingPipelineState(profile as Record<string, unknown> | null, staticRelease, inspection as Record<string, unknown> | null),
       }, 200, headers);
     }
 
@@ -1591,7 +1659,9 @@ Deno.serve(async (req) => {
       const profile = profileResult.data && typeof profileResult.data === 'object' ? profileResult.data as Record<string, unknown> : null;
       const review = reviewResult.data && typeof reviewResult.data === 'object' ? reviewResult.data as Record<string, unknown> : null;
       const baseline = baselinePayload(movie, profile, review);
-      const baselineValidation = validate(baseline);
+      const observedQueries = (queryMetricResult.error ? [] : queryMetricResult.data ?? []).map((item) => String((item as Record<string, unknown>).query || '')).filter(Boolean);
+      const baselineQualityV2 = evaluateSeoQualityV2(baseline, movie, observedQueries);
+      const baselineValidation = mergeQualityV2(validate(baseline), baselineQualityV2);
       const baselineVersion = Number(profile?.version || 0);
       const staticRelease = releaseForProfile(releaseResult.error ? [] : releaseResult.data, baselineVersion);
       const serverDraft = draftResult.data && Number(draftResult.data.baseline_version || 0) === baselineVersion
@@ -1610,10 +1680,12 @@ Deno.serve(async (req) => {
         profile: profileResult.data,
         review: reviewResult.data,
         quality: qualityResult.data,
+        quality_v2: baselineQualityV2,
         ai_available: Boolean(GEMINI_API_KEY || OPENAI_API_KEY),
         ai_provider: GEMINI_API_KEY ? 'gemini' : OPENAI_API_KEY ? 'openai' : null,
         publish_mode: SEO_PUBLISH_MODE,
         static_release: staticRelease,
+        indexing_pipeline: indexingPipelineState(profile, staticRelease, inspectionResult.error ? null : inspectionResult.data as Record<string, unknown> | null),
         worker_status: workerStatus,
         insights: {
           work_item: workItemResult.error ? null : workItemResult.data,
@@ -1700,8 +1772,12 @@ Deno.serve(async (req) => {
       ]);
       const relatedMovies = await verifiedPublicRelatedMovies(rankedRelatedMovies, publicMoviePaths);
         const assistantBaseline = cleanPayload(applyDeterministicEditorialConstraints({ ...verifiedWorkingBaseline, topic_links: existingTopicLinks }));
-        const assistantValidation = validate(assistantBaseline);
-        const keywordPlan = buildVerifiedKeywordPlan(movie, assistantBaseline.focus_keyword);
+        const observedQueries = (queryMetricResult.error ? [] : queryMetricResult.data ?? [])
+          .map((item) => String((item as Record<string, unknown>).query || ''))
+          .filter(Boolean);
+        const keywordPlan = buildVerifiedKeywordPlan(movie, assistantBaseline.focus_keyword, observedQueries);
+        const assistantQualityV2 = evaluateSeoQualityV2(assistantBaseline, movie, observedQueries);
+        const assistantValidation = mergeQualityV2(validate(assistantBaseline), assistantQualityV2);
         const trustedContext = {
         mode,
         page_url: `https://khophim.org/phim/${slug}`,
@@ -1800,7 +1876,8 @@ Deno.serve(async (req) => {
         }, keywordPlan))));
       };
       let proposed = buildProposedPayload(verifiedWorkingBaseline, suggestion);
-      let proposedValidation = validate(proposed);
+      let proposedQualityV2 = evaluateSeoQualityV2(proposed, movie, observedQueries);
+      let proposedValidation = mergeQualityV2(validate(proposed), proposedQualityV2);
       proposedValidation = mergeValidation(proposedValidation, await remoteValidationIssues(db, proposed));
       let repairedInSecondPass = false;
       const firstPassRemaining = repairableIssues(proposedValidation);
@@ -1824,12 +1901,14 @@ Deno.serve(async (req) => {
             ? await requestGeminiSuggestion(repairContext, proposed)
             : await requestOpenAiSuggestion(repairContext, proposed);
           const repairedProposed = buildProposedPayload(proposed, repairedSuggestion, repairFields);
-          let repairedValidation = validate(repairedProposed);
+          const repairedQualityV2 = evaluateSeoQualityV2(repairedProposed, movie, observedQueries);
+          let repairedValidation = mergeQualityV2(validate(repairedProposed), repairedQualityV2);
           repairedValidation = mergeValidation(repairedValidation, await remoteValidationIssues(db, repairedProposed));
           const repairedRemaining = repairableIssues(repairedValidation);
           if (repairedRemaining.length < firstPassRemaining.length || repairedValidation.score > proposedValidation.score) {
             proposed = repairedProposed;
             proposedValidation = repairedValidation;
+            proposedQualityV2 = repairedQualityV2;
             repairedInSecondPass = true;
             suggestion = {
               ...repairedSuggestion,
@@ -1862,6 +1941,7 @@ Deno.serve(async (req) => {
         evidence: safeEvidence,
         warnings: Array.from(new Set(suggestion.warnings.filter(Boolean))),
         completion,
+        quality_v2: proposedQualityV2,
         fact_enrichment: factEnrichment,
         preserved_fields: Array.from(new Set([...suggestion.preserved_fields, 'slug', 'canonical_path', 'index_mode', 'movie_patch'])),
         generated_at: new Date().toISOString(),
@@ -1870,12 +1950,14 @@ Deno.serve(async (req) => {
 
     if (action === 'validate') {
       const payload = cleanPayload(body.payload);
-      return json(validate(payload), 200, headers);
+      const qualityV2 = evaluateSeoQualityV2(payload, { ...(payload.movie_patch || {}), content: payload.intro_content || '' });
+      return json({ ...mergeQualityV2(validate(payload), qualityV2), quality_v2: qualityV2 }, 200, headers);
     }
 
     if (action === 'inspect') {
       const payload = cleanPayload(body.payload);
-      const validation = mergeValidation(validate(payload), await remoteValidationIssues(db, payload));
+      const qualityV2 = evaluateSeoQualityV2(payload, { ...(payload.movie_patch || {}), content: payload.intro_content || '' });
+      const validation = mergeValidation(mergeQualityV2(validate(payload), qualityV2), await remoteValidationIssues(db, payload));
       if (SEO_PUBLISH_MODE === 'static') {
         const blocking = validation.issues.filter((issue) => issue.severity === 'error' || INDEX_READINESS_CODES.has(issue.code));
         const checkedAt = new Date().toISOString();
@@ -1895,7 +1977,7 @@ Deno.serve(async (req) => {
             },
           ],
         };
-        return json({ validation, live_audit: liveAudit, publish_mode: SEO_PUBLISH_MODE }, 200, headers);
+        return json({ validation, quality_v2: qualityV2, live_audit: liveAudit, publish_mode: SEO_PUBLISH_MODE }, 200, headers);
       }
       const liveAudit = await inspectLivePage(payload);
       const liveIssues = liveAudit.checks
@@ -1906,7 +1988,7 @@ Deno.serve(async (req) => {
           section: 'technical' as const,
           message: check.message,
         }));
-      return json({ validation: mergeValidation(validation, liveIssues), live_audit: liveAudit }, 200, headers);
+      return json({ validation: mergeValidation(validation, liveIssues), quality_v2: qualityV2, live_audit: liveAudit }, 200, headers);
     }
 
     if (action === 'save' || action === 'publish') {
@@ -1925,14 +2007,16 @@ Deno.serve(async (req) => {
       ]);
       if (movieResult.error || !movieResult.data) throw movieResult.error || new Error('Movie not found');
       if (profileResult.error) throw profileResult.error;
+      const movie = movieResult.data as Record<string, unknown>;
       const currentProfile = profileResult.data && typeof profileResult.data === 'object' ? profileResult.data as Record<string, unknown> : null;
       const currentVersion = Number(currentProfile?.version || 0);
       const currentBaseline = baselinePayload(
-        movieResult.data as Record<string, unknown>,
+        movie,
         currentProfile,
         reviewResult.data && typeof reviewResult.data === 'object' ? reviewResult.data as Record<string, unknown> : null,
       );
-      const currentValidation = validate(currentBaseline);
+      const currentQualityV2 = evaluateSeoQualityV2(currentBaseline, movie);
+      const currentValidation = mergeQualityV2(validate(currentBaseline), currentQualityV2);
       const focusState = fieldStates(currentBaseline, currentValidation, currentProfile?.status === 'published').focus_keyword;
       if (focusState?.protected
         && !safeEdit.unlocked_fields.includes('focus_keyword')
@@ -1943,6 +2027,8 @@ Deno.serve(async (req) => {
         payload.focus_keyword = currentBaseline.focus_keyword;
         validation = validate(payload);
       }
+      const qualityV2 = evaluateSeoQualityV2(payload, movie);
+      validation = mergeQualityV2(validation, qualityV2);
       if (action === 'publish' && safeEdit.baseline_version !== currentVersion) {
         return json({ error: 'Hồ sơ đang chạy đã thay đổi. Hãy tải lại để tránh ghi đè phiên bản mới hơn.', validation }, 409, headers);
       }
@@ -2000,10 +2086,15 @@ Deno.serve(async (req) => {
           unlocked_fields: safeEdit.unlocked_fields,
           validation_score: validation.score,
           validation_issues: validation.issues,
+          quality_rules_version: qualityV2.rules_version,
+          quality_breakdown: qualityV2.breakdown,
+          intent_map: qualityV2.intent_map,
+          content_fingerprint: qualityV2.content_fingerprint,
+          quality_evaluated_at: qualityV2.evaluated_at,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'movie_id' });
       if (saveError) throw saveError;
-      if (action === 'save') return json({ success: true, status: 'draft', validation, published_profile_unchanged: true }, 200, headers);
+      if (action === 'save') return json({ success: true, status: 'draft', validation, quality_v2: qualityV2, published_profile_unchanged: true }, 200, headers);
 
       const releaseTiming = body.release_timing === 'urgent' ? 'urgent' : 'nightly';
       if (SEO_PUBLISH_MODE === 'static' && releaseTiming === 'nightly') {
@@ -2059,6 +2150,7 @@ Deno.serve(async (req) => {
           status: 'scheduled-nightly',
           publish_mode: SEO_PUBLISH_MODE,
           validation,
+          quality_v2: qualityV2,
           live_audit: queuedAudit,
           published_profile_unchanged: true,
           public_discovery: { indexable: false, in_sitemap: false, queued: true, checked_at: queuedAt },
@@ -2077,6 +2169,14 @@ Deno.serve(async (req) => {
       const publishedVersion = publishResult && typeof publishResult === 'object'
         ? (publishResult as Record<string, unknown>).version as string | number | undefined
         : undefined;
+      const { error: qualitySaveError } = await db.from('movie_seo_profiles').update({
+        quality_rules_version: qualityV2.rules_version,
+        quality_breakdown: qualityV2.breakdown,
+        intent_map: qualityV2.intent_map,
+        content_fingerprint: qualityV2.content_fingerprint,
+        quality_evaluated_at: qualityV2.evaluated_at,
+      }).eq('movie_id', payload.movie_id).eq('version', Number(publishedVersion || 0));
+      if (qualitySaveError) throw qualitySaveError;
       if (SEO_PUBLISH_MODE === 'static') {
         const queuedAt = new Date().toISOString();
         const staticPendingAudit = {

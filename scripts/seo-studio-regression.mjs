@@ -10,10 +10,12 @@ const files = Object.fromEntries(await Promise.all([
   'src/router/config.tsx',
   'supabase/functions/admin-seo-studio/index.ts',
   'supabase/functions/static-seo-catalog/index.ts',
+  'supabase/functions/_shared/seo-quality-v2.ts',
   'supabase/functions/sitemap-seo-studio/index.ts',
   'supabase/migrations/20260828170000_complete_movie_seo_studio.sql',
   'supabase/migrations/20260828103000_add_movie_seo_studio.sql',
   'supabase/migrations/20260905030000_add_safe_seo_studio_editing.sql',
+  'supabase/migrations/20260925193000_add_movie_seo_quality_v2.sql',
   'scripts/generate-static-movie-pages.mjs',
   'scripts/verify-seo-deployment.mjs',
   'scripts/production-smoke.mjs',
@@ -58,6 +60,8 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['applyAiSuggestion', 'AI suggestions cannot be selectively applied to a draft'],
   ['Các mục tốt chỉ thay đổi khi bạn tự chọn', 'good SEO fields are not protected from default AI selection'],
   ['Dữ liệu phim đang đạt — không cần sửa', 'already-good movie data is not collapsed by default'],
+  ['Cổng SEO Studio V', 'SEO Studio still shows the playback catalogue score as the editorial quality gate'],
+  ['indexingPipeline?.google_confirmed', 'SEO Studio does not distinguish Google-confirmed states from internal publication states'],
   ['Gợi ý từ dữ liệu có sẵn', 'SEO Studio disguises its non-AI fallback as AI'],
   ['SEO Worker đang không chạy trên website thật', 'operator cannot see when the SEO Worker is unavailable'],
   ["loaded.publish_mode === 'worker' && loaded.worker_status?.online === false", 'static-only publishing shows a false Worker outage warning'],
@@ -161,6 +165,9 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ["payload.index_mode === 'auto'", 'server does not resolve automatic index mode before a verified static publication'],
   ["action === 'release_status'", 'server does not expose live asynchronous publication status'],
   ["action === 'retry_release'", 'server does not support a bounded failed-release retry'],
+  ['evaluateSeoQualityV2', 'publish does not apply the current SEO quality contract'],
+  ['indexingPipelineState', 'server does not expose truthful publication/discovery/index states'],
+  ['quality_rules_version: qualityV2.rules_version', 'draft does not persist the quality contract version'],
 ]);
 const studioEndpoint = files['supabase/functions/admin-seo-studio/index.ts'];
 if (studioEndpoint.indexOf('const prePublishAudit = await inspectLivePage(payload)') < 0
@@ -212,6 +219,8 @@ expect('supabase/functions/static-seo-catalog/index.ts', [
   ["const manuallyApproved = profile?.status === 'published'", 'static catalogue does not separate editorial SEO approval from playback audit state'],
   ["from('movie_seo_topic_links')", 'static SEO HTML does not include persisted contextual topic clusters'],
   ['persisted_topic_links', 'automatic contextual links are not merged with editorial links'],
+  ['evaluateSeoQualityV2', 'static release does not re-evaluate V2 profiles before rendering'],
+  ['quality_v2_passed', 'static release cannot fail closed when a current V2 profile regresses'],
 ]);
 expect('scripts/generate-static-movie-pages.mjs', [
   ['profile?.seo_title', 'static HTML ignores custom SEO title'],
@@ -221,6 +230,21 @@ expect('scripts/generate-static-movie-pages.mjs', [
   ['profile?.review_content', 'static fail-open HTML omits the editorial review'],
   ['kp-static-movie-data', 'static movie HTML does not embed the fast information bootstrap'],
   ['Approved SEO profile parity failed', 'static release can silently omit approved SEO profiles'],
+  ['kp-seo-quality-version', 'static HTML does not expose the quality contract version'],
+  ['hasPlayableMovieEvidence', 'static HTML still confuses editorial publication with playback availability'],
+]);
+expect('supabase/functions/_shared/seo-quality-v2.ts', [
+  ['SEO_QUALITY_RULES_VERSION = 2', 'quality gate is not explicitly versioned'],
+  ['buildSeoIntentMap', 'quality gate lacks per-movie intent clusters'],
+  ['search_intent', 'quality gate does not score search intent separately'],
+  ['originality', 'quality gate does not score originality separately'],
+  ['content_fingerprint', 'quality gate cannot audit repeated editorial output'],
+]);
+expect('supabase/migrations/20260925193000_add_movie_seo_quality_v2.sql', [
+  ['quality_rules_version', 'profile schema does not store the applied quality version'],
+  ['quality_breakdown', 'profile schema does not store explainable quality components'],
+  ['intent_map', 'profile schema does not persist per-movie search intent'],
+  ['content_fingerprint', 'profile schema cannot detect repeated content'],
 ]);
 expect('supabase/functions/sitemap-seo-studio/index.ts', [
   [".eq('index_mode', 'index')", 'manual sitemap includes non-approved URLs'],

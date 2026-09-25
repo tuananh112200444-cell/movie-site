@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { hasValidPublishableApiKey, withPublicReadCors } from '../_shared/public-api-key.ts';
+import { evaluateSeoQualityV2 } from '../_shared/seo-quality-v2.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -88,13 +89,22 @@ function profileMovie(row: Record<string, unknown>): Record<string, unknown> | n
   if (!nested || typeof nested !== 'object') return null;
   const movie = nested as Record<string, unknown>;
   const topicLinks = new Map<string,Record<string,unknown>>();
-  for (const item of [
-    ...(Array.isArray(row.topic_links) ? row.topic_links : []),
-    ...(Array.isArray(row.persisted_topic_links) ? row.persisted_topic_links : []),
-  ]) {
+  for (const item of (Array.isArray(row.topic_links) ? row.topic_links : [])) {
     if (!item || typeof item !== 'object') continue;
     const link = item as Record<string,unknown>;
-    const target = String(link.url || link.target_path || '').trim();
+    const target = String(link.url || '').trim();
+    if (!target.startsWith('/') || target.startsWith('//') || target === `/phim/${String(row.slug || '')}`) continue;
+    topicLinks.set(target,{
+      title:String(link.title || link.anchor || '').trim(),
+      url:target,
+      anchor:String(link.anchor || link.title || '').trim(),
+      description:String(link.description || '').trim(),
+    });
+  }
+  for (const item of (Array.isArray(row.persisted_topic_links) ? row.persisted_topic_links : [])) {
+    if (!item || typeof item !== 'object') continue;
+    const link = item as Record<string,unknown>;
+    const target = String(link.target_path || '').trim();
     if (!target.startsWith('/phim/') || target === `/phim/${String(row.slug || '')}`) continue;
     topicLinks.set(target,{
       title:String(link.title || link.anchor || '').trim(),
@@ -103,10 +113,36 @@ function profileMovie(row: Record<string, unknown>): Record<string, unknown> | n
       description:String(link.description || '').trim(),
     });
   }
+  const storedRulesVersion = Number(row.quality_rules_version || 1);
+  const dynamicQuality = evaluateSeoQualityV2({
+    movie_id: row.movie_id,
+    slug: row.slug,
+    focus_keyword: row.focus_keyword,
+    secondary_keywords: row.secondary_keywords,
+    seo_title: row.seo_title,
+    meta_description: row.meta_description,
+    canonical_path: row.canonical_path,
+    og_image_url: row.og_image_url,
+    intro_content: row.intro_content,
+    review_content: row.review_content,
+    faq: row.faq,
+    topic_links: [...topicLinks.values()],
+    movie_patch: row.movie_patch && typeof row.movie_patch === 'object' ? row.movie_patch as Record<string, unknown> : {},
+  }, movie);
+  const effectiveScore = storedRulesVersion >= dynamicQuality.rules_version
+    ? Math.min(Number(row.validation_score || 0), dynamicQuality.score)
+    : Number(row.validation_score || 0);
   const profile = {
     status: row.status,
     index_mode: row.index_mode,
-    validation_score: Number(row.validation_score || 0),
+    validation_score: effectiveScore,
+    quality_rules_version: storedRulesVersion,
+    quality_breakdown: storedRulesVersion >= dynamicQuality.rules_version ? dynamicQuality.breakdown : row.quality_breakdown || {},
+    intent_map: storedRulesVersion >= dynamicQuality.rules_version ? dynamicQuality.intent_map : row.intent_map || {},
+    content_fingerprint: storedRulesVersion >= dynamicQuality.rules_version ? dynamicQuality.content_fingerprint : row.content_fingerprint || null,
+    quality_evaluated_at: storedRulesVersion >= dynamicQuality.rules_version ? dynamicQuality.evaluated_at : row.quality_evaluated_at || null,
+    quality_v2_passed: storedRulesVersion < dynamicQuality.rules_version ? null : dynamicQuality.passed,
+    quality_migration_required: storedRulesVersion < dynamicQuality.rules_version,
     seo_title: row.seo_title,
     meta_description: row.meta_description,
     canonical_path: row.canonical_path,
@@ -125,7 +161,7 @@ function profileMovie(row: Record<string, unknown>): Record<string, unknown> | n
     content: String(row.intro_content || movie.content || ''),
     seo_profile: profile,
     seo_index_tier: 'manual',
-    seo_quality_score: Number(row.validation_score || 0),
+    seo_quality_score: effectiveScore,
     seo_checked_at: row.updated_at,
   };
 }
@@ -185,7 +221,8 @@ Deno.serve(async (req) => {
     .select(`
       movie_id,slug,status,index_mode,validation_score,seo_title,meta_description,
       canonical_path,og_image_url,focus_keyword,secondary_keywords,intro_content,review_content,
-      faq,topic_links,version,live_audit,last_audited_at,updated_at,movies!inner(${MOVIE_FIELDS})
+      faq,topic_links,movie_patch,version,live_audit,last_audited_at,updated_at,quality_rules_version,
+      quality_breakdown,intent_map,content_fingerprint,quality_evaluated_at,movies!inner(${MOVIE_FIELDS})
     `, { count: 'exact' })
     .eq('status', 'published')
     .eq('index_mode', 'index')

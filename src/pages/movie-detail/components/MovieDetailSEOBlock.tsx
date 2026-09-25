@@ -86,7 +86,7 @@ export default function MovieDetailSEOBlock({ movie }: Props) {
           <div>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">Thể loại</h3>
             <div className="flex flex-wrap gap-2">
-              {genres.map((genre) => <Link key={genre.slug} to={`/the-loai/${genre.slug}`} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-sm text-white/70 hover:border-red-500/30 hover:text-red-400">{genre.name}</Link>)}
+              {genres.map((genre) => <Link key={genre.slug} to={`/the-loai/${genre.slug}`} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-sm text-white/70 hover:border-red-500/30 hover:text-red-400">Xem phim {genre.name}</Link>)}
             </div>
           </div>
         )}
