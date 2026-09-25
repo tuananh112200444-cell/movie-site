@@ -210,6 +210,8 @@ expect('supabase/functions/static-seo-catalog/index.ts', [
   ['Trailer/upcoming pages can also have a verified editorial profile', 'static upcoming pages can lag behind a verified SEO Studio publish'],
   ["profile?.index_mode === 'index'", 'manual index approval is not gated'],
   ["const manuallyApproved = profile?.status === 'published'", 'static catalogue does not separate editorial SEO approval from playback audit state'],
+  ["from('movie_seo_topic_links')", 'static SEO HTML does not include persisted contextual topic clusters'],
+  ['persisted_topic_links', 'automatic contextual links are not merged with editorial links'],
 ]);
 expect('scripts/generate-static-movie-pages.mjs', [
   ['profile?.seo_title', 'static HTML ignores custom SEO title'],

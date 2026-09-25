@@ -24,8 +24,11 @@ const regularMovieLocs = [...(await readFile(path.join(OUT_DIR, 'sitemap-movies-
   .map((match) => match[1]);
 const upcomingMovieLocs = [...(await readFile(path.join(OUT_DIR, 'sitemap-movies-upcoming.xml'), 'utf8')).matchAll(/<loc>(https:\/\/khophim\.org\/phim\/[^<]+)<\/loc>/g)]
   .map((match) => match[1]);
+const editorialMovieLocs = [...(await readFile(path.join(OUT_DIR, 'sitemap-seo-studio.xml'), 'utf8')).matchAll(/<loc>(https:\/\/khophim\.org\/phim\/[^<]+)<\/loc>/g)]
+  .map((match) => match[1]);
 const upcomingMovieUrls = new Set(upcomingMovieLocs);
-const catalogMovieLocs = [...new Set([...regularMovieLocs, ...upcomingMovieLocs])];
+const editorialMovieUrls = new Set(editorialMovieLocs);
+const catalogMovieLocs = [...new Set([...editorialMovieLocs,...regularMovieLocs, ...upcomingMovieLocs])];
 const catalogRecords = [];
 for (const movieUrl of catalogMovieLocs) {
   const slug = decodeURIComponent(new URL(movieUrl).pathname.replace(/^\/phim\//, ''));
@@ -38,6 +41,7 @@ for (const movieUrl of catalogMovieLocs) {
     name,
     movie: bootstrap?.detail?.movie || {},
     upcoming: upcomingMovieUrls.has(movieUrl),
+    editorial: editorialMovieUrls.has(movieUrl),
   });
 }
 const worker = await import(`${pathToFileURL(path.resolve('functions/[[path]].js')).href}?static-shells=${Date.now()}`);
@@ -64,6 +68,10 @@ function matchesContext(record, pathname) {
   const categories = taxonomySlugs(movie.category);
   const countries = taxonomySlugs(movie.country);
   if (pathname === '/kho-phim') return true;
+  if (pathname === '/xem-phim-online' || pathname === '/xem-phim') return !record.upcoming;
+  if (pathname === '/phim-vietsub' || pathname === '/xem-phim-vietsub') return /vietsub|phụ đề|phu de/i.test(String(movie.lang || ''));
+  if (pathname === '/phim-thuyet-minh' || pathname === '/xem-phim-thuyet-minh') return /thuyết minh|thuyet minh|lồng tiếng|long tieng/i.test(String(movie.lang || ''));
+  if (pathname === '/phim-full-hd' || pathname === '/xem-phim-hd') return /hd|fhd|4k|full/i.test(`${movie.quality || ''} ${movie.episode_current || ''}`);
   if (pathname === '/phim-sap-chieu') return record.upcoming;
   if (pathname === '/phim-le') return /single|phim-le/.test(type);
   if (pathname === '/phim-bo') return /series|tv|phim-bo/.test(type);
@@ -76,8 +84,10 @@ function matchesContext(record, pathname) {
 }
 
 function contextualMovieLinks(pathname) {
-  const matches = catalogRecords.filter((record) => matchesContext(record, pathname));
-  const limit = pathname === '/kho-phim' ? matches.length : 48;
+  const matches = catalogRecords.filter((record) => matchesContext(record, pathname))
+    .sort((a,b)=>Number(b.editorial)-Number(a.editorial));
+  const broadIntentHub = ['/xem-phim-online','/xem-phim','/phim-vietsub','/xem-phim-vietsub','/phim-thuyet-minh','/xem-phim-thuyet-minh','/phim-full-hd','/xem-phim-hd'].includes(pathname);
+  const limit = pathname === '/kho-phim' ? matches.length : broadIntentHub ? 72 : 48;
   return matches.slice(0, limit).map((record) => `<li><a href="${record.url}">${record.name}</a></li>`).join('');
 }
 

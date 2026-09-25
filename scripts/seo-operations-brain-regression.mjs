@@ -44,6 +44,7 @@ requireText('supabase/functions/admin-seo-studio/index.ts', "status: 'completed'
 requireText('supabase/functions/admin-seo-studio/index.ts', "from('seo_static_release_requests')", 'publishing does not request a static artifact refresh');
 requireText('supabase/functions/seo-static-release/index.ts', 'queueGoogleCoverageCheck', 'a verified static SEO publication does not automatically start the Google coverage evidence loop');
 requireText('supabase/functions/seo-static-release/index.ts', 'confirmedSlugs', 'Google coverage feedback is not limited to a wall-clock guess before the Pages deployment is actually verified');
+requireText('supabase/functions/seo-static-release/index.ts', "refresh_movie_seo_topic_clusters", 'new SEO releases do not refresh contextual topic clusters before the Pages build');
 if (files['supabase/functions/seo-static-release/index.ts'].includes("db.rpc('movie_has_usable_persisted_playback'")) {
   failures.push('Static SEO publication is still blocked by the separate playback system.');
 }
