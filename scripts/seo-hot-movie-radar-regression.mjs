@@ -48,6 +48,12 @@ requireText('supabase/functions/static-seo-catalog/index.ts', [
   ['tmdbId > 0 || trustedCinemaSource', 'static publication still requires TMDB for trusted cinema records'],
 ]);
 
+const staticCatalogue = read('supabase/functions/static-seo-catalog/index.ts');
+checks.push([
+  !staticCatalogue.includes(".not('movies.tmdb_id', 'is', null)"),
+  'static catalogue query discards verified cinema records before the trusted-source quality gate',
+]);
+
 requireText('supabase/functions/gsc-seo-feedback/index.ts', [
   ["from('seo_hot_movie_runs')", 'SEO dashboard API omits the latest radar run'],
   ["from('seo_hot_movie_candidates')", 'SEO dashboard API omits hot candidates'],
