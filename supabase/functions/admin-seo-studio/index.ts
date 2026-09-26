@@ -8,6 +8,10 @@ import {
   type SeoQualityV2Result,
 } from '../_shared/seo-quality-v2.ts';
 import {
+  buildIndexedSeoDecision,
+  type IndexedSeoDecision,
+} from '../_shared/seo-indexed-page-guard.ts';
+import {
   missingMovieFactFields,
   patchFromDatabaseConsensus,
   patchFromVerifiedDatabaseCandidate,
@@ -665,6 +669,48 @@ function fieldStates(payload: SeoPayload, validation: ReturnType<typeof validate
     }
   }
   return states;
+}
+
+function applyIndexedDecisionToFieldStates(
+  states: Record<string, SafeFieldState>,
+  decision: IndexedSeoDecision,
+): Record<string, SafeFieldState> {
+  const protectedFields = new Set(decision.protected_fields);
+  const editableFields = new Set(decision.editable_fields);
+  return Object.fromEntries(Object.entries(states).map(([field, state]) => {
+    if (!protectedFields.has(field) || editableFields.has(field) || state.status === 'needs_attention' || state.status === 'immutable') {
+      return [field,state];
+    }
+    return [field,{
+      status:'protected' as const,
+      protected:true,
+      reason:`${decision.label}: ${decision.reason}`,
+    }];
+  }));
+}
+
+function indexedGuardIssues(
+  baseline: SeoPayload,
+  next: SeoPayload,
+  unlockedFields: string[],
+  decision: IndexedSeoDecision,
+): ValidationIssue[] {
+  if (!decision.indexed) return [];
+  const protectedFields = new Set(decision.protected_fields);
+  const editableFields = new Set(decision.editable_fields);
+  const unlocked = new Set(unlockedFields);
+  return SAFE_FIELD_PATHS.flatMap((field) => {
+    if (comparable(valueAt(baseline,field)) === comparable(valueAt(next,field))) return [];
+    if (!protectedFields.has(field) || editableFields.has(field)) return [];
+    return [{
+      code:`indexed_guard_${field.replace(/[^a-z0-9]+/gi,'_')}`,
+      severity:'error' as const,
+      section:'technical' as const,
+      message:unlocked.has(field)
+        ? `Mục “${field}” vẫn bị khóa vì Search Console chưa có bằng chứng cần sửa. ${decision.reason}`
+        : `Mục “${field}” của trang đã index đang được bảo vệ. ${decision.reason}`,
+    }];
+  });
 }
 
 function moviePatchFromRecord(movie: Record<string, unknown>): Record<string, unknown> {
@@ -1662,6 +1708,14 @@ Deno.serve(async (req) => {
       const observedQueries = (queryMetricResult.error ? [] : queryMetricResult.data ?? []).map((item) => String((item as Record<string, unknown>).query || '')).filter(Boolean);
       const baselineQualityV2 = evaluateSeoQualityV2(baseline, movie, observedQueries);
       const baselineValidation = mergeQualityV2(validate(baseline), baselineQualityV2);
+      const indexedDecision = buildIndexedSeoDecision({
+        slug:String(movie.slug || ''),
+        aliases:baselineQualityV2.intent_map.aliases,
+        profileUpdatedAt:profile?.updated_at,
+        inspection:inspectionResult.error ? null : inspectionResult.data as Record<string, unknown> | null,
+        pageMetric:metricResult.error ? null : metricResult.data as Record<string, unknown> | null,
+        queryMetrics:queryMetricResult.error ? [] : (queryMetricResult.data ?? []) as Array<Record<string, unknown>>,
+      });
       const baselineVersion = Number(profile?.version || 0);
       const staticRelease = releaseForProfile(releaseResult.error ? [] : releaseResult.data, baselineVersion);
       const serverDraft = draftResult.data && Number(draftResult.data.baseline_version || 0) === baselineVersion
@@ -1681,6 +1735,7 @@ Deno.serve(async (req) => {
         review: reviewResult.data,
         quality: qualityResult.data,
         quality_v2: baselineQualityV2,
+        indexed_decision: indexedDecision,
         ai_available: Boolean(GEMINI_API_KEY || OPENAI_API_KEY),
         ai_provider: GEMINI_API_KEY ? 'gemini' : OPENAI_API_KEY ? 'openai' : null,
         publish_mode: SEO_PUBLISH_MODE,
@@ -1698,7 +1753,10 @@ Deno.serve(async (req) => {
           baseline,
           baseline_version: baselineVersion,
           baseline_validation: baselineValidation,
-          fields: fieldStates(baseline, baselineValidation, profile?.status === 'published'),
+          fields: applyIndexedDecisionToFieldStates(
+            fieldStates(baseline, baselineValidation, profile?.status === 'published'),
+            indexedDecision,
+          ),
           draft: serverDraft,
           history_available: Number(profile?.version || 0) > 0,
         },
@@ -1778,6 +1836,18 @@ Deno.serve(async (req) => {
         const keywordPlan = buildVerifiedKeywordPlan(movie, assistantBaseline.focus_keyword, observedQueries);
         const assistantQualityV2 = evaluateSeoQualityV2(assistantBaseline, movie, observedQueries);
         const assistantValidation = mergeQualityV2(validate(assistantBaseline), assistantQualityV2);
+        const indexedDecision = buildIndexedSeoDecision({
+          slug,
+          aliases:assistantQualityV2.intent_map.aliases,
+          profileUpdatedAt:profile?.updated_at,
+          inspection:inspectionResult.error ? null : inspectionResult.data as Record<string, unknown> | null,
+          pageMetric:metricResult.error ? null : metricResult.data as Record<string, unknown> | null,
+          queryMetrics:queryMetricResult.error ? [] : (queryMetricResult.data ?? []) as Array<Record<string, unknown>>,
+        });
+        const indexedAllowedFields = new Set(AI_EDITABLE_FIELDS.filter((field) =>
+          !indexedDecision.indexed
+          || !indexedDecision.protected_fields.includes(field)
+          || indexedDecision.editable_fields.includes(field)));
         const trustedContext = {
         mode,
         page_url: `https://khophim.org/phim/${slug}`,
@@ -1787,7 +1857,11 @@ Deno.serve(async (req) => {
           review_content: plainText(assistantBaseline.review_content, mode === 'deep' ? 18000 : 8000),
         },
         current_validation: assistantValidation,
-        protected_fields: fieldStates(assistantBaseline, assistantValidation, profile?.status === 'published'),
+        protected_fields: applyIndexedDecisionToFieldStates(
+          fieldStates(assistantBaseline, assistantValidation, profile?.status === 'published'),
+          indexedDecision,
+        ),
+        indexed_page_guard: indexedDecision,
         movie_facts: {
           name: assistantBaseline.movie_patch?.name,
           title_vi: assistantBaseline.movie_patch?.title_vi,
@@ -1875,7 +1949,7 @@ Deno.serve(async (req) => {
           index_mode: baseline.index_mode,
         }, keywordPlan))));
       };
-      let proposed = buildProposedPayload(verifiedWorkingBaseline, suggestion);
+      let proposed = buildProposedPayload(verifiedWorkingBaseline, suggestion, indexedAllowedFields);
       let proposedQualityV2 = evaluateSeoQualityV2(proposed, movie, observedQueries);
       let proposedValidation = mergeQualityV2(validate(proposed), proposedQualityV2);
       proposedValidation = mergeValidation(proposedValidation, await remoteValidationIssues(db, proposed));
@@ -1883,7 +1957,7 @@ Deno.serve(async (req) => {
       const firstPassRemaining = repairableIssues(proposedValidation);
       if (aiGenerationSucceeded && firstPassRemaining.length > 0) {
         const repairFields = new Set(firstPassRemaining.flatMap((issue) => fieldsForIssue(issue.code))
-          .filter((field) => AI_EDITABLE_FIELDS.includes(field as typeof AI_EDITABLE_FIELDS[number])));
+          .filter((field) => AI_EDITABLE_FIELDS.includes(field as typeof AI_EDITABLE_FIELDS[number]) && indexedAllowedFields.has(field as typeof AI_EDITABLE_FIELDS[number])));
         const repairContext = {
           ...trustedContext,
           mode: 'deep',
@@ -1942,6 +2016,7 @@ Deno.serve(async (req) => {
         warnings: Array.from(new Set(suggestion.warnings.filter(Boolean))),
         completion,
         quality_v2: proposedQualityV2,
+        indexed_decision: indexedDecision,
         fact_enrichment: factEnrichment,
         preserved_fields: Array.from(new Set([...suggestion.preserved_fields, 'slug', 'canonical_path', 'index_mode', 'movie_patch'])),
         generated_at: new Date().toISOString(),
@@ -2000,10 +2075,13 @@ Deno.serve(async (req) => {
       }
       let validation = validate(payload);
       if (!payload.movie_id || !payload.slug) return json({ error: 'Missing movie identity', validation }, 400, headers);
-      const [movieResult, profileResult, reviewResult] = await Promise.all([
+      const [movieResult, profileResult, reviewResult, inspectionResult, metricResult, queryMetricResult] = await Promise.all([
         db.from('movies').select('id,slug,name,origin_name,title_vi,title_en,content,year,status,seo_catalog_status,episode_current,current_episode,release_at,quality,lang,trailer_url,thumb_url,poster_url,actor,director,category,country,is_published,updated_at').eq('id', payload.movie_id).maybeSingle(),
         db.from('movie_seo_profiles').select('*').eq('movie_id', payload.movie_id).maybeSingle(),
         db.from('movie_reviews').select('content,word_count,generated_at,updated_at').eq('slug', payload.slug).maybeSingle(),
+        db.from('seo_url_inspections').select('verdict,coverage_state,indexing_state,page_fetch_state,user_canonical,google_canonical,last_crawl_time,inspected_at,recommendation').eq('movie_id', payload.movie_id).maybeSingle(),
+        db.from('seo_search_metrics').select('clicks,impressions,ctr,position,date_start,date_end,collected_at').eq('dimension_type', 'page').ilike('dimension_value', `%/phim/${payload.slug}%`).order('collected_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('seo_query_page_metrics').select('query,clicks,impressions,ctr,position,date_start,date_end,collected_at').ilike('page', `%/phim/${payload.slug}%`).order('collected_at', { ascending: false }).order('impressions', { ascending: false }).limit(30),
       ]);
       if (movieResult.error || !movieResult.data) throw movieResult.error || new Error('Movie not found');
       if (profileResult.error) throw profileResult.error;
@@ -2015,8 +2093,17 @@ Deno.serve(async (req) => {
         currentProfile,
         reviewResult.data && typeof reviewResult.data === 'object' ? reviewResult.data as Record<string, unknown> : null,
       );
-      const currentQualityV2 = evaluateSeoQualityV2(currentBaseline, movie);
+      const observedQueries = (queryMetricResult.error ? [] : queryMetricResult.data ?? []).map((item) => String((item as Record<string, unknown>).query || '')).filter(Boolean);
+      const currentQualityV2 = evaluateSeoQualityV2(currentBaseline, movie, observedQueries);
       const currentValidation = mergeQualityV2(validate(currentBaseline), currentQualityV2);
+      const indexedDecision = buildIndexedSeoDecision({
+        slug:payload.slug,
+        aliases:currentQualityV2.intent_map.aliases,
+        profileUpdatedAt:currentProfile?.updated_at,
+        inspection:inspectionResult.error ? null : inspectionResult.data as Record<string, unknown> | null,
+        pageMetric:metricResult.error ? null : metricResult.data as Record<string, unknown> | null,
+        queryMetrics:queryMetricResult.error ? [] : (queryMetricResult.data ?? []) as Array<Record<string, unknown>>,
+      });
       const focusState = fieldStates(currentBaseline, currentValidation, currentProfile?.status === 'published').focus_keyword;
       if (focusState?.protected
         && !safeEdit.unlocked_fields.includes('focus_keyword')
@@ -2041,6 +2128,12 @@ Deno.serve(async (req) => {
           validation,
           safeEdit.unlocked_fields,
           currentProfile?.status === 'published',
+        ));
+        validation = mergeValidation(validation,indexedGuardIssues(
+          currentBaseline,
+          payload,
+          safeEdit.unlocked_fields,
+          indexedDecision,
         ));
       }
       if (action === 'publish' && validation.issues.some((item) => item.severity === 'error')) {
@@ -2094,7 +2187,7 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }, { onConflict: 'movie_id' });
       if (saveError) throw saveError;
-      if (action === 'save') return json({ success: true, status: 'draft', validation, quality_v2: qualityV2, published_profile_unchanged: true }, 200, headers);
+      if (action === 'save') return json({ success: true, status: 'draft', validation, quality_v2: qualityV2, indexed_decision: indexedDecision, published_profile_unchanged: true }, 200, headers);
 
       const releaseTiming = body.release_timing === 'urgent' ? 'urgent' : 'nightly';
       if (SEO_PUBLISH_MODE === 'static' && releaseTiming === 'nightly') {
@@ -2151,6 +2244,7 @@ Deno.serve(async (req) => {
           publish_mode: SEO_PUBLISH_MODE,
           validation,
           quality_v2: qualityV2,
+          indexed_decision: indexedDecision,
           live_audit: queuedAudit,
           published_profile_unchanged: true,
           public_discovery: { indexable: false, in_sitemap: false, queued: true, checked_at: queuedAt },
@@ -2229,6 +2323,7 @@ Deno.serve(async (req) => {
           status: 'queued-static',
           publish_mode: SEO_PUBLISH_MODE,
           validation,
+          indexed_decision: indexedDecision,
           live_audit: staticPendingAudit,
           public_discovery: { indexable: false, in_sitemap: false, queued: true, checked_at: queuedAt },
           static_release: { status: 'pending', release_lane: 'urgent', requested_version: Number(publishedVersion || 0), requested_at: queuedAt },
@@ -2378,6 +2473,7 @@ Deno.serve(async (req) => {
         success: true,
         status: payload.index_mode === 'index' ? 'published-indexable' : 'published-noindex',
         validation,
+        indexed_decision: indexedDecision,
         live_audit: finalVerification,
         public_discovery: {
           indexable: payload.index_mode === 'index',

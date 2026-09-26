@@ -11,6 +11,7 @@ const files = Object.fromEntries(await Promise.all([
   'supabase/functions/admin-seo-studio/index.ts',
   'supabase/functions/static-seo-catalog/index.ts',
   'supabase/functions/_shared/seo-quality-v2.ts',
+  'supabase/functions/_shared/seo-indexed-page-guard.ts',
   'supabase/functions/sitemap-seo-studio/index.ts',
   'supabase/migrations/20260828170000_complete_movie_seo_studio.sql',
   'supabase/migrations/20260828103000_add_movie_seo_studio.sql',
@@ -62,6 +63,9 @@ expect('src/pages/admin-seo-studio/page.tsx', [
   ['Dữ liệu phim đang đạt — không cần sửa', 'already-good movie data is not collapsed by default'],
   ['Cổng SEO Studio V', 'SEO Studio still shows the playback catalogue score as the editorial quality gate'],
   ['indexingPipeline?.google_confirmed', 'SEO Studio does not distinguish Google-confirmed states from internal publication states'],
+  ['data-kp-indexed-page-guard="true"', 'indexed pages have no evidence-based protection panel'],
+  ['indexedDecision.observation.decision_check_at', 'UI does not expose the 28-day decision checkpoint after recrawl'],
+  ['Google đang bảo vệ', 'UI still allows sensitive indexed fields to be unlocked without evidence'],
   ['Gợi ý từ dữ liệu có sẵn', 'SEO Studio disguises its non-AI fallback as AI'],
   ['SEO Worker đang không chạy trên website thật', 'operator cannot see when the SEO Worker is unavailable'],
   ["loaded.publish_mode === 'worker' && loaded.worker_status?.online === false", 'static-only publishing shows a false Worker outage warning'],
@@ -168,6 +172,9 @@ expect('supabase/functions/admin-seo-studio/index.ts', [
   ['evaluateSeoQualityV2', 'publish does not apply the current SEO quality contract'],
   ['indexingPipelineState', 'server does not expose truthful publication/discovery/index states'],
   ['quality_rules_version: qualityV2.rules_version', 'draft does not persist the quality contract version'],
+  ['buildIndexedSeoDecision', 'server does not classify indexed pages from Search Console evidence'],
+  ['indexedGuardIssues', 'server does not enforce indexed-page field protection'],
+  ['indexedAllowedFields', 'AI can rewrite protected indexed-page fields'],
 ]);
 const studioEndpoint = files['supabase/functions/admin-seo-studio/index.ts'];
 if (studioEndpoint.indexOf('const prePublishAudit = await inspectLivePage(payload)') < 0
@@ -239,6 +246,16 @@ expect('supabase/functions/_shared/seo-quality-v2.ts', [
   ['search_intent', 'quality gate does not score search intent separately'],
   ['originality', 'quality gate does not score originality separately'],
   ['content_fingerprint', 'quality gate cannot audit repeated editorial output'],
+]);
+expect('supabase/functions/_shared/seo-indexed-page-guard.ts', [
+  ["'awaiting_recrawl'", 'guard cannot wait for Google to crawl the current profile'],
+  ["'insufficient_data'", 'guard edits sensitive fields without a minimum evidence threshold'],
+  ["'low_ctr'", 'guard does not identify evidence-backed CTR opportunities'],
+  ["'wrong_query'", 'guard does not identify query-intent drift'],
+  ['early_check_at', 'guard lacks the 7-day early checkpoint'],
+  ['provisional_check_at', 'guard lacks the 14-day provisional checkpoint'],
+  ['decision_check_at', 'guard lacks the 28-day decision checkpoint'],
+  ['MIN_IMPRESSIONS = 100', 'guard has no conservative impression threshold'],
 ]);
 expect('supabase/migrations/20260925193000_add_movie_seo_quality_v2.sql', [
   ['quality_rules_version', 'profile schema does not store the applied quality version'],
