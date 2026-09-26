@@ -196,8 +196,7 @@ Deno.serve(async (req) => {
       `)
       .eq('eligible_for_index', true)
       .eq('movies.is_published', true)
-      .is('movies.superseded_by_movie_id', null)
-      .not('movies.tmdb_id', 'is', null);
+      .is('movies.superseded_by_movie_id', null);
   qualityQuery = upcomingCohort
     ? qualityQuery
       .eq('index_tier', 'upcoming')
