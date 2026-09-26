@@ -21,7 +21,22 @@ type Signal = {
   releaseYear?: number;
   movieId?: string;
   movieSlug?: string;
+  verifiedCinema?: VerifiedCinemaCandidate;
   evidence?: Record<string, unknown>;
+};
+
+type VerifiedCinemaCandidate = {
+  sourceUrl: string;
+  title: string;
+  description: string;
+  posterUrl: string;
+  trailerUrl: string;
+  releaseDate: string;
+  year: number;
+  genres: string[];
+  actors: string[];
+  directors: string[];
+  country: string;
 };
 
 type MatchRow = {
@@ -136,6 +151,102 @@ function htmlDecode(value: string): string {
     .trim();
 }
 
+function slugify(value: string): string {
+  return normalizeTitle(value).replace(/\s+/g, '-').replace(/^-+|-+$/g, '').slice(0, 110);
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function names(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return values.map((item) => {
+    const itemRecord = record(item);
+    return String(itemRecord?.name ?? item ?? '').replace(/\s+/g, ' ').trim();
+  }).filter(Boolean).slice(0, 16);
+}
+
+function absoluteHttpUrl(value: unknown, base: string): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw, base);
+    return url.protocol === 'https:' ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function verifiedYoutubeUrl(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (url.protocol !== 'https:' || !['youtube.com', 'm.youtube.com', 'youtu.be'].includes(host)) return '';
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
+function verifiedCinemaFromHtml(sourceUrl: string, fallbackTitle: string, html: string): VerifiedCinemaCandidate | null {
+  let parsedMovie: Record<string, unknown> | null = null;
+  for (const match of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try {
+      const parsed = JSON.parse(match[1]) as unknown;
+      const roots = Array.isArray(parsed) ? parsed : [parsed];
+      const candidates = roots.flatMap((item) => {
+        const itemRecord = record(item);
+        const graph = Array.isArray(itemRecord?.['@graph']) ? itemRecord?.['@graph'] as unknown[] : [];
+        return [item, ...graph];
+      });
+      const movie = candidates.map(record).find((item) => String(item?.['@type'] ?? '').toLowerCase() === 'movie');
+      if (movie) {
+        parsedMovie = movie;
+        break;
+      }
+    } catch {
+      // Ignore unrelated malformed JSON-LD blocks.
+    }
+  }
+  if (!parsedMovie) return null;
+
+  const title = String(parsedMovie.name ?? fallbackTitle).replace(/\s+/g, ' ').trim();
+  const description = String(parsedMovie.description ?? '').replace(/\s+/g, ' ').trim();
+  const imageValue = record(parsedMovie.image)?.url ?? parsedMovie.image;
+  const posterUrl = absoluteHttpUrl(imageValue, sourceUrl);
+  const trailer = record(parsedMovie.trailer);
+  const trailerUrl = verifiedYoutubeUrl(trailer?.contentUrl ?? trailer?.embedUrl);
+  const releaseDate = String(parsedMovie.datePublished ?? '').slice(0, 10);
+  const year = Number(releaseDate.slice(0, 4));
+  const actors = names(parsedMovie.actor);
+  const directors = names(parsedMovie.director).slice(0, 8);
+  const genres = names(parsedMovie.genre);
+  const country = names(parsedMovie.countryOfOrigin)[0] || 'Việt Nam';
+  const currentYear = new Date().getUTCFullYear();
+  if (!title || description.length < 80 || !posterUrl || !trailerUrl
+      || !/^\d{4}-\d{2}-\d{2}$/.test(releaseDate)
+      || year < currentYear - 2 || year > currentYear + 2
+      || actors.length === 0 || directors.length === 0) return null;
+  return {
+    sourceUrl,
+    title,
+    description,
+    posterUrl,
+    trailerUrl,
+    releaseDate,
+    year,
+    genres: genres.length ? genres : ['Phim chiếu rạp'],
+    actors,
+    directors,
+    country,
+  };
+}
+
 async function fetchText(url: string, timeoutMs = 18_000): Promise<string> {
   const response = await fetch(url, {
     headers: {
@@ -179,9 +290,12 @@ async function fetchBoxOfficeSignals(): Promise<Signal[]> {
     const path = match[3];
     const detailUrl = new URL(path, BOX_OFFICE_URL).toString();
     let releaseDate = '';
+    let verifiedCinema: VerifiedCinemaCandidate | undefined;
     try {
       const detail = await fetchText(detailUrl, 10_000);
-      releaseDate = detail.match(/"releaseDate":"(\d{4}-\d{2}-\d{2})"/i)?.[1]
+      verifiedCinema = verifiedCinemaFromHtml(detailUrl, title, detail) ?? undefined;
+      releaseDate = verifiedCinema?.releaseDate
+        ?? detail.match(/"releaseDate":"(\d{4}-\d{2}-\d{2})"/i)?.[1]
         ?? detail.match(/Khởi chiếu:\s*(?:<!--\s*-->)?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i)?.slice(1).reverse().join('-')
         ?? '';
       if (releaseDate && !/^\d{4}-\d{2}-\d{2}$/.test(releaseDate)) releaseDate = '';
@@ -197,6 +311,7 @@ async function fetchBoxOfficeSignals(): Promise<Signal[]> {
       sourceUrl: detailUrl,
       releaseDate: releaseDate || undefined,
       releaseYear: releaseDate ? Number(releaseDate.slice(0, 4)) : undefined,
+      verifiedCinema,
       evidence: { market: 'Vietnam cinema', observed_rank: rank },
     } satisfies Signal;
   });
@@ -281,6 +396,130 @@ async function fetchFirstPartySignals(
       },
     } satisfies Signal;
   }).filter((signal: Signal) => signal.sourceKey && signal.title);
+}
+
+function cinemaEditorialContent(candidate: VerifiedCinemaCandidate): string {
+  const actorText = candidate.actors.slice(0, 6).join(', ');
+  const directorText = candidate.directors.join(', ');
+  const facts = `${candidate.title} là phim chiếu rạp năm ${candidate.year}, khởi chiếu ngày ${candidate.releaseDate.split('-').reverse().join('/')}. `
+    + `Phim do ${directorText} đạo diễn, với sự tham gia của ${actorText}.`;
+  const update = `KhoPhim đã ghi nhận trailer chính thức và trang thông tin của ${candidate.title} để người xem có thể theo dõi sớm. `
+    + 'Thông tin lịch phát hành, nội dung và nguồn xem sẽ tiếp tục được đối chiếu; khi có nguồn phát hợp lệ, trang phim này sẽ được cập nhật trên cùng một địa chỉ.';
+  return `${candidate.description} ${facts} ${update}`.replace(/\s+/g, ' ').trim();
+}
+
+function hasPlayableMarker(movie: Record<string, unknown>): boolean {
+  if (Number(movie.current_episode || 0) > 0) return true;
+  const label = String(movie.episode_current || '').toLocaleLowerCase('vi-VN');
+  return Boolean(label && !/(trailer|teaser|sắp chiếu|sap chieu|đang cập nhật|dang cap nhat)/.test(label));
+}
+
+async function importVerifiedCinemaMovie(
+  db: ReturnType<typeof createClient>,
+  candidate: VerifiedCinemaCandidate,
+  matchedMovieId?: string,
+): Promise<{ movie: MovieRow; inserted: boolean; changed: boolean } | null> {
+  const movieFields = 'id,slug,name,year,is_published,status,episode_current,current_episode,trailer_url,tmdb_id,source_site,content,poster_url,release_at';
+  let existingQuery = db.from('movies').select(movieFields).is('superseded_by_movie_id', null).limit(1);
+  existingQuery = matchedMovieId
+    ? existingQuery.eq('id', matchedMovieId)
+    : existingQuery.eq('source_url', candidate.sourceUrl);
+  const existingBySource = await existingQuery.maybeSingle();
+  if (existingBySource.error) throw existingBySource.error;
+  if (existingBySource.data && hasPlayableMarker(existingBySource.data as Record<string, unknown>)) {
+    return { movie: existingBySource.data as unknown as MovieRow, inserted: false, changed: false };
+  }
+
+  const now = new Date().toISOString();
+  const slug = slugify(`${candidate.title}-${candidate.year}`) || `cinema-${Date.now()}`;
+  const category = candidate.genres.map((name) => ({ id: slugify(name), name, slug: slugify(name) }));
+  const countrySlug = slugify(candidate.country);
+  const content = cinemaEditorialContent(candidate);
+  const payload = {
+    slug,
+    name: candidate.title,
+    origin_name: candidate.title,
+    title_vi: candidate.title,
+    title_original: candidate.title,
+    normalized_name: normalizeTitle(candidate.title).replace(/\s+/g, ''),
+    content,
+    type: 'phim-le',
+    status: 'trailer',
+    episode_current: 'Trailer',
+    episode_total: '',
+    current_episode: 0,
+    total_episodes: 0,
+    quality: 'HD',
+    lang: candidate.country.toLocaleLowerCase('vi-VN').includes('việt') ? 'Tiếng Việt' : 'Vietsub',
+    year: candidate.year,
+    thumb_url: candidate.posterUrl,
+    poster_url: candidate.posterUrl,
+    trailer_url: candidate.trailerUrl,
+    actor: candidate.actors,
+    director: candidate.directors,
+    category,
+    country: [{ id: countrySlug === 'viet-nam' ? 'VN' : countrySlug, name: candidate.country, slug: countrySlug }],
+    release_at: candidate.releaseDate,
+    schedule_type: null,
+    schedule_note: 'Trang phim được tạo từ tín hiệu phòng vé đã xác minh; KhoPhim sẽ cập nhật nguồn xem khi có nguồn hợp lệ.',
+    seo_catalog_status: 'upcoming',
+    catalog_source: 'phongveviet-hot-radar',
+    catalog_synced_at: now,
+    catalog_window_start: now.slice(0, 10),
+    catalog_window_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    source_site: 'phongveviet-cinema',
+    source_name: 'Phòng Vé Việt',
+    source_url: candidate.sourceUrl,
+    is_published: true,
+    updated_at: now,
+  };
+
+  let movie: MovieRow | null = null;
+  let inserted = false;
+  if (existingBySource.data?.id) {
+    if (String(existingBySource.data.content || '') === content
+        && String(existingBySource.data.trailer_url || '') === candidate.trailerUrl
+        && String(existingBySource.data.poster_url || '') === candidate.posterUrl
+        && String(existingBySource.data.release_at || '').slice(0, 10) === candidate.releaseDate) {
+      return { movie: existingBySource.data as unknown as MovieRow, inserted: false, changed: false };
+    }
+    const {
+      slug: _slug,
+      source_site: _sourceSite,
+      source_name: _sourceName,
+      source_url: _sourceUrl,
+      catalog_source: _catalogSource,
+      ...trustedUpdate
+    } = payload;
+    const update = matchedMovieId ? trustedUpdate : {
+      ...trustedUpdate,
+      source_site: payload.source_site,
+      source_name: payload.source_name,
+      source_url: payload.source_url,
+      catalog_source: payload.catalog_source,
+    };
+    const result = await db.from('movies').update(update)
+      .eq('id', String(existingBySource.data.id))
+      .select(movieFields)
+      .single();
+    if (result.error) throw result.error;
+    movie = result.data as unknown as MovieRow;
+  } else {
+    const result = await db.from('movies').insert(payload).select(movieFields).single();
+    if (result.error) {
+      if (!String(result.error.message).toLowerCase().includes('duplicate')) throw result.error;
+      const duplicate = await db.from('movies').select(movieFields).eq('slug', slug).limit(1).maybeSingle();
+      if (duplicate.error || !duplicate.data) throw duplicate.error || result.error;
+      movie = duplicate.data as unknown as MovieRow;
+    } else {
+      movie = result.data as unknown as MovieRow;
+      inserted = true;
+    }
+  }
+  if (!movie?.id) return null;
+  const refresh = await db.rpc('refresh_movie_seo_quality', { p_movie_id: movie.id });
+  if (refresh.error) throw refresh.error;
+  return { movie, inserted, changed: true };
 }
 
 async function probePage(slug: string): Promise<PageProbe> {
@@ -460,7 +699,7 @@ async function runRadar(db: ReturnType<typeof createClient>) {
     throw new Error('All hot-movie signal sources failed');
   }
 
-  const matched = await mapConcurrent(signals, 5, async (signal) => {
+  let matched = await mapConcurrent(signals, 5, async (signal) => {
     if (signal.movieId && signal.movieSlug) {
       return {
         signal,
@@ -488,6 +727,49 @@ async function runRadar(db: ReturnType<typeof createClient>) {
     if (error) throw error;
     const options = (data ?? []) as MatchRow[];
     return { signal, match: chooseMatch(options), options };
+  });
+
+  let autoImportedCount = 0;
+  let autoLinkedCount = 0;
+  matched = await mapConcurrent(matched, 2, async (item) => {
+    if (!item.signal.verifiedCinema || item.match.status === 'ambiguous') return item;
+    try {
+      const imported = await importVerifiedCinemaMovie(
+        db,
+        item.signal.verifiedCinema,
+        item.match.row?.movie_id,
+      );
+      if (!imported) return item;
+      if (imported.inserted) autoImportedCount += 1;
+      else if (imported.changed) autoLinkedCount += 1;
+      item.signal.evidence = {
+        ...(item.signal.evidence ?? {}),
+        verified_cinema_import: true,
+        imported_new_movie: imported.inserted,
+        enriched_existing_movie: !imported.inserted && imported.changed,
+      };
+      if (item.match.status !== 'missing') return item;
+      return {
+        signal: item.signal,
+        match: {
+          row: {
+            movie_id: imported.movie.id,
+            slug: imported.movie.slug,
+            movie_name: imported.movie.name,
+            movie_year: imported.movie.year,
+            is_published: imported.movie.is_published === true,
+            match_method: 'exact' as const,
+            confidence: 1,
+          },
+          status: 'direct' as const,
+          confidence: 1,
+        },
+        options: [] as MatchRow[],
+      };
+    } catch (error) {
+      sourceErrors.push(`verified import ${item.signal.sourceKey}: ${errorMessage(error)}`);
+      return item;
+    }
   });
 
   const movieIds = [...new Set(matched.flatMap((item) => item.match.row?.movie_id ? [item.match.row.movie_id] : []))];
@@ -599,6 +881,8 @@ async function runRadar(db: ReturnType<typeof createClient>) {
     enrich_content: rows.filter((row) => row.readiness_status === 'enrich_content').length,
     repair_technical: rows.filter((row) => row.readiness_status === 'repair_technical').length,
     release_static: rows.filter((row) => row.readiness_status === 'release_static').length,
+    auto_imported: autoImportedCount,
+    auto_linked: autoLinkedCount,
     work_items: workItems ?? null,
   };
   await db.from('seo_hot_movie_runs').update({

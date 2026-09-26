@@ -65,6 +65,7 @@ function isHighValueStaticMovie(movie: Record<string, unknown>, upcoming = false
   const image = String(movie.poster_url || movie.thumb_url || '').trim();
   const year = Number(movie.year || 0);
   const tmdbId = Number(movie.tmdb_id || 0);
+  const trustedCinemaSource = ['moveek-cinema', 'phongveviet-cinema'].includes(String(movie.source_site || ''));
   const actors = Array.isArray(movie.actor) ? movie.actor.filter(Boolean) : [];
   const categories = Array.isArray(movie.category) ? movie.category.filter(Boolean) : [];
   const countries = Array.isArray(movie.country) ? movie.country.filter(Boolean) : [];
@@ -77,7 +78,7 @@ function isHighValueStaticMovie(movie: Record<string, unknown>, upcoming = false
     ? UPCOMING_MIN_CONTENT_LENGTH
     : (manuallyApproved ? 160 : 500);
   return name.length >= 2 && content.length >= requiredContentLength && Boolean(image)
-    && year >= 1888 && year <= currentYear + 2 && (manuallyApproved || tmdbId > 0)
+    && year >= 1888 && year <= currentYear + 2 && (manuallyApproved || tmdbId > 0 || trustedCinemaSource)
     && categories.length > 0 && countries.length > 0 && !broken
     && (manuallyApproved || (originName.length >= 2 && hasUsefulPerson(actors)))
     && (manuallyApproved || hasUsefulPerson(Array.isArray(movie.director) ? movie.director.filter(Boolean) : []))
