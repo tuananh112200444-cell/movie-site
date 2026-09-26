@@ -24,6 +24,11 @@ requireText('supabase/migrations/20260910171118_add_hot_movie_seo_radar.sql', [
   ["'12 */6 * * *'", 'radar is not scheduled every six hours'],
 ]);
 
+requireText('supabase/migrations/20260926100000_connect_hot_radar_to_trailer_catalog.sql', [
+  ["replace(document.normalized_name, ' ', '') = compact_title_key", 'exact hot-movie matching does not share the compact catalogue key'],
+  ["document.normalized_name operator(extensions.%) compact_title_key", 'fuzzy matching still compares incompatible normalized title formats'],
+]);
+
 requireText('supabase/functions/seo-hot-movie-radar/index.ts', [
   ['verifyAdminRequest', 'manual runs are not protected by admin authentication'],
   ['BOX_OFFICE_URL', 'Vietnam box-office signal is missing'],
@@ -33,6 +38,14 @@ requireText('supabase/functions/seo-hot-movie-radar/index.ts', [
   ['probePage', 'production HTTP/robots/canonical verification is missing'],
   ['loadSitemapText', 'sitemap membership verification is missing'],
   ['refresh_seo_hot_movie_work_items', 'radar does not update the operations queue'],
+  ['verifiedCinemaFromHtml', 'verified cinema metadata is not extracted for missing hot movies'],
+  ['importVerifiedCinemaMovie', 'verified missing cinema movies are not imported automatically'],
+  ['refresh_movie_seo_quality', 'automatic cinema imports do not enter the SEO quality pipeline'],
+]);
+
+requireText('supabase/functions/static-seo-catalog/index.ts', [
+  ["['moveek-cinema', 'phongveviet-cinema']", 'verified cinema imports cannot enter the upcoming static catalogue'],
+  ['tmdbId > 0 || trustedCinemaSource', 'static publication still requires TMDB for trusted cinema records'],
 ]);
 
 requireText('supabase/functions/gsc-seo-feedback/index.ts', [
