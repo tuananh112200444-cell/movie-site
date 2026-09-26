@@ -60,6 +60,36 @@ export interface SeoSafeFieldState {
   reason: string;
 }
 
+export interface SeoIndexedDecision {
+  status: 'not_indexed' | 'awaiting_recrawl' | 'insufficient_data' | 'healthy' | 'low_ctr' | 'low_position' | 'wrong_query' | 'canonical_mismatch';
+  label: string;
+  reason: string;
+  indexed: boolean;
+  google_confirmed: boolean;
+  protected_fields: string[];
+  editable_fields: string[];
+  evidence: {
+    impressions: number;
+    clicks: number;
+    ctr: number;
+    position: number;
+    matching_query_impressions: number;
+    observed_query_impressions: number;
+    matching_query_ratio: number;
+    last_crawl_time: string | null;
+    inspected_at: string | null;
+    user_canonical: string | null;
+    google_canonical: string | null;
+  };
+  observation: {
+    started_at: string | null;
+    age_days: number;
+    early_check_at: string | null;
+    provisional_check_at: string | null;
+    decision_check_at: string | null;
+  };
+}
+
 export interface SeoSafeEditContext {
   baseline: SeoStudioPayload;
   baseline_version: number;
@@ -214,6 +244,7 @@ export interface SeoStudioLoadResult {
     evaluated_at: string;
   } | null;
   indexing_pipeline?: { stage: string; label: string; google_confirmed: boolean };
+  indexed_decision?: SeoIndexedDecision;
   insights?: {
     work_item?: { task_type?: string; status?: string; priority_score?: number; urgency?: string; reason?: string; required_fields?: string[]; evidence?: Record<string, unknown>; due_at?: string; updated_at?: string } | null;
     inspection?: { verdict?: string; coverage_state?: string; indexing_state?: string; page_fetch_state?: string; user_canonical?: string; google_canonical?: string; last_crawl_time?: string; inspected_at?: string; recommendation?: string } | null;
@@ -277,6 +308,7 @@ export interface SeoAiSuggestionResult {
   changed_fields: string[];
   evidence: SeoAiEvidence[];
   warnings: string[];
+  indexed_decision?: SeoIndexedDecision;
   completion?: {
     complete: boolean;
     repaired_in_second_pass: boolean;

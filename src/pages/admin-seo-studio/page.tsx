@@ -29,6 +29,12 @@ type StepKey = 'movie' | 'search' | 'content' | 'links' | 'technical';
 type LocalSeoDraft = { savedAt: string; payload: SeoStudioPayload; step: StepKey; unlockedFields?: string[] };
 type LocalSeoSession = { movie: SeoMovieSearchItem; step: StepKey };
 
+function formatSeoDecisionDate(value?: string | null): string {
+  if (!value) return 'Chờ Google crawl';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Chưa xác định' : date.toLocaleDateString('vi-VN');
+}
+
 const LOCAL_DRAFT_PREFIX = 'kp:seo-studio:draft:v2:';
 const LOCAL_SESSION_KEY = 'kp:seo-studio:session:v2';
 
@@ -565,6 +571,11 @@ export default function AdminSeoStudioPage() {
 
   const unlockField = (field: string) => {
     if (fieldStates[field]?.status === 'immutable') return;
+    const decision = loaded?.indexed_decision;
+    if (decision?.indexed && decision.protected_fields.includes(field) && !decision.editable_fields.includes(field)) {
+      setNotice({ type:'error', text:`${FIELD_LABELS[field] || field} đang được bảo vệ vì chưa có bằng chứng Search Console cần sửa.` });
+      return;
+    }
     setUnlockedFields((current) => current.includes(field) ? current : [...current, field]);
   };
 
@@ -811,6 +822,7 @@ export default function AdminSeoStudioPage() {
   const staticRelease = loaded?.static_release;
   const studioQuality = loaded?.quality_v2;
   const indexingPipeline = loaded?.indexing_pipeline;
+  const indexedDecision = loaded?.indexed_decision;
   const unifiedActionLabel = busy === 'ai'
     ? 'Trợ lý đang làm…'
     : busy === 'inspect'
@@ -860,12 +872,20 @@ export default function AdminSeoStudioPage() {
             <div className="rounded-xl bg-black/20 px-3 py-2"><p className="text-[10px] uppercase text-white/30">Đã thay đổi</p><strong className="text-sm text-cyan-300">{changedFields.length} mục</strong></div>
             <div className={`rounded-xl px-3 py-2 ${hasScoreRegression ? 'bg-red-500/10' : 'bg-black/20'}`}><p className="text-[10px] uppercase text-white/30">So với bản đang chạy</p><strong className={`text-sm ${hasScoreRegression ? 'text-red-300' : 'text-emerald-300'}`}>{hasScoreRegression ? 'Đang giảm chất lượng' : 'Không suy giảm'}</strong></div>
           </div>
+          {indexedDecision && <div data-kp-indexed-page-guard="true" className={`mt-3 rounded-xl border p-3 ${indexedDecision.indexed ? 'border-cyan-500/20 bg-cyan-500/[0.06]' : 'border-white/[0.07] bg-black/15'}`}>
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold text-cyan-200">{indexedDecision.label}</p><p className="mt-1 max-w-3xl text-[11px] leading-5 text-white/45">{indexedDecision.reason}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${indexedDecision.google_confirmed ? 'bg-cyan-400/15 text-cyan-200' : 'bg-white/[0.06] text-white/40'}`}>{indexedDecision.google_confirmed ? 'Có bằng chứng Google' : 'Chưa có xác nhận Google'}</span></div>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-lg bg-black/20 p-2"><span className="block text-[9px] uppercase text-white/25">Impression</span><strong className="text-xs text-white/75">{indexedDecision.evidence.impressions}</strong></div><div className="rounded-lg bg-black/20 p-2"><span className="block text-[9px] uppercase text-white/25">CTR</span><strong className="text-xs text-white/75">{(indexedDecision.evidence.ctr * 100).toFixed(2)}%</strong></div><div className="rounded-lg bg-black/20 p-2"><span className="block text-[9px] uppercase text-white/25">Vị trí TB</span><strong className="text-xs text-white/75">{indexedDecision.evidence.position > 0 ? indexedDecision.evidence.position.toFixed(1) : '—'}</strong></div><div className="rounded-lg bg-black/20 p-2"><span className="block text-[9px] uppercase text-white/25">Đã theo dõi</span><strong className="text-xs text-white/75">{indexedDecision.observation.age_days} ngày</strong></div></div>
+            <p className="mt-2 text-[10px] leading-5 text-white/30">Mốc đánh giá: 7 ngày {formatSeoDecisionDate(indexedDecision.observation.early_check_at)} · 14 ngày {formatSeoDecisionDate(indexedDecision.observation.provisional_check_at)} · quyết định 28 ngày {formatSeoDecisionDate(indexedDecision.observation.decision_check_at)}. Thời gian chỉ bắt đầu sau khi Google crawl bản hiện tại.</p>
+          </div>}
           {!simpleMode && <div className="mt-3 flex flex-wrap gap-2">
             {activeSafeFields.map((field) => {
               const state = currentFieldStates[field];
               if (!state) return null;
               const changed = changedFields.includes(field);
               const locked = isFieldLocked(field);
+              const indexedFieldCanUnlock = !indexedDecision?.indexed
+                || !indexedDecision.protected_fields.includes(field)
+                || indexedDecision.editable_fields.includes(field);
               const tone = state.status === 'needs_attention'
                 ? 'border-amber-500/20 bg-amber-500/10 text-amber-200'
                 : state.status === 'immutable'
@@ -877,7 +897,9 @@ export default function AdminSeoStudioPage() {
                 {changed
                   ? <button onClick={() => restoreField(field)} className="font-semibold underline decoration-white/30 underline-offset-2">Hoàn tác</button>
                   : locked && state.status !== 'immutable'
-                    ? <button onClick={() => unlockField(field)} className="font-semibold underline decoration-white/30 underline-offset-2">Mở sửa</button>
+                    ? indexedFieldCanUnlock
+                      ? <button onClick={() => unlockField(field)} className="font-semibold underline decoration-white/30 underline-offset-2">Mở sửa</button>
+                      : <strong className="text-cyan-200/70">Google đang bảo vệ</strong>
                     : state.status === 'needs_attention' ? <strong>Cần sửa</strong> : null}
               </div>;
             })}
