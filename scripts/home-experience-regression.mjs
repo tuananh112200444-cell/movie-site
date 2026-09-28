@@ -324,14 +324,14 @@ for (const contract of [
   "fetchSection(supabase, 'phim-chieu-rap', false, limit, false)",
   "if (sourceSite === 'phimapi') return `https://phimimg.com/",
   "if (key !== 'phim-chieu-rap') return merged;",
-  "query = query.eq('chieurap', true)",
+  "if (typeOrCategory === 'phim-chieu-rap') return [];",
   "key !== 'phim-chieu-rap' || (movie as Record<string, unknown>).chieurap === true",
   "candidates = pool.filter((movie) => movie.chieurap === true)",
 ]) {
   if (!proxy.includes(contract)) failures.push(`KKPhim cinema source contract is missing: ${contract}`);
 }
 for (const contract of [
-  'v9-vsmov-only-4k',
+  'v11-full-country-shelves',
   'function filterEdgeHomeSection',
   "key === 'phim-chieu-rap' && item.chieurap !== true",
   'X-KhoPhim-Home-Repair',
@@ -723,6 +723,49 @@ if (
   /text\\\/html[\s\S]{0,500}stale-while-revalidate/.test(pagesWorker)
 ) {
   failures.push('The Pages worker can override safe HTML headers with a stale build cache.');
+}
+for (const country of ['au-my', 'trung-quoc', 'han-quoc', 'thai-lan']) {
+  const items = homeFallback.sections?.[country] ?? [];
+  if (items.length < 5 || items.some((item) => !(item.country ?? []).some((term) => term?.slug === country))) {
+    failures.push(`Static homepage fallback contains movies outside the ${country} taxonomy.`);
+  }
+}
+const countryFingerprints = ['au-my', 'trung-quoc', 'han-quoc', 'thai-lan']
+  .map((country) => (homeFallback.sections?.[country] ?? []).map((item) => item.slug).join('|'));
+if (new Set(countryFingerprints).size !== countryFingerprints.length) {
+  failures.push('Country homepage shelves must not reuse the same generic movie list.');
+}
+if (!proxy.includes("taxonomyHasSlug((movie as Record<string, unknown>).country, key)")
+  || !proxy.includes(".filter((item) => !isCountry || taxonomyHasSlug(item.country, typeOrCategory))")) {
+  failures.push('Home proxy does not enforce country taxonomy after provider merging.');
+}
+if (/const HOME_SUPABASE_SELECT = '[^']*chieurap/.test(proxy)) {
+  failures.push('Home proxy still selects the missing movies.chieurap column and breaks all canonical rails.');
+}
+if (!pagesWorker.includes('edgeHomeHasTaxonomySlug') || !pagesWorker.includes('v11-full-country-shelves')) {
+  failures.push('Pages edge cache does not reject cross-country shelves or rotate the repaired payload version.');
+}
+if (!proxy.includes("if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) return 12;")
+  || !pagesWorker.includes("if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) return 12;")) {
+  failures.push('Country shelves can be accepted too sparse for the desktop and mobile layouts.');
+}
+if (!homeFallbackGenerator.includes('fetchCanonicalHomeSections')
+  || !homeFallbackGenerator.includes("items.every((item) => taxonomyHasSlug(item.country, key))")
+  || !homeFallbackGenerator.includes('ophim1\\.com|opstream')) {
+  failures.push('Static homepage generation does not rebuild and validate canonical country shelves.');
+}
+if (!pagesFallbackGenerator.includes('section_generated_at')
+  || pagesFallbackGenerator.includes('generated_at: hasLiveVietnam || hasLiveCinema ? generatedAt')) {
+  failures.push('A partial cinema/Vietnam refresh still falsifies the freshness timestamp of every homepage shelf.');
+}
+if (!trailerSection.includes('const checkPosition = () =>')
+  || !trailerSection.includes("window.addEventListener('kp:page-resumed', checkPosition)")) {
+  failures.push('Trailer shelf can remain permanently unmounted after a fast scroll or restored tab.');
+}
+if (!/const SUPABASE_LIST_SELECT = '[^']*trailer_url/.test(movieApi)
+  || !/const SUPABASE_LIST_CORE_SELECT = '[^']*trailer_url/.test(movieApi)
+  || !movieApi.includes("trailer_url: (m.trailer_url as string) || ''")) {
+  failures.push('Upcoming movie queries omit trailer_url, causing the verified trailer shelf to reject every movie.');
 }
 if ((homeFallback.sections?.['vsmov-4k'] ?? []).some((movie) => (
   !/vsmov/i.test(`${movie.source_site || ''} ${movie.source_name || ''}`)
