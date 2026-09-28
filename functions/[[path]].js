@@ -4477,7 +4477,8 @@ const HOME_SECTION_KEYS = new Set([
 function minimumEdgeHomeItems(key) {
   if (key === 'vsmov-4k') return 2;
   if (key === 'top-rated') return 5;
-  if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan', 'queer', 'onlyflix-moi'].includes(key)) return 5;
+  if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) return 12;
+  if (['queer', 'onlyflix-moi'].includes(key)) return 5;
   return 6;
 }
 
@@ -4511,6 +4512,12 @@ function isFreshEdgeHomeItem(item) {
   return ongoing && Number.isFinite(changedAt) && Date.now() - changedAt <= 14 * 86400000;
 }
 
+function edgeHomeHasTaxonomySlug(value, slug) {
+  return Array.isArray(value) && value.some((item) => (
+    item && typeof item === 'object' && String(item.slug || '').toLowerCase() === slug
+  ));
+}
+
 function filterEdgeHomeSection(key, items) {
   const seen = new Set();
   return (Array.isArray(items) ? items : []).filter((item) => {
@@ -4532,6 +4539,8 @@ function filterEdgeHomeSection(key, items) {
       if (Number(item.tmdb_vote_average || 0) <= 0 || Number(item.tmdb_vote_count || 0) < 10) return false;
     }
     if (key === 'queer' && !isQueerHomeItem(item)) return false;
+    if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)
+      && !edgeHomeHasTaxonomySlug(item.country, key)) return false;
     if (key === 'trending' && !isFreshEdgeHomeItem(item)) return false;
     seen.add(slug);
     return true;
@@ -5057,8 +5066,8 @@ async function proxyHome(request, context) {
     ? requestedSections
     : ['au-my', 'han-quoc', 'hoat-hinh', 'phim-bo', 'phim-le', 'trending'];
   const sectionKey = sections.join(',');
-  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v9-vsmov-only-4k?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
-  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v9-vsmov-only-4k?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v11-full-country-shelves?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v11-full-country-shelves?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
 
   if (typeof caches !== 'undefined') {
     const cached = await caches.default.match(liveKey);
@@ -5086,7 +5095,7 @@ async function proxyHome(request, context) {
         cf: {
           cacheEverything: true,
           cacheTtl: 900,
-          cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v9-vsmov-only-4k`,
+          cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v11-full-country-shelves`,
         },
         signal: AbortSignal.timeout(6500),
       });

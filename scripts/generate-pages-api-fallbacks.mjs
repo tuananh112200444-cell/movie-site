@@ -120,7 +120,15 @@ const hasLiveVietnam = currentVietnamItems.length >= 12;
 const hasLiveCinema = currentCinemaItems.length >= 12;
 const refreshedSource = {
   ...source,
-  generated_at: hasLiveVietnam || hasLiveCinema ? generatedAt : source.generated_at,
+  // Do not claim that every shelf is fresh merely because the two dedicated
+  // KKPhim rails were refreshed. The full snapshot timestamp belongs to the
+  // canonical homepage build in refresh-home-fallback.mjs.
+  generated_at: source.generated_at,
+  section_generated_at: {
+    ...(source.section_generated_at || {}),
+    ...(hasLiveCinema ? { 'phim-chieu-rap': generatedAt } : {}),
+    ...(hasLiveVietnam ? { 'viet-nam': generatedAt } : {}),
+  },
   sections: {
     ...sections,
     'phim-chieu-rap': cinemaItems,

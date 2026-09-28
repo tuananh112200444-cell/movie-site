@@ -1116,10 +1116,10 @@ function sortListItems(
 // Keep this list aligned with the production `movies` table. `chieurap` used
 // to be present in an upstream payload but is not a database column; selecting
 // it made every direct list request fail with PostgREST 42703/HTTP 400.
-const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, thumb_url, poster_url, hero_backdrop_url, hero_poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, created_at, updated_at, published_at, last_episode_change_at, is_published, seo_catalog_status, superseded_by_movie_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, thumb_url, poster_url, hero_backdrop_url, hero_poster_url, trailer_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, created_at, updated_at, published_at, last_episode_change_at, is_published, seo_catalog_status, superseded_by_movie_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
 // Minimal public contract used when an optional column is renamed/removed in
 // production. Cards remain usable while the richer schema is being repaired.
-const SUPABASE_LIST_CORE_SELECT = 'id, slug, name, origin_name, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, category, country, is_published, updated_at, source_site, source_name';
+const SUPABASE_LIST_CORE_SELECT = 'id, slug, name, origin_name, thumb_url, poster_url, trailer_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, category, country, is_published, updated_at, source_site, source_name';
 const SUPABASE_LIST_PAGE_SIZE = 36;
 const SUPABASE_LIST_CACHE_TTL_MS = 5 * 60 * 1000;
 const SUPABASE_LIST_CACHE_LIMIT = 120;
@@ -3697,6 +3697,7 @@ function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
     type: (m.type as string) || 'phim-le',
     thumb_url: (m.thumb_url as string) || (m.poster_url as string) || '',
     poster_url: (m.poster_url as string) || '',
+    trailer_url: (m.trailer_url as string) || '',
     hero_backdrop_url: (m.hero_backdrop_url as string) || undefined,
     hero_poster_url: (m.hero_poster_url as string) || undefined,
     quality: (m.quality as string) || 'HD',

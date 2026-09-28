@@ -13,12 +13,28 @@ export default function TrailerMoviesSection() {
   useEffect(() => {
     const el = ref.current;
     if (!el || triggered) return;
+    const checkPosition = () => {
+      const rect = el.getBoundingClientRect();
+      const viewportH = window.innerHeight || document.documentElement.clientHeight || 0;
+      // Once the visitor has reached or passed this shelf, render it even if
+      // a fast swipe skipped the short intersection window.
+      if (rect.top <= viewportH + 240) setTriggered(true);
+    };
     const observer = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) { setTriggered(true); observer.disconnect(); } },
-      { rootMargin: '200px' } // Giảm từ 800px xuống 200px
+      { rootMargin: '240px' }
     );
     observer.observe(el);
-    return () => observer.disconnect();
+    checkPosition();
+    window.addEventListener('scroll', checkPosition, { passive: true });
+    window.addEventListener('pageshow', checkPosition);
+    window.addEventListener('kp:page-resumed', checkPosition);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', checkPosition);
+      window.removeEventListener('pageshow', checkPosition);
+      window.removeEventListener('kp:page-resumed', checkPosition);
+    };
   }, [triggered]);
 
   return (

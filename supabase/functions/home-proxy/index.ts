@@ -5,6 +5,7 @@ import { hasValidPublishableApiKey, withPublicReadCors } from '../_shared/public
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const EDGE_PROXY_SECRET = Deno.env.get('MOVIE_DETAIL_PROXY_SECRET') ?? '';
+const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
 const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY') ?? '';
 const TMDB_READ_ACCESS_TOKEN = Deno.env.get('TMDB_READ_ACCESS_TOKEN') ?? '';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
@@ -18,7 +19,7 @@ const VSMOV_4K_URL = 'https://vsmov.com/api/danh-sach/4k?page=1';
 /* ── CORS helpers ── */
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': 'https://khophim.org',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-khophim-proxy-secret',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-khophim-proxy-secret, x-cron-secret, x-home-proxy-refresh',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 const INTERNAL_REFRESH_HEADER = 'x-home-proxy-refresh';
@@ -29,7 +30,8 @@ const STATIC_QUEER_FALLBACK_URL = 'https://khophim.org/queer-fallback.json?v=202
 function minimumHomeSectionItems(key: string): number {
   if (key === 'vsmov-4k') return 2;
   if (key === 'top-rated') return 5;
-  if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan', 'queer', 'onlyflix-moi'].includes(key)) return 5;
+  if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) return 12;
+  if (['queer', 'onlyflix-moi'].includes(key)) return 5;
   return HOME_MIN_SECTION_ITEMS;
 }
 function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
@@ -145,6 +147,8 @@ function filteredSectionItems(sections: Record<string, unknown[]> | null | undef
       && /(?:4k|2160p|uhd)/i.test(String((movie as Record<string, unknown>).quality || ''))
     ))
     .filter((movie) => key !== 'queer' || isQueerUniverseMovie(movie as Record<string, unknown>))
+    .filter((movie) => !['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)
+      || taxonomyHasSlug((movie as Record<string, unknown>).country, key))
     .filter((movie) => key !== 'trending' || isFreshHomepageCandidate(movie as Record<string, unknown>))
     .filter((m) => key === 'onlyflix-moi' || !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
 }
@@ -523,8 +527,11 @@ async function filterQuarantinedExactMovies(
 
 /* ── Build trending list from new-movies ── */
 const HOME_OVERRIDE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,status,seo_catalog_status,superseded_by_movie_id,source_site,source_name,year,type,tmdb_id,tmdb_vote_average,tmdb_vote_count,tmdb_popularity,ophim_id,ophim_slug,is_published,published_at,last_episode_change_at';
-const HOME_SUPABASE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,hero_backdrop_url,hero_poster_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,source_site,source_name,year,type,category,country,chieurap,created_at,updated_at,published_at,last_episode_change_at,seo_catalog_status,superseded_by_movie_id,is_published,tmdb_id,tmdb_vote_average,tmdb_vote_count,tmdb_popularity';
-const HOME_TOP_RATED_SELECT = HOME_SUPABASE_SELECT.replace(',chieurap', '');
+// The canonical movies table has no chieurap column. Cinema membership comes
+// from the verified KKPhim cinema feed; keeping the missing column here made
+// every unrelated Supabase country/type query fail with 42703.
+const HOME_SUPABASE_SELECT = 'id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,poster_url,thumb_url,hero_backdrop_url,hero_poster_url,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,source_site,source_name,year,type,category,country,created_at,updated_at,published_at,last_episode_change_at,seo_catalog_status,superseded_by_movie_id,is_published,tmdb_id,tmdb_vote_average,tmdb_vote_count,tmdb_popularity';
+const HOME_TOP_RATED_SELECT = HOME_SUPABASE_SELECT;
 
 function normalizeTitle(value: unknown): string {
   return String(value || '')
@@ -1280,6 +1287,7 @@ async function fetchSupabaseSection(
   limit = 18,
 ): Promise<Record<string, unknown>[]> {
   try {
+    if (typeOrCategory === 'phim-chieu-rap') return [];
     let query = supabase
       .from('movies')
       .select(HOME_SUPABASE_SELECT)
@@ -1290,7 +1298,6 @@ async function fetchSupabaseSection(
     } else {
       const types = supabaseTypeValues(typeOrCategory);
       query = types.length === 1 ? query.eq('type', types[0]) : query.in('type', types);
-      if (typeOrCategory === 'phim-chieu-rap') query = query.eq('chieurap', true);
     }
 
     const { data, error } = await query
@@ -1598,7 +1605,12 @@ async function fetchSection(
   const candidates = [
     ...singaporeItems,
     ...readItems(kkphimPayload, 'phimapi'),
-  ].filter((item) => typeOrCategory !== 'phim-chieu-rap' || item.chieurap === true);
+  ]
+    .filter((item) => typeOrCategory !== 'phim-chieu-rap' || item.chieurap === true)
+    // Several provider endpoints accept a country query but ignore it and
+    // return the generic latest feed. Never let those discovery rows cross
+    // the canonical taxonomy boundary of a country shelf.
+    .filter((item) => !isCountry || taxonomyHasSlug(item.country, typeOrCategory));
 
   const itemScore = (item: Record<string, unknown>) => {
     const currentEpisode = Math.max(
@@ -1779,6 +1791,7 @@ async function handleRequest(req: Request): Promise<Response> {
   const suppliedProxySecret = req.headers.get('x-khophim-proxy-secret') ?? '';
   const isPrivilegedCaller = Boolean(
     (EDGE_PROXY_SECRET && suppliedProxySecret === EDGE_PROXY_SECRET)
+    || (CRON_SECRET && req.headers.get('x-cron-secret') === CRON_SECRET)
     || (SUPABASE_SERVICE_ROLE_KEY && bearer === SUPABASE_SERVICE_ROLE_KEY)
   );
   const isPublicReadRequest = req.method === 'GET' && hasValidPublishableApiKey(req);

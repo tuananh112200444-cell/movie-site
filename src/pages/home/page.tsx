@@ -341,13 +341,15 @@ function isHeroEligible(movie: MovieItem): boolean {
 
 function selectTopRatedMovies(sections: Record<string, MovieItem[]>, limit = TOP_RATED_MOVIE_LIMIT): MovieItem[] {
   const seen = new Set<string>();
-  return [
-    ...(sections['phim-chieu-rap'] ?? []),
-    ...(sections['phim-le'] ?? []),
-    ...(sections['phim-bo'] ?? []),
-    ...(sections['han-quoc'] ?? []),
-    ...(sections['au-my'] ?? []),
-  ]
+  const verifiedRated = sections['top-rated'] ?? [];
+  const candidates = verifiedRated.length >= 5 ? verifiedRated : [
+      ...(sections['phim-chieu-rap'] ?? []),
+      ...(sections['phim-le'] ?? []),
+      ...(sections['phim-bo'] ?? []),
+      ...(sections['han-quoc'] ?? []),
+      ...(sections['au-my'] ?? []),
+    ];
+  return candidates
     .filter((movie) => {
       const key = movie.slug || movie._id || movie.name;
       if (!key || seen.has(key) || !isHeroEligible(movie)) return false;
