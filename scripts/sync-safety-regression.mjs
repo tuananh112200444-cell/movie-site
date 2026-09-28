@@ -56,6 +56,7 @@ const unifiedPlaybackHealth = fs.readFileSync('supabase/migrations/2026080520500
 const systemBrainMigration = fs.readFileSync('supabase/migrations/20260822070340_consolidate_system_brains.sql', 'utf8');
 const peakEpisodeFreshness = fs.readFileSync('supabase/migrations/20260825141500_add_peak_kkphim_episode_freshness.sql', 'utf8');
 const kkphimOngoingRefresh = fs.readFileSync('supabase/migrations/20260928154500_add_kkphim_ongoing_refresh_queue.sql', 'utf8');
+const unavailableConnectorPause = fs.readFileSync('supabase/migrations/20260928160000_pause_unavailable_catalog_connectors.sql', 'utf8');
 if (!ophim.includes('isTrailerEpisode(episode)') || !ophim.includes('if (isTrailerEpisode(ep)) continue')) {
   failures.push('OPhim sync must not treat a trailer episode as playable movie coverage');
 }
@@ -140,6 +141,15 @@ if (
   || !kkphimOngoingRefresh.includes('dispatch_kkphim_ongoing_refresh(2)')
 ) {
   failures.push('Ongoing KKPhim series must receive bounded round-robin targeted episode refreshes after leaving page 1');
+}
+if (
+  !unavailableConnectorPause.includes("'catalog:cobephim-recent'")
+  || !unavailableConnectorPause.includes("'catalog:onlyflix-recent'")
+  || !unavailableConnectorPause.includes("'catalog:tmdb-enrichment'")
+  || !unavailableConnectorPause.includes("enabled=false")
+  || !unavailableConnectorPause.includes("data_preserved',true")
+) {
+  failures.push('Unavailable catalogue connectors must pause without deleting their existing movie data');
 }
 if (
   ophim.includes('Targeted provider identity refresh; independent probe pending')
