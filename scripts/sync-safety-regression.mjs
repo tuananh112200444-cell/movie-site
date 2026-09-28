@@ -55,6 +55,7 @@ const episodeRepairPriority = fs.readFileSync('supabase/migrations/2026080517000
 const unifiedPlaybackHealth = fs.readFileSync('supabase/migrations/20260805205000_unify_public_playback_health.sql', 'utf8');
 const systemBrainMigration = fs.readFileSync('supabase/migrations/20260822070340_consolidate_system_brains.sql', 'utf8');
 const peakEpisodeFreshness = fs.readFileSync('supabase/migrations/20260825141500_add_peak_kkphim_episode_freshness.sql', 'utf8');
+const kkphimOngoingRefresh = fs.readFileSync('supabase/migrations/20260928154500_add_kkphim_ongoing_refresh_queue.sql', 'utf8');
 if (!ophim.includes('isTrailerEpisode(episode)') || !ophim.includes('if (isTrailerEpisode(ep)) continue')) {
   failures.push('OPhim sync must not treat a trailer episode as playable movie coverage');
 }
@@ -130,6 +131,15 @@ if (
   || !peakEpisodeFreshness.includes("'2-59/15 4-6,11-16 * * *'")
 ) {
   failures.push('KKPhim episode freshness must continue at a tightly bounded rate during Vietnam viewing peaks');
+}
+if (
+  !kkphimOngoingRefresh.includes('create table if not exists public.kkphim_ongoing_refresh_queue')
+  || !kkphimOngoingRefresh.includes('for update of queue skip locked')
+  || !kkphimOngoingRefresh.includes('movie_id=')
+  || !kkphimOngoingRefresh.includes("'1,11,21,31,41,51 * * * *'")
+  || !kkphimOngoingRefresh.includes('dispatch_kkphim_ongoing_refresh(2)')
+) {
+  failures.push('Ongoing KKPhim series must receive bounded round-robin targeted episode refreshes after leaving page 1');
 }
 if (
   ophim.includes('Targeted provider identity refresh; independent probe pending')
