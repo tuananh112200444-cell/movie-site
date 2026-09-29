@@ -29,6 +29,7 @@ const VietnamMoviesSection = lazy(() => import('./components/TopCinemaMoviesSect
 const Top10TodaySection = lazy(() => import('./components/Top10TodaySection'));
 const TopRatedSection = lazy(() => import('./components/TopRatedSection'));
 const TrailerMoviesSection = lazy(() => import('./components/TrailerMoviesSection'));
+const CountryTabsSection = lazy(() => import('./components/CountryTabsSection'));
 const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined) ?? 'https://khophim.org';
 
 const HOME_V2_SHORTCUTS = [
@@ -741,7 +742,7 @@ export default function Home() {
     );
   }
   return (
-    <div className={`home-editorial-v4 min-h-screen kp-cinema-page text-white${homeV2 ? ' home-cinema-v2' : ''}`}>
+    <div className={`home-editorial-v4 home-editorial-v5 min-h-screen kp-cinema-page text-white${homeV2 ? ' home-cinema-v2' : ''}`}>
       <h1 className="sr-only">KhoPhim – Tìm phim theo tên, thể loại và quốc gia</h1>
       {deferredContentReady && (
         <Suspense fallback={null}>
@@ -825,20 +826,6 @@ export default function Home() {
           </DeferredHomeSection>
         </EditorialSectionFrame>
 
-        <EditorialSectionFrame number="4K" code="ULTRA HD" tone="cinema">
-          <LazyMovieSection
-            fetchType="type" fetchKey="vsmov-4k" limit={compactMobile ? 9 : 12}
-            title="Phim 4K Siêu Nét" viewAllLink="/phim-4k"
-            cols={6} rootMargin="240px" sectionIndex={3} theme="cinematic" mobileLayout="rail"
-            movies={homeData['vsmov-4k'] ?? []}
-            loading={homeLoading}
-          />
-        </EditorialSectionFrame>
-
-        <AdsterraNativeBanner />
-
-        <AdsterraResponsiveBanner />
-
         <EditorialSectionFrame number="03" code="DAILY CHART" tone="ranking">
           <DeferredHomeSection minHeight={compactMobile ? 220 : 300}>
             <Suspense fallback={<div className="h-[220px] sm:h-[300px] skeleton" />}>
@@ -852,17 +839,40 @@ export default function Home() {
           </DeferredHomeSection>
         </EditorialSectionFrame>
 
+        <AdsterraNativeBanner />
+        <AdsterraResponsiveBanner />
+
+        <EditorialSectionFrame number="04" code="SERIES INDEX" tone="series">
+          <LazyMovieSection
+            fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 15}
+            title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
+            cols={6} rootMargin="160px" sectionIndex={4} theme="trending" mobileLayout="rail"
+            movies={homeData['phim-bo'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="05" code="FEATURE FILMS" tone="single">
+          <LazyMovieSection
+            fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 15}
+            title="Phim Lẻ Đang Hot" viewAllLink="/phim-le"
+            cols={6} rootMargin="160px" sectionIndex={5} theme="cinematic" mobileLayout="rail"
+            movies={homeData['phim-le'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
         <EditorialSectionFrame number="BL" code="QUEER UNIVERSE" tone="mood">
           <LazyMovieSection
             fetchType="type" fetchKey="queer-universe" limit={compactMobile ? 9 : 12}
             title="Phim GL / Bách Hợp Mới Nhất" viewAllLink={QUEER_PORTAL_PATH}
-            cols={6} rootMargin="120px" sectionIndex={4} theme="trending" mobileLayout="rail"
+            cols={6} rootMargin="120px" sectionIndex={6} theme="trending" mobileLayout="rail"
             movies={queerMovies}
             loading={queerLoading}
           />
         </EditorialSectionFrame>
 
-        <EditorialSectionFrame number="05" code="CRITICS' CHOICE" tone="rated">
+        <EditorialSectionFrame number="07" code="CRITICS' CHOICE" tone="rated">
           <DeferredHomeSection minHeight={homeV2 ? (compactMobile ? 980 : 520) : (compactMobile ? 1500 : 820)}>
             <Suspense fallback={<div className={homeV2 ? 'h-[980px] lg:h-[520px] skeleton' : 'h-[1500px] lg:h-[820px] skeleton'} />}>
               <TopRatedSection initialMovies={topRatedMovies} loading={homeLoading} limit={homeV2 ? 5 : 10} />
@@ -870,80 +880,40 @@ export default function Home() {
           </DeferredHomeSection>
         </EditorialSectionFrame>
 
-        {!compactMobile && <>
-        <EditorialSectionFrame number="06" code="COMING SOON" tone="trailer">
+        <EditorialSectionFrame number="08" code="ANIME ARCHIVE" tone="anime">
+          <LazyMovieSection
+            fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 9 : 12}
+            title="Kho Tàng Anime Mới Nhất" viewAllLink="/hoat-hinh"
+            cols={6} rootMargin="160px" sectionIndex={8} theme="anime" mobileLayout="rail"
+            movies={homeData['hoat-hinh'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
+        <EditorialSectionFrame number="4K" code="ULTRA HD" tone="cinema">
+          <LazyMovieSection
+            fetchType="type" fetchKey="vsmov-4k" limit={compactMobile ? 9 : 12}
+            title="Phim 4K Siêu Nét" viewAllLink="/phim-4k"
+            cols={6} rootMargin="180px" sectionIndex={9} theme="cinematic" mobileLayout="rail"
+            movies={homeData['vsmov-4k'] ?? []}
+            loading={homeLoading}
+          />
+        </EditorialSectionFrame>
+
+        {!compactMobile && (
+        <EditorialSectionFrame number="09" code="COMING SOON" tone="trailer">
           <DeferredHomeSection minHeight={190}>
             <Suspense fallback={<div className="h-[190px] skeleton" />}>
               <TrailerMoviesSection />
             </Suspense>
           </DeferredHomeSection>
         </EditorialSectionFrame>
-        </>}
+        )}
 
-        <EditorialSectionFrame number="07" code="ANIME ARCHIVE" tone="anime">
-          <LazyMovieSection
-            fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 9 : 12}
-            title="Kho Tàng Anime Mới Nhất" viewAllLink="/hoat-hinh"
-            cols={6} rootMargin="160px" sectionIndex={7} theme="anime" mobileLayout="rail"
-            movies={homeData['hoat-hinh'] ?? []}
-            loading={homeLoading}
-          />
-        </EditorialSectionFrame>
-
-        <EditorialSectionFrame number="08" code="SERIES INDEX" tone="series">
-          <LazyMovieSection
-            fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 15}
-            title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
-            cols={5} rootMargin="160px" sectionIndex={8} theme="trending" mobileLayout="rail"
-            movies={homeData['phim-bo'] ?? []}
-            loading={homeLoading}
-          />
-        </EditorialSectionFrame>
-        <EditorialSectionFrame number="09" code="FEATURE FILMS" tone="single">
-          <LazyMovieSection
-            fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 15}
-            title="Phim Lẻ Đang Hot" viewAllLink="/phim-le"
-            cols={5} rootMargin="160px" sectionIndex={9} theme="cinematic" mobileLayout="rail"
-            movies={homeData['phim-le'] ?? []}
-            loading={homeLoading}
-          />
-        </EditorialSectionFrame>
-
-        <EditorialSectionFrame number="10" code="WESTERN FRAME" tone="western">
-          <LazyMovieSection
-            fetchType="country" fetchKey="au-my" limit={compactMobile ? 9 : 18}
-            title="Phim Âu Mỹ" viewAllLink="/phim-au-my"
-            cols={6} rootMargin="160px" sectionIndex={10} theme="hollywood" mobileLayout="rail"
-            movies={homeData['au-my'] ?? []}
-            loading={homeLoading}
-          />
-        </EditorialSectionFrame>
-        <EditorialSectionFrame number="11" code="ORIENTAL FRAME" tone="china">
-          <LazyMovieSection
-            fetchType="country" fetchKey="trung-quoc" limit={compactMobile ? 9 : 18}
-            title="Phim Trung Quốc" viewAllLink="/phim-trung-quoc"
-            cols={6} rootMargin="160px" sectionIndex={11} theme="oriental" mobileLayout="rail"
-            movies={homeData['trung-quoc'] ?? []}
-            loading={homeLoading}
-          />
-        </EditorialSectionFrame>
-        <EditorialSectionFrame number="12" code="K-DRAMA FRAME" tone="korea">
-          <LazyMovieSection
-            fetchType="country" fetchKey="han-quoc" limit={compactMobile ? 9 : 18}
-            title="Phim Hàn Quốc" viewAllLink="/phim-han-quoc"
-            cols={6} rootMargin="160px" sectionIndex={12} theme="kdrama" mobileLayout="rail"
-            movies={homeData['han-quoc'] ?? []}
-            loading={homeLoading}
-          />
-        </EditorialSectionFrame>
-        <EditorialSectionFrame number="13" code="THAI FRAME" tone="thai">
-          <LazyMovieSection
-            fetchType="country" fetchKey="thai-lan" limit={compactMobile ? 9 : 18}
-            title="Phim Thái Lan" viewAllLink="/phim-thai-lan"
-            cols={6} rootMargin="160px" sectionIndex={13} theme="tropical" mobileLayout="rail"
-            movies={homeData['thai-lan'] ?? []}
-            loading={homeLoading}
-          />
+        <EditorialSectionFrame number="10—13" code="WORLD INDEX" tone="western">
+          <Suspense fallback={<div className="h-[470px] skeleton" />}>
+            <CountryTabsSection sections={homeData} loading={homeLoading} compactMobile={compactMobile} />
+          </Suspense>
         </EditorialSectionFrame>
 
         <EditorialSectionFrame number="14" code="MOOD INDEX" tone="mood">

@@ -289,6 +289,10 @@ export default function MovieSection({
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const t = getTheme(theme);
   const ThemeIcon = t.icon;
+  // Desktop uses one consistent poster rhythm. The previous anime mosaic
+  // created a 572px hero card midway down the page and made later shelves feel
+  // progressively larger than the first rows.
+  const useAnimeMosaic = false;
 
   // LazyMovieSection has already applied the section's explicit limit. Do not
   // silently reduce a requested 15–18 card desktop shelf to twelve items.
@@ -404,7 +408,7 @@ export default function MovieSection({
       </div>
 
       {/* Anime gets an editorial mosaic instead of another identical poster shelf. */}
-      {theme === 'anime' && isDesktop ? (
+      {useAnimeMosaic && theme === 'anime' && isDesktop ? (
         <div className="anime-editorial-mosaic relative overflow-hidden rounded-2xl border border-sky-400/15 bg-[radial-gradient(circle_at_10%_0%,rgba(56,189,248,0.13),transparent_34%),linear-gradient(135deg,rgba(14,24,43,0.96),rgba(8,10,16,0.96))] p-2.5 shadow-[0_28px_80px_-60px_rgba(56,189,248,0.9)] md:p-4">
           <div className="pointer-events-none absolute right-3 top-1 text-[44px] font-black tracking-[-0.08em] text-white/[0.025] md:text-[84px]">
             ANIME
