@@ -23,6 +23,7 @@ const top10 = await readFile('src/pages/home/components/Top10TodaySection.tsx', 
 const topRated = await readFile('src/pages/home/components/TopRatedSection.tsx', 'utf8');
 const vietnamSection = await readFile('src/pages/home/components/TopCinemaMoviesSection.tsx', 'utf8');
 const trailerSection = await readFile('src/pages/home/components/TrailerMoviesSection.tsx', 'utf8');
+const countryTabsSection = await readFile('src/pages/home/components/CountryTabsSection.tsx', 'utf8');
 const mobileSwipeHint = await readFile('src/pages/home/components/MobileSwipeHint.tsx', 'utf8');
 const globalCss = await readFile('src/index.css', 'utf8');
 const imagePreloader = await readFile('src/utils/imagePreloader.ts', 'utf8');
@@ -157,7 +158,7 @@ for (const contract of [
 ]) {
   if (!home.includes(contract)) failures.push(`Homepage cinema hero contract is missing: ${contract}`);
 }
-if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !home.includes("const MOBILE_HOME_SECTIONS = [\n  'top-rated'")) {
+if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !/const MOBILE_HOME_SECTIONS = \[\r?\n\s*'top-rated'/.test(home)) {
   failures.push('Desktop and mobile homepage requests must include the dedicated top-rated rail.');
 }
 for (const contract of [
@@ -454,8 +455,8 @@ if (app.includes('warmPlayerSourceHealth')) {
   failures.push('Player source-health warming must not consume homepage bandwidth.');
 }
 for (const country of ['han-quoc', 'au-my', 'trung-quoc', 'thai-lan']) {
-  if (!home.includes(`fetchKey="${country}" limit={compactMobile ? 9 : 18}`)) {
-    failures.push(`Mobile homepage is missing the progressive ${country} shelf.`);
+  if (!countryTabsSection.includes(`key: '${country}'`)) {
+    failures.push(`Homepage world index is missing the ${country} tab.`);
   }
 }
 if (/!compactMobile\s*&&\s*<>\s*\n\s*<EditorialSectionFrame number="10"/.test(home)) {
@@ -566,7 +567,7 @@ const fourKShelfEnd = home.indexOf('</EditorialSectionFrame>', fourKShelfStart);
 const fourKShelf = fourKShelfStart >= 0 && fourKShelfEnd > fourKShelfStart
   ? home.slice(fourKShelfStart, fourKShelfEnd)
   : '';
-if (!fourKShelf.includes('sectionIndex={3}') || !fourKShelf.includes('limit={compactMobile ? 9 : 12}') || !fourKShelf.includes('mobileLayout="rail"') || fourKShelf.includes('eager')) {
+if (!fourKShelf.includes('sectionIndex={9}') || !fourKShelf.includes('limit={compactMobile ? 9 : 12}') || !fourKShelf.includes('mobileLayout="rail"') || fourKShelf.includes('eager')) {
   failures.push('The offscreen 4K shelf must keep its content while mounting progressively near the viewport.');
 }
 const animeShelfStart = home.indexOf('fetchKey="hoat-hinh"');
