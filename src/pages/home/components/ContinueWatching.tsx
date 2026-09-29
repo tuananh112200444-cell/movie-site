@@ -12,6 +12,8 @@ export default function ContinueWatching() {
   const { getAllProgress } = useResumeWatch();
   const resumeByMovie = getAllProgress();
   if (history.length === 0) return null;
+  const visibleHistory = history.slice(0, 6);
+  const remainingDesktopColumns = Math.max(0, 6 - visibleHistory.length);
 
   return (
     <section className="continue-watching-panel mb-6 md:mb-10 home-section-surface">
@@ -31,7 +33,7 @@ export default function ContinueWatching() {
       </div>
 
       <div className="continue-watching-grid grid grid-cols-3 gap-x-2.5 gap-y-4 sm:grid-cols-4 md:grid-cols-6 md:gap-3">
-        {history.slice(0, 6).map((entry) => (
+        {visibleHistory.map((entry) => (
           <HistoryCard
             key={entry.slug || entry._id}
             entry={entry}
@@ -39,19 +41,22 @@ export default function ContinueWatching() {
             onRemove={removeEntry}
           />
         ))}
-        {history.length < 6 && (
+        {remainingDesktopColumns > 0 && (
           <Link
             to="/phim-moi-nhat"
-            className="continue-watching-cta hidden min-h-[220px] flex-col justify-between rounded-xl border border-white/[0.075] bg-white/[0.035] p-4 text-left transition-colors hover:border-orange-300/25 hover:bg-white/[0.055] md:col-span-2 md:flex"
+            style={{ gridColumn: `span ${remainingDesktopColumns} / span ${remainingDesktopColumns}` }}
+            className={`continue-watching-cta hidden min-h-[220px] flex-col rounded-xl border border-white/[0.075] bg-white/[0.035] p-4 text-left transition-colors hover:border-orange-300/25 hover:bg-white/[0.055] md:flex ${remainingDesktopColumns === 1 ? 'items-center justify-center gap-3 text-center' : 'justify-between'}`}
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/12 text-orange-200">
               <i className="ri-compass-3-line text-lg" />
             </span>
             <span>
-              <span className="block text-sm font-black text-white">Khám phá phim mới</span>
-              <span className="mt-1 block text-xs leading-5 text-white/42">
-                Chọn thêm phim đang hot để hàng xem tiếp của bạn luôn đầy đủ.
-              </span>
+              <span className="block text-sm font-black text-white">{remainingDesktopColumns === 1 ? 'Khám phá thêm' : 'Khám phá phim mới'}</span>
+              {remainingDesktopColumns > 1 && (
+                <span className="mt-1 block text-xs leading-5 text-white/42">
+                  Chọn thêm phim đang hot để hàng xem tiếp của bạn luôn đầy đủ.
+                </span>
+              )}
             </span>
             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-200">
               Xem phim mới <i className="ri-arrow-right-line" />

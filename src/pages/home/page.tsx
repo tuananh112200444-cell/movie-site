@@ -688,10 +688,27 @@ export default function Home() {
         return true;
       });
   }, [homeData]);
-  const personalizedMovies = useMemo(
-    () => buildPersonalizedHomeMovies(homeData, history, favorites, compactMobile ? 9 : 18),
-    [compactMobile, favorites, history, homeData],
-  );
+  const personalizedMovies = useMemo(() => {
+    const limit = compactMobile ? 9 : 18;
+    const personalized = buildPersonalizedHomeMovies(homeData, history, favorites, limit);
+    if (personalized.length < 4) return personalized;
+
+    // Keep the truly personalized picks first, then complete a sparse desktop
+    // row with current popular titles. This avoids visible holes without
+    // duplicating films or putting an unrelated title in a country shelf.
+    const seen = new Set<string>();
+    return [
+      ...personalized,
+      ...(homeData.trending ?? []),
+      ...(homeData['phim-bo'] ?? []),
+      ...(homeData['phim-le'] ?? []),
+    ].filter((movie) => {
+      const key = String(movie.slug || movie._id || '').trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer';
+    }).slice(0, limit);
+  }, [compactMobile, favorites, history, homeData]);
   const top10TodayMovies = useMemo(() => {
     const seen = new Set<string>();
     const fallbackGroups = [
