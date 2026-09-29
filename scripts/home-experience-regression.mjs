@@ -24,6 +24,7 @@ const topRated = await readFile('src/pages/home/components/TopRatedSection.tsx',
 const vietnamSection = await readFile('src/pages/home/components/TopCinemaMoviesSection.tsx', 'utf8');
 const trailerSection = await readFile('src/pages/home/components/TrailerMoviesSection.tsx', 'utf8');
 const countryTabsSection = await readFile('src/pages/home/components/CountryTabsSection.tsx', 'utf8');
+const continueWatching = await readFile('src/pages/home/components/ContinueWatching.tsx', 'utf8');
 const mobileSwipeHint = await readFile('src/pages/home/components/MobileSwipeHint.tsx', 'utf8');
 const globalCss = await readFile('src/index.css', 'utf8');
 const imagePreloader = await readFile('src/utils/imagePreloader.ts', 'utf8');
@@ -298,6 +299,12 @@ if (!movieApi.includes("sections.includes('trending') && candidateTrending.lengt
 }
 if (!home.includes('buildPersonalizedHomeMovies') || !home.includes('title="Dành Cho Bạn"') || !home.includes('useWatchHistory()')) {
   failures.push('Homepage must build private on-device recommendations from watch history.');
+}
+if (!home.includes("...(homeData.trending ?? [])") || !home.includes("...(homeData['phim-bo'] ?? [])")) {
+  failures.push('A sparse personalized shelf must be completed with deduplicated popular movies.');
+}
+if (!continueWatching.includes('remainingDesktopColumns') || !continueWatching.includes('gridColumn: `span ${remainingDesktopColumns}')) {
+  failures.push('Continue watching must fill all remaining desktop columns instead of leaving a visual hole.');
 }
 const homeReader = movieApi.slice(movieApi.indexOf('async function fetchHomePageDataUncached'));
 if (!homeReader.includes("new URL('/api/home', window.location.origin)") || homeReader.indexOf("new URL('/api/home', window.location.origin)") > homeReader.indexOf("new URL(`${SUPABASE_URL}/functions/v1/home-proxy`)")) {
