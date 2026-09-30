@@ -202,8 +202,8 @@ export function CampaignCatfishBanner() {
         <div className={demo ? 'campaign-banner-v2__media' : 'relative overflow-hidden rounded-lg border border-amber-200/25 bg-black shadow-[0_12px_42px_rgba(0,0,0,0.62)]'}>
           {mixedDemo ? (
             <>
-              <div className="campaign-banner-mix__desktop" data-testid="campaign-catfish-desktop-split">
-                {mixedCatfishCampaigns.map((item) => <CampaignCreative key={item.name} campaign={item} demo desktopOnly />)}
+              <div className="campaign-banner-mix__desktop campaign-banner-mix__catfish-single" data-testid="campaign-catfish-desktop-single">
+                <CampaignCreative key={campaign.name} campaign={campaign} demo desktopOnly />
               </div>
               <div className="campaign-banner-mix__mobile">
                 {mobileCollapsed ? (
