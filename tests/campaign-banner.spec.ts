@@ -97,7 +97,7 @@ test('SHBET demo chooses wide top and standard catfish assets', async ({ page })
   await expect(catfish.locator('source')).toHaveAttribute('srcset', '/campaign-demo-shbet/mobile-300x80.gif');
 });
 
-test('mixed demo splits both campaigns on desktop and swaps them on mobile', async ({ page, isMobile }) => {
+test('mixed demo keeps the top pair but rotates one correctly-sized catfish banner on desktop', async ({ page, isMobile }) => {
   await page.goto('/?banner-mix=1&intro=off');
 
   const top = page.getByTestId('campaign-top-banner');
@@ -107,15 +107,18 @@ test('mixed demo splits both campaigns on desktop and swaps them on mobile', asy
 
   if (!isMobile) {
     const topSplit = page.getByTestId('campaign-top-desktop-split');
-    const catfishSplit = page.getByTestId('campaign-catfish-desktop-split');
+    const catfishSingle = page.getByTestId('campaign-catfish-desktop-single');
     await expect(topSplit.locator('img')).toHaveCount(2);
-    await expect(catfishSplit.locator('img')).toHaveCount(2);
+    await expect(catfishSingle.locator('img')).toHaveCount(1);
     await expect(topSplit.locator('img').nth(0)).toHaveAttribute('src', '/banner-demo/assets/728x90.gif');
     await expect(topSplit.locator('img').nth(1)).toHaveAttribute('src', '/campaign-demo-f8bet/top-728x90.gif');
     await expect(topSplit.locator('[data-campaign-creative="f8bet"]')).toHaveAttribute('href', 'https://bit.ly/4cCE7SB');
-    await expect(catfishSplit.locator('img').nth(0)).toHaveAttribute('src', '/banner-demo/assets/728x90.gif');
-    await expect(catfishSplit.locator('img').nth(1)).toHaveAttribute('src', '/campaign-demo-shbet/catfish-desktop-728x90.gif');
-    await expect(catfishSplit.locator('[data-campaign-creative="shbet"]')).toHaveAttribute('href', 'https://bit.ly/SH2PP21');
+    await expect(catfish).toHaveAttribute('data-campaign-name', 'shbet');
+    await expect(catfishSingle.locator('img')).toHaveAttribute('src', '/campaign-demo-shbet/catfish-desktop-728x90.gif');
+    const catfishBox = await catfish.boundingBox();
+    expect(catfishBox).not.toBeNull();
+    expect(catfishBox?.width ?? 9999).toBeLessThanOrEqual(760);
+    await expect(catfish).toHaveAttribute('data-campaign-name', '9922', { timeout: 7000 });
     return;
   }
 

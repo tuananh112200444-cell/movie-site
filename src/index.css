@@ -5299,7 +5299,7 @@ body.tab-hidden .animate-pulse {
 }
 
 .campaign-banner-mix--catfish {
-  width: min(1210px, calc(100vw - 40px));
+  width: min(760px, calc(100vw - 40px));
 }
 
 .campaign-banner-mix__desktop {
@@ -5311,6 +5311,10 @@ body.tab-hidden .animate-pulse {
 
 .campaign-banner-mix__mobile {
   display: none;
+}
+
+.campaign-banner-mix__catfish-single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .campaign-banner-mix__collapse {
