@@ -35,6 +35,8 @@ const checks = [
   [box.includes("aria-label={isEmbedFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}"), 'Embed/MP4 fullscreen controls need accessible names'],
   [box.includes('h-12 w-12'), 'Embed fullscreen control must keep a 48px touch target'],
   [box.includes('data-kp-fullscreen="true"'), 'KhoPhim fullscreen control needs a stable selector above source-player controls'],
+  [box.includes('data-kp-cinema-deck="true"') && box.includes('KHO PLAYER') && box.includes('AUTO SOURCE'), 'Watch pages must expose the branded Angular Cinema Deck shell'],
+  [globalCss.includes('KHO PLAYER — ANGULAR CINEMA DECK DEMO') && globalCss.includes('.kp-cinema-deck__rail') && globalCss.includes('.kp-cinema-deck__controls'), 'Cinema Deck must style its identity rail and controls without changing playback logic'],
   [!box.includes('data-kp-source-fullscreen-proxy="true"'), 'Invisible fullscreen hitboxes must not intercept provider settings or seek controls'],
   [box.includes('Always expose a first-party fullscreen action') && box.includes('Do not rely on') && box.includes('data-kp-fullscreen="true"'), 'Apple iframe playback must keep a visible KhoPhim fullscreen fallback'],
   [box.includes('allowFullScreen') && box.includes('fullscreen; picture-in-picture') && !box.includes("fullscreen 'none'"), 'Source iframe fullscreen must be delegated on desktop and mobile browsers'],

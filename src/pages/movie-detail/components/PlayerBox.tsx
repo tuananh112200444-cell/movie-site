@@ -1413,7 +1413,20 @@ export default function PlayerBox({
   }, [effectivePlayerMode, episode?.link_m3u8, iframeBlocked, rememberActiveSourceFailure, reportIssue, requestTerminalSourceRepair, switchToFallbackServer]);
 
   return (
-    <div className="movie-player-box mb-2 relative">
+    <div className="movie-player-box kp-cinema-deck mb-2 relative" data-kp-cinema-deck="true">
+      <div className="kp-cinema-deck__rail" aria-hidden="true">
+        <div className="kp-cinema-deck__identity">
+          <span className="kp-cinema-deck__index">KP/01</span>
+          <span className="kp-cinema-deck__brand">KHO PLAYER</span>
+          <span className="kp-cinema-deck__divider" />
+          <span className="kp-cinema-deck__episode">{episode?.name || 'READY'}</span>
+        </div>
+        <div className="kp-cinema-deck__telemetry">
+          <span><i className="ri-checkbox-blank-circle-fill" /> AUTO SOURCE</span>
+          <span>{effectivePlayerMode.toUpperCase()}</span>
+          {quality && <span>{quality}</span>}
+        </div>
+      </div>
       <div className="movie-player-frame relative overflow-hidden rounded-2xl bg-black lg:rounded-[22px]">
         {episode?.is_scheduled && (
           <div className="aspect-video w-full bg-[#090b12] flex flex-col items-center justify-center gap-4 px-4 text-center">
@@ -1691,7 +1704,7 @@ export default function PlayerBox({
 
       {/* Control bar */}
       {effectivePlayerMode !== 'embed' && (
-      <div className="movie-watch-topbar mt-2 flex items-center justify-between gap-2 px-2 py-2 flex-wrap lg:mt-3 lg:px-3">
+      <div className="movie-watch-topbar kp-cinema-deck__controls mt-2 flex items-center justify-between gap-2 px-2 py-2 flex-wrap lg:mt-3 lg:px-3">
         <div className="flex items-center gap-1.5 flex-wrap">
           <button aria-label="Tập trước" onClick={onPrev} disabled={!hasPrev} title="Tập trước"
             className="w-11 h-11 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/15 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed">
