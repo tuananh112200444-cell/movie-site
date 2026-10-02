@@ -3650,10 +3650,10 @@ async function proxyMovieDetail(request, context) {
   if (refresh) upstreamUrl.searchParams.set('refresh', '1');
   const detailCacheRevision = preferredSource === 'vsmov'
     ? 'vsmov-4k-v1'
-    : 'canonical-v12-hot-movie-radar';
+    : 'canonical-v13-ongoing-episode-refresh';
   const detailCacheRevisionQuery = preferredSource === 'vsmov'
     ? `?rev=${detailCacheRevision}`
-    : '?rev=canonical-v12-hot-movie-radar';
+    : '?rev=canonical-v13-ongoing-episode-refresh';
   const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}${detailCacheRevisionQuery}`, { method: 'GET' });
   const failureKey = new Request(`${SITE_URL}/__circuit/movie-detail/${encodeURIComponent(slug)}?source=${encodeURIComponent(preferredSource || 'auto')}`, { method: 'GET' });
   let fallbackPromise;

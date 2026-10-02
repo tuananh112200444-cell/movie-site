@@ -484,6 +484,23 @@ function setCached<T>(key: string, data: T): void {
   apiCache.set(key, { data, ts: Date.now() });
 }
 
+const ONGOING_DETAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function getCachedMovieDetail(key: string): { data: MovieDetailResponse; stale: boolean } | null {
+  const entry = apiCache.get(key) as CacheEntry<MovieDetailResponse> | undefined;
+  if (!entry) return null;
+  const status = String(entry.data?.movie?.status || '').trim().toLowerCase();
+  const episodeLabel = String(entry.data?.movie?.episode_current || '').trim().toLowerCase();
+  const isCompleted = status === 'completed' || /^(full|hoàn tất|hoan tat)/i.test(episodeLabel);
+  const ttl = isCompleted ? TTL_CONFIG.detail : ONGOING_DETAIL_CACHE_TTL_MS;
+  const age = Date.now() - entry.ts;
+  if (age > ttl * 2) {
+    apiCache.delete(key);
+    return null;
+  }
+  return { data: entry.data, stale: age > ttl };
+}
+
 /* ════════════════════════════════════════════
    CIRCUIT BREAKER  — tạm ngưng gọi API nếu die
    ════════════════════════════════════════════ */
@@ -1835,7 +1852,7 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
     endpoint.url.searchParams.set('slug', slug);
     // Version the public Edge cache key whenever stream-health/scoring rules
     // change so a healthy revalidated source is not shadowed by an older POP.
-    endpoint.url.searchParams.set('rev', '20260903-special-episodes-v13');
+    endpoint.url.searchParams.set('rev', '20261002-ongoing-detail-v14');
     if (forceRefresh && endpoint.allowRefresh) endpoint.url.searchParams.set('refresh', '1');
     if (source) endpoint.url.searchParams.set('source', source);
 
@@ -4473,7 +4490,7 @@ const VERIFIED_DETAIL_SIBLING_SLUGS: Readonly<Record<string, string>> = {
 
 export async function fetchMovieDetail(slug: string, forceRefresh = false, source?: string): Promise<MovieDetailResponse | null> {
   const detailSourceKey = source || 'default';
-  const cacheKey = `detail_v12_special_rpc_${detailSourceKey}_${slug}`;
+  const cacheKey = `detail_v13_ongoing_ttl_${detailSourceKey}_${slug}`;
   const inflightKey = `${detailSourceKey}:${slug}`;
   // Xóa cache key cũ nếu còn sót
   apiCache.delete(`detail_${slug}`);
@@ -4483,8 +4500,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
   apiCache.delete(`detail_v5_${slug}`);
   apiCache.delete(`detail_v6_${slug}`);
 
-  const ttl = TTL_CONFIG.detail;
-  const cached = getCached<MovieDetailResponse>(cacheKey, ttl);
+  const cached = getCachedMovieDetail(cacheKey);
 
   if (
     cached && !cached.stale && !forceRefresh && cached.data &&
@@ -4529,7 +4545,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       // and the request was routinely aborted under peak pool pressure. Keep
       // that legacy diagnostic fallback only in local development.
       const proxyPromise = fetchMovieDetailFromProxy(slug, forceRefresh, source);
-      const supabaseFallbackPromise = import.meta.env.DEV
+      let supabaseFallbackPromise = import.meta.env.DEV
         ? fetchMovieDetailFromSupabase(slug, 4200).catch(() => null)
         : Promise.resolve<MovieDetailResponse | null>(null);
       // Start the exact-slug provider fallback immediately. The canonical edge
@@ -4594,6 +4610,14 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
           .then((merged) => setCached(cacheKey, merged))
           .catch(() => {});
         return quickPlayable;
+      }
+
+      // Only after both canonical gateways miss their bounded fast path, read
+      // the public catalogue tables directly. This avoids an extra connection
+      // during normal traffic while preventing a cold Edge Function timeout
+      // from becoming a false "chưa có nguồn" page for a stored movie.
+      if (!import.meta.env.DEV) {
+        supabaseFallbackPromise = fetchMovieDetailFromSupabase(slug, 5000).catch(() => null);
       }
 
       // The proxy already missed its fast-path budget. From here all fallbacks
