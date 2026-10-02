@@ -932,12 +932,12 @@
         "_id": "87c29e93-319e-40c9-824e-88849b1675cf",
         "category": [],
         "country": [],
-        "current_episode": 6,
-        "episode_current": "Tập 6",
-        "episode_total": "6 Tập",
+        "current_episode": 10,
+        "episode_current": "Tập 10",
+        "episode_total": "10 Tập",
         "lang": "",
         "modified": {
-          "time": "2026-09-03T02:01:44.910368+00:00"
+          "time": "2026-09-30T17:25:29.394704+00:00"
         },
         "name": "Cú Giao Bóng Tình Yêu - Match Point รักนี้ต้องเสิร์ฟ (2026)",
         "origin_name": "Cú Giao Bóng Tình Yêu",
@@ -948,9 +948,9 @@
         "source_site": "blvietsub",
         "status": "ongoing",
         "thumb_url": "http://blvietsub.com/wp-content/uploads/2026/07/cu-giao-bong-tinh-yeu-2026-scaled.webp",
-        "total_episodes": 6,
+        "total_episodes": 10,
         "type": "phim-bo",
-        "updated_at": "2026-09-03T02:01:44.910368+00:00",
+        "updated_at": "2026-09-30T17:25:29.394704+00:00",
         "year": 2026
       },
       {
