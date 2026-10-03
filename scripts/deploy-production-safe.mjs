@@ -25,7 +25,7 @@ function run(command, args) {
     env: process.env,
     encoding: 'utf8',
     stdio: ['inherit', 'pipe', 'pipe'],
-    shell: process.platform === 'win32',
+    shell: false,
     maxBuffer: 64 * 1024 * 1024,
   });
   if (result.stdout) process.stdout.write(result.stdout);
@@ -92,7 +92,7 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
     env: process.env,
     encoding: 'utf8',
     stdio: 'ignore',
-    shell: process.platform === 'win32',
+    shell: false,
   });
   if (auth.status !== 0) fail('Cloudflare authentication is unavailable. Sign in with Wrangler or provide CLOUDFLARE_API_TOKEN.');
 }
