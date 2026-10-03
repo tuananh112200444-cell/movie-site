@@ -22,7 +22,7 @@ function git(args, options = {}) {
 function run(command, args) {
   const executable = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : command;
   const executableArgs = process.platform === 'win32'
-    ? ['/d', '/s', '/c', [command, ...args].map((value) => {
+    ? ['/d', '/s', '/c', ['call', command, ...args].map((value) => {
         const text = String(value);
         return /[\s&|<>^"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
       }).join(' ')]
