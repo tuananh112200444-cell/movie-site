@@ -83,10 +83,18 @@ if (!deployRequested) {
 if (process.env.KHOPHIM_PRODUCTION_DEPLOY !== 'YES') {
   fail('set KHOPHIM_PRODUCTION_DEPLOY=YES for the intentional production release.');
 }
-if (!process.env.CLOUDFLARE_API_TOKEN) fail('CLOUDFLARE_API_TOKEN is missing.');
-
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+if (!process.env.CLOUDFLARE_API_TOKEN) {
+  const auth = spawnSync(npx, ['wrangler', 'whoami'], {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: 'utf8',
+    stdio: 'ignore',
+    shell: process.platform === 'win32',
+  });
+  if (auth.status !== 0) fail('Cloudflare authentication is unavailable. Sign in with Wrangler or provide CLOUDFLARE_API_TOKEN.');
+}
 run(npm, ['run', 'build']);
 
 const manifestPath = 'out/release.json';
