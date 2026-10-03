@@ -23,6 +23,8 @@ const CAT_LINKS = [
   { label: 'Diễn Viên Nổi Tiếng', to: '/dien-vien', icon: 'ri-user-star-line' },
   { label: 'Tìm Kiếm Phim', to: '/search', icon: 'ri-search-line' },
   { label: 'Lọc Phim Nâng Cao', to: '/filter', icon: 'ri-equalizer-2-line' },
+  { label: 'Lịch Của Tôi', to: '/lich-cua-toi', icon: 'ri-calendar-check-line' },
+  { label: 'Yêu Cầu Phim', to: '/yeu-cau-phim', icon: 'ri-customer-service-2-line' },
 ];
 
 const COUNTRY_LINKS = [
@@ -96,6 +98,8 @@ const MOBILE_FOOTER_LINKS = [
   { label: 'Tìm kiếm', to: '/search' },
   { label: 'Giới thiệu', to: '/about' },
   { label: 'Chính sách', to: '/policy' },
+  { label: 'Lịch của tôi', to: '/lich-cua-toi' },
+  { label: 'Yêu cầu phim', to: '/yeu-cau-phim' },
 ];
 
 

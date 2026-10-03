@@ -6,6 +6,7 @@ import EditorialHero from './components/EditorialHero';
 import { prefetchCriticalRoutes } from '../../utils/prefetchRoute';
 import { removeSmartSessionCache, setSmartSessionCache } from '../../utils/smartCache';
 import type { MovieItem } from '../../types/movie';
+import { pinCinemaPromotions } from '../../data/homePromotions';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useWatchHistory, type WatchEntry } from '../../hooks/useWatchHistory';
 import { useFavorites, type FavMovie } from '../../hooks/useFavorites';
@@ -177,12 +178,14 @@ function DeferredHomeSection({
   );
 }
 
-const ALL_SECTIONS = ['top-rated', 'vsmov-4k', 'trending', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
+const ALL_SECTIONS = ['top-rated', 'vsmov-4k', 'trending', 'top10-single', 'top10-series', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
 const DESKTOP_HOME_SECTIONS = ALL_SECTIONS;
 const MOBILE_HOME_SECTIONS = [
   'top-rated',
   'vsmov-4k',
   'trending',
+  'top10-single',
+  'top10-series',
   'phim-chieu-rap',
   'phim-le',
   'phim-bo',
@@ -262,7 +265,9 @@ function buildPersonalizedHomeMovies(
 }
 
 function normalizeHomeSections(sections?: Record<string, MovieItem[]>): Record<string, MovieItem[]> {
-  return sections ? { ...sections } : {};
+  const normalized = sections ? { ...sections } : {};
+  normalized['phim-chieu-rap'] = pinCinemaPromotions(normalized['phim-chieu-rap'] ?? []);
+  return normalized;
 }
 
 type EditorialSectionTone = 'cinema' | 'hot' | 'ranking' | 'rated' | 'trailer' | 'anime' | 'series' | 'single' | 'western' | 'china' | 'korea' | 'thai' | 'mood';
@@ -372,7 +377,7 @@ function selectTopRatedMovies(sections: Record<string, MovieItem[]>, limit = TOP
 function selectHeroMovies(sections: Record<string, MovieItem[]>): MovieItem[] {
   // Keep the main artwork exactly aligned with the first 8 cards in the
   // "Phim Đang Chiếu Rạp" shelf. Do not reorder or re-rank this list here.
-  return (sections['phim-chieu-rap'] ?? []).slice(0, HERO_MOVIE_LIMIT);
+  return pinCinemaPromotions(sections['phim-chieu-rap'] ?? []).slice(0, HERO_MOVIE_LIMIT);
 }
 
 function readBootHeroMovies(): MovieItem[] {
@@ -383,7 +388,7 @@ function readBootHeroMovies(): MovieItem[] {
     if (!Array.isArray(parsed)) return [];
     // The build-time snapshot is the same cinema order as the shelf. It is
     // only used for the first paint; live home data refreshes it afterwards.
-    return (parsed as MovieItem[]).slice(0, HERO_MOVIE_LIMIT);
+    return pinCinemaPromotions(parsed as MovieItem[], HERO_MOVIE_LIMIT);
   } catch {
     return [];
   }
@@ -435,7 +440,7 @@ async function loadStaticHomeFallback(signal?: AbortSignal, allowedSections?: st
     }) as MovieItem[];
   }
 
-  return hasHomeMovies(parsedSections) ? parsedSections : {};
+  return hasHomeMovies(parsedSections) ? normalizeHomeSections(parsedSections) : {};
 }
 
 export default function Home() {
@@ -474,6 +479,13 @@ export default function Home() {
   const [queerLoading, setQueerLoading] = useState(true);
   const [rankedTop10Movies, setRankedTop10Movies] = useState<MovieItem[]>([]);
   const [top10Loading, setTop10Loading] = useState(true);
+  const [canonicalTypeRails, setCanonicalTypeRails] = useState<Record<'phim-bo' | 'phim-le' | 'phim-chieu-rap' | 'hoat-hinh', MovieItem[]>>({
+    'phim-bo': [],
+    'phim-le': [],
+    'phim-chieu-rap': [],
+    'hoat-hinh': [],
+  });
+  const [canonicalTypeRailsLoading, setCanonicalTypeRailsLoading] = useState(true);
   const homeDataRef = useRef(homeData);
   const lastHomeFetchRef = useRef(0);
   const heroRevealScheduledRef = useRef(false);
@@ -676,6 +688,42 @@ export default function Home() {
     return () => controller.abort();
   }, [activePortal, deferredContentReady]);
 
+  useEffect(() => {
+    if (activePortal !== 'movies' || !deferredContentReady) return;
+    let cancelled = false;
+    setCanonicalTypeRailsLoading(true);
+    import('../../services/movieApi')
+      .then(({ fetchMoviesByType }) => Promise.all([
+        fetchMoviesByType('phim-bo', 1, 'modified.time', 'desc'),
+        fetchMoviesByType('phim-le', 1, 'modified.time', 'desc'),
+        fetchMoviesByType('phim-chieu-rap', 1, 'modified.time', 'desc'),
+        fetchMoviesByType('hoat-hinh', 1, 'modified.time', 'desc'),
+      ]))
+      .then(([series, singles, cinema, anime]) => {
+        if (cancelled) return;
+        const cinemaItems = pinCinemaPromotions(cinema.items ?? [], 18);
+        setCanonicalTypeRails({
+          'phim-bo': (series.items ?? []).slice(0, 15),
+          'phim-le': (singles.items ?? []).slice(0, 15),
+          'phim-chieu-rap': cinemaItems,
+          'hoat-hinh': (anime.items ?? []).slice(0, 12),
+        });
+        if (cinemaItems.length >= HERO_MOVIE_LIMIT) setHeroMovies(cinemaItems.slice(0, HERO_MOVIE_LIMIT));
+      })
+      .catch(() => {
+        if (!cancelled) setCanonicalTypeRails({
+          'phim-bo': [],
+          'phim-le': [],
+          'phim-chieu-rap': [],
+          'hoat-hinh': [],
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setCanonicalTypeRailsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activePortal, deferredContentReady]);
+
   const trendingMovies = homeData.trending ?? [];
   const dailyUpdateMovies = useMemo(() => {
     const seen = new Set<string>();
@@ -688,27 +736,10 @@ export default function Home() {
         return true;
       });
   }, [homeData]);
-  const personalizedMovies = useMemo(() => {
-    const limit = compactMobile ? 9 : 18;
-    const personalized = buildPersonalizedHomeMovies(homeData, history, favorites, limit);
-    if (personalized.length < 4) return personalized;
-
-    // Keep the truly personalized picks first, then complete a sparse desktop
-    // row with current popular titles. This avoids visible holes without
-    // duplicating films or putting an unrelated title in a country shelf.
-    const seen = new Set<string>();
-    return [
-      ...personalized,
-      ...(homeData.trending ?? []),
-      ...(homeData['phim-bo'] ?? []),
-      ...(homeData['phim-le'] ?? []),
-    ].filter((movie) => {
-      const key = String(movie.slug || movie._id || '').trim();
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return (movie.episode_current ?? '').toLowerCase().trim() !== 'trailer';
-    }).slice(0, limit);
-  }, [compactMobile, favorites, history, homeData]);
+  const personalizedMovies = useMemo(
+    () => buildPersonalizedHomeMovies(homeData, history, favorites, compactMobile ? 9 : 18),
+    [compactMobile, favorites, history, homeData],
+  );
   const top10TodayMovies = useMemo(() => {
     const seen = new Set<string>();
     const fallbackGroups = [
@@ -732,6 +763,8 @@ export default function Home() {
     () => selectTopRatedMovies(homeData, TOP_RATED_MOVIE_LIMIT),
     [homeData],
   );
+  const freshSeriesMovies = canonicalTypeRails['phim-bo'].slice(0, compactMobile ? 9 : 15);
+  const freshSingleMovies = canonicalTypeRails['phim-le'].slice(0, compactMobile ? 9 : 15);
   // Keep a stable hero-sized loading surface even if both the live endpoint
   // and the static snapshot are temporarily unavailable. Returning `null`
   // here collapsed the top of the page and made it look as if content had
@@ -808,8 +841,8 @@ export default function Home() {
             fetchType="type" fetchKey="phim-chieu-rap" limit={compactMobile ? 9 : 18}
             title="Phim Đang Chiếu Rạp" viewAllLink="/phim-chieu-rap"
             cols={6} rootMargin="100px" sectionIndex={0} theme="cinematic"
-            movies={homeData['phim-chieu-rap'] ?? []}
-            loading={homeLoading}
+            movies={canonicalTypeRails['phim-chieu-rap'].slice(0, compactMobile ? 9 : 18)}
+            loading={canonicalTypeRailsLoading}
           />
         </EditorialSectionFrame>
 
@@ -862,20 +895,20 @@ export default function Home() {
         <EditorialSectionFrame number="04" code="SERIES INDEX" tone="series">
           <LazyMovieSection
             fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 15}
-            title="Phim Bộ Đang Hot" viewAllLink="/phim-bo"
+            title="Phim Bộ Mới Cập Nhật" viewAllLink="/phim-bo?sort=updated"
             cols={6} rootMargin="160px" sectionIndex={4} theme="trending" mobileLayout="rail"
-            movies={homeData['phim-bo'] ?? []}
-            loading={homeLoading}
+            movies={freshSeriesMovies}
+            loading={canonicalTypeRailsLoading}
           />
         </EditorialSectionFrame>
 
         <EditorialSectionFrame number="05" code="FEATURE FILMS" tone="single">
           <LazyMovieSection
             fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 15}
-            title="Phim Lẻ Đang Hot" viewAllLink="/phim-le"
+            title="Phim Lẻ Mới Cập Nhật" viewAllLink="/phim-le?sort=updated"
             cols={6} rootMargin="160px" sectionIndex={5} theme="cinematic" mobileLayout="rail"
-            movies={homeData['phim-le'] ?? []}
-            loading={homeLoading}
+            movies={freshSingleMovies}
+            loading={canonicalTypeRailsLoading}
           />
         </EditorialSectionFrame>
 
@@ -902,8 +935,8 @@ export default function Home() {
             fetchType="type" fetchKey="hoat-hinh" limit={compactMobile ? 9 : 12}
             title="Kho Tàng Anime Mới Nhất" viewAllLink="/hoat-hinh"
             cols={6} rootMargin="160px" sectionIndex={8} theme="anime" mobileLayout="rail"
-            movies={homeData['hoat-hinh'] ?? []}
-            loading={homeLoading}
+            movies={canonicalTypeRails['hoat-hinh'].slice(0, compactMobile ? 9 : 12)}
+            loading={canonicalTypeRailsLoading}
           />
         </EditorialSectionFrame>
 

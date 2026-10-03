@@ -12,11 +12,13 @@ interface Props {
   movie: MovieDetail;
   slug: string;
   favored: boolean;
+  followed: boolean;
   isTrailerOnly: boolean;
   hasEpisodes: boolean;
   episodeDataLoading: boolean;
   noIndex: boolean;
   onFavToggle: () => void;
+  onFollowToggle: () => void;
   onWatchNow: () => void;
 }
 
@@ -309,7 +311,7 @@ function buildMovieSchema({
   return schemas;
 }
 
-export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, hasEpisodes, episodeDataLoading, noIndex, onFavToggle, onWatchNow }: Props) {
+export default function MovieDetailHero({ movie, slug, favored, followed, isTrailerOnly, hasEpisodes, episodeDataLoading, noIndex, onFavToggle, onFollowToggle, onWatchNow }: Props) {
   const [showDesc, setShowDesc] = useState(false);
 
   const portraitArtwork = getPortraitImagePaths(movie);
@@ -541,6 +543,53 @@ export default function MovieDetailHero({ movie, slug, favored, isTrailerOnly, h
                 <SocialShare title={displayTitle} url={`${SITE_URL}/phim/${slug}`} />
               </div>
             </div>
+          </div>
+
+          <div className={`mt-3 flex flex-col gap-3 rounded-2xl border p-4 sm:mt-4 sm:flex-row sm:items-center sm:justify-between ${
+            followed
+              ? 'border-sky-400/30 bg-gradient-to-r from-sky-500/12 to-cyan-500/[0.04]'
+              : 'border-white/[0.08] bg-gradient-to-r from-white/[0.045] to-transparent'
+          }`}>
+            <div className="flex min-w-0 items-start gap-3">
+              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${followed ? 'bg-sky-400 text-sky-950' : 'bg-sky-500/15 text-sky-300'}`}>
+                <i className={`${followed ? 'ri-notification-3-fill' : 'ri-notification-3-line'} text-lg`} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-white">{followed ? 'Bạn đang theo dõi phim này' : 'Không bỏ lỡ cập nhật mới'}</p>
+                <p className="mt-1 text-xs leading-5 text-white/45">
+                  {movie.status === 'completed'
+                    ? 'Nhận thông báo khi phim có nguồn phát hoặc bản cập nhật mới.'
+                    : 'Nhận thông báo ngay khi KhoPhim cập nhật tập mới.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              {followed && (
+                <Link to="/lich-cua-toi" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-bold text-white/65 hover:text-white">
+                  Lịch của tôi
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={onFollowToggle}
+                aria-pressed={followed}
+                className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-xs font-black transition sm:flex-none ${
+                  followed ? 'border border-sky-400/30 bg-sky-500/15 text-sky-200' : 'bg-sky-400 text-sky-950 hover:bg-sky-300'
+                }`}
+              >
+                <i className={followed ? 'ri-check-line' : 'ri-notification-3-fill'} />
+                {followed ? 'Đang theo dõi' : 'Theo dõi phim'}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-2 flex justify-end">
+            <Link
+              to={`/yeu-cau-phim?type=missing_episode&name=${encodeURIComponent(displayTitle)}&url=${encodeURIComponent(`${SITE_URL}/phim/${slug}`)}`}
+              className="inline-flex min-h-11 items-center gap-1.5 px-2 text-xs font-semibold text-white/35 transition hover:text-amber-300"
+            >
+              <i className="ri-error-warning-line" /> Báo thiếu tập hoặc nguồn phát
+            </Link>
           </div>
         </div>
       </div>

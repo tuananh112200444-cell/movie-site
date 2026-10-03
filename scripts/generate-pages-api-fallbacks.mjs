@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { PINNED_CINEMA_MOVIES } from '../src/data/homePromotions.ts';
 
 const sourcePath = new URL('../public/home-fallback.json', import.meta.url);
 const apiDirectory = new URL('../public/api/', import.meta.url);
@@ -10,6 +11,11 @@ const storedCinemaItems = Array.isArray(sections['phim-chieu-rap'])
   ? sections['phim-chieu-rap'].filter((item) => item && item.chieurap === true)
   : [];
 const storedVietnamItems = Array.isArray(sections['viet-nam']) ? sections['viet-nam'] : [];
+const existingVietnamApi = JSON.parse(await readFile(
+  new URL('kkphim-vietnam-latest', apiDirectory),
+  'utf8',
+).catch(() => '{"items":[]}'));
+const existingVietnamItems = Array.isArray(existingVietnamApi?.items) ? existingVietnamApi.items : [];
 
 function absoluteKkphimImage(value, cdnBase) {
   const path = String(value || '').trim();
@@ -100,12 +106,18 @@ const [currentCinemaItems, currentVietnamItems] = await Promise.all([
   fetchCurrentCinemaItems(),
   fetchCurrentVietnamItems(),
 ]);
-const cinemaItems = currentCinemaItems.length >= 12
+const baseCinemaItems = currentCinemaItems.length >= 12
   ? currentCinemaItems
   : normalizeCinemaItems(storedCinemaItems, 'https://phimimg.com');
+const promotedCinemaItems = PINNED_CINEMA_MOVIES;
+const promotedCinemaSlugs = new Set(promotedCinemaItems.map((item) => item.slug));
+const cinemaItems = [
+  ...promotedCinemaItems,
+  ...baseCinemaItems.filter((item) => !promotedCinemaSlugs.has(item.slug)),
+].slice(0, 18);
 const vietnamItems = currentVietnamItems.length >= 12
   ? currentVietnamItems
-  : normalizeVietnamItems(storedVietnamItems, 'https://phimimg.com');
+  : normalizeVietnamItems([...storedVietnamItems, ...existingVietnamItems], 'https://phimimg.com');
 
 if (cinemaItems.length < 6) {
   throw new Error(`Static cinema API fallback is too small (${cinemaItems.length} items).`);

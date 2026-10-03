@@ -98,6 +98,9 @@
 /search / 200
 /dien-vien / 200
 /yeu-thich / 200
+/tai-khoan / 200
+/lich-cua-toi / 200
+/yeu-cau-phim / 200
 /xem-phim/* / 200
 /dien-vien/* / 200
 /blog/* / 200

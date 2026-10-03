@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { MovieItem } from '../types/movie';
+import { ACCOUNT_DATA_CHANGED_EVENT, pushSyncItem } from '@/services/accountSync';
 
 const KEY = 'kp_watch_history';
 const MAX = 20;
@@ -61,10 +62,22 @@ export function persistWatchHistoryProgress(
   if (idx < 0) return;
   list[idx] = { ...list[idx], watchedTime, watchedDuration };
   save(list);
+  const entry = list[idx];
+  void pushSyncItem('watch_history', entry.slug || entry._id, entry as unknown as Record<string, unknown>).catch(() => {});
 }
 
 export function useWatchHistory() {
   const [history, setHistory] = useState<WatchEntry[]>(load);
+
+  useEffect(() => {
+    const refresh = () => setHistory(load());
+    window.addEventListener(ACCOUNT_DATA_CHANGED_EVENT, refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener(ACCOUNT_DATA_CHANGED_EVENT, refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
 
   const addEntry = useCallback((movie: MovieItem, epSlug = '', epName = '') => {
     setHistory((prev) => {
@@ -93,6 +106,7 @@ export function useWatchHistory() {
       };
       const next = [entry, ...filtered];
       save(next);
+      void pushSyncItem('watch_history', entry.slug || entry._id, entry as unknown as Record<string, unknown>).catch(() => {});
       return next;
     });
   }, []);
@@ -107,20 +121,27 @@ export function useWatchHistory() {
       const next = [...prev];
       next[idx] = { ...next[idx], watchedTime, watchedDuration };
       save(next);
+      void pushSyncItem('watch_history', next[idx].slug || next[idx]._id, next[idx] as unknown as Record<string, unknown>).catch(() => {});
       return next;
     });
   }, []);
 
   const removeEntry = useCallback((id: string) => {
     setHistory((prev) => {
+      const removed = prev.find((e) => e._id === id);
       const next = prev.filter((e) => e._id !== id);
       save(next);
+      if (removed) void pushSyncItem('watch_history', removed.slug || removed._id, {}, true).catch(() => {});
       return next;
     });
   }, []);
 
   const clearAll = useCallback(() => {
+    const existing = load();
     try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+    existing.forEach((entry) => {
+      void pushSyncItem('watch_history', entry.slug || entry._id, {}, true).catch(() => {});
+    });
     setHistory([]);
   }, []);
 

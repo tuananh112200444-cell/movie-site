@@ -24,6 +24,9 @@ const routeImports: Record<string, () => Promise<unknown>> = {
   '/hoat-hinh':       () => import('../pages/movie-list/page'),
   '/tv-shows':        () => import('../pages/movie-list/page'),
   '/yeu-thich':       () => import('../pages/favorites/page'),
+  '/tai-khoan':       () => import('../pages/account/page'),
+  '/lich-cua-toi':    () => import('../pages/release-schedule/page'),
+  '/yeu-cau-phim':    () => import('../pages/movie-request/page'),
   '/about':           () => import('../pages/about/page'),
   '/policy':          () => import('../pages/policy/page'),
 };

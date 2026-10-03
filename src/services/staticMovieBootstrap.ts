@@ -70,6 +70,12 @@ export function normalizeDetailForCanonicalRoute(
 ): MovieDetailResponse {
   const canonical = canonicalMovieSlug(canonicalSlug);
   const staticMovie = staticDetail?.movie;
+  const staticEpisodes = staticDetail?.episodes ?? [];
+  const dynamicEpisodes = detail.episodes ?? [];
+  const staticServerNames = new Set(staticEpisodes.map((server) => server.server_name));
+  const episodes = staticEpisodes.length > 0
+    ? [...staticEpisodes, ...dynamicEpisodes.filter((server) => !staticServerNames.has(server.server_name))]
+    : dynamicEpisodes;
   return {
     ...detail,
     movie: {
@@ -80,6 +86,7 @@ export function normalizeDetailForCanonicalRoute(
       name: staticMovie?.name || detail.movie.name,
       origin_name: staticMovie?.origin_name || detail.movie.origin_name,
     },
+    episodes,
   };
 }
 

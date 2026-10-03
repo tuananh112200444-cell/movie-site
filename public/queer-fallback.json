@@ -689,9 +689,9 @@
         "_id": "b67f5dc3-87a4-43d2-af6c-e64bf25d9379",
         "category": [],
         "country": [],
-        "current_episode": 6,
-        "episode_current": "Tập 6",
-        "episode_total": "6 Tập",
+        "current_episode": 10,
+        "episode_current": "Tập 10",
+        "episode_total": "10 Tập",
         "lang": "",
         "modified": {
           "time": "2026-09-03T04:17:48.152408+00:00"
@@ -932,9 +932,9 @@
         "_id": "87c29e93-319e-40c9-824e-88849b1675cf",
         "category": [],
         "country": [],
-        "current_episode": 10,
-        "episode_current": "Tập 10",
-        "episode_total": "10 Tập",
+        "current_episode": 6,
+        "episode_current": "Tập 6",
+        "episode_total": "6 Tập",
         "lang": "",
         "modified": {
           "time": "2026-09-30T17:25:29.394704+00:00"

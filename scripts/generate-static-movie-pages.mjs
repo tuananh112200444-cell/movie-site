@@ -109,6 +109,23 @@ function staticBootstrapJson(value) {
     .replace(/\u2029/g, '\\u2029');
 }
 
+async function loadCuratedMovieDetails() {
+  const directory = path.join('public', 'movie-data');
+  const files = await readdir(directory).catch(() => []);
+  const details = new Map();
+
+  for (const fileName of files) {
+    if (!fileName.endsWith('.json')) continue;
+    const payload = JSON.parse(await readFile(path.join(directory, fileName), 'utf8').catch(() => 'null'));
+    const slug = String(payload?.canonical_slug || '').trim();
+    const detail = payload?.detail;
+    if (!slug || !detail?.movie || !Array.isArray(detail.episodes) || detail.episodes.length === 0) continue;
+    details.set(slug, detail);
+  }
+
+  return details;
+}
+
 function movieDetailFromStaticMovie(movie, canonicalSlug) {
   return {
     status: true,
@@ -589,6 +606,9 @@ if (rawUpcomingMovies.length < MIN_EXPECTED_UPCOMING_MOVIES) {
 
 const aliases = JSON.parse(await readFile('src/data/movieCanonicalAliases.json', 'utf8'));
 const canonicalSlugFor = (slug) => String(aliases[String(slug || '').trim()] || slug || '').trim();
+const sourceSlugOverrides = new Map([
+  ['gia-dinh-la-so-1-phan-1', 'gia-dinh-la-so-1-phan-1'],
+]);
 const sourceSlugByCanonical = new Map(
   Object.entries(aliases).map(([sourceSlug, canonicalSlug]) => [String(canonicalSlug), String(sourceSlug)]),
 );
@@ -598,10 +618,17 @@ if (upcomingMovies.length < MIN_EXPECTED_UPCOMING_MOVIES) {
   throw new Error(`Only ${upcomingMovies.length} distinct upcoming trailer movies remain after canonical deduplication.`);
 }
 const indexableMovies = [...movies, ...upcomingMovies];
+const curatedMovieDetails = await loadCuratedMovieDetails();
 const indexableByCanonical = new Map();
 for (const movie of indexableMovies) {
   const canonicalSlug = canonicalSlugFor(movie.slug);
-  if (canonicalSlug) indexableByCanonical.set(canonicalSlug, movie);
+  if (!canonicalSlug) continue;
+  const existing = indexableByCanonical.get(canonicalSlug);
+  // If a canonical row and a legacy alias are both present in a stale edge
+  // catalogue, the canonical row is authoritative regardless of source order.
+  if (!existing || String(movie.slug || '') === canonicalSlug || String(existing.slug || '') !== canonicalSlug) {
+    indexableByCanonical.set(canonicalSlug, movie);
+  }
 }
 
 const hotPayload = JSON.parse(await readFile('public/api/kkphim-cinema-hot', 'utf8').catch(() => '{"items":[]}'));
@@ -624,7 +651,7 @@ const pageDefinitions = [
     return {
       movie,
       canonicalSlug,
-      sourceSlug: sourceSlugByCanonical.get(canonicalSlug) || String(movie.slug || canonicalSlug),
+      sourceSlug: sourceSlugOverrides.get(canonicalSlug) || sourceSlugByCanonical.get(canonicalSlug) || String(movie.slug || canonicalSlug),
       indexable: true,
     };
   }),
@@ -634,13 +661,15 @@ const pageDefinitions = [
 await mkdir(path.join('out', 'phim'), { recursive: true });
 await mkdir(path.join('out', 'movie-data'), { recursive: true });
 await writeInBatches(pageDefinitions.map(({ movie, canonicalSlug, sourceSlug, indexable }) => async () => {
+  const curatedDetail = curatedMovieDetails.get(canonicalSlug);
+  const pageMovie = curatedDetail?.movie ? { ...movie, ...curatedDetail.movie, slug: canonicalSlug } : movie;
   // Cloudflare Pages serves /phim/slug cleanly from /phim/slug.html. Using
   // /phim/slug/index.html forces a trailing-slash redirect that conflicts with
   // the canonical and with every existing internal movie link.
   await Promise.all([
     writeFile(
       path.join('out', 'phim', `${canonicalSlug}.html`),
-      renderMoviePage(movie, assetTags, { canonicalSlug, sourceSlug, indexable }),
+      renderMoviePage(pageMovie, assetTags, { canonicalSlug, sourceSlug, indexable }),
       'utf8',
     ),
     writeFile(
@@ -651,7 +680,7 @@ await writeInBatches(pageDefinitions.map(({ movie, canonicalSlug, sourceSlug, in
         source_slug: sourceSlug,
         indexable,
         generated_at: new Date().toISOString(),
-        detail: movieDetailFromStaticMovie(movie, canonicalSlug),
+        detail: curatedDetail || movieDetailFromStaticMovie(movie, canonicalSlug),
       }),
       'utf8',
     ),

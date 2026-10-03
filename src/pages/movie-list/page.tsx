@@ -12,6 +12,7 @@ import Pagination from '@/components/base/Pagination';
 import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
 import AdsterraNativeBanner from '@/components/feature/AdsterraNativeBanner';
 import type { Movie } from '../../types/movie';
+import { pinCinemaPromotions } from '../../data/homePromotions';
 import { getImageUrl } from '../../services/movieApi';
 
 interface MovieListPageProps {
@@ -143,26 +144,38 @@ function getMovieKey(movie: Movie): string {
   return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
 }
 
-function getModifiedTime(movie: Movie): number {
-  return new Date(movie.modified?.time ?? 0).getTime() || 0;
-}
-
 export default function MovieListPage({ type, title, countryFilter }: MovieListPageProps) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { pathname } = useLocation();
 
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
-  const [sortBy, setSortBy] = useState<'new' | 'hot' | 'updated'>('new');
+  const requestedSort = searchParams.get('sort');
+  const initialSort = requestedSort === 'hot' ? 'hot' : 'updated';
+  const [sortBy, setSortBy] = useState<'hot' | 'updated'>(initialSort);
   // Query the requested page directly. The old pseudo "stable" mode fetched
   // many pages then rebuilt the order in the browser, which made list pages
   // look unrelated to their actual source order.
-  const sortField = sortBy === 'updated' ? 'modified.time' : 'year';
+  const sortField = sortBy === 'hot' ? 'hot' : 'modified.time';
+
+  useEffect(() => {
+    const nextSort = searchParams.get('sort');
+    setSortBy(nextSort === 'hot' ? 'hot' : 'updated');
+  }, [searchParams]);
+
+  const selectSort = useCallback((mode: 'hot' | 'updated') => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('page');
+    if (mode === 'updated') next.delete('sort');
+    else next.set('sort', 'hot');
+    setSortBy(mode);
+    setSearchParams(next);
+  }, [searchParams, setSearchParams]);
 
   /* ── Gọi API đúng page — không còn pool system ── */
   const { movies: rawMovies, loading, totalPages: hookTotalPages } = useMoviesByType(
     type,
     page,
-    2,
+    1,
     sortField,
   );
 
@@ -182,30 +195,13 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
       return true;
     });
 
-    if (sortBy === 'hot') {
-      const currentYear = new Date().getFullYear();
-      const score = (m: Movie): number => {
-        const yearDiff = currentYear - (m.year ?? 0);
-        const yearScore = yearDiff <= 0 ? 60 : yearDiff === 1 ? 45 : yearDiff === 2 ? 30 : yearDiff === 3 ? 15 : yearDiff <= 5 ? 5 : 0;
-        const mtime = new Date(m.modified?.time ?? 0).getTime();
-        const freshScore = Math.max(0, 80 - (Date.now() - mtime) / 3600000 * 2);
-        const ep = (m.episode_current ?? '').toLowerCase().trim();
-        const isFull = ep === 'full' || ep === 'full hd' || ep.startsWith('hoàn tất');
-        return yearScore + freshScore + (isFull ? 25 : 0) + (m.chieurap ? 15 : 0);
-      };
-      return [...list].sort((a, b) => score(b) - score(a)).slice(0, PAGE_SIZE);
-    }
-
-    const sorted = [...list].sort((a, b) => {
-      if (sortBy === 'new') {
-        const byYear = (b.year ?? 0) - (a.year ?? 0);
-        if (byYear !== 0) return byYear;
-      }
-      return getModifiedTime(b) - getModifiedTime(a);
-    });
-
-    return sorted.slice(0, PAGE_SIZE);
-  }, [rawMovies, sortBy, countryFilter]);
+    // The database/provider owns the total order before applying page range.
+    // Re-sorting a page-sized fragment in the browser made numbered pages
+    // disagree with each other and with homepage shelves.
+    return type === 'phim-chieu-rap' && page === 1 && !countryFilter
+      ? pinCinemaPromotions(list, PAGE_SIZE)
+      : list.slice(0, PAGE_SIZE);
+  }, [rawMovies, sortBy, countryFilter, page, type]);
 
   const totalPages = Math.max(1, hookTotalPages || 1);
   const hasNextPage = page < totalPages;
@@ -260,7 +256,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
     { label: 'Trạng thái', value: 'Theo nguồn' },
   ];
   const { sectionRef: seoRef, visible: seoVisible } = useLazySection('300px');
-  const showFeatured = page === 1 && sortBy === 'new' && movies.length >= 5;
+  const showFeatured = page === 1 && sortBy === 'updated' && movies.length >= 5;
   const featuredMovies = showFeatured ? movies.slice(0, 5) : [];
   const gridMovies = showFeatured ? movies.slice(5) : movies;
 
@@ -327,17 +323,17 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
           </div>
 
           <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-white/[0.06] bg-black/20 p-1 w-full sm:w-auto">
-            {(['new', 'hot', 'updated'] as const).map((mode) => (
+            {(['updated', 'hot'] as const).map((mode) => (
               <button
                 key={mode}
-                onClick={() => setSortBy(mode)}
+                onClick={() => selectSort(mode)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                   sortBy === mode
                     ? 'bg-white/[0.12] text-white shadow-sm'
                     : 'text-white/30 hover:text-white/60'
                 }`}
               >
-                {mode === 'new' ? 'Mới nhất' : mode === 'hot' ? 'Hot nhất' : 'Mới cập nhật'}
+                {mode === 'hot' ? 'Hot nhất' : 'Mới cập nhật'}
               </button>
             ))}
           </div>
@@ -351,7 +347,7 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
         {/* ── Movie Grid ── */}
         {loading ? (
           <div className="space-y-6 sm:space-y-8">
-            {page === 1 && sortBy === 'new' && (
+            {page === 1 && sortBy === 'updated' && (
               <div>
                 <div className="flex items-center gap-4 mb-5">
                   <div className="h-6 w-40 skeleton rounded-lg" />
@@ -408,7 +404,13 @@ export default function MovieListPage({ type, title, countryFilter }: MovieListP
 
         {/* ── Pagination ── */}
         {!loading && (movies.length > 0 || page > 1) && (
-          <Pagination currentPage={page} totalPages={totalPages} basePath={basePath} hasNext={hasNextPage} />
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            basePath={basePath}
+            hasNext={hasNextPage}
+            preserveQuery={sortBy === 'hot' ? { sort: 'hot' } : undefined}
+          />
         )}
 
         {!loading && movies.length > 0 && <AdsterraNativeBanner />}

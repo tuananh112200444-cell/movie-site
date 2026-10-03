@@ -17,6 +17,30 @@ const COUNTRIES: Array<{
   { key: 'thai-lan', label: 'Thái Lan', code: 'TH', link: '/phim-thai-lan', theme: 'tropical' },
 ];
 
+function selectFreshCountryMovies(items: MovieItem[], country: CountryKey, limit: number): MovieItem[] {
+  const currentYear = new Date().getFullYear();
+  const seen = new Set<string>();
+  return [...items]
+    .filter((movie) => {
+      const slug = String(movie.slug || '').trim();
+      const year = Number(movie.year || 0);
+      if (!slug || seen.has(slug)) return false;
+      if (year < currentYear - 1 || year > currentYear + 1) return false;
+      if (!(movie.country ?? []).some((entry) => entry?.slug === country)) return false;
+      if (/trailer|teaser/i.test(String(movie.episode_current || ''))) return false;
+      seen.add(slug);
+      return true;
+    })
+    .sort((left, right) => {
+      const yearDelta = Number(right.year || 0) - Number(left.year || 0);
+      if (yearDelta !== 0) return yearDelta;
+      const leftTime = Date.parse(left.created_at || left.published_at || left.modified?.time || '') || 0;
+      const rightTime = Date.parse(right.created_at || right.published_at || right.modified?.time || '') || 0;
+      return rightTime - leftTime || String(right._id || '').localeCompare(String(left._id || ''));
+    })
+    .slice(0, limit);
+}
+
 export default function CountryTabsSection({
   sections,
   loading,
@@ -30,6 +54,10 @@ export default function CountryTabsSection({
   const selected = useMemo(
     () => COUNTRIES.find((country) => country.key === active) ?? COUNTRIES[0],
     [active],
+  );
+  const selectedMovies = useMemo(
+    () => selectFreshCountryMovies(sections[selected.key] ?? [], selected.key, compactMobile ? 9 : 18),
+    [compactMobile, sections, selected.key],
   );
 
   return (
@@ -58,7 +86,7 @@ export default function CountryTabsSection({
       <div className="world-index__content" key={selected.key}>
         <MovieSection
           title={`Phim ${selected.label}`}
-          movies={(sections[selected.key] ?? []).slice(0, compactMobile ? 9 : 18)}
+          movies={selectedMovies}
           loading={loading}
           viewAllLink={selected.link}
           cols={6}

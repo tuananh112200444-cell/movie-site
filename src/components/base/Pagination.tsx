@@ -7,11 +7,16 @@ interface PaginationProps {
   basePath: string;
   hasNext?: boolean;
   accentClass?: string;
+  preserveQuery?: Record<string, string>;
   onPageChange?: (page: number) => void;
 }
 
-function pageHref(basePath: string, page: number): string {
-  return page > 1 ? `${basePath}?page=${page}` : basePath;
+function pageHref(basePath: string, page: number, preserveQuery?: Record<string, string>): string {
+  const params = new URLSearchParams(preserveQuery);
+  if (page > 1) params.set('page', String(page));
+  else params.delete('page');
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 export default function Pagination({
@@ -20,6 +25,7 @@ export default function Pagination({
   basePath,
   hasNext,
   accentClass = 'bg-red-500',
+  preserveQuery,
   onPageChange,
 }: PaginationProps) {
   const navigate = useNavigate();
@@ -46,7 +52,7 @@ export default function Pagination({
     onPageChange?.(nextPage);
     navigate({
       pathname: basePath,
-      search: nextPage > 1 ? `?page=${nextPage}` : '',
+      search: pageHref('', nextPage, preserveQuery),
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -63,14 +69,14 @@ export default function Pagination({
         <PageIconButton
           icon="ri-skip-left-line"
           disabled={page === 1}
-          href={pageHref(basePath, 1)}
+          href={pageHref(basePath, 1, preserveQuery)}
           label="Trang dau"
           onClick={() => goToPage(1)}
         />
         <PageIconButton
           icon="ri-arrow-left-s-line"
           disabled={page === 1}
-          href={pageHref(basePath, page - 1)}
+          href={pageHref(basePath, page - 1, preserveQuery)}
           label="Trang truoc"
           onClick={() => goToPage(page - 1)}
         />
@@ -83,7 +89,7 @@ export default function Pagination({
           ) : (
             <a
               key={item}
-              href={pageHref(basePath, item)}
+              href={pageHref(basePath, item, preserveQuery)}
               onClick={(event) => {
                 event.preventDefault();
                 goToPage(item);
@@ -100,14 +106,14 @@ export default function Pagination({
         <PageIconButton
           icon="ri-arrow-right-s-line"
           disabled={!canGoNext}
-          href={pageHref(basePath, page + 1)}
+          href={pageHref(basePath, page + 1, preserveQuery)}
           label="Trang sau"
           onClick={() => goToPage(page + 1)}
         />
         <PageIconButton
           icon="ri-skip-right-line"
           disabled={!canGoNext}
-          href={pageHref(basePath, safeTotal)}
+          href={pageHref(basePath, safeTotal, preserveQuery)}
           label="Trang cuoi"
           onClick={() => goToPage(safeTotal)}
         />

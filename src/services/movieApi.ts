@@ -864,7 +864,7 @@ function shouldBypassImageProxy(url: string): boolean {
   // Keep CDNs with their own renditions direct, and never send a domain that
   // wsrv explicitly blocks through the proxy. These origins already publish
   // long-lived browser/CDN cache headers, so bypassing avoids an extra RTT.
-  return /^https?:\/\/(image\.tmdb\.org|blogger\.googleusercontent\.com|[^/]+\.bp\.blogspot\.com|i\.ibb\.co|pic1\.iqiyipic\.com|vcover-hz-pic\.wetvinfo\.com|phimimg\.com|icdn\.darkbytes\.xyz)\//i.test(url);
+  return /^https?:\/\/(image\.tmdb\.org|img\.anili\.st|www\.ytv\.co\.jp|blogger\.googleusercontent\.com|[^/]+\.bp\.blogspot\.com|i\.ibb\.co|pic1\.iqiyipic\.com|vcover-hz-pic\.wetvinfo\.com|phimimg\.com|icdn\.darkbytes\.xyz)\//i.test(url);
 }
 
 export function getImageFallbacks(primaryPath?: string, altPath?: string): string[] {
@@ -1125,6 +1125,10 @@ function sortListItems(
           || 0,
       ).getTime() || 0;
     }
+    if (sortField === 'hot') {
+      return Math.max(0, Number(item.view || 0)) * 1000
+        + Math.max(0, Number(item.tmdb_popularity || 0));
+    }
     return 0;
   };
   return [...items].sort((a, b) => (valueOf(a) - valueOf(b)) * direction);
@@ -1133,7 +1137,7 @@ function sortListItems(
 // Keep this list aligned with the production `movies` table. `chieurap` used
 // to be present in an upstream payload but is not a database column; selecting
 // it made every direct list request fail with PostgREST 42703/HTTP 400.
-const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, thumb_url, poster_url, hero_backdrop_url, hero_poster_url, trailer_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, created_at, updated_at, published_at, last_episode_change_at, is_published, seo_catalog_status, superseded_by_movie_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+const SUPABASE_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, thumb_url, poster_url, hero_backdrop_url, hero_poster_url, trailer_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, category, country, created_at, updated_at, published_at, last_episode_change_at, is_published, seo_catalog_status, superseded_by_movie_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note, view, tmdb_popularity';
 // Minimal public contract used when an optional column is renamed/removed in
 // production. Cards remain usable while the richer schema is being repaired.
 const SUPABASE_LIST_CORE_SELECT = 'id, slug, name, origin_name, thumb_url, poster_url, trailer_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, category, country, is_published, updated_at, source_site, source_name';
@@ -1215,7 +1219,7 @@ function filterCatalogueListingItems(
   items: MovieListResponse['items'],
   params: Pick<SupabaseListParams, 'type' | 'year' | 'sortField'>,
 ): MovieListResponse['items'] {
-  const showingFreshFeed = !params.year && params.sortField === 'modified.time';
+  const showingFreshFeed = !params.year && (params.sortField === 'modified.time' || params.sortField === 'hot');
   const sortingByYear = params.sortField === 'year';
   return items.filter((item) => {
     if (params.type === 'phim-sap-chieu' && !isConfirmedUpcomingMovie(item)) return false;
@@ -1284,12 +1288,19 @@ async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): 
         // Exact filtered counts forced PostgreSQL to scan the whole matching
         // catalogue for every shelf/page. Estimated count keeps pagination
         // useful without putting viewer requests behind an expensive COUNT.
-        .select(selectFields, { count: 'estimated' })
-        .eq('is_published', true);
+        .select(selectFields, { count: 'exact' })
+        .eq('is_published', true)
+        .is('superseded_by_movie_id', null)
+        .or('seo_catalog_status.is.null,seo_catalog_status.not.in.(hidden,draft,superseded)');
 
       const typeValues = typeFilterValues(params.type);
       if (typeValues.length === 1) query = query.eq('type', typeValues[0]);
       else if (typeValues.length > 1) query = query.in('type', typeValues);
+      if (params.type === 'phim-le') {
+        query = query
+          .or('current_episode.is.null,current_episode.lte.1')
+          .or('total_episodes.is.null,total_episodes.lte.1');
+      }
       if (params.type === 'phim-sap-chieu') {
         // Never use the generic latest catalogue as an upcoming fallback.
         // These are the only two states the database can prove are upcoming.
@@ -1297,12 +1308,19 @@ async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): 
         query = query
           .gte('year', currentCatalogYear())
           .lte('year', currentCatalogYear() + 2);
+      } else {
+        // Visibility must be part of the database query before count/range.
+        // Filtering trailers after pagination produced sparse or empty later
+        // pages while the UI still advertised the unfiltered page count.
+        query = query
+          .not('episode_current', 'ilike', '%trailer%')
+          .not('episode_current', 'ilike', '%teaser%');
       }
 
       if (params.category) query = query.filter('category', 'cs', JSON.stringify([{ slug: params.category }]));
       if (params.country) query = query.filter('country', 'cs', JSON.stringify([{ slug: params.country }]));
       if (params.year) query = query.eq('year', Number(params.year));
-      if (!params.year && params.sortField === 'modified.time') {
+      if (!params.year && (params.sortField === 'modified.time' || params.sortField === 'hot')) {
         // All catalogue pages whose default is “Mới cập nhật” share this
         // contract: a historical import must never be presented as fresh.
         query = query
@@ -1331,10 +1349,20 @@ async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): 
 
       const ascending = params.sortType === 'asc';
       query = params.sortField === 'year'
-        ? query.order('year', { ascending, nullsFirst: false }).order('updated_at', { ascending: false, nullsFirst: false })
+        ? query.order('year', { ascending, nullsFirst: false })
+          .order('created_at', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: false })
         : params.sortField === 'modified.time'
-          ? query.order('last_episode_change_at', { ascending, nullsFirst: false }).order('created_at', { ascending: false, nullsFirst: false })
-          : query.order('created_at', { ascending: false, nullsFirst: false });
+          ? query.order('last_episode_change_at', { ascending, nullsFirst: false })
+            .order('created_at', { ascending: false, nullsFirst: false })
+            .order('id', { ascending: false })
+          : params.sortField === 'hot'
+            ? query.order('view', { ascending: false, nullsFirst: false })
+              .order('tmdb_popularity', { ascending: false, nullsFirst: false })
+              .order('year', { ascending: false, nullsFirst: false })
+              .order('id', { ascending: false })
+            : query.order('created_at', { ascending: false, nullsFirst: false })
+              .order('id', { ascending: false });
       return query.range(from, to);
     };
 
@@ -1352,7 +1380,35 @@ async function fetchMoviesFromSupabaseListUncached(params: SupabaseListParams): 
     }
     if (!response) return null;
     const { data, count, error } = response;
-    if (error || !data || data.length === 0) return null;
+    if (error?.code === 'PGRST103') {
+      // An out-of-range canonical page is a valid empty page. Falling through
+      // to a provider catalogue here mixed a different ordering into later
+      // pages and resurrected duplicates from earlier pages.
+      return {
+        status: true,
+        items: [],
+        pagination: {
+          currentPage: page,
+          totalItems: from,
+          totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE,
+          totalPages: Math.max(1, page - 1),
+        },
+      };
+    }
+    if (error || !data) return null;
+    if (data.length === 0) {
+      const totalItems = count ?? 0;
+      return {
+        status: true,
+        items: [],
+        pagination: {
+          currentPage: page,
+          totalItems,
+          totalItemsPerPage: SUPABASE_LIST_PAGE_SIZE,
+          totalPages: Math.max(1, Math.ceil(totalItems / SUPABASE_LIST_PAGE_SIZE)),
+        },
+      };
+    }
 
     const items = filterCatalogueListingItems(sortListItems(
       (data as unknown as Record<string, unknown>[])
@@ -1548,6 +1604,7 @@ export async function fetchMoviesByType(
   }
 
   const q = new URLSearchParams({ page: String(page) });
+  q.set('limit', String(SUPABASE_LIST_PAGE_SIZE));
   if (sortField) { q.set('sort_field', sortField); q.set('sort_type', sortType); }
 
   // OPTIMIZED: chỉ gọi 2 nguồn chính + 1 mirror
@@ -1606,6 +1663,7 @@ export async function fetchMoviesByCategory(params: {
   if (params.keyword)   q.set('keyword', params.keyword);
   if (params.sortField) { q.set('sort_field', params.sortField); q.set('sort_type', params.sortType ?? 'desc'); }
   q.set('page', String(params.page ?? 1));
+  q.set('limit', String(SUPABASE_LIST_PAGE_SIZE));
   const type = params.type ?? 'phim-moi-cap-nhat';
 
   // OPTIMIZED: chỉ 3 nguồn chính
@@ -1653,8 +1711,11 @@ export async function fetchQueerMovies(
   try {
     let query = supabase
       .from('movies')
-      .select(SUPABASE_QUEER_LIST_SELECT, { count: 'estimated' })
+      .select(SUPABASE_QUEER_LIST_SELECT, { count: 'exact' })
       .eq('is_published', true)
+      .is('superseded_by_movie_id', null)
+      .not('episode_current', 'ilike', '%trailer%')
+      .not('episode_current', 'ilike', '%teaser%')
       .or('source_site.ilike.%admin-queer%,source_site.ilike.%blvietsub%,source_name.ilike.%blvietsub%,source_site.ilike.%bl vietsub%,source_name.ilike.%bl vietsub%,source_site.ilike.%glvietsub%,source_name.ilike.%glvietsub%,source_site.ilike.%gl vietsub%,source_name.ilike.%gl vietsub%');
 
     if (options.country && options.country !== 'all') {
@@ -1665,13 +1726,22 @@ export async function fetchQueerMovies(
         .gte('year', currentCatalogYear() - 1)
         .lte('year', currentCatalogYear() + 1)
         .order('last_episode_change_at', { ascending, nullsFirst: false })
-        .order('created_at', { ascending, nullsFirst: false });
+        .order('created_at', { ascending, nullsFirst: false })
+        .order('id', { ascending: false });
+    } else if (sortField === 'hot') {
+      query = query
+        .gte('year', currentCatalogYear() - 1)
+        .lte('year', currentCatalogYear() + 1)
+        .order('view', { ascending: false, nullsFirst: false })
+        .order('tmdb_popularity', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false });
     } else {
       query = query
         .gte('year', 1888)
         .lte('year', currentCatalogYear() + 1)
         .order('year', { ascending, nullsFirst: false })
-        .order('created_at', { ascending: false, nullsFirst: false });
+        .order('created_at', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false });
     }
 
     const { data, count, error } = await query.range(from, to).abortSignal(AbortSignal.timeout(5_500));
@@ -2893,7 +2963,7 @@ const QUEER_UNIVERSE_TERMS = [
 const QUEER_SOURCE_TERMS = ['blvietsub', 'bl vietsub', 'bl-vietsub', 'glvietsub', 'gl vietsub', 'vu tru dam my'];
 const BLVIETSUB_SLUG_PREFIX = 'blvietsub-';
 const QUEER_FALLBACK_URL = '/queer-fallback.json?v=20260904-pure-v2';
-const SUPABASE_QUEER_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, updated_at, created_at, published_at, last_episode_change_at, ophim_id, tmdb_id, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
+const SUPABASE_QUEER_LIST_SELECT = 'id, slug, name, origin_name, title_vi, title_en, title_zh, title_original, thumb_url, poster_url, type, year, quality, lang, episode_current, episode_total, current_episode, total_episodes, schedule_type, release_time, release_day, schedule_timezone, time, category, country, is_published, seo_catalog_status, superseded_by_movie_id, updated_at, created_at, published_at, last_episode_change_at, ophim_id, tmdb_id, tmdb_popularity, view, source_site, source_name, release_at, next_episode_at, next_episode_name, schedule_note';
 const BLVIETSUB_SEARCH_TERMS = [
   'bl',
   'boy love',
@@ -3749,6 +3819,8 @@ function toSupabaseMovieItem(m: Record<string, unknown>): MovieItem {
     superseded_by_movie_id: (m.superseded_by_movie_id as string) || null,
     ophim_id: (m.ophim_id as string) || undefined,
     tmdb_id: (m.tmdb_id as string) || undefined,
+    tmdb_popularity: Number(m.tmdb_popularity || 0) || undefined,
+    view: Number(m.view || 0) || undefined,
     source_site: (m.source_site as string) || 'supabase',
     source_name: (m.source_name as string) || 'Supabase',
     title_vi: (m.title_vi as string) || undefined,
@@ -4545,7 +4617,7 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
       // and the request was routinely aborted under peak pool pressure. Keep
       // that legacy diagnostic fallback only in local development.
       const proxyPromise = fetchMovieDetailFromProxy(slug, forceRefresh, source);
-      let supabaseFallbackPromise = import.meta.env.DEV
+      const supabaseFallbackPromise = import.meta.env.DEV
         ? fetchMovieDetailFromSupabase(slug, 4200).catch(() => null)
         : Promise.resolve<MovieDetailResponse | null>(null);
       // Start the exact-slug provider fallback immediately. The canonical edge
@@ -4610,14 +4682,6 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
           .then((merged) => setCached(cacheKey, merged))
           .catch(() => {});
         return quickPlayable;
-      }
-
-      // Only after both canonical gateways miss their bounded fast path, read
-      // the public catalogue tables directly. This avoids an extra connection
-      // during normal traffic while preventing a cold Edge Function timeout
-      // from becoming a false "chưa có nguồn" page for a stored movie.
-      if (!import.meta.env.DEV) {
-        supabaseFallbackPromise = fetchMovieDetailFromSupabase(slug, 5000).catch(() => null);
       }
 
       // The proxy already missed its fast-path budget. From here all fallbacks

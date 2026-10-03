@@ -25,6 +25,9 @@ const FilterPage        = lazy(() => import('../pages/filter/page'));
 const MovieDetailPage   = lazy(() => import('../pages/movie-detail/page'));
 const MovieListPage     = lazy(() => import('../pages/movie-list/page'));
 const FavoritesPage     = lazy(() => import('../pages/favorites/page'));
+const AccountPage       = lazy(() => import('../pages/account/page'));
+const ReleaseSchedulePage = lazy(() => import('../pages/release-schedule/page'));
+const MovieRequestPage  = lazy(() => import('../pages/movie-request/page'));
 const AboutPage         = lazy(() => import('../pages/about/page'));
 const PolicyPage        = lazy(() => import('../pages/policy/page'));
 const NotFound          = lazy(() => import('../pages/NotFound'));
@@ -85,6 +88,9 @@ function LazyHome()          { return <Suspense fallback={<PageLoader />}><Home 
 function LazyFilter()        { return <Suspense fallback={<PageLoader />}><FilterPage /></Suspense>; }
 function LazyMovieDetail()   { return <Suspense fallback={<PageLoader />}><MovieDetailPage /></Suspense>; }
 function LazyFavorites()     { return <Suspense fallback={<PageLoader />}><FavoritesPage /></Suspense>; }
+function LazyAccount()       { return <Suspense fallback={<PageLoader />}><AccountPage /></Suspense>; }
+function LazyReleaseSchedule() { return <Suspense fallback={<PageLoader />}><ReleaseSchedulePage /></Suspense>; }
+function LazyMovieRequest()  { return <Suspense fallback={<PageLoader />}><MovieRequestPage /></Suspense>; }
 function LazyAbout()         { return <Suspense fallback={<PageLoader />}><AboutPage /></Suspense>; }
 function LazyPolicy()        { return <Suspense fallback={<PageLoader />}><PolicyPage /></Suspense>; }
 function LazyNotFound()      { return <Suspense fallback={<PageLoader />}><NotFound /></Suspense>; }
@@ -228,6 +234,9 @@ const routes: RouteObject[] = [
   { path: '/about',     element: <LazyAbout /> },
   { path: '/policy',    element: <LazyPolicy /> },
   { path: '/yeu-thich', element: <LazyFavorites /> },
+  { path: '/tai-khoan', element: <LazyAccount /> },
+  { path: '/lich-cua-toi', element: <LazyReleaseSchedule /> },
+  { path: '/yeu-cau-phim', element: <LazyMovieRequest /> },
 
   // ═══════════════════════════════════════════
   // SITEMAP

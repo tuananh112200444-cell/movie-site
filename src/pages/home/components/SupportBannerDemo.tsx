@@ -1,8 +1,6 @@
-import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 export default function SupportBannerDemo() {
-  const [showThanks, setShowThanks] = useState(false);
-
   return (
     <section className="support-banner-demo" aria-labelledby="support-banner-title">
       <div className="support-banner-demo__glow" aria-hidden="true" />
@@ -39,11 +37,14 @@ export default function SupportBannerDemo() {
         </p>
 
         <div className="support-banner-demo__actions">
-          <button type="button" onClick={() => setShowThanks(true)}>
-            <i className="ri-heart-3-fill" aria-hidden="true" />
-            Ủng hộ KhoPhim
-          </button>
-          {showThanks && <span role="status">Cảm ơn bạn đã đồng hành cùng KhoPhim!</span>}
+          <Link to="/tai-khoan" className="support-banner-demo__action support-banner-demo__action--primary">
+            <i className="ri-login-box-line" aria-hidden="true" />
+            Đăng nhập
+          </Link>
+          <Link to="/tai-khoan?mode=signup" className="support-banner-demo__action support-banner-demo__action--secondary">
+            <i className="ri-user-add-line" aria-hidden="true" />
+            Đăng ký
+          </Link>
         </div>
       </div>
     </section>

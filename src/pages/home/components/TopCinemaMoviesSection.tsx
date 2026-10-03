@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getPortraitImagePaths, getImageUrl } from '../../../services/movieApi';
+import { fetchMoviesByCategory, getPortraitImagePaths, getImageUrl } from '../../../services/movieApi';
 import { isImagePreloaded, markImagePreloaded } from '../../../utils/imagePreloader';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import type { MovieItem } from '../../../types/movie';
@@ -40,27 +40,14 @@ function normalizeVietnamMovies(items: MovieItem[]): MovieItem[] {
 }
 
 async function fetchVietnamMovies(signal: AbortSignal): Promise<MovieItem[]> {
-  try {
-    const response = await fetch('/api/kkphim-vietnam-latest', {
-      headers: { Accept: 'application/json' },
-      signal,
-    });
-    if (!response.ok) throw new Error(`Vietnam API returned ${response.status}`);
-    const payload = await response.json() as { items?: MovieItem[] };
-    const movies = normalizeVietnamMovies(payload.items ?? []);
-    if (movies.length > 0) return movies;
-  } catch (error) {
-    if (signal.aborted) throw error;
-  }
-
-  const fallbackResponse = await fetch('/home-fallback.json', {
-    headers: { Accept: 'application/json' },
-    cache: 'default',
-    signal,
+  const response = await fetchMoviesByCategory({
+    country: 'viet-nam',
+    page: 1,
+    sortField: 'modified.time',
+    sortType: 'desc',
   });
-  if (!fallbackResponse.ok) throw new Error(`Vietnam fallback returned ${fallbackResponse.status}`);
-  const fallback = await fallbackResponse.json() as { sections?: Record<string, MovieItem[]> };
-  return normalizeVietnamMovies(fallback.sections?.['viet-nam'] ?? []);
+  if (signal.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError');
+  return normalizeVietnamMovies(response.items ?? []);
 }
 
 function getEpInfo(ep?: string): { label: string; color: 'green' | 'blue' | 'amber' } {
@@ -91,7 +78,7 @@ export default function VietnamMoviesSection({ fallbackMovies = EMPTY_VIETNAM_MO
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const visibleMovies = movies.slice(0, isDesktop ? 20 : mobileExpanded ? 9 : 6);
 
-  /* ── Dedicated, server-proxied KKPhim Vietnam feed ── */
+  /* ── Same canonical updated feed as /phim-viet-nam ── */
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
@@ -346,7 +333,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
             {/* Bottom gradient for text */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent z-[2]" />
 
-            {/* Visual ordering follows the KKPhim Vietnam feed; no fabricated traffic data. */}
+            {/* Visual ordering follows the canonical Vietnam catalogue; no fabricated traffic data. */}
             <div className="absolute top-2 left-2 z-[15]">
               <div
                 className={`flex items-center justify-center rounded-lg border-2 border-gray-900/80 font-black shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] md:group-hover:scale-110 ${rankStyle.size} ${rankStyle.bg} ${rankStyle.text} ${rankStyle.shadow}`}
@@ -441,7 +428,7 @@ function SectionHeader({ count = 0 }: { count?: number }) {
           <h3 className="text-lg md:text-2xl lg:text-[1.55rem] font-black text-white flex items-center gap-2">
             Phim Việt Nam Mới Cập Nhật
           </h3>
-          <span className="text-[10px] text-white/30 -mt-0.5">Phim Việt Nam mới cập nhật, dữ liệu trực tiếp từ KKPhim</span>
+          <span className="text-[10px] text-white/30 -mt-0.5">Phim Việt Nam mới cập nhật, cùng thứ tự với trang Xem tất cả</span>
         </div>
         <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full uppercase tracking-wide">
           {count} phim

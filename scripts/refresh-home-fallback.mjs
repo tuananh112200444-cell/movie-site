@@ -1,8 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { PINNED_CINEMA_MOVIES } from '../src/data/homePromotions.ts';
 
 const OUTPUT_URL = new URL('../public/home-fallback.json', import.meta.url);
 const TOP_RATED_OUTPUT_URL = new URL('../public/top-rated-fallback.json', import.meta.url);
 const ENV_URL = new URL('../.env', import.meta.url);
+const CONAN_PROMOTION = PINNED_CINEMA_MOVIES[0];
 const HOME_PROXY_URL = new URL(
   'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/home-proxy',
 );
@@ -100,16 +102,19 @@ async function fetchCanonicalHomeSection(publicKey, key) {
   url.searchParams.set('select', CANONICAL_HOME_SELECT);
   url.searchParams.set('is_published', 'eq.true');
   url.searchParams.set('superseded_by_movie_id', 'is.null');
-  url.searchParams.set('order', 'last_episode_change_at.desc.nullslast,published_at.desc.nullslast,updated_at.desc.nullslast');
-  url.searchParams.set('limit', '120');
+  const isCountryRail = ['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key);
+  url.searchParams.set('order', isCountryRail
+    ? 'year.desc.nullslast,created_at.desc.nullslast,id.desc'
+    : 'last_episode_change_at.desc.nullslast,published_at.desc.nullslast,id.desc');
+  url.searchParams.set('limit', key === 'phim-le' || key === 'phim-bo' || isCountryRail ? '36' : '120');
 
   if (key === 'phim-le') url.searchParams.set('type', 'in.(single,phim-le)');
   if (key === 'phim-bo') url.searchParams.set('type', 'in.(series,phim-bo)');
   if (key === 'hoat-hinh') url.searchParams.set('type', 'eq.hoathinh');
-  if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) {
+  if (isCountryRail) {
     url.searchParams.set('country', `cs.${JSON.stringify([{ slug: key }])}`);
   }
-  if (key === 'trending') {
+  if (key === 'trending' || key === 'phim-le' || key === 'phim-bo' || isCountryRail) {
     const year = new Date().getUTCFullYear();
     url.searchParams.set('year', `gte.${year - 1}`);
     url.searchParams.append('year', `lte.${year + 1}`);
@@ -130,7 +135,10 @@ async function fetchCanonicalHomeSection(publicKey, key) {
     .filter((item) => !['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key) || taxonomyHasSlug(item.country, key))
     .map((item) => sanitizeMovie({ ...item, _id: item.id, modified: { time: item.last_episode_change_at || item.published_at || item.updated_at } }))
     .filter(isCanonicalMovie)
-    .sort((a, b) => itemFreshness(b) - itemFreshness(a))
+    .sort((a, b) => isCountryRail
+      ? Number(b.year || 0) - Number(a.year || 0)
+        || (Date.parse(b.created_at || '') || 0) - (Date.parse(a.created_at || '') || 0)
+      : itemFreshness(b) - itemFreshness(a))
     .filter((item) => {
       const slug = String(item.slug || '');
       if (!slug || seen.has(slug)) return false;
@@ -258,10 +266,18 @@ function validateSections(sections, requireTopRated = true) {
     const minimum = key === 'vsmov-4k' ? 2 : 5;
     if (items.length < minimum) return false;
     if (['han-quoc','au-my','trung-quoc','thai-lan'].includes(key)) {
-      return items.every((item) => taxonomyHasSlug(item.country, key));
+      const currentYear = new Date().getUTCFullYear();
+      return items.every((item) => taxonomyHasSlug(item.country, key)
+        && Number(item.year || 0) >= currentYear - 1
+        && Number(item.year || 0) <= currentYear + 1);
     }
-    if (key === 'phim-le') return items.every((item) => ['single','phim-le'].includes(String(item.type || '').toLowerCase()));
-    if (key === 'phim-bo') return items.every((item) => ['series','phim-bo'].includes(String(item.type || '').toLowerCase()));
+    if (key === 'phim-le' || key === 'phim-bo') {
+      const currentYear = new Date().getUTCFullYear();
+      const expected = key === 'phim-le' ? ['single','phim-le'] : ['series','phim-bo'];
+      return items.every((item) => expected.includes(String(item.type || '').toLowerCase())
+        && Number(item.year || 0) >= currentYear - 1
+        && Number(item.year || 0) <= currentYear + 1);
+    }
     if (key === 'hoat-hinh') return items.every((item) => String(item.type || '').toLowerCase() === 'hoathinh');
     if (key === 'phim-chieu-rap') return items.every((item) => item.chieurap === true);
     if (key === 'top-rated') return items.every((item) => Number(item.tmdb_vote_average || 0) > 0 && Number(item.tmdb_vote_count || 0) >= 10);
@@ -270,10 +286,79 @@ function validateSections(sections, requireTopRated = true) {
   });
 }
 
+function normalizeFreshTypeRails(sections) {
+  if (!sections || typeof sections !== 'object') return sections;
+  const currentYear = new Date().getUTCFullYear();
+  for (const [key, supportKey, expectedTypes] of [
+    ['phim-le', 'top10-single', ['single', 'phim-le']],
+    ['phim-bo', 'top10-series', ['series', 'phim-bo']],
+  ]) {
+    const seen = new Set();
+    sections[key] = [
+      ...(Array.isArray(sections[key]) ? sections[key] : []),
+      ...(Array.isArray(sections[supportKey]) ? sections[supportKey] : []),
+    ]
+      .filter(isCanonicalMovie)
+      .filter((item) => expectedTypes.includes(String(item.type || '').toLowerCase()))
+      .filter((item) => Number(item.year || 0) >= currentYear - 1 && Number(item.year || 0) <= currentYear + 1)
+      .filter((item) => !/trailer|teaser/i.test(String(item.episode_current || '')))
+      .filter((item) => {
+        const slug = String(item.slug || '');
+        if (!slug || seen.has(slug)) return false;
+        seen.add(slug);
+        return true;
+      })
+      .sort((a, b) => itemFreshness(b) - itemFreshness(a))
+      .slice(0, 18);
+  }
+  for (const key of ['han-quoc', 'au-my', 'trung-quoc', 'thai-lan']) {
+    const seen = new Set();
+    sections[key] = (Array.isArray(sections[key]) ? sections[key] : [])
+      .filter(isCanonicalMovie)
+      .filter((item) => taxonomyHasSlug(item.country, key))
+      .filter((item) => Number(item.year || 0) >= currentYear - 1 && Number(item.year || 0) <= currentYear + 1)
+      .filter((item) => !/trailer|teaser/i.test(String(item.episode_current || '')))
+      .filter((item) => {
+        const slug = String(item.slug || '');
+        if (!slug || seen.has(slug)) return false;
+        seen.add(slug);
+        return true;
+      })
+      .sort((a, b) => Number(b.year || 0) - Number(a.year || 0)
+        || (Date.parse(b.created_at || '') || 0) - (Date.parse(a.created_at || '') || 0))
+      .slice(0, 18);
+  }
+  return sections;
+}
+
+function pinCinemaPromotion(sections) {
+  const promotion = CONAN_PROMOTION;
+  if (!sections || !promotion) return sections;
+  sections['phim-chieu-rap'] = [
+    promotion,
+    ...(sections['phim-chieu-rap'] ?? []).filter((movie) => movie.slug !== promotion.slug),
+  ].slice(0, 18);
+  return sections;
+}
+
 async function keepExistingFallback(reason) {
   try {
     const current = JSON.parse(await readFile(OUTPUT_URL, 'utf8'));
+    const publicKey = process.env.VITE_PUBLIC_SUPABASE_ANON_KEY?.trim()
+      || (await readFile(ENV_URL, 'utf8').catch(() => '')).match(/^VITE_PUBLIC_SUPABASE_ANON_KEY\s*=\s*["']?([^"'\r\n]+)["']?/m)?.[1]?.trim()
+      || FALLBACK_SUPABASE_PUBLIC_KEY;
+    const refreshKeys = ['phim-le', 'phim-bo', 'han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
+    const refreshedTypeRails = await Promise.allSettled(
+      refreshKeys.map((key) => fetchCanonicalHomeSection(publicKey, key)),
+    );
+    for (const [index, key] of refreshKeys.entries()) {
+      const result = refreshedTypeRails[index];
+      if (result.status === 'fulfilled' && result.value.length >= 6) current.sections[key] = result.value;
+    }
+    normalizeFreshTypeRails(current.sections);
     if (validateSections(current.sections, false)) {
+      pinCinemaPromotion(current.sections);
+      await writeFile(OUTPUT_URL, `${JSON.stringify(current)}\n`, 'utf8');
       console.warn(`Home fallback refresh skipped: ${reason}. Kept the existing valid snapshot.`);
       return;
     }
@@ -342,6 +427,7 @@ try {
     if (Array.isArray(items) && items.length >= (key === 'vsmov-4k' ? 2 : 5)) sourceSections[key] = items;
   }
   Object.assign(sourceSections, canonicalSections);
+  normalizeFreshTypeRails(sourceSections);
   if (verifiedVsmov4K.length >= 2) sourceSections['vsmov-4k'] = verifiedVsmov4K;
   if (!validateSections(sourceSections, false)) {
     const current = JSON.parse(await readFile(OUTPUT_URL, 'utf8'));
@@ -360,6 +446,8 @@ try {
   if ((sourceSections['top10-series']?.length ?? 0) < 6) {
     sourceSections['top10-series'] = (sourceSections['phim-bo'] ?? []).slice(0, 10);
   }
+
+  pinCinemaPromotion(sourceSections);
 
   const snapshot = {
     status: true,

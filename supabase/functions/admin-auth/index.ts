@@ -1,6 +1,12 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { isAdminSessionConfigured, issueAdminSession } from '../_shared/admin-session.ts';
+import {
+  hashAdminClientIP,
+  hashAdminPin,
+  isAdminPinConfigured,
+  verifyAdminPin,
+} from '../_shared/admin-pin.ts';
 
 const CORS_ORIGIN = Deno.env.get('CORS_ORIGIN') ?? 'https://khophim.org';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -35,35 +41,12 @@ function json(body: unknown, status: number, corsHeaders: Record<string, string>
   });
 }
 
-function getSalt(): string {
-  const keyPart = SUPABASE_SERVICE_ROLE_KEY.slice(0, 48);
-  return 'khophim-admin-salt-v2-' + keyPart;
-}
-
-async function hashPin(pin: string): Promise<string> {
-  const salt = getSalt();
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pin + salt);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-
 function getClientIP(req: Request): string {
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
   const realIP = req.headers.get('x-real-ip');
   if (realIP) return realIP.trim();
   return 'unknown';
-}
-
-async function hashIP(ip: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(ip + getSalt());
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function getPinHash(supabase: ReturnType<typeof createClient>): Promise<{ pin_hash: string | null; setup_required: boolean }> {
@@ -87,7 +70,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !isAdminSessionConfigured()) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !isAdminSessionConfigured() || !isAdminPinConfigured()) {
       return json({ error: 'Admin authentication is not configured.' }, 503, corsHeaders);
     }
     const body = await req.json().catch(() => ({})) as { pin?: string; action?: string; newPin?: string };
@@ -116,14 +99,14 @@ serve(async (req) => {
         return json({ error: 'Password must contain both letters and numbers.' }, 400, corsHeaders);
       }
 
-      const hashedNewPin = await hashPin(body.newPin);
+      const hashedNewPin = await hashAdminPin(body.newPin);
       const { error } = await supabase
         .from('admin_settings')
         .upsert({ id: 1, pin: hashedNewPin, updated_at: new Date().toISOString() }, { onConflict: 'id' });
 
       if (error) throw error;
 
-      const { token, expiresAt } = await generateSignedToken();
+      const { token, expiresAt } = await issueAdminSession();
       return json({ token, expiresAt, setup: true, message: 'Admin password created.' }, 200, corsHeaders);
     }
 
@@ -133,7 +116,7 @@ serve(async (req) => {
 
     // ── VERIFY FLOW ──
     const clientIP = getClientIP(req);
-    const ipHash = await hashIP(clientIP);
+    const ipHash = await hashAdminClientIP(clientIP);
     const { data: record, error: rateError } = await supabase
       .from('admin_login_attempts')
       .select('attempt_count, last_attempt_at, locked_until')
@@ -165,9 +148,11 @@ serve(async (req) => {
       return json({ setup_required: true, message: 'No admin password exists. Please create one.' }, 200, corsHeaders);
     }
 
-    const hashedInput = await hashPin(pin);
+    const verification = currentPinHash
+      ? await verifyAdminPin(pin, currentPinHash)
+      : { valid: false, needsUpgrade: false };
 
-    if (!currentPinHash || hashedInput !== currentPinHash) {
+    if (!verification.valid) {
       const newCount = (record?.attempt_count ?? 0) + 1;
       const lockedUntil = newCount >= MAX_ATTEMPTS
         ? new Date(Date.now() + LOCK_DURATION_MS).toISOString()
@@ -198,6 +183,16 @@ serve(async (req) => {
       }
 
       return json({ error: 'Invalid PIN', remaining, message: `Wrong password. ${remaining} attempts left.` }, 401, corsHeaders);
+    }
+
+    if (verification.needsUpgrade) {
+      const upgradedHash = await hashAdminPin(pin);
+      const { error: upgradeError } = await supabase
+        .from('admin_settings')
+        .update({ pin: upgradedHash, updated_at: new Date().toISOString() })
+        .eq('id', 1)
+        .eq('pin', currentPinHash);
+      if (upgradeError) throw new Error(`Unable to upgrade admin password hash: ${upgradeError.message}`);
     }
 
     await supabase.from('admin_login_attempts').upsert(

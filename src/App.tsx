@@ -13,6 +13,8 @@ import AdsterraSocialBar from "./components/feature/AdsterraSocialBar";
 import { warmViewerRegion } from "./services/viewerRegion";
 import CinematicLogoIntro from "./components/feature/CinematicLogoIntro";
 import { CampaignCatfishBanner } from "./components/feature/CampaignBannerDemo";
+import { AuthProvider } from "./context/AuthContext";
+import { FollowUpdatesProvider } from "./context/FollowUpdatesContext";
 
 const BackToTop = lazy(() => import("./components/base/BackToTop"));
 const CWVMonitor = lazy(() => import("./components/base/CWVMonitor"));
@@ -203,18 +205,22 @@ function App() {
       <ThemeProvider>
         <I18nextProvider i18n={i18n}>
           <BrowserRouter basename={__BASE_PATH__}>
-            <ToastProvider>
-              <AnalyticsProvider>
-                <OfflineIndicator />
-                <UpdateCoordinator />
-                <AdsterraSocialBar />
-                <ScrollProgressBar />
-                <AnimatedContent />
-                <CampaignCatfishBanner />
-                <CinematicLogoIntro />
-                <NonCriticalEnhancements />
-              </AnalyticsProvider>
-            </ToastProvider>
+            <AuthProvider>
+              <FollowUpdatesProvider>
+              <ToastProvider>
+                <AnalyticsProvider>
+                  <OfflineIndicator />
+                  <UpdateCoordinator />
+                  <AdsterraSocialBar />
+                  <ScrollProgressBar />
+                  <AnimatedContent />
+                  <CampaignCatfishBanner />
+                  <CinematicLogoIntro />
+                  <NonCriticalEnhancements />
+                </AnalyticsProvider>
+              </ToastProvider>
+              </FollowUpdatesProvider>
+            </AuthProvider>
           </BrowserRouter>
         </I18nextProvider>
       </ThemeProvider>
