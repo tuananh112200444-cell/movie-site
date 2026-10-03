@@ -20,14 +20,7 @@ function git(args, options = {}) {
 }
 
 function run(command, args) {
-  const executable = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : command;
-  const executableArgs = process.platform === 'win32'
-    ? ['/d', '/s', '/c', ['call', command, ...args].map((value) => {
-        const text = String(value);
-        return /[\s&|<>^"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-      }).join(' ')]
-    : args;
-  const result = spawnSync(executable, executableArgs, {
+  const result = spawnSync(command, args, {
     cwd: process.cwd(),
     env: process.env,
     encoding: 'utf8',
@@ -91,16 +84,18 @@ if (!deployRequested) {
 if (process.env.KHOPHIM_PRODUCTION_DEPLOY !== 'YES') {
   fail('set KHOPHIM_PRODUCTION_DEPLOY=YES for the intentional production release.');
 }
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const npmCli = process.env.npm_execpath;
+const wranglerCli = 'node_modules/wrangler/bin/wrangler.js';
+if (!npmCli || !existsSync(npmCli)) fail('npm CLI path is unavailable. Run production deploy through npm run deploy:production.');
+if (!existsSync(wranglerCli)) fail('local Wrangler CLI is missing. Install project dependencies first.');
 if (!process.env.CLOUDFLARE_API_TOKEN) {
   try {
-    run(npx, ['wrangler', 'whoami']);
+    run(process.execPath, [wranglerCli, 'whoami']);
   } catch {
     fail('Cloudflare authentication is unavailable. Sign in with Wrangler or provide CLOUDFLARE_API_TOKEN.');
   }
 }
-run(npm, ['run', 'build']);
+run(process.execPath, [npmCli, 'run', 'build']);
 
 const manifestPath = 'out/release.json';
 if (!existsSync(manifestPath)) fail('out/release.json is missing after build.');
@@ -111,8 +106,8 @@ if (String(manifest.commit || '') !== head.slice(0, 12)) {
 if (!existsSync('out/_worker.js')) fail('compiled Pages worker is missing from the artifact.');
 
 const message = git(['show', '-s', '--format=%s', 'HEAD']).slice(0, 120);
-const deployOutput = run(npx, [
-  'wrangler', 'pages', 'deploy', 'out',
+const deployOutput = run(process.execPath, [
+  wranglerCli, 'pages', 'deploy', 'out',
   '--project-name', PROJECT,
   '--branch', PRODUCTION_BRANCH,
   '--commit-hash', head,
