@@ -26,6 +26,7 @@ function run(command, args) {
     encoding: 'utf8',
     stdio: ['inherit', 'pipe', 'pipe'],
     shell: process.platform === 'win32',
+    maxBuffer: 64 * 1024 * 1024,
   });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
