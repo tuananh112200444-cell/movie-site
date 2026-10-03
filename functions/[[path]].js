@@ -10,6 +10,42 @@ const SUPABASE_PUBLIC_KEY = 'sb_publishable_Juh45t-R83dfgJI0O4_PQw_iYYoU-yh';
 const MAINTENANCE_MODE = false;
 const SEO_PRERENDER_VERSION = '20260903-editorial-cohort-v1';
 const HOME_DOCUMENT_CACHE_VERSION = '20260828-fast-home-v1';
+const STATIC_MOVIE_DOCUMENT_VERSION = '20261002-mb66-merged-v1';
+const CONAN_ULTRA_30_PROMOTION = {
+  id: 'fbc1045c-df6c-4021-8e61-9c75c8fcc30a',
+  _id: 'fbc1045c-df6c-4021-8e61-9c75c8fcc30a',
+  slug: 'tham-tu-lung-danh-conan-vu-an-tien-gia-ultra-30',
+  name: 'Thám Tử Lừng Danh Conan: Vụ Án Tiền Giả Ultra 30',
+  origin_name: 'Detective Conan: The Counterfeit Case of Ultra 30',
+  type: 'single',
+  status: 'completed',
+  thumb_url: 'https://vsmov.com/storage/images/pT9RIHf4K9OyOB3eqYj97E5h0YA.jpg',
+  poster_url: 'https://vsmov.com/storage/images/v0T74v8LPZBSL247oGeTOp06tnm.jpg',
+  hero_backdrop_url: 'https://vsmov.com/storage/images/pT9RIHf4K9OyOB3eqYj97E5h0YA.jpg',
+  hero_poster_url: 'https://vsmov.com/storage/images/v0T74v8LPZBSL247oGeTOp06tnm.jpg',
+  chieurap: true,
+  sub_docquyen: false,
+  time: '1 giờ 33 phút',
+  episode_current: 'Full',
+  episode_total: '1 tập',
+  current_episode: 1,
+  total_episodes: 1,
+  quality: 'FHD',
+  lang: 'Vietsub',
+  year: 2026,
+  category: [
+    { id: 'mystery', name: 'Bí Ẩn', slug: 'bi-an' },
+    { id: 'crime', name: 'Hình Sự', slug: 'hinh-su' },
+    { id: 'action', name: 'Hành Động', slug: 'hanh-dong' },
+    { id: 'adventure', name: 'Phiêu Lưu', slug: 'phieu-luu' },
+  ],
+  country: [{ id: 'japan', name: 'Nhật Bản', slug: 'nhat-ban' }],
+  source_site: 'vsmov',
+  source_name: 'VSMOV',
+  is_published: true,
+  seo_catalog_status: 'published',
+  modified: { time: '2026-09-29T00:00:00Z' },
+};
 const CONSOLIDATED_SEO_PATHS = new Map([
   ['/xem-phim', '/xem-phim-online'],
   ['/xem-phim-mien-phi', '/xem-phim-online'],
@@ -36,12 +72,14 @@ const LEGACY_MOVIE_REDIRECTS = new Map([
   ['/phim/tham-tu-lung-danh-conan-25-nang-dau-halloween', '/phim/tham-tu-lung-danh-conan-nang-dau-halloween'],
   ['/phim/kisskh-goblin', '/phim/nu-hon-cua-yeu-tinh'],
   ['/phim/nguoi-nhen-khoi-dau-moi', '/phim/spider-man-brand-new-day-2026'],
+  ['/phim/tham-tu-lung-danh-conan-vu-an-mang-so-30', '/phim/tham-tu-lung-danh-conan-vu-an-tien-gia-ultra-30'],
   // This VSMOV duplicate only contains scattered episodes through 147. Keep
   // Google's historical detail URL on the verified 166-episode canonical row.
   ['/phim/gia-dinh-la-so-mot-phan-1', '/phim/gia-dinh-la-so-1-phan-1'],
 ]);
 const LEGACY_WATCH_SLUG_REDIRECTS = new Map([
   ['gia-dinh-la-so-mot-phan-1', 'gia-dinh-la-so-1-phan-1'],
+  ['tham-tu-lung-danh-conan-vu-an-mang-so-30', 'tham-tu-lung-danh-conan-vu-an-tien-gia-ultra-30'],
 ]);
 const REMOVED_MOVIE_PATHS = new Set([
   '/phim/toi-yeu-los-angeles',
@@ -2633,7 +2671,10 @@ async function getStaticMovieDocument(context, request, slug) {
   if (!context?.env?.ASSETS || typeof context.env.ASSETS.fetch !== 'function') return null;
   const assetUrl = new URL(request.url);
   assetUrl.pathname = `/phim/${encodeURIComponent(slug)}`;
-  assetUrl.search = '';
+  // Pages' ASSETS binding may retain a deleted/replaced static movie document
+  // across deployments under its bare path. Version this internal lookup so a
+  // new app release can never inherit HTML that references an older JS bundle.
+  assetUrl.search = `?rev=${STATIC_MOVIE_DOCUMENT_VERSION}`;
   try {
     // Always read the small bounded HTML asset as GET so HEAD responses can
     // inherit the exact index/noindex policy embedded by the static generator.
@@ -4343,7 +4384,7 @@ async function proxySearch(request, context) {
   const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
   // Version the edge key whenever canonical merge semantics change so a
   // retired provider slug cannot remain pinned in search for 15 minutes.
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v20-canonical-dedupe/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v21-high-kick-canonical/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
   const rpcCircuitKey = new Request(`${SITE_URL}/__circuit/search-rpc/v1`, { method: 'GET' });
   let rpcCircuitOpen = false;
   if (request.method === 'GET' && typeof caches !== 'undefined') {
@@ -4518,6 +4559,18 @@ function edgeHomeHasTaxonomySlug(value, slug) {
   ));
 }
 
+function isRecentEdgeHomeTypeItem(item, key) {
+  const recentCountryKeys = ['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
+  if (!['phim-le', 'phim-bo', ...recentCountryKeys].includes(key)) return true;
+  const type = String(item?.type || '').toLowerCase();
+  const year = Number(item?.year || 0);
+  const currentYear = new Date().getFullYear();
+  if (year < currentYear - 1 || year > currentYear + 1) return false;
+  if (recentCountryKeys.includes(key)) return true;
+  const expectedTypes = key === 'phim-le' ? ['single', 'phim-le'] : ['series', 'phim-bo'];
+  return expectedTypes.includes(type);
+}
+
 function filterEdgeHomeSection(key, items) {
   const seen = new Set();
   return (Array.isArray(items) ? items : []).filter((item) => {
@@ -4526,6 +4579,7 @@ function filterEdgeHomeSection(key, items) {
     const name = String(item.name || item.title_vi || item.origin_name || '').trim();
     if (!slug || !name || !(item.poster_url || item.thumb_url) || seen.has(slug)) return false;
     if (String(item.episode_current || '').trim().toLowerCase() === 'trailer') return false;
+    if (!isRecentEdgeHomeTypeItem(item, key)) return false;
     // Do not infer theatrical release from type=single. Only the canonical
     // cinema flag is authoritative for this shelf.
     if (key === 'phim-chieu-rap' && item.chieurap !== true) return false;
@@ -4547,6 +4601,15 @@ function filterEdgeHomeSection(key, items) {
   });
 }
 
+function pinEdgeHomePromotions(sections) {
+  if (!sections || typeof sections !== 'object' || !Array.isArray(sections['phim-chieu-rap'])) return sections;
+  sections['phim-chieu-rap'] = [
+    CONAN_ULTRA_30_PROMOTION,
+    ...sections['phim-chieu-rap'].filter((item) => item?.slug !== CONAN_ULTRA_30_PROMOTION.slug),
+  ];
+  return sections;
+}
+
 async function loadStaticHomeSnapshot(request, context, sections) {
   const assetRequest = new Request(new URL('/home-fallback.json', request.url), { method: 'GET' });
   const assetResponse = context?.env?.ASSETS?.fetch
@@ -4559,6 +4622,7 @@ async function loadStaticHomeSnapshot(request, context, sections) {
     key,
     filterEdgeHomeSection(key, snapshot.sections[key]),
   ]));
+  pinEdgeHomePromotions(normalizedSections);
   if (sections.includes('top-rated') && normalizedSections['top-rated'].length < 5) {
     try {
       const topRatedRequest = new Request(new URL('/top-rated-fallback.json', request.url), { method: 'GET' });
@@ -4583,6 +4647,7 @@ async function repairHomePayload(request, context, sections, payload) {
   if (!payload || typeof payload !== 'object') return { payload, repaired: [] };
   const liveSections = payload.sections && typeof payload.sections === 'object' ? payload.sections : {};
   const normalized = Object.fromEntries(sections.map((key) => [key, filterEdgeHomeSection(key, liveSections[key])]));
+  pinEdgeHomePromotions(normalized);
   const sparseKeys = sections.filter((key) => normalized[key].length < minimumEdgeHomeItems(key));
   if (sparseKeys.length === 0) return { payload: { ...payload, sections: normalized }, repaired: [] };
 
@@ -4705,7 +4770,8 @@ async function proxyMovieList(request, context) {
   const yearValue = Number(requestUrl.searchParams.get('year') || 0);
   const year = Number.isInteger(yearValue) && yearValue >= 1900 && yearValue <= 2200 ? yearValue : 0;
   const page = Math.max(1, Math.min(1000, Number(requestUrl.searchParams.get('page') || 1) || 1));
-  const sortField = requestUrl.searchParams.get('sortField') === 'year' ? 'year' : 'updated_at';
+  const requestedSortField = requestUrl.searchParams.get('sortField');
+  const sortField = requestedSortField === 'year' || requestedSortField === 'hot' ? requestedSortField : 'updated_at';
   const sortType = requestUrl.searchParams.get('sortType') === 'asc' ? 'asc' : 'desc';
   const pageSize = 36;
   const offset = (page - 1) * pageSize;
@@ -4734,6 +4800,7 @@ async function proxyMovieList(request, context) {
   const params = new URLSearchParams({
     select: MOVIE_LIST_SELECT,
     is_published: 'eq.true',
+    superseded_by_movie_id: 'is.null',
     offset: String(offset),
     limit: String(pageSize),
   });
@@ -4744,15 +4811,21 @@ async function proxyMovieList(request, context) {
   if (country) params.set('country', `cs.${JSON.stringify([{ slug: country }])}`);
   if (year) params.set('year', `eq.${year}`);
   if (type === 'phim-chieu-rap') params.set('chieurap', 'eq.true');
+  if (type !== 'phim-sap-chieu') {
+    params.append('episode_current', 'not.ilike.*trailer*');
+    params.append('episode_current', 'not.ilike.*teaser*');
+  }
   params.set('order', sortField === 'year'
-    ? `year.${sortType}.nullslast,updated_at.desc.nullslast`
-    : `updated_at.${sortType}.nullslast`);
+    ? `year.${sortType}.nullslast,created_at.desc.nullslast,id.desc`
+    : sortField === 'hot'
+      ? 'view.desc.nullslast,tmdb_popularity.desc.nullslast,year.desc.nullslast,id.desc'
+      : `last_episode_change_at.${sortType}.nullslast,created_at.desc.nullslast,id.desc`);
 
   try {
     const upstream = await fetch(`${SUPABASE_REST_BASE}/movies?${params.toString()}`, {
       headers: {
         Accept: 'application/json',
-        Prefer: 'count=estimated',
+        Prefer: 'count=exact',
         apikey: SUPABASE_PUBLIC_KEY,
         Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
       },
@@ -5066,8 +5139,8 @@ async function proxyHome(request, context) {
     ? requestedSections
     : ['au-my', 'han-quoc', 'hoat-hinh', 'phim-bo', 'phim-le', 'trending'];
   const sectionKey = sections.join(',');
-  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v11-full-country-shelves?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
-  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v11-full-country-shelves?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v12-conan-ultra30-pinned?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v12-conan-ultra30-pinned?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
 
   if (typeof caches !== 'undefined') {
     const cached = await caches.default.match(liveKey);
@@ -5095,7 +5168,7 @@ async function proxyHome(request, context) {
         cf: {
           cacheEverything: true,
           cacheTtl: 900,
-          cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v11-full-country-shelves`,
+          cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v12-conan-ultra30-pinned`,
         },
         signal: AbortSignal.timeout(6500),
       });
@@ -5399,6 +5472,44 @@ const ADSTERRA_BANNER_FRAMES = new Map([
   ['/_ads/banner-300x250.html', { key: 'b9e4fcb9b31cf4b3ba07f94fd96f3290', width: 300, height: 250 }],
 ]);
 const ADSTERRA_BANNERS_ENABLED = false;
+const HLS_TRIAL_GATEWAY_ORIGIN = 'https://khophim-hls-gateway-trial.tuananh112200444.workers.dev';
+const HLS_PRODUCTION_GATEWAY_ORIGIN = 'https://khophim-hls-gateway.tuananh112200444.workers.dev';
+
+function isHlsTrialPath(pathname) {
+  return pathname === '/api/hls-ticket' || pathname.startsWith('/hls/');
+}
+
+function hlsGatewayOrigin(url) {
+  return url.hostname === 'khophim.org' || url.hostname === 'www.khophim.org'
+    ? HLS_PRODUCTION_GATEWAY_ORIGIN
+    : HLS_TRIAL_GATEWAY_ORIGIN;
+}
+
+async function proxyHlsRequest(request, url, env) {
+  const target = new URL(`${url.pathname}${url.search}`, hlsGatewayOrigin(url));
+  const headers = new Headers(request.headers);
+  // The staging gateway accepts only the production site's identity. Pages
+  // preview acts as the same-origin frontend and never exposes the gateway
+  // secret or the private R2 binding to the browser.
+  headers.set('Origin', 'https://khophim.org');
+  if (env?.HLS_PROXY_SECRET) headers.set('X-KhoPhim-Proxy-Secret', env.HLS_PROXY_SECRET);
+  else headers.delete('X-KhoPhim-Proxy-Secret');
+  headers.delete('Host');
+
+  const upstream = await fetch(new Request(target, {
+    method: request.method,
+    headers,
+    body: request.method === 'GET' || request.method === 'HEAD' ? null : request.body,
+    redirect: 'manual',
+  }));
+  const responseHeaders = new Headers(upstream.headers);
+  responseHeaders.set('X-KhoPhim-HLS-Gateway', url.hostname.endsWith('.pages.dev') ? 'staging' : 'production');
+  return new Response(request.method === 'HEAD' ? null : upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: responseHeaders,
+  });
+}
 
 function adsterraBannerFrameResponse(request, pathname) {
   const ad = ADSTERRA_BANNER_FRAMES.get(pathname);
@@ -5439,10 +5550,14 @@ function adsterraBannerFrameResponse(request, pathname) {
 }
 
 export async function onRequest(context) {
-  const { request } = context;
+  const { request, env } = context;
   const url = new URL(request.url);
   const pathname = url.pathname;
   const isLocalDevelopmentHost = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+
+  if (isHlsTrialPath(pathname)) {
+    return proxyHlsRequest(request, url, env);
+  }
 
   const adFrameResponse = adsterraBannerFrameResponse(request, pathname);
   if (adFrameResponse) return adFrameResponse;

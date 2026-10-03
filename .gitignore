@@ -7,6 +7,9 @@ dist/
 work/
 test-results/
 .tmp-workers-types/
+.tmp-*
+.tmp-*/
+workers/**/.tmp-*/
 tmp_*
 motchill_page.html
 tools/video-pipeline/config.json

@@ -332,17 +332,6 @@ function dedupeMovies(movies: Movie[]): Movie[] {
   });
 }
 
-function getHotScore(movie: Movie): number {
-  const currentYear = new Date().getFullYear();
-  const yearDiff = currentYear - (movie.year ?? 0);
-  const yearScore = yearDiff <= 0 ? 60 : yearDiff === 1 ? 45 : yearDiff === 2 ? 30 : yearDiff === 3 ? 15 : yearDiff <= 5 ? 5 : 0;
-  const mtime = new Date(movie.modified?.time ?? 0).getTime();
-  const freshScore = Math.max(0, 80 - (Date.now() - mtime) / 3600000 * 2);
-  const ep = (movie.episode_current ?? '').toLowerCase().trim();
-  const isFull = ep === 'full' || ep === 'full hd' || ep.startsWith('hoàn tất');
-  return yearScore + freshScore + (isFull ? 25 : 0) + (movie.chieurap ? 15 : 0);
-}
-
 const COUNTRY_SEO_DESCRIPTIONS: Record<string, string> = {
   'han-quoc': 'Khám phá phim Hàn Quốc Vietsub HD: drama tình cảm, hành động, cổ trang, hài hước và series đang cập nhật trên KhoPhim.',
   'trung-quoc': 'Khám phá phim Trung Quốc Vietsub HD: cổ trang, tiên hiệp, ngôn tình, hành động và phim bộ mới cập nhật trên KhoPhim.',
@@ -360,13 +349,13 @@ export default function CountryPage({ countrySlug }: Props) {
   const config = COUNTRY_CONFIGS[countrySlug];
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { sectionRef: seoRef, visible: seoVisible } = useLazySection('300px');
 
   // Read page from URL param
   const urlPage = parseInt(searchParams.get('page') ?? '1', 10);
   const [page, setPage] = useState(isNaN(urlPage) || urlPage < 1 ? 1 : urlPage);
-  const [sortBy, setSortBy] = useState<'new' | 'hot'>('new');
+  const [sortBy, setSortBy] = useState<'updated' | 'hot'>(searchParams.get('sort') === 'hot' ? 'hot' : 'updated');
   
   // Sync page state with URL param
   useEffect(() => {
@@ -376,14 +365,31 @@ export default function CountryPage({ countrySlug }: Props) {
     }
   }, [searchParams, page]);
 
+  useEffect(() => {
+    setSortBy(searchParams.get('sort') === 'hot' ? 'hot' : 'updated');
+  }, [searchParams]);
+
+  const handleSortChange = useCallback((mode: 'updated' | 'hot') => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('page');
+    if (mode === 'updated') next.delete('sort');
+    else next.set('sort', mode);
+    setSortBy(mode);
+    setPage(1);
+    setSearchParams(next);
+  }, [searchParams, setSearchParams]);
+
   const handleSetPage = useCallback((p: number) => {
     setPage(p);
+    const params = new URLSearchParams();
+    if (sortBy === 'hot') params.set('sort', 'hot');
+    if (p > 1) params.set('page', String(p));
     navigate({
       pathname: config?.path ?? pathname,
-      search: p > 1 ? `?page=${p}` : '',
+      search: params.toString() ? `?${params.toString()}` : '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [config?.path, navigate, pathname]);
+  }, [config?.path, navigate, pathname, sortBy]);
   
   // Self-referencing canonical — includes page param when page > 1
   const canonicalUrl = page > 1 
@@ -400,7 +406,7 @@ export default function CountryPage({ countrySlug }: Props) {
     let cancelled = false;
     setLoading(true);
 
-    const sortField = 'year';
+    const sortField = sortBy === 'hot' ? 'hot' : 'modified.time';
     fetchMoviesByCategory({
         country: countrySlug,
         page,
@@ -409,13 +415,6 @@ export default function CountryPage({ countrySlug }: Props) {
       }).then((response) => {
       if (cancelled) return;
       const items = dedupeMovies(response.items ?? []);
-      const stableItems = sortBy === 'hot'
-        ? [...items].sort((a, b) => getHotScore(b) - getHotScore(a))
-        : [...items].sort((a, b) => {
-            const yearDelta = (b.year ?? 0) - (a.year ?? 0);
-            if (yearDelta !== 0) return yearDelta;
-            return new Date(b.modified?.time ?? 0).getTime() - new Date(a.modified?.time ?? 0).getTime();
-          });
       const pagination = response.pagination;
       const sourceTotalPages = pagination?.totalPages ?? 1;
       const sourcePageSize = pagination?.totalItemsPerPage || PAGE_SIZE;
@@ -423,7 +422,7 @@ export default function CountryPage({ countrySlug }: Props) {
       const nextTotalPages = sourcePageSize === PAGE_SIZE
         ? Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
         : sourceTotalPages;
-      setSortedMovies(stableItems.slice(0, PAGE_SIZE));
+      setSortedMovies(items.slice(0, PAGE_SIZE));
       setTotalPages(nextTotalPages);
       setHasNextPage(page < nextTotalPages || items.length >= PAGE_SIZE);
     }).catch(() => {
@@ -526,12 +525,12 @@ export default function CountryPage({ countrySlug }: Props) {
 
           <div className="flex items-center gap-1 bg-[#1a1d27] border border-white/[0.06] rounded-xl p-1 overflow-x-auto w-full sm:w-auto">
             {([
-              { key: 'new', icon: 'ri-time-line', label: 'Mới Nhất' },
+              { key: 'updated', icon: 'ri-time-line', label: 'Mới Cập Nhật' },
               { key: 'hot', icon: 'ri-fire-line', label: 'Hot Nhất' },
             ] as const).map((s) => (
               <button
                 key={s.key}
-                onClick={() => setSortBy(s.key)}
+                onClick={() => handleSortChange(s.key)}
                 className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg transition-all cursor-pointer whitespace-nowrap font-medium ${
                   sortBy === s.key
                     ? `${config.accentBg} text-white`
@@ -579,6 +578,7 @@ export default function CountryPage({ countrySlug }: Props) {
               hasNext={hasNextPage}
               accentClass={config.accentBg}
               onPageChange={setPage}
+              preserveQuery={sortBy === 'hot' ? { sort: 'hot' } : undefined}
             />
             <JumpToPage current={page} onGo={handleSetPage} />
           </>

@@ -75,6 +75,35 @@ const STABLE_PLAYBACK_SECONDS = 30;
 const PLAYBACK_HEARTBEAT_SECONDS = 300;
 const LONG_SEEK_DISTANCE_SECONDS = 20;
 const SEEK_RECOVERY_DELAY_MS = 8_000;
+const HLS_TICKET_REFRESH_MARGIN_MS = 60_000;
+
+function protectedHlsObjectKey(src: string): string | null {
+  try {
+    const currentOrigin = typeof window === 'undefined' ? 'https://khophim.org' : window.location.origin;
+    const url = new URL(src, currentOrigin);
+    if (url.origin !== currentOrigin || !url.pathname.startsWith('/hls/')) return null;
+    return decodeURIComponent(url.pathname.slice('/hls/'.length));
+  } catch {
+    return null;
+  }
+}
+
+async function requestProtectedHlsTicket(src: string, signal: AbortSignal): Promise<number | null> {
+  const objectKey = protectedHlsObjectKey(src);
+  if (!objectKey) return null;
+  const response = await fetch('/api/hls-ticket', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ objectKey }),
+    signal,
+  });
+  if (!response.ok) throw new Error(`HLS ticket request failed (${response.status})`);
+  const ticket = await response.json() as { expiresAt?: number };
+  const expiresAt = Number(ticket.expiresAt || 0);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error('HLS ticket expiry is invalid');
+  return expiresAt;
+}
 
 function getPlaybackProfile() {
   if (typeof window === 'undefined') {
@@ -198,15 +227,6 @@ function capToLowerAutoLevel(hls: Hls): boolean {
   return true;
 }
 
-function srtToVtt(text: string): string {
-  const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const body = normalized
-    .replace(/^\s*WEBVTT[^\n]*\n+/i, '')
-    .replace(/^\s*\d+\s*\n(?=\d{2}:\d{2}:\d{2}[,.]\d{3}\s+-->\s+)/gm, '')
-    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
-    .trim();
-  return `WEBVTT\n\n${body}\n`;
-}
 export default function LightweightHlsPlayer({
   src,
   poster,
@@ -224,6 +244,7 @@ export default function LightweightHlsPlayer({
   onPlayerIssue,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const subtitleTrackRef = useRef<HTMLTrackElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -288,6 +309,8 @@ export default function LightweightHlsPlayer({
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [captionsEnabled, setCaptionsEnabled] = useState(Boolean(subtitleUrl));
+  const [activeCaptionText, setActiveCaptionText] = useState('');
+  const [nativeVideoFullscreen, setNativeVideoFullscreen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [levels, setLevels] = useState<HlsQualityLevel[]>([]);
@@ -296,6 +319,8 @@ export default function LightweightHlsPlayer({
   const [pipActive, setPipActive] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [isScrubbing, setIsScrubbing] = useState(false);
+  const protectedSource = Boolean(protectedHlsObjectKey(src));
+  const [protectedTicketReady, setProtectedTicketReady] = useState(() => !protectedSource);
 
   // Callback identity changes must never rebuild MediaSource. Keep the latest
   // handlers in a ref so parent renders (progress, countdowns, health UI) are
@@ -435,61 +460,40 @@ export default function LightweightHlsPlayer({
   }, [subtitleUrl]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    for (const track of Array.from(video.textTracks)) {
-      track.mode = captionsEnabled ? 'showing' : 'disabled';
+    const trackElement = subtitleTrackRef.current;
+    const track = trackElement?.track;
+    if (!trackElement || !track) {
+      setActiveCaptionText('');
+      return;
     }
-  }, [captionsEnabled, subtitleUrl]);
-  // Debug: try fetching subtitle to surface CORS/404 issues and attach a Blob track
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !subtitleUrl) return;
-    let aborted = false;
-    let blobUrl = '';
-    let trackEl: HTMLTrackElement | null = null;
-    (async () => {
-      try {
-        const res = await fetch(subtitleUrl, { method: 'GET' });
-        
-        if (!res.ok) return;
-        const text = await res.text();
-        if (aborted) return;
-        
 
-        // Attach as a Blob-based track (useful to verify parsed VTT and to bypass some URL issues
-        // when fetch is allowed). This will also make the track visible in video.textTracks.
-        try {
-          const vttText = srtToVtt(text);
-          const blob = new Blob([vttText], { type: 'text/vtt' });
-          blobUrl = URL.createObjectURL(blob);
-          trackEl = document.createElement('track');
-          trackEl.kind = 'subtitles';
-          trackEl.src = blobUrl;
-          trackEl.srclang = 'vi';
-          trackEl.label = 'Tiếng Việt (blob)';
-          trackEl.default = true;
-          video.appendChild(trackEl);
-          trackEl.addEventListener('load', () => {
-            try {
-              if (trackEl?.track) trackEl.track.mode = captionsEnabled ? 'showing' : 'disabled';
-            } catch { /* ignore */ }
-          
-          });
-        } catch (e) {
-          if (import.meta.env.DEV) console.warn('[Subtitle] failed to create blob track', e);
-        }
-      } catch (e) {
-        if (import.meta.env.DEV) console.warn('[Subtitle] fetch error', e);
+    const useNativeRenderer = pipActive || nativeVideoFullscreen;
+    const updateActiveCaption = () => {
+      if (!captionsEnabled || useNativeRenderer) {
+        setActiveCaptionText('');
+        return;
       }
-    })();
-
-    return () => {
-      aborted = true;
-      if (trackEl?.parentNode) trackEl.parentNode.removeChild(trackEl);
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      const text = Array.from(track.activeCues || [])
+        .map((cue) => String((cue as VTTCue).text || ''))
+        .join('\n')
+        .replace(/<br\s*\/?\s*>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .trim();
+      setActiveCaptionText(text);
     };
-  }, [subtitleUrl, captionsEnabled]);
+    const configureTrack = () => {
+      track.mode = captionsEnabled ? (useNativeRenderer ? 'showing' : 'hidden') : 'disabled';
+      updateActiveCaption();
+    };
+
+    trackElement.addEventListener('load', configureTrack);
+    track.addEventListener('cuechange', updateActiveCaption);
+    configureTrack();
+    return () => {
+      trackElement.removeEventListener('load', configureTrack);
+      track.removeEventListener('cuechange', updateActiveCaption);
+    };
+  }, [captionsEnabled, nativeVideoFullscreen, pipActive, protectedTicketReady, subtitleUrl]);
   const syncPseudoFullscreenLayout = useCallback(() => {
     const el = containerRef.current;
     if (!el || !pseudoFsRef.current) return;
@@ -533,6 +537,27 @@ export default function LightweightHlsPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
+
+    setProtectedTicketReady(!protectedSource);
+
+    let disposed = false;
+    let ticketRefreshTimer: number | null = null;
+    const ticketAbortController = new AbortController();
+    const clearTicketRefresh = () => {
+      if (ticketRefreshTimer !== null) window.clearTimeout(ticketRefreshTimer);
+      ticketRefreshTimer = null;
+      ticketAbortController.abort();
+    };
+    const refreshProtectedTicket = async (): Promise<void> => {
+      const expiresAt = await requestProtectedHlsTicket(src, ticketAbortController.signal);
+      if (disposed || !expiresAt) return;
+      const delay = Math.max(30_000, expiresAt - Date.now() - HLS_TICKET_REFRESH_MARGIN_MS);
+      ticketRefreshTimer = window.setTimeout(() => {
+        void refreshProtectedTicket().catch(() => {
+          if (!disposed) ticketRefreshTimer = window.setTimeout(() => void refreshProtectedTicket().catch(() => {}), 15_000);
+        });
+      }, delay);
+    };
 
     setLoaded(false);
     setHasError(false);
@@ -602,10 +627,22 @@ export default function LightweightHlsPlayer({
         callbacksRef.current.onFatalError?.();
       }, 18_000);
 
-      setTimeout(() => {
-        hls.loadSource(src);
-        hls.attachMedia(video);
-      }, 0);
+      void refreshProtectedTicket()
+        .then(() => {
+          if (disposed) return;
+          setProtectedTicketReady(true);
+          hls.loadSource(src);
+          hls.attachMedia(video);
+        })
+        .catch((error) => {
+          if (disposed || error instanceof DOMException && error.name === 'AbortError') return;
+          startupSettled = true;
+          window.clearTimeout(startupWatchdog);
+          setHasError(true);
+          setIsBuffering(false);
+          setErrorMsg('Không thể cấp quyền xem phim');
+          callbacksRef.current.onFatalError?.();
+        });
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         startupSettled = true;
@@ -741,6 +778,8 @@ export default function LightweightHlsPlayer({
       });
 
       return () => {
+        disposed = true;
+        clearTicketRefresh();
         startupSettled = true;
         window.clearTimeout(startupWatchdog);
         if (stallTimerRef.current) {
@@ -760,7 +799,6 @@ export default function LightweightHlsPlayer({
 
     // Native HLS (Safari)
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      setTimeout(() => { video.src = src; }, 0);
       let nativeStartupSettled = false;
       const nativeStartupWatchdog = window.setTimeout(() => {
         if (nativeStartupSettled || !pageActiveRef.current || document.hidden || networkOfflineRef.current) return;
@@ -808,7 +846,25 @@ export default function LightweightHlsPlayer({
       };
       video.addEventListener('loadedmetadata', onMeta);
       video.addEventListener('error', onErr);
+      void refreshProtectedTicket()
+        .then(() => {
+          if (!disposed) {
+            setProtectedTicketReady(true);
+            video.src = src;
+          }
+        })
+        .catch((error) => {
+          if (disposed || error instanceof DOMException && error.name === 'AbortError') return;
+          nativeStartupSettled = true;
+          window.clearTimeout(nativeStartupWatchdog);
+          setHasError(true);
+          setIsBuffering(false);
+          setErrorMsg('Không thể cấp quyền xem phim');
+          callbacksRef.current.onFatalError?.();
+        });
       return () => {
+        disposed = true;
+        clearTicketRefresh();
         nativeStartupSettled = true;
         window.clearTimeout(nativeStartupWatchdog);
         if (stallTimerRef.current) {
@@ -825,10 +881,12 @@ export default function LightweightHlsPlayer({
       };
     }
 
+    disposed = true;
+    clearTicketRefresh();
     setHasError(true);
     setErrorMsg('Trình duyệt không hỗ trợ HLS');
     return undefined;
-  }, [src, autoPlay, retryNonce]);
+  }, [src, autoPlay, retryNonce, protectedSource]);
 
   /* ── Video events ── */
   useEffect(() => {
@@ -1058,8 +1116,12 @@ export default function LightweightHlsPlayer({
       }
     };
 
-    const onIOSBegin = () => setIsFullscreen(true);
+    const onIOSBegin = () => {
+      setNativeVideoFullscreen(true);
+      setIsFullscreen(true);
+    };
     const onIOSEnd   = () => {
+      setNativeVideoFullscreen(false);
       setIsFullscreen(false);
       pseudoFsRef.current = false;
     };
@@ -1505,16 +1567,24 @@ export default function LightweightHlsPlayer({
         preload="metadata"
         crossOrigin="anonymous"
       >
-        {subtitleUrl && (
+        {subtitleUrl && (!protectedSource || protectedTicketReady) && (
           <track
+            ref={subtitleTrackRef}
             kind="subtitles"
             src={subtitleUrl}
             srcLang="vi"
             label="Tiếng Việt"
-            default
           />
         )}
       </video>
+      {captionsEnabled && activeCaptionText && !pipActive && !nativeVideoFullscreen && (
+        <div
+          data-kp-subtitle="true"
+          className={`kp-player-subtitle-layer ${showControls || !isPlaying ? 'is-controls-visible' : ''}`}
+        >
+          <span className="kp-player-subtitle-text">{activeCaptionText}</span>
+        </div>
+      )}
       <PlayerWatermark active={showControls || !isPlaying} />
 
       {/* Loading */}

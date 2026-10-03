@@ -1,5 +1,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  hashAdminClientIP,
+  hashAdminPin,
+  isAdminPinConfigured,
+  verifyAdminPin,
+} from '../_shared/admin-pin.ts';
 
 
 const CORS_ORIGIN = Deno.env.get('CORS_ORIGIN') ?? 'https://khophim.org';
@@ -34,20 +40,6 @@ function json(body: unknown, status: number, corsHeaders: Record<string, string>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
-function getSalt(): string {
-  const keyPart = SUPABASE_SERVICE_ROLE_KEY.slice(0, 48);
-  return 'khophim-admin-salt-v2-' + keyPart;
-}
-
-async function hashPin(pin: string): Promise<string> {
-  const salt = getSalt();
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pin + salt);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 function validatePinComplexity(pin: string): { valid: boolean; error?: string } {
   if (!pin || pin.length < 6) return { valid: false, error: 'Password must be at least 6 characters.' };
   if (pin.length > 32) return { valid: false, error: 'Password must be at most 32 characters.' };
@@ -68,26 +60,20 @@ function getClientIP(req: Request): string {
   return 'unknown';
 }
 
-async function hashIP(ip: string): Promise<string> {
-  const salt = getSalt();
-  const encoder = new TextEncoder();
-  const data = encoder.encode(ip + salt);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req.headers.get('origin'));
 
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !isAdminPinConfigured()) {
+      return json({ error: 'Admin authentication is not configured.' }, 503, corsHeaders);
+    }
     const body = await req.json().catch(() => ({})) as { currentPin?: string; newPin?: string; action?: string };
     const { currentPin, newPin, action } = body;
 
     const clientIP = getClientIP(req);
-    const ipHash = await hashIP(clientIP);
+    const ipHash = await hashAdminClientIP(clientIP);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
@@ -131,7 +117,7 @@ serve(async (req) => {
       const complexity = validatePinComplexity(newPin);
       if (!complexity.valid) return json({ error: complexity.error }, 400, corsHeaders);
 
-      const hashedNewPin = await hashPin(newPin);
+      const hashedNewPin = await hashAdminPin(newPin);
       const { error } = await supabase
         .from('admin_settings')
         .upsert({ id: 1, pin: hashedNewPin, updated_at: new Date().toISOString() }, { onConflict: 'id' });
@@ -153,9 +139,9 @@ serve(async (req) => {
 
     // Verify current PIN
     const actualPinHash = setting!.pin;
-    const hashedCurrent = await hashPin(currentPin);
+    const verification = await verifyAdminPin(currentPin, actualPinHash);
 
-    if (hashedCurrent !== actualPinHash) {
+    if (!verification.valid) {
       const newChangeCount = (rateRecord?.change_attempt_count ?? 0) + 1;
       const changeLockedUntil = newChangeCount >= MAX_CHANGE_ATTEMPTS
         ? new Date(now + CHANGE_LOCK_MS).toISOString()
@@ -179,8 +165,8 @@ serve(async (req) => {
     }
 
     // Prevent reusing same PIN
-    const hashedNew = await hashPin(newPin);
-    if (hashedNew === actualPinHash) {
+    const hashedNew = await hashAdminPin(newPin);
+    if (!verification.needsUpgrade && hashedNew === actualPinHash) {
       return json({ error: 'New password cannot match old password.' }, 400, corsHeaders);
     }
 

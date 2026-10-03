@@ -54,9 +54,7 @@ export const TYPES = [
 
 export const SORT_OPTIONS = [
   { label: 'Mới Cập Nhật', value: 'modified.time:desc', icon: 'ri-time-line' },
-  { label: 'Năm Mới Nhất', value: 'year:desc', icon: 'ri-calendar-line' },
-  { label: 'Năm Cũ Nhất', value: 'year:asc', icon: 'ri-history-line' },
-  { label: 'Tên A → Z', value: 'name:asc', icon: 'ri-sort-asc' },
+  { label: 'Hot Nhất', value: 'hot:desc', icon: 'ri-fire-line' },
 ];
 
 const YEARS = Array.from({ length: 27 }, (_, i) => String(2026 - i));

@@ -20,13 +20,13 @@ type KhophimWindow = Window & typeof globalThis & {
   [SUPABASE_SINGLETON_KEY]?: SupabaseClient;
 };
 
-function createReadonlyClient(): SupabaseClient {
+function createPublicClient(): SupabaseClient {
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      storageKey: 'khophim-public-readonly',
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: 'khophim-user-session',
     },
   });
 }
@@ -34,5 +34,5 @@ function createReadonlyClient(): SupabaseClient {
 const browserGlobal = typeof window !== 'undefined' ? (window as KhophimWindow) : null;
 
 export const supabase = browserGlobal
-  ? (browserGlobal[SUPABASE_SINGLETON_KEY] ??= createReadonlyClient())
-  : createReadonlyClient();
+  ? (browserGlobal[SUPABASE_SINGLETON_KEY] ??= createPublicClient())
+  : createPublicClient();

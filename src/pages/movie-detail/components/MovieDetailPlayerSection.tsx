@@ -13,6 +13,7 @@ import { useServerNow } from '@/hooks/useServerNow';
 import { getMovieCountdownInfo } from '@/utils/movieSchedule';
 import PlayerBox from './PlayerBox';
 import { getAudioLanguageLabels } from '@/utils/audioLanguage';
+import { CampaignUnderVideoBanner } from '@/components/feature/CampaignBannerDemo';
 
 const EP_GROUP = 100;
 const MOBILE_COLLAPSED_EPISODES = 24;
@@ -657,6 +658,7 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                     onVideoEnded={onVideoEnded}
                     nextEpName={hasNext ? navigableEpisodes[currentEpIdx + 1]?.ep.name : undefined}
                   />
+                  <CampaignUnderVideoBanner />
                 </>
               )}
 

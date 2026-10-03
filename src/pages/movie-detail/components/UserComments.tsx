@@ -1,338 +1,163 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { fetchMovieComments, setMovieCommentLiked, submitMovieComment, type PublicMovieComment } from '@/services/communityService';
 
-interface Comment {
-  id: string;
-  name: string;
-  avatar: string;
-  rating: number;
-  text: string;
-  createdAt: string;
-  likes: number;
-  liked: boolean;
+interface Props { slug: string; movieName: string }
+
+const COLORS = ['bg-red-500', 'bg-orange-500', 'bg-emerald-500', 'bg-cyan-500', 'bg-violet-500', 'bg-pink-500'];
+
+function initials(name: string) {
+  return name.trim().split(/\s+/).map((word) => word[0]).join('').toUpperCase().slice(0, 2);
 }
 
-interface UserCommentsProps {
-  slug: string;
-  movieName: string;
-}
-
-const STORAGE_KEY = (slug: string) => `khophim_comments_${slug}`;
-
-const AVATAR_COLORS = [
-  'bg-red-500', 'bg-orange-500', 'bg-amber-500',
-  'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500',
-  'bg-violet-500', 'bg-pink-500', 'bg-rose-500',
-];
-
-function getAvatarColor(name: string): string {
+function avatarColor(name: string) {
   let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  for (let index = 0; index < name.length; index += 1) hash = name.charCodeAt(index) + ((hash << 5) - hash);
+  return COLORS[Math.abs(hash) % COLORS.length];
 }
 
-function getInitials(name: string): string {
-  return name.trim().split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+function timeAgo(value: string) {
+  const minutes = Math.floor((Date.now() - new Date(value).getTime()) / 60_000);
+  if (!Number.isFinite(minutes) || minutes < 1) return 'Vừa xong';
+  if (minutes < 60) return `${minutes} phút trước`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} giờ trước`;
+  const days = Math.floor(hours / 24);
+  return days < 30 ? `${days} ngày trước` : new Date(value).toLocaleDateString('vi-VN');
 }
 
-function timeAgo(dateStr: string): string {
-  const date = new Date(dateStr);
-  const diff = Date.now() - date.getTime();
-  if (Number.isNaN(diff)) return 'Không xác định';
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Vừa xong';
-  if (mins < 60) return `${mins} phút trước`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} giờ trước`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days} ngày trước`;
-  return date.toLocaleDateString('vi-VN');
+function friendlyError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  if (/authentication|required|jwt/i.test(message)) return 'Bạn cần đăng nhập để thực hiện thao tác này.';
+  if (/too many/i.test(message)) return 'Bạn đã gửi nhiều bình luận. Vui lòng chờ ít phút.';
+  return 'Chưa thể kết nối hệ thống bình luận. Vui lòng thử lại sau.';
 }
 
-export default function UserComments({ slug, movieName }: UserCommentsProps) {
-  const [comments, setComments]     = useState<Comment[]>([]);
-  const [name, setName]             = useState('');
-  const [text, setText]             = useState('');
-  const [rating, setRating]         = useState(5);
-  const [hoverRating, setHoverRating] = useState(0);
+export default function UserComments({ slug, movieName }: Props) {
+  const { user } = useAuth();
+  const [comments, setComments] = useState<PublicMovieComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [rating, setRating] = useState(5);
+  const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted]   = useState(false);
-  const [sortBy, setSortBy]         = useState<'newest' | 'top'>('newest');
-  const [showAll, setShowAll]       = useState(false);
-  const formRef = useRef<HTMLFormElement>(null);
+  const [error, setError] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'top'>('newest');
 
-  /* Load from localStorage */
-  useEffect(() => {
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const raw = localStorage.getItem(STORAGE_KEY(slug));
-      const saved: Comment[] = raw ? JSON.parse(raw) : [];
-      setComments(Array.isArray(saved) ? saved : []);
-    } catch {
-      setComments([]);
+      setComments(await fetchMovieComments(slug));
+      setError('');
+    } catch (loadError) {
+      setError(friendlyError(loadError));
+    } finally {
+      setLoading(false);
     }
   }, [slug]);
 
-  const saveToStorage = useCallback((list: Comment[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEY(slug), JSON.stringify(list));
-    } catch { /* ignore */ }
-  }, [slug]);
+  useEffect(() => { void load(); }, [load]);
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !text.trim()) return;
+  useEffect(() => {
+    const channel = supabase.channel(`movie-comments-${slug}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'movie_comments', filter: `movie_slug=eq.${slug}` }, () => void load())
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [load, slug]);
+
+  const sorted = useMemo(() => [...comments].sort((left, right) => sortBy === 'top'
+    ? right.likes - left.likes
+    : new Date(right.created_at).getTime() - new Date(left.created_at).getTime()), [comments, sortBy]);
+  const average = comments.length ? (comments.reduce((sum, item) => sum + item.rating, 0) / comments.length).toFixed(1) : '0.0';
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user || text.trim().length < 3) return;
     setSubmitting(true);
-
-    setTimeout(() => {
-      const newComment: Comment = {
-        id: `user-${Date.now()}`,
-        name: name.trim(),
-        avatar: '',
+    setError('');
+    try {
+      await submitMovieComment({
+        movieSlug: slug,
         rating,
-        text: text.trim(),
-        createdAt: new Date().toISOString(),
-        likes: 0,
-        liked: false,
-      };
-      setComments((prev) => {
-        const updated = [newComment, ...prev];
-        saveToStorage(updated);
-        return updated;
+        body: text,
+        authorName: String(user.user_metadata?.display_name || user.email?.split('@')[0] || 'Thành viên KhoPhim'),
       });
-      setName('');
       setText('');
       setRating(5);
+      await load();
+    } catch (submitError) {
+      setError(friendlyError(submitError));
+    } finally {
       setSubmitting(false);
-      setSubmitted(true);
-      setTimeout(() => setSubmitted(false), 3000);
-    }, 600);
-  }, [name, text, rating, saveToStorage]);
+    }
+  };
 
-  const handleLike = useCallback((id: string) => {
-    setComments((prev) => {
-      const updated = prev.map((c) =>
-        c.id === id
-          ? { ...c, liked: !c.liked, likes: c.liked ? c.likes - 1 : c.likes + 1 }
-          : c
-      );
-      saveToStorage(updated);
-      return updated;
-    });
-  }, [saveToStorage]);
-
-  const sorted = [...comments].sort((a, b) => {
-    if (sortBy === 'top') return b.likes - a.likes;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
-
-  const displayed = showAll ? sorted : sorted.slice(0, 5);
-  const avgRating = comments.length > 0
-    ? (comments.reduce((s, c) => s + c.rating, 0) / comments.length).toFixed(1)
-    : '0';
-
-  const ratingDist = [5, 4, 3, 2, 1].map((r) => ({
-    star: r,
-    count: comments.filter((c) => c.rating === r).length,
-    pct: comments.length > 0 ? (comments.filter((c) => c.rating === r).length / comments.length) * 100 : 0,
-  }));
+  const handleLike = async (comment: PublicMovieComment) => {
+    if (!user) { setError('Bạn cần đăng nhập để thích bình luận.'); return; }
+    const liked = !comment.liked;
+    setComments((items) => items.map((item) => item.id === comment.id
+      ? { ...item, liked, likes: Math.max(0, item.likes + (liked ? 1 : -1)) }
+      : item));
+    try { await setMovieCommentLiked(comment.id, liked); }
+    catch (likeError) { setError(friendlyError(likeError)); void load(); }
+  };
 
   return (
-    <section className="mt-6 mb-6 rounded-2xl border border-white/[0.06] bg-[#0d0f18] overflow-hidden">
-      {/* Header */}
-      <div className="px-5 md:px-7 pt-5 pb-4 border-b border-white/[0.06]">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-1 h-5 bg-red-500 rounded-full flex-shrink-0" />
-          <h2 className="text-white font-bold text-base">Bình Luận &amp; Đánh Giá</h2>
-          <span className="text-white/30 text-sm ml-1">— {movieName}</span>
-          <span className="ml-auto text-white/30 text-xs bg-white/5 border border-white/8 px-2.5 py-1 rounded-full">
-            {comments.length} bình luận
-          </span>
+    <section className="mb-6 mt-6 overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0d0f18]" aria-labelledby="community-comments-title">
+      <div className="border-b border-white/[0.06] px-5 py-5 md:px-7">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="h-5 w-1 rounded-full bg-red-500" />
+          <h2 id="community-comments-title" className="font-bold">Bình luận &amp; đánh giá công khai</h2>
+          <span className="text-xs text-white/30">— {movieName}</span>
+          <span className="ml-auto rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300"><i className="ri-global-line mr-1" /> Mọi người đều thấy</span>
         </div>
-
-        {/* Rating summary */}
-        {comments.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6 mt-4">
-            {/* Big score */}
-            <div className="text-center flex-shrink-0">
-              <div className="text-4xl font-bold text-white leading-none">{avgRating}</div>
-              <div className="flex items-center justify-center gap-0.5 mt-1.5">
-                {[1,2,3,4,5].map((s) => (
-                  <i key={s} className={`ri-star-fill text-sm ${parseFloat(avgRating) >= s ? 'text-amber-400' : 'text-white/15'}`} />
-                ))}
-              </div>
-              <div className="text-white/30 text-[11px] mt-1">/ 5 sao</div>
-            </div>
-            {/* Distribution bars */}
-            <div className="flex-1 space-y-1.5">
-              {ratingDist.map(({ star, count, pct }) => (
-                <div key={star} className="flex items-center gap-2">
-                  <span className="text-[11px] text-white/40 w-3 text-right flex-shrink-0">{star}</span>
-                  <i className="ri-star-fill text-amber-400/60 text-[10px] flex-shrink-0" />
-                  <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-amber-400/70 rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <span className="text-[11px] text-white/25 w-4 flex-shrink-0">{count}</span>
-                </div>
-              ))}
-            </div>
+        <div className="mt-4 flex items-center gap-4">
+          <div className="text-3xl font-black">{average}</div>
+          <div>
+            <div className="flex gap-0.5">{[1,2,3,4,5].map((star) => <i key={star} className={`ri-star-fill text-sm ${Number(average) >= star ? 'text-amber-400' : 'text-white/15'}`} />)}</div>
+            <p className="mt-1 text-[11px] text-white/30">{comments.length} đánh giá công khai</p>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Comment form */}
-      <div className="px-5 md:px-7 py-5 border-b border-white/[0.06]">
-        <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-1.5">
-          <i className="ri-edit-line text-red-400" /> Viết bình luận của bạn
-        </p>
-        {submitted ? (
-          <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3">
-            <i className="ri-checkbox-circle-fill text-emerald-400 text-lg" />
-            <div>
-              <p className="text-emerald-300 text-sm font-semibold">Đã gửi bình luận!</p>
-              <p className="text-emerald-400/60 text-xs mt-0.5">Bình luận được lưu riêng trên thiết bị này.</p>
-            </div>
-          </div>
-        ) : (
-          <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
-            {/* Name */}
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Tên của bạn..."
-              maxLength={40}
-              required
-              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-red-500/40 focus:bg-white/[0.06] transition-all"
-            />
-
-            {/* Star rating */}
-            <div className="flex items-center gap-3">
-              <span className="text-white/40 text-xs">Đánh giá:</span>
-              <div className="flex items-center gap-1">
-                {[1,2,3,4,5].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    aria-label={`Đánh giá ${s} sao`}
-                    aria-pressed={rating === s}
-                    onClick={() => setRating(s)}
-                    onMouseEnter={() => setHoverRating(s)}
-                    onMouseLeave={() => setHoverRating(0)}
-                    className="flex h-11 w-11 items-center justify-center cursor-pointer rounded-lg transition-transform hover:scale-105 touch-manipulation"
-                  >
-                    <i className={`ri-star-fill text-xl transition-colors ${
-                      (hoverRating || rating) >= s ? 'text-amber-400' : 'text-white/15'
-                    }`} />
-                  </button>
-                ))}
+      <div className="border-b border-white/[0.06] px-5 py-5 md:px-7">
+        {user ? (
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-semibold">Chia sẻ với cộng đồng</p>
+              <div className="flex items-center gap-1" aria-label={`Đánh giá ${rating} sao`}>
+                {[1,2,3,4,5].map((star) => <button key={star} type="button" onClick={() => setRating(star)} aria-label={`${star} sao`} className="flex h-11 w-11 items-center justify-center rounded-lg"><i className={`ri-star-fill text-xl ${rating >= star ? 'text-amber-400' : 'text-white/15'}`} /></button>)}
               </div>
-              <span className="text-amber-400 text-xs font-semibold">
-                {['', 'Tệ', 'Không hay', 'Bình thường', 'Hay', 'Tuyệt vời'][hoverRating || rating]}
-              </span>
             </div>
-
-            {/* Text */}
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={`Chia sẻ cảm nhận của bạn về phim ${movieName}...`}
-              rows={3}
-              maxLength={500}
-              required
-              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-red-500/40 focus:bg-white/[0.06] transition-all resize-none"
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-white/20 text-[11px]">{text.length}/500</span>
-              <button
-                type="submit"
-                disabled={submitting || !name.trim() || !text.trim()}
-                className="flex min-h-11 items-center gap-2 px-5 bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-all cursor-pointer whitespace-nowrap touch-manipulation"
-              >
-                {submitting ? (
-                  <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Đang gửi...</>
-                ) : (
-                  <><i className="ri-send-plane-fill text-sm" /> Gửi bình luận</>
-                )}
-              </button>
-            </div>
-            <p className="text-[11px] leading-relaxed text-white/25">
-              Bình luận hiện chỉ được lưu trên trình duyệt của bạn và không được tính là đánh giá công khai của phim.
-            </p>
+            <textarea value={text} onChange={(event) => setText(event.target.value)} rows={3} minLength={3} maxLength={1000} required placeholder="Viết cảm nhận của bạn..." className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm outline-none placeholder:text-white/25 focus:border-red-500/45" />
+            <div className="flex items-center justify-between gap-3"><span className="text-[11px] text-white/25">{text.length}/1000 · Hiển thị công khai</span><button disabled={submitting || text.trim().length < 3} className="min-h-11 rounded-xl bg-red-500 px-5 text-sm font-bold disabled:opacity-40">{submitting ? 'Đang đăng...' : 'Đăng bình luận'}</button></div>
           </form>
+        ) : (
+          <div className="flex flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-sm font-semibold">Tham gia thảo luận</p><p className="mt-1 text-xs text-white/40">Đăng nhập để bình luận, đánh giá và thích ý kiến khác.</p></div>
+            <Link to="/tai-khoan" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-500 px-4 text-sm font-bold"><i className="ri-login-box-line" /> Đăng nhập</Link>
+          </div>
         )}
+        {error && <p role="alert" className="mt-3 text-xs text-amber-300">{error}</p>}
       </div>
 
-      {/* Sort + Comments list */}
-      <div className="px-5 md:px-7 py-5">
-        {/* Sort bar */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <span className="text-white/30 text-xs">Sắp xếp:</span>
-          {(['newest', 'top'] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setSortBy(s)}
-              className={`min-h-11 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap touch-manipulation ${
-                sortBy === s
-                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                  : 'text-white/40 hover:text-white border border-transparent hover:border-white/10'
-              }`}
-            >
-              {s === 'newest' ? 'Mới nhất' : 'Nhiều like nhất'}
-            </button>
-          ))}
+      <div className="px-5 py-5 md:px-7">
+        <div className="mb-4 flex gap-2">
+          {(['newest', 'top'] as const).map((value) => <button key={value} onClick={() => setSortBy(value)} className={`min-h-11 rounded-xl px-3 text-xs font-semibold ${sortBy === value ? 'bg-red-500/15 text-red-300' : 'text-white/40'}`}>{value === 'newest' ? 'Mới nhất' : 'Nhiều lượt thích'}</button>)}
         </div>
-
-        {/* Comments */}
-        <div className="space-y-4">
-          {displayed.map((c) => (
-            <div key={c.id} className="flex gap-3">
-              {/* Avatar */}
-              <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${getAvatarColor(c.name)}`}>
-                {getInitials(c.name)}
+        {loading ? <div className="h-20 animate-pulse rounded-xl bg-white/[0.04]" /> : sorted.length === 0 ? (
+          <div className="py-8 text-center"><i className="ri-chat-3-line text-3xl text-white/15" /><p className="mt-2 text-sm text-white/35">Chưa có bình luận công khai. Hãy là người đầu tiên.</p></div>
+        ) : (
+          <div className="space-y-5">
+            {sorted.map((comment) => <article key={comment.id} className="flex gap-3">
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarColor(comment.author_name)}`}>{initials(comment.author_name)}</div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{comment.author_name}</span><div className="flex">{[1,2,3,4,5].map((star) => <i key={star} className={`ri-star-fill text-[10px] ${comment.rating >= star ? 'text-amber-400' : 'text-white/10'}`} />)}</div><span className="text-[11px] text-white/25">{timeAgo(comment.created_at)}</span></div>
+                <p className="mt-1.5 whitespace-pre-line text-sm leading-6 text-white/65">{comment.body}</p>
+                <button onClick={() => void handleLike(comment)} className={`mt-2 flex min-h-11 items-center gap-1.5 text-xs ${comment.liked ? 'text-red-400' : 'text-white/30 hover:text-white/60'}`}><i className={comment.liked ? 'ri-heart-fill' : 'ri-heart-line'} /> {comment.likes || 'Thích'}</button>
               </div>
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-white/80 text-sm font-semibold">{c.name}</span>
-                  <div className="flex items-center gap-0.5">
-                    {[1,2,3,4,5].map((s) => (
-                      <i key={s} className={`ri-star-fill text-[11px] ${c.rating >= s ? 'text-amber-400' : 'text-white/10'}`} />
-                    ))}
-                  </div>
-                  <span className="text-white/25 text-[11px]">{timeAgo(c.createdAt)}</span>
-                </div>
-                <p className="text-white/60 text-sm leading-relaxed">{c.text}</p>
-                <button
-                  onClick={() => handleLike(c.id)}
-                  className={`mt-1 flex min-h-11 items-center gap-1.5 rounded-lg pr-3 text-[11px] transition-all cursor-pointer touch-manipulation ${
-                    c.liked ? 'text-red-400' : 'text-white/30 hover:text-white/60'
-                  }`}
-                >
-                  <i className={c.liked ? 'ri-heart-fill' : 'ri-heart-line'} />
-                  <span>{c.likes > 0 ? c.likes : ''} Thích</span>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Show more */}
-        {sorted.length > 5 && (
-          <button
-            onClick={() => setShowAll((v) => !v)}
-            className="mt-5 w-full py-2.5 rounded-xl border border-white/[0.08] text-white/40 hover:text-white hover:border-white/20 text-sm transition-all cursor-pointer flex items-center justify-center gap-2"
-          >
-            <i className={showAll ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} />
-            {showAll ? 'Thu gọn' : `Xem thêm ${sorted.length - 5} bình luận`}
-          </button>
-        )}
-
-        {comments.length === 0 && (
-          <div className="text-center py-8">
-            <i className="ri-chat-3-line text-4xl text-white/10 mb-2 block" />
-            <p className="text-white/30 text-sm">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
+            </article>)}
           </div>
         )}
       </div>

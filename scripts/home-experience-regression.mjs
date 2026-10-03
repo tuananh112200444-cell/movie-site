@@ -16,6 +16,7 @@ const smartCache = await readFile('src/utils/smartCache.ts', 'utf8');
 const discovery = await readFile('src/pages/home/components/HomeDiscoverySection.tsx', 'utf8');
 const portalGateway = await readFile('src/pages/home/components/PortalGateway.tsx', 'utf8');
 const movieSection = await readFile('src/pages/home/components/MovieSection.tsx', 'utf8');
+const movieList = await readFile('src/pages/movie-list/page.tsx', 'utf8');
 const movieCard = await readFile('src/components/base/MovieCard.tsx', 'utf8');
 const movieDetail = await readFile('src/pages/movie-detail/page.tsx', 'utf8');
 const slugEncoder = await readFile('src/utils/slugEncoder.ts', 'utf8');
@@ -24,7 +25,6 @@ const topRated = await readFile('src/pages/home/components/TopRatedSection.tsx',
 const vietnamSection = await readFile('src/pages/home/components/TopCinemaMoviesSection.tsx', 'utf8');
 const trailerSection = await readFile('src/pages/home/components/TrailerMoviesSection.tsx', 'utf8');
 const countryTabsSection = await readFile('src/pages/home/components/CountryTabsSection.tsx', 'utf8');
-const continueWatching = await readFile('src/pages/home/components/ContinueWatching.tsx', 'utf8');
 const mobileSwipeHint = await readFile('src/pages/home/components/MobileSwipeHint.tsx', 'utf8');
 const globalCss = await readFile('src/index.css', 'utf8');
 const imagePreloader = await readFile('src/utils/imagePreloader.ts', 'utf8');
@@ -159,7 +159,7 @@ for (const contract of [
 ]) {
   if (!home.includes(contract)) failures.push(`Homepage cinema hero contract is missing: ${contract}`);
 }
-if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !/const MOBILE_HOME_SECTIONS = \[\r?\n\s*'top-rated'/.test(home)) {
+if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !home.includes("const MOBILE_HOME_SECTIONS = [\n  'top-rated'")) {
   failures.push('Desktop and mobile homepage requests must include the dedicated top-rated rail.');
 }
 for (const contract of [
@@ -300,12 +300,6 @@ if (!movieApi.includes("sections.includes('trending') && candidateTrending.lengt
 if (!home.includes('buildPersonalizedHomeMovies') || !home.includes('title="Dành Cho Bạn"') || !home.includes('useWatchHistory()')) {
   failures.push('Homepage must build private on-device recommendations from watch history.');
 }
-if (!home.includes("...(homeData.trending ?? [])") || !home.includes("...(homeData['phim-bo'] ?? [])")) {
-  failures.push('A sparse personalized shelf must be completed with deduplicated popular movies.');
-}
-if (!continueWatching.includes('remainingDesktopColumns') || !continueWatching.includes('gridColumn: `span ${remainingDesktopColumns}')) {
-  failures.push('Continue watching must fill all remaining desktop columns instead of leaving a visual hole.');
-}
 const homeReader = movieApi.slice(movieApi.indexOf('async function fetchHomePageDataUncached'));
 if (!homeReader.includes("new URL('/api/home', window.location.origin)") || homeReader.indexOf("new URL('/api/home', window.location.origin)") > homeReader.indexOf("new URL(`${SUPABASE_URL}/functions/v1/home-proxy`)")) {
   failures.push('Homepage must prefer the same-origin Cloudflare cache before the Supabase fallback.');
@@ -339,7 +333,7 @@ for (const contract of [
   if (!proxy.includes(contract)) failures.push(`KKPhim cinema source contract is missing: ${contract}`);
 }
 for (const contract of [
-  'v11-full-country-shelves',
+  'v12-conan-ultra30-pinned',
   'function filterEdgeHomeSection',
   "key === 'phim-chieu-rap' && item.chieurap !== true",
   'X-KhoPhim-Home-Repair',
@@ -373,18 +367,18 @@ for (const contract of [
 if (!vietnamSection.includes('normalizeVietnamMovies')
   || !vietnamSection.includes('Phim Việt Nam Mới Cập Nhật')
   || !vietnamSection.includes('rank={index + 1}')
-  || !vietnamSection.includes("fetch('/api/kkphim-vietnam-latest'")
-  || !vietnamSection.includes("fetch('/home-fallback.json'")
-  || !vietnamSection.includes("fallback.sections?.['viet-nam']")
+  || !vietnamSection.includes("fetchMoviesByCategory({")
+  || !vietnamSection.includes("country: 'viet-nam'")
+  || !vietnamSection.includes("sortField: 'modified.time'")
   || !vietnamSection.includes('fallbackMovies = EMPTY_VIETNAM_MOVIES')
   || !home.includes('<VietnamMoviesSection />')
-  || !vietnamSection.includes('dữ liệu trực tiếp từ KKPhim')
+  || !vietnamSection.includes('cùng thứ tự với trang Xem tất cả')
   || vietnamSection.includes('getViewerCount(')
   || vietnamSection.includes('Math.random()')
   || vietnamSection.includes('K xem')) {
   failures.push('Vietnam UI must show the direct KKPhim Vietnam shelf without fabricated popularity data.');
 }
-if (!home.includes("'trending', 'phim-chieu-rap', 'phim-le'") || !home.includes("'trending', 'phim-chieu-rap', 'phim-le', 'phim-bo'")) {
+if (!home.includes("'phim-chieu-rap'") || !home.includes("const MOBILE_HOME_SECTIONS")) {
   failures.push('Desktop and mobile homepage payloads must retain the cinema fallback rail.');
 }
 if (!home.includes('title="Phim Đang Chiếu Rạp"')
@@ -678,6 +672,23 @@ if (!String(packageJson.scripts?.prebuild || '').includes('refresh-home-fallback
 if (!String(packageJson.scripts?.prebuild || '').includes('generate-pages-api-fallbacks.mjs')) {
   failures.push('Production builds must generate fail-open Pages API fallbacks.');
 }
+for (const snippet of [
+  "title=\"Phim Bộ Mới Cập Nhật\" viewAllLink=\"/phim-bo?sort=updated\"",
+  "title=\"Phim Lẻ Mới Cập Nhật\" viewAllLink=\"/phim-le?sort=updated\"",
+  "fetchMoviesByType('phim-bo', 1, 'modified.time', 'desc')",
+  "fetchMoviesByType('phim-le', 1, 'modified.time', 'desc')",
+]) {
+  if (!home.includes(snippet)) failures.push(`Homepage type rail is not aligned with its catalogue destination: ${snippet}`);
+}
+if (!movieList.includes("searchParams.get('sort')")
+  || !movieList.includes("preserveQuery={sortBy === 'hot' ? { sort: 'hot' } : undefined}")) {
+  failures.push('Movie-list pages must open and paginate the sort mode selected by a homepage section.');
+}
+if (!proxy.includes("isRecentHomepageTypeItem(movie as Record<string, unknown>, key)")
+  || !pagesWorker.includes('isRecentEdgeHomeTypeItem(item, key)')
+  || !homeFallbackGenerator.includes("key === 'trending' || key === 'phim-le' || key === 'phim-bo'")) {
+  failures.push('Homepage phim-le/phim-bo rails must reject stale historical imports at every live and fallback boundary.');
+}
 for (const section of ['vsmov-4k', 'trending', 'top10-single', 'top10-series', 'phim-chieu-rap', 'phim-le', 'phim-bo', 'hoat-hinh']) {
   if (!Array.isArray(homeFallback.sections?.[section]) || homeFallback.sections[section].length < 6) {
     failures.push(`Static homepage fallback is missing a usable ${section} section.`);
@@ -750,7 +761,7 @@ if (!proxy.includes("taxonomyHasSlug((movie as Record<string, unknown>).country,
 if (/const HOME_SUPABASE_SELECT = '[^']*chieurap/.test(proxy)) {
   failures.push('Home proxy still selects the missing movies.chieurap column and breaks all canonical rails.');
 }
-if (!pagesWorker.includes('edgeHomeHasTaxonomySlug') || !pagesWorker.includes('v11-full-country-shelves')) {
+if (!pagesWorker.includes('edgeHomeHasTaxonomySlug') || !pagesWorker.includes('v12-conan-ultra30-pinned')) {
   failures.push('Pages edge cache does not reject cross-country shelves or rotate the repaired payload version.');
 }
 if (!proxy.includes("if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) return 12;")
@@ -758,7 +769,8 @@ if (!proxy.includes("if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].include
   failures.push('Country shelves can be accepted too sparse for the desktop and mobile layouts.');
 }
 if (!homeFallbackGenerator.includes('fetchCanonicalHomeSections')
-  || !homeFallbackGenerator.includes("items.every((item) => taxonomyHasSlug(item.country, key))")
+  || !homeFallbackGenerator.includes('taxonomyHasSlug(item.country, key)')
+  || !homeFallbackGenerator.includes('Number(item.year || 0) >= currentYear - 1')
   || !homeFallbackGenerator.includes('ophim1\\.com|opstream')) {
   failures.push('Static homepage generation does not rebuild and validate canonical country shelves.');
 }

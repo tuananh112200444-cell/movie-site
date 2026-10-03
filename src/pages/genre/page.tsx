@@ -353,7 +353,7 @@ const GENRE_META: Record<string, {
 
 const SORT_OPTIONS = [
   { value: 'modified.time_desc', label: 'Mới cập nhật', icon: 'ri-time-line' },
-  { value: 'year_desc', label: 'Năm mới nhất', icon: 'ri-calendar-line' },
+  { value: 'hot_desc', label: 'Hot nhất', icon: 'ri-fire-line' },
 ];
 
 const PAGE_SIZE = 36;
@@ -419,13 +419,12 @@ export default function GenrePage() {
   
   const [movies, setMovies] = useState<MovieItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState('modified.time_desc');
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') === 'hot' ? 'hot_desc' : 'modified.time_desc');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const { heroRef, showHeroBg, heroImgLoaded, setHeroImgLoaded } = useHeroLazyLoad();
 
   const getSortParams = (sort: string) => {
-    if (sort === 'year_desc') return { sortField: 'year', sortType: 'desc' as const };
-    if (sort === 'year_asc') return { sortField: 'year', sortType: 'asc' as const };
+    if (sort === 'hot_desc') return { sortField: 'hot', sortType: 'desc' as const };
     return { sortField: 'modified.time', sortType: 'desc' as const };
   };
 
@@ -481,7 +480,7 @@ export default function GenrePage() {
   const handleSortChange = (newSort: string) => {
     setSortBy(newSort);
     setPage(1);
-    setSearchParams({});
+    setSearchParams(newSort === 'hot_desc' ? { sort: 'hot' } : {});
   };
 
   const handlePageChange = useCallback((next: number) => {
@@ -506,12 +505,12 @@ export default function GenrePage() {
   const seoTitle = `Phim ${meta.name} mới cập nhật | KhoPhim`;
   const canonicalPath = `/the-loai/${slug}`;
   const verifiedDescription = totalItems > 0
-    ? `Khám phá ${totalItems.toLocaleString('vi-VN')} phim ${meta.name.toLowerCase()} đang có trong danh mục KhoPhim. Lọc theo năm phát hành và thời gian cập nhật để chọn phim phù hợp.`
-    : `Khám phá danh sách phim ${meta.name.toLowerCase()} trên KhoPhim, sắp xếp theo thời gian cập nhật hoặc năm phát hành.`;
+    ? `Khám phá ${totalItems.toLocaleString('vi-VN')} phim ${meta.name.toLowerCase()} đang có trong danh mục KhoPhim. Ưu tiên phim mới cập nhật hoặc đang được xem nhiều.`
+    : `Khám phá danh sách phim ${meta.name.toLowerCase()} trên KhoPhim, sắp xếp theo thời gian cập nhật hoặc mức độ quan tâm.`;
   const safeFaq = [
     {
       q: `Danh sách phim ${meta.name.toLowerCase()} được sắp xếp thế nào?`,
-      a: `Bạn có thể sắp xếp phim ${meta.name.toLowerCase()} theo thời gian cập nhật, năm mới nhất hoặc năm cũ nhất.`,
+      a: `Bạn có thể sắp xếp phim ${meta.name.toLowerCase()} theo thời gian cập nhật hoặc mức độ được xem nhiều trên KhoPhim.`,
     },
     {
       q: `Làm sao xem thông tin một phim ${meta.name.toLowerCase()}?`,
@@ -719,6 +718,7 @@ export default function GenrePage() {
                 basePath={canonicalPath}
                 hasNext={page < totalPages}
                 onPageChange={handlePageChange}
+                preserveQuery={sortBy === 'hot_desc' ? { sort: 'hot' } : undefined}
               />
             </>
           )}

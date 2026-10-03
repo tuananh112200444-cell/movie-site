@@ -1,12 +1,31 @@
-import { defineConfig } from "vite";
+import { defineConfig, type ProxyOptions } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import AutoImport from "unplugin-auto-import/vite";
 import { compression } from "vite-plugin-compression2";
+import { PINNED_CINEMA_MOVIES } from "./src/data/homePromotions";
 
 const base = process.env.BASE_PATH || "/";
 const isPreview = process.env.IS_PREVIEW ? true : false;
+const hlsTrialOrigin = 'https://khophim-hls-gateway-trial.tuananh112200444.workers.dev';
+
+function hlsTrialProxy(): ProxyOptions {
+  return {
+    target: hlsTrialOrigin,
+    changeOrigin: true,
+    secure: true,
+    configure(proxy) {
+      proxy.on('proxyReq', (proxyRequest) => {
+        proxyRequest.setHeader('Origin', 'https://khophim.org');
+      });
+      proxy.on('proxyRes', (proxyResponse) => {
+        const cookies = proxyResponse.headers['set-cookie'];
+        if (cookies) proxyResponse.headers['set-cookie'] = cookies.map((cookie) => cookie.replace(/;\s*Secure/ig, ''));
+      });
+    },
+  };
+}
 
 function readReleaseId() {
   try {
@@ -38,7 +57,12 @@ function readHomeHeroBootstrap(): HomeHeroMovie[] {
       readFileSync(resolve(__dirname, 'public/home-fallback.json'), 'utf8'),
     ) as { sections?: Record<string, HomeHeroMovie[]> };
     // The first paint must match the cinema shelf exactly, in its source order.
-    return (snapshot.sections?.['phim-chieu-rap'] ?? []).slice(0, 8);
+    const cinemaMovies = snapshot.sections?.['phim-chieu-rap'] ?? [];
+    const pinnedSlugs = new Set(PINNED_CINEMA_MOVIES.map((movie) => movie.slug));
+    return [
+      ...PINNED_CINEMA_MOVIES,
+      ...cinemaMovies.filter((movie) => !pinnedSlugs.has(String(movie.slug || ''))),
+    ].slice(0, 8);
   } catch {
     return [];
   }
@@ -248,6 +272,10 @@ export default defineConfig(() => {
   server: {
     port: 3000,
     host: "0.0.0.0",
+    proxy: {
+      '/api/hls-ticket': hlsTrialProxy(),
+      '/hls': hlsTrialProxy(),
+    },
   },
   };
 });

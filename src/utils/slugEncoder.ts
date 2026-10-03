@@ -40,6 +40,13 @@ const MOVIE_SOURCE_SLUGS = Object.fromEntries(
   Object.entries(MOVIE_CANONICAL_ALIASES).map(([sourceSlug, canonicalSlug]) => [canonicalSlug, sourceSlug]),
 ) as Record<string, string>;
 
+// Some retired aliases still redirect to a canonical row that now owns a
+// complete provider-backed playback set. Those routes must fetch the canonical
+// slug itself instead of reversing back to the retired metadata row.
+const MOVIE_SOURCE_SLUG_OVERRIDES: Record<string, string> = {
+  'gia-dinh-la-so-1-phan-1': 'gia-dinh-la-so-1-phan-1',
+};
+
 export function canonicalMovieSlug(slug: string): string {
   const clean = String(slug || '').trim();
   return MOVIE_CANONICAL_ALIASES[clean] || clean;
@@ -47,5 +54,5 @@ export function canonicalMovieSlug(slug: string): string {
 
 export function movieDetailSourceSlug(slug: string): string {
   const canonical = canonicalMovieSlug(slug);
-  return MOVIE_SOURCE_SLUGS[canonical] || canonical;
+  return MOVIE_SOURCE_SLUG_OVERRIDES[canonical] || MOVIE_SOURCE_SLUGS[canonical] || canonical;
 }

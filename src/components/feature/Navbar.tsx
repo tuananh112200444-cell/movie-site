@@ -6,6 +6,8 @@ import { CampaignTopBanner } from './CampaignBannerDemo';
 import SearchSuggestions from './SearchSuggestions';
 import SocialBrandIcon, { type SocialBrandPlatform } from '@/components/base/SocialBrandIcon';
 import { SOCIAL_URLS } from '@/config/socialLinks';
+import { useAuth } from '@/context/AuthContext';
+import { useFollowUpdates } from '@/context/FollowUpdatesContext';
 
 const GENRES = [
   { name: 'Hành Động', slug: 'hanh-dong', icon: 'ri-sword-line' },
@@ -71,6 +73,8 @@ const SOCIAL_LINKS: NavbarSocialLink[] = [
   { href: SOCIAL_URLS.telegram, icon: 'ri-telegram-fill', desktopColor: 'text-white border-white/20 bg-gradient-to-br from-[#37b9f1] to-[#168ac1] shadow-[0_6px_18px_rgba(41,168,232,0.25)] hover:brightness-110', mobileColor: 'text-white bg-gradient-to-br from-[#37b9f1] to-[#168ac1] border-white/15', title: 'Telegram KhoPhim' },
 ];
 export default function Navbar() {
+  const { user, syncStatus } = useAuth();
+  const { unreadCount } = useFollowUpdates();
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -446,6 +450,41 @@ export default function Navbar() {
             
             {/* Yêu Thích */}
             <Link
+              to="/lich-cua-toi"
+              className={`relative hidden lg:flex h-9 w-9 items-center justify-center rounded-xl border transition-all ${
+                isActive('/lich-cua-toi') ? 'border-sky-500/35 bg-sky-500/10 text-sky-300' : 'border-white/[0.08] text-white/45 hover:border-sky-500/30 hover:text-sky-300'
+              }`}
+              title="Lịch phát hành và thông báo"
+            >
+              <i className="ri-notification-3-line text-base" />
+              {unreadCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-black text-white">{Math.min(unreadCount, 9)}</span>}
+            </Link>
+
+            <Link
+              to="/yeu-cau-phim"
+              className={`hidden 2xl:flex h-9 w-9 items-center justify-center rounded-xl border transition-all ${isActive('/yeu-cau-phim') ? 'border-amber-500/35 bg-amber-500/10 text-amber-300' : 'border-white/[0.08] text-white/45 hover:border-amber-500/30 hover:text-amber-300'}`}
+              title="Yêu cầu phim hoặc bổ sung tập"
+            >
+              <i className="ri-customer-service-2-line text-base" />
+            </Link>
+
+            {/* Yêu Thích */}
+            <Link
+              to="/tai-khoan"
+              className={`hidden lg:flex h-9 items-center justify-center gap-2 rounded-xl border px-2.5 text-xs font-semibold transition-all ${
+                isActive('/tai-khoan')
+                  ? 'border-red-500/30 bg-red-500/10 text-red-300'
+                  : 'border-white/[0.08] text-white/50 hover:border-white/15 hover:bg-white/[0.06] hover:text-white'
+              }`}
+              title={user ? 'Tài khoản và đồng bộ' : 'Đăng nhập để đồng bộ'}
+            >
+              <i className={user ? 'ri-account-circle-fill text-base' : 'ri-user-line text-base'} />
+              <span className="hidden xl:inline">{user ? 'Tài khoản' : 'Đăng nhập'}</span>
+              {user && <span className={`h-1.5 w-1.5 rounded-full ${syncStatus === 'synced' ? 'bg-emerald-400' : syncStatus === 'error' ? 'bg-amber-400' : 'bg-sky-400 animate-pulse'}`} />}
+            </Link>
+
+            {/* Yêu Thích */}
+            <Link
               to="/yeu-thich"
               className={`hidden lg:flex w-9 h-9 items-center justify-center rounded-xl transition-all cursor-pointer border ${
                 isActive('/yeu-thich')
@@ -657,6 +696,9 @@ export default function Navbar() {
               { label: 'Chiếu Rạp', to: '/phim-chieu-rap', icon: 'ri-building-line' },
               { label: 'Lọc Phim', to: '/filter', icon: 'ri-equalizer-2-line' },
               { label: 'Yêu Thích', to: '/yeu-thich', icon: 'ri-heart-line' },
+              { label: user ? 'Tài Khoản' : 'Đăng Nhập', to: '/tai-khoan', icon: user ? 'ri-account-circle-fill' : 'ri-user-line' },
+              { label: 'Lịch Của Tôi', to: '/lich-cua-toi', icon: 'ri-calendar-event-line' },
+              { label: 'Yêu Cầu Phim', to: '/yeu-cau-phim', icon: 'ri-customer-service-2-line' },
             ].map((item) => (
               <Link key={item.to} to={item.to} onClick={() => setMobileMenuOpen(false)}
                 className={`flex min-h-11 items-center gap-2.5 px-3 py-2.5 text-sm rounded-xl transition-all touch-manipulation ${

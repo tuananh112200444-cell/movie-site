@@ -131,6 +131,18 @@ function isFreshHomepageCandidate(movie: Record<string, unknown>): boolean {
     && Date.now() - episodeChangedAt <= HOME_FRESH_EPISODE_DAYS * 86400000;
 }
 
+function isRecentHomepageTypeItem(movie: Record<string, unknown>, key: string): boolean {
+  const recentCountryKeys = ['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'];
+  if (!['phim-le', 'phim-bo', ...recentCountryKeys].includes(key)) return true;
+  const type = String(movie.type || '').toLowerCase();
+  const year = Number(movie.year || 0);
+  const currentYear = new Date().getFullYear();
+  if (year < currentYear - 1 || year > currentYear + 1) return false;
+  if (recentCountryKeys.includes(key)) return true;
+  const expectedTypes = key === 'phim-le' ? ['single', 'phim-le'] : ['series', 'phim-bo'];
+  return expectedTypes.includes(type);
+}
+
 function filteredSectionItems(sections: Record<string, unknown[]> | null | undefined, key: string): unknown[] {
   return ((sections?.[key] ?? []) as unknown[])
     .filter((movie) => !isRetiredOphimCatalogItem(movie))
@@ -150,6 +162,7 @@ function filteredSectionItems(sections: Record<string, unknown[]> | null | undef
     .filter((movie) => !['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)
       || taxonomyHasSlug((movie as Record<string, unknown>).country, key))
     .filter((movie) => key !== 'trending' || isFreshHomepageCandidate(movie as Record<string, unknown>))
+    .filter((movie) => isRecentHomepageTypeItem(movie as Record<string, unknown>, key))
     .filter((m) => key === 'onlyflix-moi' || !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
 }
 
@@ -1294,15 +1307,30 @@ async function fetchSupabaseSection(
       .eq('is_published', true);
 
     if (isCountry) {
-      query = query.filter('country', 'cs', JSON.stringify([{ slug: typeOrCategory }]));
+      const currentYear = new Date().getFullYear();
+      query = query
+        .filter('country', 'cs', JSON.stringify([{ slug: typeOrCategory }]))
+        .gte('year', currentYear - 1)
+        .lte('year', currentYear + 1);
     } else {
       const types = supabaseTypeValues(typeOrCategory);
       query = types.length === 1 ? query.eq('type', types[0]) : query.in('type', types);
+      if (typeOrCategory === 'phim-le' || typeOrCategory === 'phim-bo') {
+        const currentYear = new Date().getFullYear();
+        query = query.gte('year', currentYear - 1).lte('year', currentYear + 1);
+      }
     }
 
-    const { data, error } = await query
-      .order('last_episode_change_at', { ascending: false, nullsFirst: false })
-      .order('published_at', { ascending: false, nullsFirst: false })
+    const orderedQuery = isCountry
+      ? query
+        .order('year', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false })
+      : query
+        .order('last_episode_change_at', { ascending: false, nullsFirst: false })
+        .order('published_at', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false });
+    const { data, error } = await orderedQuery
       .limit(limit * 2)
       .abortSignal(timeoutSignal(1500));
 

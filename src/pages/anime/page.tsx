@@ -1,22 +1,19 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useHeroLazyLoad } from '@/hooks/useHeroLazyLoad';
-import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import MovieCard from '@/components/base/MovieCard';
 import Pagination from '@/components/base/Pagination';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import { fetchMoviesByType } from '@/services/movieApi';
-import { setSmartSessionCache } from '@/utils/smartCache';
 import type { MovieItem } from '@/types/movie';
 
 const ANIME_BG = 'https://readdy.ai/api/search-image?query=dark%20anime%20cityscape%20neon%20purple%20pink%20lights%20night%20cyberpunk%20aesthetic%20cherry%20blossom%20petals%20falling%20dramatic%20cinematic%20atmosphere%20stars%20magical%20glowing%20particles%20fantasy%20japanese%20style%20wide%20landscape&width=1400&height=500&seq=anime-hero-bg-v1&orientation=landscape';
 
 const SORT_OPTIONS = [
   { value: 'modified.time_desc', label: 'Mới cập nhật', icon: 'ri-time-line' },
-  { value: 'year_desc', label: 'Năm mới nhất', icon: 'ri-calendar-line' },
-  { value: 'year_asc', label: 'Năm cũ nhất', icon: 'ri-history-line' },
+  { value: 'hot_desc', label: 'Hot nhất', icon: 'ri-fire-line' },
 ];
 
 const SEASON_FILTERS = [
@@ -77,7 +74,6 @@ const FAQ = [
 ];
 
 const PAGE_SIZE = 36;
-const POOL_CACHE_TTL = 10 * 60 * 1000;
 function getMovieKey(movie: MovieItem): string {
   return movie._id || movie.slug || `${movie.name}-${movie.year ?? ''}`;
 }
@@ -91,27 +87,6 @@ function inferCachedTotalPages(items: MovieItem[], current = 1): number {
   return Math.max(current, Math.ceil(items.length / PAGE_SIZE) + (items.length >= PAGE_SIZE ? 1 : 0), 1);
 }
 
-function getPoolCacheKey(slug: string, sort: string, season: string) {
-  return `kp_anime_${slug}_${sort}_${season}_v1`;
-}
-
-function getPoolCache(slug: string, sort: string, season: string): MovieItem[] | null {
-  try {
-    const key = getPoolCacheKey(slug, sort, season);
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
-    const entry = JSON.parse(raw) as { data: MovieItem[]; ts: number };
-    if (Date.now() - entry.ts > POOL_CACHE_TTL) { sessionStorage.removeItem(key); return null; }
-    return entry.data;
-  } catch { return null; }
-}
-
-function setPoolCache(slug: string, sort: string, season: string, data: MovieItem[]): void {
-  try {
-    const key = getPoolCacheKey(slug, sort, season);
-    setSmartSessionCache(key, JSON.stringify({ data, ts: Date.now() }));
-  } catch { /* quota */ }
-}
 
 function SkeletonCard() {
   return (
@@ -186,12 +161,15 @@ function isJapanAnime(m: MovieItem): boolean {
 
 export default function AnimePage() {
   const navigate = useNavigate();
-  const [page, setPage] = useState(1);
+  const [searchParams] = useSearchParams();
+  const urlPage = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1);
+  const [page, setPage] = useState(urlPage);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [movies, setMovies] = useState<MovieItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState('modified.time_desc');
+  const urlSort = searchParams.get('sort') === 'hot' ? 'hot_desc' : 'modified.time_desc';
+  const [sortBy, setSortBy] = useState(urlSort);
   const [activeSeason, setActiveSeason] = useState('all');
   const [activeStatus, setActiveStatus] = useState('all');
   const [activeEpisode, setActiveEpisode] = useState('all');
@@ -239,13 +217,12 @@ export default function AnimePage() {
   }, [movies, activeStatus, activeEpisode, activeYear]);
 
   const getSortParams = (sort: string) => {
-    if (sort === 'year_desc') return { sortField: 'year', sortType: 'desc' as const };
-    if (sort === 'year_asc') return { sortField: 'year', sortType: 'asc' as const };
+    if (sort === 'hot_desc') return { sortField: 'hot', sortType: 'desc' as const };
     return { sortField: 'modified.time', sortType: 'desc' as const };
   };
 
   const fetchMovies = useCallback(async (pg: number, reset = false, sort = sortBy, season = activeSeason) => {
-    const cacheKey = `${sort}_${season}`;
+    const cacheKey = `${sort}_${season}_p${pg}`;
     if (reset) {
       if (pg === 1) {
         const cached = poolMapRef.current?.[cacheKey];
@@ -253,18 +230,6 @@ export default function AnimePage() {
           setMovies(cached);
           setTotalPages(inferCachedTotalPages(cached, totalPagesMapRef.current?.[cacheKey] ?? 1));
           setTotalItems(totalItemsMapRef.current?.[cacheKey] ?? cached.length);
-          setLoading(false);
-          return;
-        }
-        const ssCached = getPoolCache('anime', sort, season);
-        if (ssCached && ssCached.length > 0) {
-          poolMapRef.current ??= {};
-          seenMapRef.current ??= {};
-          poolMapRef.current[cacheKey] = ssCached;
-          seenMapRef.current[cacheKey] = new Set(ssCached.map(getMovieKey));
-          setMovies(ssCached);
-          setTotalPages(inferCachedTotalPages(ssCached, totalPagesMapRef.current?.[cacheKey] ?? 1));
-          setTotalItems(totalItemsMapRef.current?.[cacheKey] ?? ssCached.length);
           setLoading(false);
           return;
         }
@@ -309,9 +274,6 @@ export default function AnimePage() {
       totalPagesMapRef.current[cacheKey] = tp;
       totalItemsMapRef.current[cacheKey] = ti;
       setTotalItems(ti);
-      if (pg === 1 && poolMapRef.current[cacheKey]?.length) {
-        setPoolCache('anime', sort, season, poolMapRef.current[cacheKey]);
-      }
     } catch {
       if (reset) setMovies([]);
     } finally {
@@ -325,13 +287,13 @@ export default function AnimePage() {
     totalPagesMapRef.current = {};
     totalItemsMapRef.current = {};
     setMovies([]);
-    setPage(1);
+    setPage(urlPage);
     setActiveStatus('all');
     setActiveEpisode('all');
     setActiveYear('all');
-    fetchMovies(1, true);
+    fetchMovies(urlPage, true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [fetchMovies]);
+  }, [fetchMovies, urlPage]);
 
   const handleSortChange = (newSort: string) => {
     setSortBy(newSort);
@@ -339,7 +301,7 @@ export default function AnimePage() {
     setActiveStatus('all');
     setActiveEpisode('all');
     setActiveYear('all');
-    fetchMovies(1, true, newSort, activeSeason);
+    navigate(newSort === 'hot_desc' ? '/anime?sort=hot' : '/anime');
   };
 
   const handleSeasonChange = (newSeason: string) => {
@@ -348,16 +310,15 @@ export default function AnimePage() {
     setActiveStatus('all');
     setActiveEpisode('all');
     setActiveYear('all');
-    fetchMovies(1, true, sortBy, newSeason);
+    navigate(sortBy === 'hot_desc' ? '/anime?sort=hot' : '/anime');
   };
 
   const handlePageChange = useCallback((next: number) => {
     setPage(next);
-    fetchMovies(next, true, sortBy, activeSeason);
-  }, [activeSeason, fetchMovies, sortBy]);
+  }, []);
 
   const handleLoadMore = () => {
-    handlePageChange(page + 1);
+    navigate(`/anime?${sortBy === 'hot_desc' ? 'sort=hot&' : ''}page=${page + 1}`);
   };
 
   const activeFilterCount = (activeStatus !== 'all' ? 1 : 0) + (activeEpisode !== 'all' ? 1 : 0) + (activeYear !== 'all' ? 1 : 0);
@@ -750,7 +711,7 @@ export default function AnimePage() {
                   >
                     {loading
                       ? <><i className="ri-loader-4-line animate-spin" /> Đang tải...</>
-                      : <><i className="ri-add-line" /> Tải thêm anime</>
+                      : <><i className="ri-arrow-right-line" /> Trang anime tiếp theo</>
                     }
                   </button>
                 </div>
@@ -764,6 +725,7 @@ export default function AnimePage() {
                   hasNext={page < totalPages}
                   accentClass="bg-purple-500"
                   onPageChange={handlePageChange}
+                  preserveQuery={sortBy === 'hot_desc' ? { sort: 'hot' } : undefined}
                 />
               )}
             </>

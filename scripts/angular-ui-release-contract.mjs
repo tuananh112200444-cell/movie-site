@@ -6,7 +6,7 @@ const requiredSource = [
   ['src/pages/home/components/GenreSEOSection.tsx', ['primaryLinks', 'Thể loại và quốc gia khác', 'grid-cols-2', 'lg:grid-cols-8']],
   ['src/index.css', ['HOME — ANGULAR CINEMA V7', '.editorial-section-frame', '.home-poster-item', '1760px']],
   ['src/pages/home/components/MovieSection.tsx', ['movie-section-mobile-grid', 'grid-cols-2', 'sm:grid-cols-3', 'carouselItemClass']],
-  ['src/components/feature/CampaignBannerDemo.tsx', ["return 'mix';", 'campaign-demo-f8bet/top-728x90.gif', 'campaign-demo-shbet/catfish-desktop-728x90.gif', 'Thu gọn banner đầu trang', 'Thu gọn banner catfish']],
+  ['src/components/feature/CampaignBannerDemo.tsx', ["return 'mb66';", 'campaign-demo-f8bet/top-728x90.gif', 'campaign-demo-shbet/catfish-desktop-728x90.gif', 'campaign-demo-mb66/mb66-728x90.gif', 'mb66TopCampaigns', 'mb66CatfishCampaigns', 'CampaignUnderVideoBanner', 'visibleTopCampaigns.map', 'visibleCatfishCampaigns.map', 'https://bit.ly/qtqctong2c184', 'Đóng banner đầu trang', 'Đóng banner catfish']],
 ];
 
 const failures = [];
@@ -69,7 +69,7 @@ for (const marker of ['.editorial-section-frame', '.movie-player-box']) {
 for (const marker of ['daily-update-demo', 'genre-seo-heading', 'editorial-section-frame']) {
   if (!jsBundle.includes(marker)) failures.push(`Built JavaScript is missing ${marker}`);
 }
-for (const marker of ['campaign-demo-f8bet/top-728x90.gif', 'campaign-demo-shbet/catfish-desktop-728x90.gif']) {
+for (const marker of ['campaign-demo-f8bet/top-728x90.gif', 'campaign-demo-shbet/catfish-desktop-728x90.gif', 'campaign-demo-mb66/mb66-728x90.gif']) {
   if (!jsBundle.includes(marker)) failures.push(`Built JavaScript is missing banner ${marker}`);
   try {
     await readFile(path.join('out', marker));

@@ -7,6 +7,7 @@ import { useToast } from '@/components/base/Toast';
 import { persistWatchHistoryProgress, useWatchHistory } from '@/hooks/useWatchHistory';
 import { useResumeWatch, type ResumeInfo } from '@/hooks/useResumeWatch';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useFollowUpdates } from '@/context/FollowUpdatesContext';
 import MovieDetailHero from './components/MovieDetailHero';
 import AdsterraResponsiveBanner from '@/components/feature/AdsterraResponsiveBanner';
 import AdsterraRectangleBanner from '@/components/feature/AdsterraRectangleBanner';
@@ -355,6 +356,7 @@ export default function MovieDetailPage() {
   const { addEntry } = useWatchHistory();
   const { getResume, saveProgress, clearProgress } = useResumeWatch();
   const { isFav, toggle } = useFavorites();
+  const { isFollowing, toggleFollow } = useFollowUpdates();
 
   const [staticBootstrap, setStaticBootstrap] = useState<StaticMovieBootstrapPayload | null>(embeddedStaticBootstrap);
   const [detail, setDetail] = useState<MovieDetailResponse | null>(embeddedStaticBootstrap?.detail ?? null);
@@ -1245,6 +1247,12 @@ export default function MovieDetailPage() {
     showToast(added ? 'Đã thêm vào Yêu Thích!' : 'Đã xóa khỏi Yêu Thích', added ? 'success' : 'info');
   }, [detail, toggle, showToast]);
 
+  const handleFollowToggle = useCallback(() => {
+    if (!detail?.movie) return;
+    const added = toggleFollow(detail.movie);
+    showToast(added ? 'Đang theo dõi tập mới của phim!' : 'Đã bỏ theo dõi phim', added ? 'success' : 'info');
+  }, [detail, showToast, toggleFollow]);
+
   /* ── Loading ── */
   if (loading) return (
     <div className="angular-detail-page min-h-screen kp-cinema-page text-white" data-player-fix="viewer-resilience-20260824">
@@ -1296,6 +1304,7 @@ export default function MovieDetailPage() {
 
   const movie = displayMovie;
   const favored = isFav(movie._id);
+  const followed = isFollowing(movie.slug);
   const shouldNoIndexMovieInfo = staticBootstrap
     ? !isStaticMovieIndexable
     : !hasEpisodes && !trailerEmbedUrl;
@@ -1367,11 +1376,13 @@ export default function MovieDetailPage() {
             movie={movie}
             slug={slug ?? ''}
             favored={favored}
+            followed={followed}
             isTrailerOnly={isTrailerOnly}
             hasEpisodes={canOpenWatchPage}
             episodeDataLoading={episodeDataLoading}
             noIndex={shouldNoIndexMovieInfo}
             onFavToggle={handleFavToggle}
+            onFollowToggle={handleFollowToggle}
             onWatchNow={() => {
               if (!canOpenWatchPage && !isTrailerOnly) {
                 showToast(episodeDataLoading ? 'Đang tải danh sách tập phim' : 'Phim chưa có tập để xem', 'info');
