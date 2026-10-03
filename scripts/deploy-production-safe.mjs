@@ -20,7 +20,14 @@ function git(args, options = {}) {
 }
 
 function run(command, args) {
-  const result = spawnSync(command, args, {
+  const executable = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : command;
+  const executableArgs = process.platform === 'win32'
+    ? ['/d', '/s', '/c', [command, ...args].map((value) => {
+        const text = String(value);
+        return /[\s&|<>^"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+      }).join(' ')]
+    : args;
+  const result = spawnSync(executable, executableArgs, {
     cwd: process.cwd(),
     env: process.env,
     encoding: 'utf8',
@@ -87,14 +94,11 @@ if (process.env.KHOPHIM_PRODUCTION_DEPLOY !== 'YES') {
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 if (!process.env.CLOUDFLARE_API_TOKEN) {
-  const auth = spawnSync(npx, ['wrangler', 'whoami'], {
-    cwd: process.cwd(),
-    env: process.env,
-    encoding: 'utf8',
-    stdio: 'ignore',
-    shell: false,
-  });
-  if (auth.status !== 0) fail('Cloudflare authentication is unavailable. Sign in with Wrangler or provide CLOUDFLARE_API_TOKEN.');
+  try {
+    run(npx, ['wrangler', 'whoami']);
+  } catch {
+    fail('Cloudflare authentication is unavailable. Sign in with Wrangler or provide CLOUDFLARE_API_TOKEN.');
+  }
 }
 run(npm, ['run', 'build']);
 
