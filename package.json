@@ -78,6 +78,7 @@
     "ui:test:mobile": "playwright test tests/ui-quality.spec.ts --project=mobile-chrome",
     "devices:test": "playwright test tests/device-compatibility.spec.ts --project=desktop-chrome",
     "movie:data:test": "node scripts/movie-data-quality.mjs",
+    "movie:artwork:repair:test": "node scripts/retired-artwork-repair-regression.mjs",
     "source:brain:test": "node scripts/source-brain-audit.mjs",
     "source:brain:full": "node scripts/source-brain-audit.mjs --full",
     "source:brain:warm": "node scripts/source-brain-warm-verified.mjs",

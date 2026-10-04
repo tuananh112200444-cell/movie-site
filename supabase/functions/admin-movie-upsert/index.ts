@@ -494,6 +494,8 @@ function mergeMovieData(
   merged.id = existing.id;
   merged.slug = existing.slug; // keep canonical slug
   merged.created_at = undefined;
+  if (hasValue(merged.poster_url)) merged.poster_url = normalizeArtworkValue(merged.poster_url, 'w500') as string;
+  if (hasValue(merged.thumb_url)) merged.thumb_url = normalizeArtworkValue(merged.thumb_url, 'w780') as string;
 
   return merged;
 }
@@ -545,6 +547,12 @@ function hasUsableArtwork(value: unknown): boolean {
   return Boolean(url) && !/^https?:\/\/phim\.nguonc\.com\/public\/images\//i.test(url);
 }
 
+function normalizeArtworkValue(value: unknown, size: 'w500' | 'w780'): unknown {
+  const url = String(value || '').trim();
+  const match = url.match(/^https:\/\/phim\.nguonc\.com\/public\/images\/Film\/([A-Za-z0-9]{20,40}\.jpg)$/);
+  return match ? `https://image.tmdb.org/t/p/${size}/${match[1]}` : value;
+}
+
 function chooseFilled<T>(current: T | null | undefined, incoming: T | null | undefined): T | null | undefined {
   return hasValue(current) ? current : incoming;
 }
@@ -563,8 +571,14 @@ function mergeMovieFields(target: MergeMovieRow, sources: MergeMovieRow[]): Reco
     update.title_original = chooseFilled(update.title_original ?? target.title_original, source.title_original);
     update.origin_name = chooseFilled(update.origin_name ?? target.origin_name, source.origin_name);
     update.normalized_name = chooseFilled(update.normalized_name ?? target.normalized_name, source.normalized_name);
-    update.thumb_url = chooseArtwork(update.thumb_url ?? target.thumb_url, source.thumb_url);
-    update.poster_url = chooseArtwork(update.poster_url ?? target.poster_url, source.poster_url);
+    update.thumb_url = chooseArtwork(
+      update.thumb_url ?? normalizeArtworkValue(target.thumb_url, 'w780'),
+      normalizeArtworkValue(source.thumb_url, 'w780'),
+    );
+    update.poster_url = chooseArtwork(
+      update.poster_url ?? normalizeArtworkValue(target.poster_url, 'w500'),
+      normalizeArtworkValue(source.poster_url, 'w500'),
+    );
     update.tmdb_id = chooseFilled(update.tmdb_id ?? target.tmdb_id, source.tmdb_id);
     update.imdb_id = chooseFilled(update.imdb_id ?? target.imdb_id, source.imdb_id);
     update.ophim_id = chooseFilled(update.ophim_id ?? target.ophim_id, source.ophim_id);
