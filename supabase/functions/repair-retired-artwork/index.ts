@@ -7,8 +7,8 @@ const ALLOWED_SECRETS = [
   Deno.env.get('CRON_SECRET') ?? '',
   Deno.env.get('SYNC_SECRET') ?? '',
 ].filter(Boolean);
-const MAX_BATCH = 20;
-const CONCURRENCY = 4;
+const MAX_BATCH = 5;
+const CONCURRENCY = 2;
 
 type MovieRow = Record<string, unknown>;
 type ProviderMovie = Record<string, unknown>;

@@ -10,7 +10,7 @@ expect(worker.includes('matches.length === 1') && worker.includes('year !== cand
 expect(worker.includes("poster_url: poster") && worker.includes("thumb_url: thumb")
   && !/episode_current|link_m3u8|link_embed/.test(worker),
   'Artwork repair must update only artwork and verified TMDB identity.');
-expect(worker.includes('const MAX_BATCH = 20') && worker.includes('const CONCURRENCY = 4'),
+expect(worker.includes('const MAX_BATCH = 5') && worker.includes('const CONCURRENCY = 2'),
   'Artwork repair must remain a bounded low-concurrency batch.');
 expect(migration.includes('repair-retired-artwork-offpeak') && migration.includes("'3-58/5 17-22 * * *'"),
   'Artwork repair must run only in the established off-peak window.');
