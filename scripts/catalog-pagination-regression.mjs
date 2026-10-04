@@ -1,4 +1,6 @@
-import { readFile } from 'node:fs/promises';
+import { readFile as readRawFile } from 'node:fs/promises';
+
+const readFile = async (path, encoding) => String(await readRawFile(path, encoding)).replace(/\r\n/g, '\n');
 
 const sources = Object.fromEntries(await Promise.all([
   ['movieList', 'src/pages/movie-list/page.tsx'],

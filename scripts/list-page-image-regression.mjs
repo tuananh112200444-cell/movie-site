@@ -6,11 +6,13 @@ const movieCardSource = await readFile('src/components/base/MovieCard.tsx', 'utf
 const movieDetailHeroSource = await readFile('src/pages/movie-detail/components/MovieDetailHero.tsx', 'utf8');
 const homeProxySource = await readFile('supabase/functions/home-proxy/index.ts', 'utf8');
 const providerSyncSource = await readFile('supabase/functions/sync-ophim-movies/index.ts', 'utf8');
+const adminMovieUpsertSource = await readFile('supabase/functions/admin-movie-upsert/index.ts', 'utf8');
 const edgeSource = await readFile('functions/[[path]].js', 'utf8');
 const genrePageSource = await readFile('src/pages/genre/page.tsx', 'utf8');
 const countryPageSource = await readFile('src/pages/country/page.tsx', 'utf8');
 const redirectsSource = await readFile('public/_redirects', 'utf8');
 const artworkRepairMigration = await readFile('supabase/migrations/20260823054500_repair_ophim_artwork_paths.sql', 'utf8');
+const retiredNguoncRepairMigration = await readFile('supabase/migrations/20261004131000_repair_retired_nguonc_artwork.sql', 'utf8');
 const failures = [];
 
 if (!source.includes('movie.hero_backdrop_url || movie.thumb_url || movie.poster_url')) {
@@ -59,6 +61,23 @@ if (/^\/\*\s+\/index\.html\s+200$/m.test(redirectsSource)) {
 if (!movieCardSource.includes('return getPortraitImagePaths(movie)')) {
   failures.push('Portrait movie cards do not use the provider-aware artwork contract.');
 }
+if (!movieApiSource.includes('function isKnownUnavailableArtwork')
+  || !movieApiSource.includes('movie.hero_poster_url')
+  || !movieApiSource.includes('if (isKnownUnavailableArtwork(original)) return FALLBACK_IMG;')) {
+  failures.push('Retired NguonC images can still bypass verified hero artwork and leave cards blank.');
+}
+if (!homeProxySource.includes('function isRetiredNguoncArtwork')
+  || !homeProxySource.includes('(heroPosterUrl || heroBackdropUrl)')) {
+  failures.push('Homepage responses can still publish retired NguonC images instead of verified TMDB artwork.');
+}
+if (!retiredNguoncRepairMigration.includes('get_tmdb_metadata_enrichment_candidates')
+  || !retiredNguoncRepairMigration.includes('delete from public.movie_tmdb_enrichment_status')) {
+  failures.push('Published movies with retired NguonC artwork are not queued for conservative repair.');
+}
+if (!adminMovieUpsertSource.includes('function chooseArtwork')
+  || !adminMovieUpsertSource.includes('hasUsableArtwork(existing.thumb_url)')) {
+  failures.push('Future provider syncs can still preserve a retired image instead of healing it.');
+}
 if (!movieDetailHeroSource.includes('const backdropPath = movie.hero_backdrop_url || landscapeArtwork.primary || posterPath')) {
   failures.push('Movie detail backdrop does not prefer landscape artwork.');
 }
@@ -87,4 +106,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ status: 'passed', checks: 11 }, null, 2));
+console.log(JSON.stringify({ status: 'passed', checks: 15 }, null, 2));

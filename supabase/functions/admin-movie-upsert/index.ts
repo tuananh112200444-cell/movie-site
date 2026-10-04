@@ -483,8 +483,8 @@ function mergeMovieData(
     delete merged.title_vi;
     delete merged.origin_name;
     delete merged.content;
-    delete merged.thumb_url;
-    delete merged.poster_url;
+    if (hasUsableArtwork(existing.thumb_url)) delete merged.thumb_url;
+    if (hasUsableArtwork(existing.poster_url)) delete merged.poster_url;
   }
   if (isQueerSource(existing) && !isQueerSource(incoming)) {
     delete merged.category;
@@ -540,8 +540,18 @@ function hasValue(value: unknown): boolean {
   return value !== null && value !== undefined && String(value).trim() !== '';
 }
 
+function hasUsableArtwork(value: unknown): boolean {
+  const url = String(value || '').trim();
+  return Boolean(url) && !/^https?:\/\/phim\.nguonc\.com\/public\/images\//i.test(url);
+}
+
 function chooseFilled<T>(current: T | null | undefined, incoming: T | null | undefined): T | null | undefined {
   return hasValue(current) ? current : incoming;
+}
+
+function chooseArtwork<T>(current: T | null | undefined, incoming: T | null | undefined): T | null | undefined {
+  if (hasUsableArtwork(current)) return current;
+  return hasUsableArtwork(incoming) ? incoming : current || incoming;
 }
 
 function mergeMovieFields(target: MergeMovieRow, sources: MergeMovieRow[]): Record<string, unknown> {
@@ -553,8 +563,8 @@ function mergeMovieFields(target: MergeMovieRow, sources: MergeMovieRow[]): Reco
     update.title_original = chooseFilled(update.title_original ?? target.title_original, source.title_original);
     update.origin_name = chooseFilled(update.origin_name ?? target.origin_name, source.origin_name);
     update.normalized_name = chooseFilled(update.normalized_name ?? target.normalized_name, source.normalized_name);
-    update.thumb_url = chooseFilled(update.thumb_url ?? target.thumb_url, source.thumb_url);
-    update.poster_url = chooseFilled(update.poster_url ?? target.poster_url, source.poster_url);
+    update.thumb_url = chooseArtwork(update.thumb_url ?? target.thumb_url, source.thumb_url);
+    update.poster_url = chooseArtwork(update.poster_url ?? target.poster_url, source.poster_url);
     update.tmdb_id = chooseFilled(update.tmdb_id ?? target.tmdb_id, source.tmdb_id);
     update.imdb_id = chooseFilled(update.imdb_id ?? target.imdb_id, source.imdb_id);
     update.ophim_id = chooseFilled(update.ophim_id ?? target.ophim_id, source.ophim_id);

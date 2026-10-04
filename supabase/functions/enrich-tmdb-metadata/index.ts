@@ -118,6 +118,14 @@ function taxonomyList(value: unknown): Array<{ id?: string; name: string; slug: 
     .filter((item) => item.name && item.slug);
 }
 
+function isRetiredNguoncArtwork(value: unknown): boolean {
+  return /^https?:\/\/phim\.nguonc\.com\/public\/images\//i.test(String(value || '').trim());
+}
+
+function hasUsableArtwork(value: unknown): boolean {
+  return Boolean(String(value || '').trim()) && !isRetiredNguoncArtwork(value);
+}
+
 function rawTitles(movie: MovieRow): string[] {
   return [movie.origin_name, movie.title_original, movie.title_en, movie.name, movie.title_vi, movie.title_zh]
     .map((value) => String(value || '').trim())
@@ -193,7 +201,7 @@ function hasMetadataGap(movie: MovieRow): boolean {
     || stringList(movie.director).length === 0
     || taxonomyList(movie.category).length === 0
     || taxonomyList(movie.country).length === 0
-    || !String(movie.poster_url || movie.thumb_url || '').trim()
+    || (!hasUsableArtwork(movie.poster_url) && !hasUsableArtwork(movie.thumb_url))
     || missingQueerEnglishTitle;
 }
 
@@ -340,8 +348,10 @@ function metadataPatch(movie: MovieRow, resolved: VerifiedDetail, replaceDuplica
   if (stringList(movie.director).length === 0 && directors.length) patch.director = directors;
   if (taxonomyList(movie.category).length === 0 && genres.length) patch.category = genres;
   if (taxonomyList(movie.country).length === 0 && countries.length) patch.country = countries;
-  if (!String(movie.poster_url || '').trim() && poster) patch.poster_url = poster;
-  if (!String(movie.thumb_url || '').trim() && backdrop) patch.thumb_url = backdrop;
+  if (!hasUsableArtwork(movie.poster_url) && poster) patch.poster_url = poster;
+  if (!hasUsableArtwork(movie.thumb_url) && backdrop) patch.thumb_url = backdrop;
+  if (!hasUsableArtwork(movie.hero_poster_url) && poster) patch.hero_poster_url = poster;
+  if (!hasUsableArtwork(movie.hero_backdrop_url) && backdrop) patch.hero_backdrop_url = backdrop;
   if (!String(movie.trailer_url || '').trim() && youtubeTrailer(detail)) patch.trailer_url = youtubeTrailer(detail);
   if (!String(movie.title_vi || '').trim() && vietnameseTitle) patch.title_vi = vietnameseTitle;
   if (englishTitle && (!currentEnglishTitle || normalize(currentEnglishTitle) === normalize(currentVietnameseTitle))

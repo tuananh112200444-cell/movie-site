@@ -391,6 +391,10 @@ function normalizeArtworkUrl(value: unknown, sourceSite: string): string {
   return url;
 }
 
+function isRetiredNguoncArtwork(value: unknown): boolean {
+  return /^https?:\/\/phim\.nguonc\.com\/public\/images\//i.test(String(value || '').trim());
+}
+
 function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> | null {
   if (!raw || typeof raw !== 'object') return null;
   const m = raw as Record<string, unknown>;
@@ -398,8 +402,16 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
 
   // Home sections must never publish a card with no usable artwork. Some
   // providers leave poster_url empty while thumb_url is valid (or vice versa).
-  const thumbUrl = normalizeArtworkUrl(m.thumb_url, sourceSite);
-  const posterUrl = normalizeArtworkUrl(m.poster_url, sourceSite);
+  const rawThumbUrl = normalizeArtworkUrl(m.thumb_url, sourceSite);
+  const rawPosterUrl = normalizeArtworkUrl(m.poster_url, sourceSite);
+  const heroBackdropUrl = normalizeArtworkUrl(m.hero_backdrop_url, sourceSite);
+  const heroPosterUrl = normalizeArtworkUrl(m.hero_poster_url, sourceSite);
+  const thumbUrl = isRetiredNguoncArtwork(rawThumbUrl)
+    ? (heroBackdropUrl || heroPosterUrl)
+    : rawThumbUrl;
+  const posterUrl = isRetiredNguoncArtwork(rawPosterUrl)
+    ? (heroPosterUrl || heroBackdropUrl)
+    : rawPosterUrl;
   if (!thumbUrl && !posterUrl) return null;
 
   // Chỉ giữ fields cần thiết cho trang chủ để giảm payload size
@@ -453,8 +465,8 @@ function cleanMovieItem(raw: unknown, sourceSite = ''): Record<string, unknown> 
     published_at: String(m.published_at ?? ''),
     last_episode_change_at: String(m.last_episode_change_at ?? ''),
     tmdb_id: String(m.tmdb_id ?? ((m.tmdb as Record<string, unknown> | undefined)?.id ?? '')),
-    hero_backdrop_url: String(m.hero_backdrop_url ?? ''),
-    hero_poster_url: String(m.hero_poster_url ?? ''),
+    hero_backdrop_url: heroBackdropUrl,
+    hero_poster_url: heroPosterUrl,
     tmdb_popularity: Number(m.tmdb_popularity ?? 0) || 0,
     tmdb_vote_average: Number(m.tmdb_vote_average ?? 0) || 0,
     tmdb_vote_count: Number(m.tmdb_vote_count ?? 0) || 0,

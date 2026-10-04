@@ -38,6 +38,10 @@ expect(source.includes('SEASON_SUFFIX') && source.includes('/season/${seasonNumb
   'Series seasons must use verified season metadata and replace only proven duplicate season copy.');
 expect(source.includes('if (!Number(movie.tmdb_id || 0)) patch.tmdb_id = resolved.tmdbId;'),
   'A resolved TMDB id may be stored only after strict identity verification.');
+expect(source.includes('isRetiredNguoncArtwork')
+  && source.includes('!hasUsableArtwork(movie.poster_url)')
+  && source.includes('patch.hero_poster_url = poster'),
+  'Retired NguonC artwork must be treated as missing and replaced only after strict TMDB verification.');
 
 if (failures.length) {
   console.error('TMDB metadata enrichment regression failed:');
