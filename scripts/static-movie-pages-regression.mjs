@@ -18,6 +18,7 @@ const checks = [
   [packageJson.scripts.postbuild.includes('generate-static-movie-pages.mjs'), 'Production postbuild must generate static movie HTML'],
   [generator.includes('PAGE_LIMIT') && generator.includes('18_000') && generator.includes('MAX_PAGES_FILE_COUNT = 20_000'), 'Static generation must reserve space below the Cloudflare Pages free file limit'],
   [generator.includes('MIN_EXPECTED_INDEXABLE_MOVIES = 100'), 'The phased index cohort must fail closed if the live catalogue unexpectedly falls below its safe floor'],
+  [generator.includes('for (let attempt = 1; attempt <= 3; attempt += 1)') && generator.includes('attempt * 1_500'), 'Linked database fallback must retry bounded transient network failures'],
   [generator.includes("path.join('out', 'phim', `${canonicalSlug}.html`)") && generator.includes('forces a trailing-slash redirect'), 'Every selected movie must receive a clean extensionless /phim/:slug asset without a trailing-slash redirect'],
   [generator.includes('<link rel="canonical" href="${canonical}">') && generator.includes('<meta name="kp-static-movie" content="${escapeHtml(slug)}">') && generator.includes("'@type': 'Movie'") && generator.includes("'@type': 'BreadcrumbList'"), 'Generated movie HTML must carry a persistent cohort marker, self canonical and structured data'],
   [generator.includes('sitemap-movies-static-') && generator.includes("writeFile('out/sitemap-movies.xml'"), 'Movie sitemaps must contain exactly the statically generated cohort'],
