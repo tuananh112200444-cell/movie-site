@@ -708,6 +708,15 @@ for (let index = 0; index < movies.length; index += SITEMAP_CHUNK_SIZE) {
 const upcomingSitemapFile = 'sitemap-movies-upcoming.xml';
 await writeFile(path.join('out', upcomingSitemapFile), sitemapXml(upcomingMovies), 'utf8');
 
+// Keep the recent sitemap and its static HTML cohort atomic. A stale public
+// sitemap preserved during an upstream outage must never advertise URLs that
+// the current build did not generate.
+await writeFile(
+  path.join('out', 'sitemap-movies-recent.xml'),
+  sitemapXml(movies.slice(0, 100)),
+  'utf8',
+);
+
 const seoStudioMovies = Array.from(new Map(
   [...movies, ...upcomingMovies]
     .filter((movie) => movie?.seo_profile?.index_mode === 'index'
