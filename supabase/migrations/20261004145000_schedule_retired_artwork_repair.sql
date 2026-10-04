@@ -1,4 +1,4 @@
-create or replace function public.get_retired_artwork_repair_candidates(p_limit integer default 20)
+create or replace function public.get_retired_artwork_repair_candidates(p_limit integer default 5)
 returns setof public.movies
 language sql
 security definer
@@ -20,7 +20,7 @@ as $$
       or (s.status = 'skipped_identity' and s.attempted_at < now() - interval '30 days')
     )
   order by m.updated_at desc nulls last, m.id
-  limit greatest(1, least(coalesce(p_limit, 20), 20));
+  limit greatest(1, least(coalesce(p_limit, 5), 5));
 $$;
 
 revoke all on function public.get_retired_artwork_repair_candidates(integer) from public, anon, authenticated;
@@ -50,7 +50,7 @@ begin
             'Content-Type', 'application/json',
             'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET' order by created_at desc limit 1)
           ),
-          body := '{"limit":20}'::jsonb,
+          body := '{"limit":5}'::jsonb,
           timeout_milliseconds := 120000
         );
       $job$
@@ -62,7 +62,7 @@ begin
         'Content-Type', 'application/json',
         'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'CRON_SECRET' order by created_at desc limit 1)
       ),
-      body := '{"limit":20}'::jsonb,
+      body := '{"limit":5}'::jsonb,
       timeout_milliseconds := 120000
     );
   end if;
