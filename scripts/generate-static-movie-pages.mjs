@@ -498,12 +498,24 @@ async function fetchCatalog({ cohort = 'playable', pageLimit = PAGE_LIMIT, fallb
     ];
     const executable = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'npx';
     const args = process.platform === 'win32' ? ['/d', '/s', '/c', 'npx.cmd', ...cliArgs] : cliArgs;
-    const output = execFileSync(executable, args, {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'inherit'],
-    });
+    let output = '';
+    let cliError;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        output = execFileSync(executable, args, {
+          cwd: process.cwd(),
+          encoding: 'utf8',
+          maxBuffer: 64 * 1024 * 1024,
+          stdio: ['ignore', 'pipe', 'inherit'],
+        });
+        cliError = undefined;
+        break;
+      } catch (error) {
+        cliError = error;
+        if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1_500));
+      }
+    }
+    if (cliError) throw cliError;
     const start = output.indexOf('{');
     const end = output.lastIndexOf('}');
     if (start < 0 || end < start) throw new Error('Supabase CLI returned no JSON result.');
