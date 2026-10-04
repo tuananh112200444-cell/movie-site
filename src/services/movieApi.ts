@@ -701,9 +701,23 @@ export function getMovieDisplayName(item: {
 type MovieArtworkFields = {
   thumb_url?: string;
   poster_url?: string;
+  hero_poster_url?: string;
+  hero_backdrop_url?: string;
   source_site?: string;
   source_name?: string;
 };
+
+function isKnownUnavailableArtwork(value?: string): boolean {
+  return /^https?:\/\/phim\.nguonc\.com\/public\/images\//i.test(String(value || '').trim());
+}
+
+function preferredArtworkCandidates(values: Array<string | undefined>): string[] {
+  const unique = [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+  return [
+    ...unique.filter((value) => !isKnownUnavailableArtwork(value)),
+    ...unique.filter(isKnownUnavailableArtwork),
+  ];
+}
 
 /**
  * Old OPhim records use thumb as the portrait cover and poster as the wide
@@ -724,16 +738,20 @@ function usesLegacyOphimArtworkRoles(movie: MovieArtworkFields): boolean {
 
 export function getPortraitImagePaths(movie: MovieArtworkFields): { primary?: string; fallback?: string } {
   const legacy = usesLegacyOphimArtworkRoles(movie);
-  const primary = (legacy ? movie.thumb_url : movie.poster_url) || (legacy ? movie.poster_url : movie.thumb_url);
-  const secondary = (legacy ? movie.poster_url : movie.thumb_url);
-  return { primary, fallback: secondary && secondary !== primary ? secondary : undefined };
+  const candidates = preferredArtworkCandidates(legacy
+    ? [movie.thumb_url, movie.poster_url, movie.hero_poster_url, movie.hero_backdrop_url]
+    : [movie.poster_url, movie.thumb_url, movie.hero_poster_url, movie.hero_backdrop_url]);
+  const usable = candidates.filter((value) => !isKnownUnavailableArtwork(value));
+  return { primary: usable[0], fallback: usable[1] };
 }
 
 export function getLandscapeImagePaths(movie: MovieArtworkFields): { primary?: string; fallback?: string } {
   const legacy = usesLegacyOphimArtworkRoles(movie);
-  const primary = (legacy ? movie.poster_url : movie.thumb_url) || (legacy ? movie.thumb_url : movie.poster_url);
-  const secondary = (legacy ? movie.thumb_url : movie.poster_url);
-  return { primary, fallback: secondary && secondary !== primary ? secondary : undefined };
+  const candidates = preferredArtworkCandidates(legacy
+    ? [movie.poster_url, movie.thumb_url, movie.hero_backdrop_url, movie.hero_poster_url]
+    : [movie.thumb_url, movie.poster_url, movie.hero_backdrop_url, movie.hero_poster_url]);
+  const usable = candidates.filter((value) => !isKnownUnavailableArtwork(value));
+  return { primary: usable[0], fallback: usable[1] };
 }
 
 export function getImageUrl(path: string): string {
@@ -761,7 +779,7 @@ export function getImageUrl(path: string): string {
 
 export function applyImageElementFallback(image: HTMLImageElement): void {
   const original = getOriginalImageFromProxy(image.currentSrc || image.src);
-  if (original && image.dataset.kpOriginalFallbackApplied !== '1') {
+  if (original && !isKnownUnavailableArtwork(original) && image.dataset.kpOriginalFallbackApplied !== '1') {
     image.dataset.kpOriginalFallbackApplied = '1';
     image.removeAttribute('srcset');
     image.src = original;
@@ -807,6 +825,7 @@ export function getOptimizedImageUrl(path: string, width = 360, quality = 82, mi
   // Rebuild already-proxied URLs for the actual component size. Keeping an old
   // wsrv URL here caused small mobile posters to download 768-832px variants.
   original = getOriginalImageFromProxy(original) || original;
+  if (isKnownUnavailableArtwork(original)) return FALLBACK_IMG;
   // TMDB supports fixed CDN renditions. Use them directly instead of requesting
   // an unnecessary original-sized poster through a third-party proxy.
   const tmdbImage = getTmdbCardImageUrl(original, width);
@@ -879,6 +898,7 @@ export function getImageFallbacks(primaryPath?: string, altPath?: string): strin
     const trimmed = path?.trim();
     if (!trimmed || /^(?:null|undefined|about:blank|javascript:|data:)/i.test(trimmed)) return;
     const normalized = getImageUrl(trimmed);
+    if (isKnownUnavailableArtwork(normalized)) return;
     pushUrl(normalized);
     pushUrl(getOriginalImageFromProxy(normalized));
   };

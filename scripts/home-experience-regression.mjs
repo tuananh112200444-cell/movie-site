@@ -1,4 +1,6 @@
-import { readFile } from 'node:fs/promises';
+import { readFile as readRawFile } from 'node:fs/promises';
+
+const readFile = async (path, encoding) => String(await readRawFile(path, encoding)).replace(/\r\n/g, '\n');
 
 const home = await readFile('src/pages/home/page.tsx', 'utf8');
 const hero = await readFile('src/pages/home/components/HeroBanner.tsx', 'utf8');
