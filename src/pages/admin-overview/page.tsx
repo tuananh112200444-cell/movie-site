@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminFetch } from '@/services/adminAuth';
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 
 type Severity = 'critical' | 'warning' | 'info';
 
@@ -85,10 +86,10 @@ interface DiagnosticsResponse {
 }
 
 const ENDPOINTS = {
-  site: `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-site-health`,
-  content: `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-content-health`,
-  sync: `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-sync-health`,
-  player: `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-player-diagnostics?hours=24&limit=2000`,
+  site: adminFunctionUrl('admin-site-health'),
+  content: adminFunctionUrl('admin-content-health'),
+  sync: adminFunctionUrl('admin-sync-health'),
+  player: `${adminFunctionUrl('admin-player-diagnostics')}?hours=24&limit=2000`,
 };
 
 const MODULE_META: Record<HealthModule['key'], Pick<HealthModule, 'title' | 'href' | 'icon' | 'tone'>> = {

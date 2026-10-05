@@ -1,13 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { adminSupabaseBaseUrl } from './supabaseEndpoint';
 
 const FALLBACK_SUPABASE_URL = 'https://ceoxbhsdodllziyxmbqr.supabase.co';
 const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_Juh45t-R83dfgJI0O4_PQw_iYYoU-yh';
 
-const supabaseUrl =
+const directSupabaseUrl =
   (import.meta.env.VITE_PUBLIC_SUPABASE_URL as string | undefined) ||
   (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
   FALLBACK_SUPABASE_URL;
+
+const supabaseUrl = typeof window !== 'undefined' && /^\/admin(?:\/|$)/.test(window.location.pathname)
+  ? adminSupabaseBaseUrl()
+  : directSupabaseUrl;
 
 const supabaseAnonKey =
   (import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY as string | undefined) ||

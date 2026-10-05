@@ -2,6 +2,7 @@
 import { clearAdminAuth, isAdminAuthenticated } from '@/services/adminAuth';
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 
 interface AdminGuardProps {
   children: React.ReactNode;
@@ -44,8 +45,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
   async function checkSetupMode() {
     try {
-      const url = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
-      const res = await fetch(`${url}/functions/v1/admin-auth`, {
+      const res = await fetch(adminFunctionUrl('admin-auth'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'status' }),
@@ -113,8 +113,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
     setLoading(true); setError('');
     try {
-      const url = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
-      const res = await fetch(`${url}/functions/v1/admin-auth`, {
+      const res = await fetch(adminFunctionUrl('admin-auth'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pin: pin.trim() }),
@@ -157,8 +156,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
     setLoading(true);
     try {
-      const url = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
-      const res = await fetch(`${url}/functions/v1/admin-change-pin`, {
+      const res = await fetch(adminFunctionUrl('admin-change-pin'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newPin: setupPin1, action: 'setup' }),
