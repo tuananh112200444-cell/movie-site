@@ -2,13 +2,10 @@
  * Admin Auth Service – Client Side
  * No hardcoded PIN. All verification goes through secure Edge Functions.
  */
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 
 const ADMIN_TOKEN_KEY = 'kp_admin_token';
 const ADMIN_TOKEN_EXPIRY_KEY = 'kp_admin_token_exp';
-
-function getSupabaseUrl(): string {
-  return import.meta.env.VITE_PUBLIC_SUPABASE_URL as string;
-}
 
 export interface AdminVerifyResult {
   success: boolean;
@@ -23,7 +20,7 @@ export interface AdminVerifyResult {
 
 /** Gọi Edge Function verify PIN */
 export async function verifyAdminPin(pin: string): Promise<AdminVerifyResult> {
-  const res = await fetch(`${getSupabaseUrl()}/functions/v1/admin-auth`, {
+  const res = await fetch(adminFunctionUrl('admin-auth'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pin }),
@@ -63,7 +60,7 @@ export async function verifyAdminPin(pin: string): Promise<AdminVerifyResult> {
 export async function adminChangePin(
   currentPin: string, newPin: string
 ): Promise<{ success: boolean; message?: string; error?: string }> {
-  const res = await fetch(`${getSupabaseUrl()}/functions/v1/admin-change-pin`, {
+  const res = await fetch(adminFunctionUrl('admin-change-pin'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ currentPin, newPin }),

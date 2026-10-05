@@ -4,6 +4,7 @@
 
 import { adminFetch } from '@/services/adminAuth';
 import { supabase } from '@/lib/supabase';
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 
 export interface MovieReview {
   slug: string;
@@ -15,8 +16,8 @@ export interface MovieReview {
   updatedAt: string;
 }
 
-const EDGE_SAVE_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-review-save`;
-const EDGE_DELETE_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-review-delete`;
+const EDGE_SAVE_URL = adminFunctionUrl('admin-review-save');
+const EDGE_DELETE_URL = adminFunctionUrl('admin-review-delete');
 
 // ─── Edge Function CRUD ─────────────────────────────────────────────────────
 

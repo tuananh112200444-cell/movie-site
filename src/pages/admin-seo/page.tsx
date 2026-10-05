@@ -1,10 +1,11 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { adminFetch } from '@/services/adminAuth';
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 
 const SITE_URL = 'https://khophim.org';
-const GSC_FEEDBACK_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/gsc-seo-feedback`;
-const HOT_MOVIE_RADAR_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/seo-hot-movie-radar`;
+const GSC_FEEDBACK_URL = adminFunctionUrl('gsc-seo-feedback');
+const HOT_MOVIE_RADAR_URL = adminFunctionUrl('seo-hot-movie-radar');
 
 interface GscFeedback {
   latest_run: null | { started_at:string; success:boolean; pages_collected:number; queries_collected:number; urls_inspected:number; indexed_urls:number; error_message?:string|null };

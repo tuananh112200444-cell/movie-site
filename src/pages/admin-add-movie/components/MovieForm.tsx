@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getAdminToken } from '@/services/adminAuth';
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 import { searchMoviesMultiSource, searchQueerUniverseMovies } from '@/services/movieApi';
 import type { MovieItem, TMDBDisplayItem } from '@/types/movie';
 import { extractEpisodeNumber } from '@/utils/movieSchedule';
@@ -1120,7 +1121,7 @@ export default function MovieForm({ onDone }: Props) {
     setMergeMsg('');
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-movie-upsert`,
+        adminFunctionUrl('admin-movie-upsert'),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1344,7 +1345,7 @@ export default function MovieForm({ onDone }: Props) {
       const { created_at: _c, ...updatePayload } = payload;
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-movie-upsert`,
+          adminFunctionUrl('admin-movie-upsert'),
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1369,7 +1370,7 @@ export default function MovieForm({ onDone }: Props) {
       payload.created_at = now;
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-movie-upsert`,
+          adminFunctionUrl('admin-movie-upsert'),
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

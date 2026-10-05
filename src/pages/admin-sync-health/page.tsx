@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminFetch } from '@/services/adminAuth';
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 
-const EDGE_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-sync-health`;
+const EDGE_URL = adminFunctionUrl('admin-sync-health');
 
 interface SyncStatus {
   function_name: string;

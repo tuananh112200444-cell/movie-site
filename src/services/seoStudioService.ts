@@ -1,7 +1,8 @@
 import { adminFetch } from '@/services/adminAuth';
 import { supabase } from '@/lib/supabase';
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 
-const ENDPOINT = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-seo-studio`;
+const ENDPOINT = adminFunctionUrl('admin-seo-studio');
 
 export type SeoIndexMode = 'auto' | 'index' | 'noindex';
 export type SeoProfileStatus = 'draft' | 'published';
@@ -101,6 +102,7 @@ export interface SeoSafeEditContext {
     unlocked_fields: string[];
     validation_score: number;
     validation_issues: SeoValidationIssue[];
+    source_movie_updated_at?: string | null;
     updated_at: string;
   } | null;
   history_available: boolean;
@@ -184,6 +186,8 @@ export interface SeoMovieSearchItem {
   year?: number;
   thumb_url?: string;
   poster_url?: string;
+  source_site?: string;
+  source_name?: string;
   is_published?: boolean;
   updated_at?: string;
 }

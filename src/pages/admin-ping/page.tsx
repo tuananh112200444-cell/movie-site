@@ -1,10 +1,11 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { adminFetch } from '@/services/adminAuth';
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 
-const EDGE_LOGS_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-ping-logs`;
-const EDGE_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/auto-ping-new-movies`;
-const PING_STATIC_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/ping-static-pages`;
+const EDGE_LOGS_URL = adminFunctionUrl('admin-ping-logs');
+const EDGE_URL = adminFunctionUrl('auto-ping-new-movies');
+const PING_STATIC_URL = adminFunctionUrl('ping-static-pages');
 const SITE_URL = 'https://khophim.org';
 
 // 6 URL canonical vừa fix (canonical đã được sửa từ -seo sang URL chuẩn)
@@ -50,7 +51,7 @@ const YEAR_PAGES = [
   { url: `${SITE_URL}/hoat-hinh-${PREV_YEAR}`,         label: `Hoạt Hình ${PREV_YEAR}` },
 ];
 
-const CHECK_CRED_URL = `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/check-google-credentials`;
+const CHECK_CRED_URL = adminFunctionUrl('check-google-credentials');
 
 interface PingLog {
   id: number;

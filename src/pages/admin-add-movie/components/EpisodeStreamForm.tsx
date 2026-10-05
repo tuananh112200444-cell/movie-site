@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { getAdminToken } from '@/services/adminAuth';
+import { adminFunctionUrl } from '@/lib/supabaseEndpoint';
 import { getMergedEpisodes, evictAllMovieCaches, type FlatEpisode } from '@/services/movieApi';
 import { normalizeVideoCdnUrl } from '@/utils/videoCdn';
 
@@ -358,7 +359,7 @@ export default function EpisodeStreamForm({
       };
 
       const res = await fetch(
-        `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-episode-upsert`,
+        adminFunctionUrl('admin-episode-upsert'),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -454,7 +455,7 @@ export default function EpisodeStreamForm({
           return;
         }
         const res = await fetch(
-          `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-episode-upsert`,
+          adminFunctionUrl('admin-episode-upsert'),
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -484,7 +485,7 @@ export default function EpisodeStreamForm({
         }
 
         const res = await fetch(
-          `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-episode-upsert`,
+          adminFunctionUrl('admin-episode-upsert'),
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -561,7 +562,7 @@ export default function EpisodeStreamForm({
         const token = getAdminToken();
         if (token) {
           await fetch(
-            `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-movie-upsert`,
+            adminFunctionUrl('admin-movie-upsert'),
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -618,7 +619,7 @@ export default function EpisodeStreamForm({
         return;
       }
       const res = await fetch(
-        `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-episode-upsert`,
+        adminFunctionUrl('admin-episode-upsert'),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -678,7 +679,7 @@ export default function EpisodeStreamForm({
         const token = getAdminToken();
         if (token) {
           await fetch(
-            `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/admin-movie-upsert`,
+            adminFunctionUrl('admin-movie-upsert'),
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
