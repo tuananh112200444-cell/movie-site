@@ -1902,26 +1902,27 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
   if (!SUPABASE_URL) return null;
   const endpoints = typeof window !== 'undefined'
     ? [
-        {
-          url: new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`),
-          // A cold Edge isolate can exceed nine seconds while assembling a
-          // large multi-provider catalogue. Keep the loading state bounded,
-          // but never turn a slow valid movie into a false 404.
-          timeoutMs: 18_000,
-          // A short hedge removes an entire failed Pages round trip during
-          // quota/fail-open windows, while a healthy gateway normally wins
-          // before this public read starts.
-          delayMs: 0,
-          headers: { apikey: SUPABASE_ANON_KEY },
-          allowRefresh: false,
-        },
-        {
-          url: new URL('/api/movie-detail', window.location.origin),
-          timeoutMs: 7_500,
-          delayMs: 1_200,
-          headers: undefined,
-          allowRefresh: true,
-        },
+      {
+        // The same-origin Pages API is the canonical read: it applies the
+        // current source ranking and cache invalidations. Starting a public
+        // Supabase call first can return an older edge cache and make a stale
+        // provider (for example a CAM fallback) win over a newer KhoPhim R2
+        // source before the canonical result arrives.
+        url: new URL('/api/movie-detail', window.location.origin),
+        timeoutMs: 9_000,
+        delayMs: 0,
+        headers: undefined,
+        allowRefresh: true,
+      },
+      {
+        // Keep a direct Edge read only as a late emergency hedge when Pages
+        // is unavailable. It must never outrun the canonical route.
+        url: new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`),
+        timeoutMs: 18_000,
+        delayMs: 9_250,
+        headers: { apikey: SUPABASE_ANON_KEY },
+        allowRefresh: false,
+      },
       ]
     : [{
         url: new URL('https://khophim.org/api/movie-detail'),
