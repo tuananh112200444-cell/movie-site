@@ -13,7 +13,10 @@ const ENABLE_PUBLIC_LAZY_PERSIST =
   Deno.env.get('ENABLE_PUBLIC_LAZY_PERSIST') === 'true'
   && Deno.env.get('ENABLE_VIEWER_WRITE_PATH') === 'true';
 const DETAIL_CACHE_TTL_MIN = 10;
-const DETAIL_CACHE_SCHEMA_VERSION = 'special-episodes-v13';
+// Playback selection changed to preserve verified first-party R2 sources.
+// Cache entries built by earlier detail logic may contain only a provider
+// fallback, so they must never shadow the canonical stream rows.
+const DETAIL_CACHE_SCHEMA_VERSION = 'special-episodes-v14-r2-canonical';
 const VERIFIED_PLAYBACK_SAFETY_NET: Record<string, Array<{
   server_name: string;
   name: string;
