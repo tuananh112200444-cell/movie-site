@@ -28,6 +28,14 @@ type CampaignAsset = {
   height: number;
 };
 
+// Kept as a single switch so the campaign can be restored without touching
+// layouts, rotation behavior, or the remaining paid placements.
+const PAUSED_CAMPAIGN_NAMES = new Set<CampaignAsset['name']>(['9922']);
+
+function isCampaignEnabled(campaign: CampaignAsset): boolean {
+  return !PAUSED_CAMPAIGN_NAMES.has(campaign.name);
+}
+
 const ROTATION_INTERVAL_MS = 6000;
 
 function isSessionFlagSet(storageKey: string): boolean {
@@ -110,6 +118,8 @@ const mb66TopCampaigns: CampaignAsset[] = [...mixedTopCampaigns, mb66Campaign];
 const mb66CatfishCampaigns: CampaignAsset[] = [...mixedCatfishCampaigns, mb66Campaign];
 
 function CampaignCreative({ campaign, demo, desktopOnly = false }: { campaign: CampaignAsset; demo: boolean; desktopOnly?: boolean }) {
+  if (!isCampaignEnabled(campaign)) return null;
+
   const disabled = !campaign.href;
 
   return (
@@ -149,7 +159,7 @@ export function CampaignTopBanner() {
   const focusDemo = style === 'focus';
   const mb66Demo = style === 'mb66';
   const multiCampaignDemo = mixedDemo || mb66Demo;
-  const visibleTopCampaigns = mb66Demo ? mb66TopCampaigns : mixedTopCampaigns;
+  const visibleTopCampaigns = (mb66Demo ? mb66TopCampaigns : mixedTopCampaigns).filter(isCampaignEnabled);
   const rotatingIndex = useRotatingIndex(mixedDemo || focusDemo, 0);
   const campaign: CampaignAsset = mb66Demo
     ? mb66Campaign
@@ -159,7 +169,7 @@ export function CampaignTopBanner() {
       ? topCampaigns[1]
       : { ...topCampaigns[0], desktop: style === 'v2' ? V2_BANNER : DESKTOP_BANNER, mobile: style === 'v2' ? V2_BANNER : MOBILE_BANNER };
 
-  if (!visible || compactDemo) return null;
+  if (!visible || compactDemo || !isCampaignEnabled(campaign)) return null;
 
   return (
     <div
@@ -217,7 +227,7 @@ export function CampaignCatfishBanner() {
   const focusDemo = style === 'focus';
   const mb66Demo = style === 'mb66';
   const multiCampaignDemo = mixedDemo || mb66Demo;
-  const visibleCatfishCampaigns = mb66Demo ? mb66CatfishCampaigns : mixedCatfishCampaigns;
+  const visibleCatfishCampaigns = (mb66Demo ? mb66CatfishCampaigns : mixedCatfishCampaigns).filter(isCampaignEnabled);
   const rotatingIndex = useRotatingIndex(mixedDemo || compactDemo || focusDemo, 1);
   const campaign: CampaignAsset = mb66Demo
     ? mb66Campaign
@@ -229,7 +239,7 @@ export function CampaignCatfishBanner() {
       ? catfishCampaigns[1]
       : { ...catfishCampaigns[0], desktop: style === 'v2' ? V2_BANNER : DESKTOP_BANNER, mobile: style === 'v2' ? V2_BANNER : MOBILE_BANNER };
 
-  if (!visible) return null;
+  if (!visible || !isCampaignEnabled(campaign)) return null;
 
   return (
     <aside
