@@ -1,0 +1,26 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "khophim-hls-gateway",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-09-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "vars": {
+    "HLS_ALLOWED_ORIGINS": "https://khophim.org,https://www.khophim.org",
+    "HLS_ALLOWED_PREFIXES": "conan/,phí phông/",
+    "HLS_TICKET_TTL_SECONDS": "600",
+    "HLS_MAX_TOKEN_TTL_SECONDS": "900",
+    "HLS_REQUIRE_PROXY_SECRET": "true"
+  },
+  "r2_buckets": [
+    {
+      "binding": "HLS_BUCKET",
+      "bucket_name": "khophim1"
+    }
+  ]
+}
