@@ -13,6 +13,10 @@
 /phim/gia-dinh-la-so-mot-phan-1 /phim/gia-dinh-la-so-1-phan-1 301
 /xem-phim/gia-dinh-la-so-mot-phan-1/tap-166 /xem-phim/gia-dinh-la-so-1-phan-1/tap-166 301
 
+# A standalone film has no episode route. Redirect before the SPA boots so a
+# stale `/full` player state cannot load an older provider fallback.
+/xem-phim/phi-phong-quy-mau-rung-thieng/full /xem-phim/phi-phong-quy-mau-rung-thieng 302
+
 # React Router fallbacks are explicit so unknown URLs keep a real HTTP 404 via
 # public/404.html instead of becoming indexable soft-404 SPA documents.
 # Known catalogue routes must remain usable when Pages Functions temporarily
