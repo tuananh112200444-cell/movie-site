@@ -890,11 +890,18 @@ export default function MovieDetailPage() {
   );
 
   // Some old TMDB TV rows were incorrectly stored as a single `full` movie.
-  // Once verified numbered episodes are available, keep legacy links working
-  // by canonically moving `/full` to episode 1 instead of replaying the stale
-  // placeholder stream.
+  // Standalone movies do not need an episode suffix at all. Keeping `/full`
+  // creates a second player lifecycle that can retain an earlier fallback
+  // source while the canonical watch route has already received an updated
+  // first-party stream. Canonicalize it before selecting a server.
+  // For episodic titles, move legacy `/full` links to episode 1 instead.
   useEffect(() => {
     if (!isWatchPage || requestedEpisode !== 'full' || !slug || !detail?.movie) return;
+    const movieType = String(detail.movie.type || '').trim().toLowerCase();
+    if (movieType === 'single' || movieType === 'phim-le' || movieType === 'phim-chieu-rap') {
+      navigate(withPlaybackPreference(`/xem-phim/${slug}`), { replace: true });
+      return;
+    }
     if (!isClearlyEpisodicMovie(detail.movie)) return;
     const numberedEpisodes = detailEpisodeLinks.filter((episode) => getEpisodeNumber(episode) > 0);
     if (numberedEpisodes.length < 2) return;
