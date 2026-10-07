@@ -3686,6 +3686,70 @@ async function proxyMovieDetail(request, context) {
     });
   }
 
+  // This film's verified first-party stream is stored in R2. When the
+  // catalogue read times out, provider discovery can produce a CAM version
+  // under a different movie ID and cache it as if it were canonical. Keep the
+  // owner supplied playback binding at the edge so neither that fallback nor
+  // an old detail cache can replace the R2 stream for this exact slug.
+  if (slug === 'phi-phong-quy-mau-rung-thieng') {
+    const movie = {
+      _id: '8fc6cf17-0c4b-4668-8c6d-6b586fb25cff',
+      slug,
+      name: 'Phí Phông Bản Đẹp: Quỷ Máu Rừng Thiêng',
+      origin_name: 'Phi Phong: The Blood Demon',
+      content: 'Phí Phông: Quỷ Máu Rừng Thiêng là phim kinh dị Việt Nam năm 2026. Bản đẹp FHD được phát trực tiếp từ KhoPhim R2.',
+      type: 'single',
+      status: 'completed',
+      thumb_url: 'https://phimimg.com/upload/vod/20260620-1/f9f017b676af1005b05491f5a520cc7f.jpg',
+      poster_url: 'https://phimimg.com/upload/vod/20260620-1/3ed9a180dfc699fbc0502962e67d86b7.jpg',
+      is_copyright: false,
+      sub_docquyen: false,
+      chieurap: true,
+      trailer_url: '',
+      time: '120 phút',
+      episode_current: 'Full',
+      episode_total: '1',
+      current_episode: 1,
+      total_episodes: 1,
+      quality: 'FHD',
+      lang: 'Vietsub',
+      notify: '',
+      showtimes: '',
+      year: 2026,
+      view: 0,
+      actor: [],
+      director: [],
+      category: [{ id: '4db8d7d4b9873981e3eeb76d02997d58', name: 'Kinh Dị', slug: 'kinh-di' }, { id: '2fb53017b3be83cd754a08adab3e916c', name: 'Bí Ẩn', slug: 'bi-an' }],
+      country: [{ id: 'f6ce1ae8b39af9d38d653b8a0890adb8', name: 'Việt Nam', slug: 'viet-nam' }],
+      source_site: 'khophim-r2',
+      source_name: 'KhoPhim R2',
+      is_published: true,
+      seo_catalog_status: 'published',
+    };
+    const episode = {
+      name: 'Full',
+      slug: 'full',
+      episode_number: 1,
+      filename: '',
+      link_embed: '',
+      link_m3u8: 'https://khophim.org/hls/ph%C3%AD%20ph%C3%B4ng/%E8%A1%80%E9%AD%94%20Ph%C3%AD%20Ph%C3%B4ng%20Qu%E1%BB%B7%20M%C3%A1u%20R%E1%BB%ABng%20Thi%C3%AAng.2026.HD1080P.%E5%AE%98%E6%96%B9%E8%B6%8A%E5%8D%97%E8%AF%AD%E4%B8%AD%E5%AD%97.m3u8',
+      subtitle_url: '',
+      source_health_status: 'ok',
+      source_playback_score: 720,
+      source_priority: 100,
+      source_provider: 'khophim-r2',
+    };
+    return new Response(JSON.stringify({ status: true, movie, episodes: [{ server_name: 'KhoPhim R2 · Bản đẹp', server_data: [episode] }] }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'public, max-age=30, s-maxage=30',
+        'X-KhoPhim-Detail-Cache': 'PINNED_R2',
+        ...SECURITY_HEADERS,
+      },
+    });
+  }
+
   const upstreamUrl = new URL(`${SUPABASE_FUNCTION_BASE}/movie-detail-proxy`);
   upstreamUrl.searchParams.set('slug', slug);
   if (refresh) upstreamUrl.searchParams.set('refresh', '1');
