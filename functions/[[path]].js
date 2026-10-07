@@ -5555,6 +5555,16 @@ export async function onRequest(context) {
   const pathname = url.pathname;
   const isLocalDevelopmentHost = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
 
+  // This standalone title has one verified first-party R2 stream. Redirect at
+  // the edge, before the SPA can mount the legacy `/full` player and retain a
+  // provider fallback from an older client lifecycle.
+  if (pathname === '/xem-phim/phi-phong-quy-mau-rung-thieng/full') {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: '/xem-phim/phi-phong-quy-mau-rung-thieng', 'Cache-Control': 'no-store' },
+    });
+  }
+
   if (isHlsTrialPath(pathname)) {
     return proxyHlsRequest(request, url, env);
   }
