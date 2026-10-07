@@ -26,9 +26,12 @@ export function movieDetailUrl(
   slug: string,
   preference?: { source?: string; quality?: string },
 ): string {
-  const path = `/phim/${canonicalMovieSlug(slug)}`;
+  const canonical = canonicalMovieSlug(slug);
+  const path = `/phim/${canonical}`;
   const params = new URLSearchParams();
-  if (preference?.source) params.set('source', preference.source);
+  // The KKPhim Quỷ Quyệt card resolves to a VSMOV-backed canonical movie.
+  // Its provider hint must not force the retired, unplayable KKPhim route.
+  if (preference?.source && slug !== 'quy-quyet-ranh-gioi-vo-dinh') params.set('source', preference.source);
   if (preference?.quality) params.set('quality', preference.quality);
   const query = params.toString();
   return query ? `${path}?${query}` : path;
@@ -45,6 +48,7 @@ const MOVIE_SOURCE_SLUGS = Object.fromEntries(
 // slug itself instead of reversing back to the retired metadata row.
 const MOVIE_SOURCE_SLUG_OVERRIDES: Record<string, string> = {
   'gia-dinh-la-so-1-phan-1': 'gia-dinh-la-so-1-phan-1',
+  'quy-quyet-6-ranh-gioi-vo-dinh': 'quy-quyet-6-ranh-gioi-vo-dinh',
 };
 
 export function canonicalMovieSlug(slug: string): string {
