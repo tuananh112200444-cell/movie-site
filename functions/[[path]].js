@@ -3676,8 +3676,10 @@ async function fetchLocalPlayableAlternative(requestedSlug, upstreamPayload, con
 
 async function proxyMovieDetail(request, context) {
   const url = new URL(request.url);
-  const slug = String(url.searchParams.get('slug') || '').trim();
-  const preferredSource = String(url.searchParams.get('source') || '').trim().toLowerCase();
+  const requestedSlug = String(url.searchParams.get('slug') || '').trim();
+  const legacyInsidiousSlug = requestedSlug === 'quy-quyet-ranh-gioi-vo-dinh';
+  const slug = legacyInsidiousSlug ? 'quy-quyet-6-ranh-gioi-vo-dinh' : requestedSlug;
+  const preferredSource = legacyInsidiousSlug ? '' : String(url.searchParams.get('source') || '').trim().toLowerCase();
   const refresh = url.searchParams.get('refresh') === '1';
   if (!slug || slug.length > 240 || !/^[\p{L}\p{N}._~-]+$/u.test(slug)) {
     return new Response(JSON.stringify({ status: false, message: 'Invalid slug' }), {
@@ -5618,6 +5620,22 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const pathname = url.pathname;
   const isLocalDevelopmentHost = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+
+  // KKPhim publishes this title without the season number. Both provider
+  // identities point to the same stored movie; the VSMOV canonical slug has
+  // verified playback. Redirect before the SPA can open the unusable embed.
+  if (pathname === '/phim/quy-quyet-ranh-gioi-vo-dinh') {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: '/phim/quy-quyet-6-ranh-gioi-vo-dinh', 'Cache-Control': 'no-store' },
+    });
+  }
+  if (pathname === '/xem-phim/quy-quyet-ranh-gioi-vo-dinh' || pathname.startsWith('/xem-phim/quy-quyet-ranh-gioi-vo-dinh/')) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: '/xem-phim/quy-quyet-6-ranh-gioi-vo-dinh', 'Cache-Control': 'no-store' },
+    });
+  }
 
   // This standalone title has one verified first-party R2 stream. Redirect at
   // the edge, before the SPA can mount the legacy `/full` player and retain a

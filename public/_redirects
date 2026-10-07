@@ -17,6 +17,12 @@
 # stale `/full` player state cannot load an older provider fallback.
 /xem-phim/phi-phong-quy-mau-rung-thieng/full /xem-phim/phi-phong-quy-mau-rung-thieng 302
 
+# Verified provider alias: the KKPhim slug and VSMOV slug identify the same
+# movie; only the latter currently has working playback.
+/phim/quy-quyet-ranh-gioi-vo-dinh /phim/quy-quyet-6-ranh-gioi-vo-dinh 302
+/xem-phim/quy-quyet-ranh-gioi-vo-dinh /xem-phim/quy-quyet-6-ranh-gioi-vo-dinh 302
+/xem-phim/quy-quyet-ranh-gioi-vo-dinh/full /xem-phim/quy-quyet-6-ranh-gioi-vo-dinh 302
+
 # React Router fallbacks are explicit so unknown URLs keep a real HTTP 404 via
 # public/404.html instead of becoming indexable soft-404 SPA documents.
 # Known catalogue routes must remain usable when Pages Functions temporarily
