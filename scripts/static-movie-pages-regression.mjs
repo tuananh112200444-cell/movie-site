@@ -45,7 +45,7 @@ const checks = [
   [generator.includes('kp-seo-quality-version') && worker.includes('data-kp-seo-quality-version'), 'Static and edge HTML must expose the applied SEO quality contract version'],
   [catalogFunction.includes('evaluateSeoQualityV2') && generator.includes('profile.quality_v2_passed !== false'), 'Current V2 profiles must be re-evaluated and fail closed before a static release'],
   [aliases.includes('nguoi-nhen-khoi-dau-moi') && bootstrap.includes('movieDetailSourceSlug') && headers.includes('/movie-data/*'), 'Canonical aliases and static bootstrap responses must remain stable and cacheable'],
-  [moviePage.includes('const hasAdvertisedEpisodes = useMemo') && moviePage.includes('const canOpenWatchPage = hasEpisodes || hasAdvertisedEpisodes') && moviePage.includes('hasEpisodes={canOpenWatchPage}') && movieHero.includes("episodeDataLoading ? 'Đang tải tập...' : 'Chưa có tập'") && !movieHero.includes("? 'Đang cập nhật' : isTrailerOnly"), 'Released static movie metadata must show an immediate watch action instead of a misleading update state while episode data loads'],
+  [moviePage.includes('(s.server_data ?? []).some(isPlayableMovieEpisode)') && moviePage.includes('hasEpisodes={hasEpisodes}') && !moviePage.includes('canOpenWatchPage = hasEpisodes || hasAdvertisedEpisodes') && moviePage.includes("showToast('Phim hiện chưa có nguồn phát'") && movieHero.includes('showNoSourceNotice && !hasEpisodes'), 'Movie metadata must not open a watch page until a real movie episode source is available'],
 ];
 
 const failures = checks.filter(([passed]) => !passed).map(([, message]) => message);
