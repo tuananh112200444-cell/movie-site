@@ -313,6 +313,7 @@ function buildMovieSchema({
 
 export default function MovieDetailHero({ movie, slug, favored, followed, isTrailerOnly, hasEpisodes, episodeDataLoading, noIndex, onFavToggle, onFollowToggle, onWatchNow }: Props) {
   const [showDesc, setShowDesc] = useState(false);
+  const [showNoSourceNotice, setShowNoSourceNotice] = useState(false);
 
   const portraitArtwork = getPortraitImagePaths(movie);
   const landscapeArtwork = getLandscapeImagePaths(movie);
@@ -421,19 +422,21 @@ export default function MovieDetailHero({ movie, slug, favored, followed, isTrai
                   </div>
                 )}
               </div>
-              <button onClick={onWatchNow}
-                disabled={!hasEpisodes && !isTrailerOnly}
+              <button onClick={() => {
+                if (!hasEpisodes) setShowNoSourceNotice(true);
+                onWatchNow();
+              }}
                 className={`mt-2 min-h-11 w-full flex items-center justify-center gap-1.5 text-white text-xs sm:text-sm font-semibold px-3 rounded-xl transition-all whitespace-nowrap active:scale-[0.97] cursor-pointer touch-manipulation ${
-                  !hasEpisodes && !isTrailerOnly
-                    ? 'bg-white/10 text-white/40 cursor-not-allowed'
-                    : isTrailerOnly
-                    ? 'bg-orange-500 hover:bg-orange-600'
-                    : 'bg-red-500 hover:bg-red-600'
+                  hasEpisodes ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/15 border border-white/15'
                 }`}>
-                <i className={!hasEpisodes && !isTrailerOnly ? 'ri-time-line' : isTrailerOnly ? 'ri-film-line' : 'ri-play-fill'} />
-                <span className="hidden xs:inline">{!hasEpisodes && !isTrailerOnly ? (episodeDataLoading ? 'Đang tải tập...' : 'Chưa có tập') : isTrailerOnly ? 'Xem Trailer' : 'Xem Ngay'}</span>
-                <span className="xs:hidden">{!hasEpisodes && !isTrailerOnly ? (episodeDataLoading ? 'Đang tải...' : 'Chưa có') : isTrailerOnly ? 'Trailer' : 'Xem'}</span>
+                <i className={hasEpisodes ? 'ri-play-fill' : 'ri-time-line'} />
+                <span>{hasEpisodes ? 'Xem Ngay' : 'Xem Phim'}</span>
               </button>
+              {showNoSourceNotice && !hasEpisodes && (
+                <p role="status" className="mt-2 text-center text-xs text-amber-300">
+                  {episodeDataLoading ? 'Đang kiểm tra nguồn phát phim…' : 'Phim hiện chưa có nguồn phát.'}
+                </p>
+              )}
               <button onClick={onFavToggle}
                 className={`mt-1.5 min-h-11 w-full flex items-center justify-center gap-1.5 text-xs font-medium px-3 rounded-xl transition-all cursor-pointer whitespace-nowrap active:scale-[0.97] border touch-manipulation ${
                   favored ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/60 hover:text-red-400 hover:border-red-500/30'

@@ -294,8 +294,14 @@ function warmSourceHealthWithinStartupBudget(): Promise<void> {
 
 function hasPlayableEpisodeSource(detail: MovieDetailResponse | null | undefined): boolean {
   return Boolean(detail?.episodes?.some((server) =>
-    (server.server_data ?? []).some((episode) => !episode.is_scheduled && hasPlayableUrl(episode))
+    (server.server_data ?? []).some(isPlayableMovieEpisode)
   ));
+}
+
+function isPlayableMovieEpisode(episode: EpisodeData): boolean {
+  return !episode.is_scheduled &&
+    !/\b(trailer|teaser)\b/i.test(`${episode.name || ''} ${episode.slug || ''}`) &&
+    hasPlayableUrl(episode);
 }
 
 function hasAdvertisedEpisodeMetadata(movie: MovieDetailResponse['movie'] | null | undefined): boolean {
@@ -780,7 +786,7 @@ export default function MovieDetailPage() {
 
   const hasEpisodes = useMemo(() => {
     return filteredEpisodes.length > 0 && filteredEpisodes.some((s) =>
-      (s.server_data ?? []).some((ep) => ep.is_scheduled || hasPlayableUrl(ep))
+      (s.server_data ?? []).some(isPlayableMovieEpisode)
     );
   }, [filteredEpisodes]);
 
@@ -788,7 +794,7 @@ export default function MovieDetailPage() {
     const byKey = new Map<string, EpisodeData>();
     filteredEpisodes.forEach((server) => {
       (server.server_data ?? []).forEach((episode) => {
-        if (!hasPlayableUrl(episode) || episode.is_scheduled) return;
+        if (!isPlayableMovieEpisode(episode)) return;
         const sortKey = epSortKey(episode);
         const specialNumber = Number(episode.episode_number || 0);
         const key = isSpecialEpisode(episode)
@@ -877,12 +883,6 @@ export default function MovieDetailPage() {
     }
     return epCurrent === 'trailer' || epCurrent === 'sap chieu' || epCurrent === 'dang cap nhat';
   }, [detail]);
-
-  const hasAdvertisedEpisodes = useMemo(() => {
-    return !isTrailerOnly && hasAdvertisedEpisodeMetadata(displayMovie);
-  }, [displayMovie, isTrailerOnly]);
-
-  const canOpenWatchPage = hasEpisodes || hasAdvertisedEpisodes;
 
   const requestedEpisode = useMemo(
     () => normalizeRequestedEpisode(routeEpisode),
@@ -1385,20 +1385,30 @@ export default function MovieDetailPage() {
             favored={favored}
             followed={followed}
             isTrailerOnly={isTrailerOnly}
-            hasEpisodes={canOpenWatchPage}
+            hasEpisodes={hasEpisodes}
             episodeDataLoading={episodeDataLoading}
             noIndex={shouldNoIndexMovieInfo}
             onFavToggle={handleFavToggle}
             onFollowToggle={handleFollowToggle}
             onWatchNow={() => {
-              if (!canOpenWatchPage && !isTrailerOnly) {
-                showToast(episodeDataLoading ? 'Đang tải danh sách tập phim' : 'Phim chưa có tập để xem', 'info');
+              if (!hasEpisodes) {
+                showToast(episodeDataLoading ? 'Đang kiểm tra nguồn phát phim' : 'Phim hiện chưa có nguồn phát', 'info');
                 return;
               }
-              const latestEpSlug = getLatestPlayableEpisodeSlug(filteredEpisodes);
-              const best = pickBestEpisodeByScore(filteredEpisodes, latestEpSlug, preferredSource);
+              const playableMovieServers = filteredEpisodes
+                .map((server) => ({
+                  ...server,
+                  server_data: (server.server_data ?? []).filter(isPlayableMovieEpisode),
+                }))
+                .filter((server) => server.server_data.length > 0);
+              const latestEpSlug = getLatestPlayableEpisodeSlug(playableMovieServers);
+              const best = pickBestEpisodeByScore(playableMovieServers, latestEpSlug, preferredSource);
               const selected = best?.episode;
-              const episodePath = selected ? `/${encodeURIComponent(selected.slug || selected.name || 'tap-1')}` : '';
+              if (!selected || !isPlayableMovieEpisode(selected)) {
+                showToast('Phim hiện chưa có nguồn phát', 'info');
+                return;
+              }
+              const episodePath = `/${encodeURIComponent(selected.slug || selected.name || 'tap-1')}`;
               navigate(withPlaybackPreference(`/xem-phim/${slug ?? ''}${episodePath}`));
             }}
           />
