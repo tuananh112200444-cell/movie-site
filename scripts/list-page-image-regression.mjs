@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 const source = await readFile('src/pages/movie-list/components/FeaturedSection.tsx', 'utf8');
 const movieApiSource = await readFile('src/services/movieApi.ts', 'utf8');
+const imageFallbackSource = await readFile('src/hooks/useImageFallback.ts', 'utf8');
 const movieCardSource = await readFile('src/components/base/MovieCard.tsx', 'utf8');
 const movieDetailHeroSource = await readFile('src/pages/movie-detail/components/MovieDetailHero.tsx', 'utf8');
 const homeProxySource = await readFile('supabase/functions/home-proxy/index.ts', 'utf8');
@@ -49,6 +50,19 @@ if (!movieApiSource.includes('Try every resized candidate before downloading a f
 }
 if (!movieApiSource.includes('pushUrl(FALLBACK_IMG);')) {
   failures.push('The local poster placeholder must remain the final fallback after origin images.');
+}
+if (
+  !imageFallbackSource.includes('rememberedAspectSrc')
+  || !imageFallbackSource.includes('setUsingAspectFallback(true)')
+  || !imageFallbackSource.includes('rejectedAspectIdentities.current.has(imageIdentity(fallbackUrls[nextIndex]))')
+) {
+  failures.push('A valid movie image with the wrong aspect can still be replaced by an empty placeholder or retried at full resolution.');
+}
+if (
+  !movieApiSource.includes('[movie.hero_poster_url, movie.thumb_url')
+  || !movieApiSource.includes('[movie.hero_backdrop_url, movie.poster_url')
+) {
+  failures.push('Verified aspect-specific hero artwork is not preferred before ambiguous provider image fields.');
 }
 for (const route of ['/the-loai/hanh-dong', '/the-loai/tinh-cam', '/phim-han-quoc', '/phim-viet-nam']) {
   if (!redirectsSource.includes(`${route} / 200`)) {
@@ -106,4 +120,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ status: 'passed', checks: 15 }, null, 2));
+console.log(JSON.stringify({ status: 'passed', checks: 17 }, null, 2));
