@@ -19,6 +19,9 @@ const supabaseAnonKey =
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
   FALLBACK_SUPABASE_ANON_KEY;
 
+export const PUBLIC_SUPABASE_URL = directSupabaseUrl;
+export const PUBLIC_SUPABASE_ANON_KEY = supabaseAnonKey;
+
 const SUPABASE_SINGLETON_KEY = '__khophim_public_supabase_client__';
 
 type KhophimWindow = Window & typeof globalThis & {

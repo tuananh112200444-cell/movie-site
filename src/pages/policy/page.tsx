@@ -13,7 +13,7 @@ const policySchema = [
     description: 'Chính sách bảo mật, điều khoản sử dụng và chính sách DMCA của KhoPhim (khophim.org). Cam kết bảo vệ quyền riêng tư người dùng.',
     inLanguage: 'vi',
     isPartOf: { '@type': 'WebSite', name: 'KhoPhim', url: SITE_URL },
-    dateModified: '2026-04-09',
+    dateModified: '2026-10-10',
   },
   {
     '@context': 'https://schema.org',
@@ -38,26 +38,30 @@ const CONTENT: Record<TabKey, { sections: { title: string; body: string }[] }> =
     sections: [
       {
         title: '1. Thông Tin Chúng Tôi Thu Thập',
-        body: 'KhoPhim (khophim.org) không yêu cầu người dùng đăng ký tài khoản và không thu thập thông tin cá nhân như tên, email hay số điện thoại. Chúng tôi chỉ thu thập dữ liệu kỹ thuật ẩn danh như địa chỉ IP, loại trình duyệt, thiết bị và trang bạn truy cập — nhằm mục đích cải thiện trải nghiệm người dùng và phân tích lưu lượng truy cập.',
+        body: 'KhoPhim không bắt buộc đăng ký để xem phim. Nếu bạn tự nguyện tạo tài khoản, hệ thống sẽ xử lý email, tên hiển thị và mã định danh tài khoản để đăng nhập và đồng bộ dữ liệu. Chúng tôi cũng có thể thu thập dữ liệu kỹ thuật như địa chỉ IP, loại trình duyệt, thiết bị và trang truy cập nhằm bảo mật, vận hành và cải thiện dịch vụ.',
       },
       {
         title: '2. Cookie & Lưu Trữ Cục Bộ',
-        body: 'KhoPhim sử dụng localStorage và sessionStorage của trình duyệt để lưu trữ lịch sử xem phim, danh sách yêu thích và tiến độ xem dở — tất cả đều được lưu trên thiết bị của bạn, không gửi lên máy chủ. Bạn có thể xóa dữ liệu này bất kỳ lúc nào bằng cách xóa cache trình duyệt.',
+        body: 'Khi chưa đăng nhập, lịch sử xem, yêu thích, phim theo dõi, thông báo và bình luận riêng được lưu trên trình duyệt. Khi bạn đăng nhập, các dữ liệu này có thể được đồng bộ vào tài khoản để sử dụng trên thiết bị khác. Bạn có thể xóa dữ liệu cục bộ bằng cài đặt trình duyệt hoặc liên hệ KhoPhim để yêu cầu xóa dữ liệu tài khoản.',
       },
       {
         title: '3. Dữ Liệu Bên Thứ Ba',
-        body: 'Nội dung phim trên KhoPhim được tổng hợp từ các nguồn công khai thông qua API. Chúng tôi không kiểm soát chính sách bảo mật của các nguồn bên thứ ba này. Khi bạn phát video, trình duyệt của bạn có thể kết nối trực tiếp đến máy chủ của bên thứ ba.',
+        body: 'KhoPhim sử dụng Supabase để xác thực email và lưu dữ liệu đồng bộ thuộc tài khoản. Mật khẩu được hệ thống xác thực xử lý và KhoPhim không thể đọc mật khẩu gốc. Nội dung phim được tổng hợp từ các nguồn công khai; khi phát video, trình duyệt có thể kết nối trực tiếp tới máy chủ bên thứ ba.',
       },
       {
         title: '4. Bảo Mật Dữ Liệu',
-        body: 'Chúng tôi áp dụng các biện pháp kỹ thuật hợp lý để bảo vệ dữ liệu người dùng. Tuy nhiên, không có phương thức truyền tải qua Internet nào là an toàn tuyệt đối. Chúng tôi không chịu trách nhiệm về các vi phạm bảo mật nằm ngoài tầm kiểm soát của mình.',
+        body: 'Dữ liệu đồng bộ được giới hạn theo mã tài khoản và được bảo vệ bằng chính sách phân quyền ở cơ sở dữ liệu. Người dùng chưa đăng nhập hoặc tài khoản khác không được phép đọc dữ liệu riêng của bạn. Không có phương thức truyền tải qua Internet nào an toàn tuyệt đối, vì vậy bạn cần giữ bí mật mật khẩu và email khôi phục.',
       },
       {
-        title: '5. Thay Đổi Chính Sách',
-        body: 'KhoPhim có quyền cập nhật chính sách bảo mật này bất kỳ lúc nào. Các thay đổi sẽ có hiệu lực ngay khi được đăng tải trên trang web. Việc tiếp tục sử dụng dịch vụ sau khi thay đổi đồng nghĩa với việc bạn chấp nhận chính sách mới.',
+        title: '5. Quyền Kiểm Soát & Xóa Dữ Liệu',
+        body: 'Bạn có thể sử dụng KhoPhim mà không cần tài khoản, đăng xuất bất kỳ lúc nào, xóa dữ liệu lưu trong trình duyệt hoặc yêu cầu chúng tôi xóa tài khoản và dữ liệu đồng bộ. Yêu cầu xóa cần được gửi từ kênh liên hệ chính thức và có thể cần xác minh quyền sở hữu email.',
       },
       {
-        title: '6. Liên Hệ',
+        title: '6. Thay Đổi Chính Sách',
+        body: 'KhoPhim có thể cập nhật chính sách này khi chức năng tài khoản hoặc cách xử lý dữ liệu thay đổi. Ngày cập nhật được hiển thị ở đầu trang; việc tiếp tục sử dụng chức năng tài khoản sau thay đổi đồng nghĩa với việc bạn chấp nhận chính sách mới.',
+      },
+      {
+        title: '7. Liên Hệ',
         body: 'Nếu bạn có câu hỏi về chính sách bảo mật, vui lòng liên hệ chúng tôi qua Telegram hoặc Facebook được liệt kê trong trang Giới Thiệu.',
       },
     ],
@@ -69,27 +73,31 @@ const CONTENT: Record<TabKey, { sections: { title: string; body: string }[] }> =
         body: 'Bằng cách truy cập và sử dụng KhoPhim (khophim.org), bạn đồng ý tuân thủ và bị ràng buộc bởi các điều khoản và điều kiện sử dụng này. Nếu bạn không đồng ý với bất kỳ phần nào, vui lòng không sử dụng dịch vụ của chúng tôi.',
       },
       {
-        title: '2. Mục Đích Sử Dụng',
+        title: '2. Tài Khoản Người Dùng',
+        body: 'Tài khoản là tùy chọn và được cung cấp để đồng bộ trải nghiệm giữa các thiết bị. Bạn chịu trách nhiệm bảo vệ thông tin đăng nhập, sử dụng email thuộc quyền kiểm soát của mình và thông báo cho KhoPhim nếu nghi ngờ tài khoản bị truy cập trái phép.',
+      },
+      {
+        title: '3. Mục Đích Sử Dụng',
         body: 'KhoPhim được cung cấp chỉ cho mục đích xem phim giải trí cá nhân, phi thương mại. Bạn không được phép sử dụng dịch vụ để tải xuống, sao chép, phân phối lại hoặc khai thác thương mại bất kỳ nội dung nào trên trang web.',
       },
       {
-        title: '3. Nội Dung Tổng Hợp',
+        title: '4. Nội Dung Tổng Hợp',
         body: 'KhoPhim là nền tảng tổng hợp nội dung từ các nguồn công khai trên Internet. Chúng tôi không lưu trữ bất kỳ tệp video nào trên máy chủ của mình. Tất cả nội dung được nhúng từ các nguồn bên thứ ba và chúng tôi không chịu trách nhiệm về tính chính xác, hợp pháp hay chất lượng của nội dung đó.',
       },
       {
-        title: '4. Hành Vi Bị Cấm',
+        title: '5. Hành Vi Bị Cấm',
         body: 'Người dùng không được phép: (a) sử dụng bot, crawler hoặc công cụ tự động để truy cập dịch vụ; (b) cố gắng xâm nhập, phá hoại hoặc làm gián đoạn hệ thống; (c) đăng tải hoặc chia sẻ nội dung vi phạm pháp luật; (d) mạo danh KhoPhim hoặc nhân viên của chúng tôi.',
       },
       {
-        title: '5. Giới Hạn Trách Nhiệm',
+        title: '6. Giới Hạn Trách Nhiệm',
         body: 'KhoPhim được cung cấp "nguyên trạng" mà không có bất kỳ bảo đảm nào. Chúng tôi không chịu trách nhiệm về bất kỳ thiệt hại trực tiếp, gián tiếp, ngẫu nhiên hay hậu quả nào phát sinh từ việc sử dụng hoặc không thể sử dụng dịch vụ.',
       },
       {
-        title: '6. Thay Đổi Dịch Vụ',
+        title: '7. Thay Đổi Dịch Vụ',
         body: 'KhoPhim có quyền thay đổi, tạm ngừng hoặc chấm dứt bất kỳ phần nào của dịch vụ bất kỳ lúc nào mà không cần thông báo trước. Chúng tôi không chịu trách nhiệm với bạn hoặc bên thứ ba về bất kỳ sự thay đổi, tạm ngừng hay chấm dứt nào.',
       },
       {
-        title: '7. Luật Áp Dụng',
+        title: '8. Luật Áp Dụng',
         body: 'Các điều khoản này được điều chỉnh bởi pháp luật Việt Nam. Mọi tranh chấp phát sinh sẽ được giải quyết tại tòa án có thẩm quyền tại Việt Nam.',
       },
     ],
@@ -148,7 +156,7 @@ export default function PolicyPage() {
         keywords="chính sách bảo mật KhoPhim, điều khoản sử dụng khophim, DMCA KhoPhim, quyền riêng tư"
         canonical="/policy"
         schema={policySchema}
-        updatedAt="2026-04-08"
+        updatedAt="2026-10-10"
       />
       <Navbar />
 
@@ -165,7 +173,7 @@ export default function PolicyPage() {
         <div className="mb-10">
           <div className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-full px-4 py-1.5 mb-4">
             <i className="ri-shield-check-line text-red-400 text-xs" />
-            <span className="text-white/50 text-xs font-medium">Cập nhật: 08/04/2026</span>
+            <span className="text-white/50 text-xs font-medium">Cập nhật: 10/10/2026</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-3">
             Chính Sách & Điều Khoản

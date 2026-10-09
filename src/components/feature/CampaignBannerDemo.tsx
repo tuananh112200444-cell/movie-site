@@ -218,6 +218,7 @@ export function CampaignTopBanner() {
 }
 
 export function CampaignCatfishBanner() {
+  const location = useLocation();
   const [visible, setVisible] = useState(() => !isSessionFlagSet(CATFISH_BANNER_DISMISSED_KEY));
   const style = useCampaignStyle();
   const demo = style !== 'current';
@@ -239,7 +240,11 @@ export function CampaignCatfishBanner() {
       ? catfishCampaigns[1]
       : { ...catfishCampaigns[0], desktop: style === 'v2' ? V2_BANNER : DESKTOP_BANNER, mobile: style === 'v2' ? V2_BANNER : MOBILE_BANNER };
 
-  if (!visible || !isCampaignEnabled(campaign)) return null;
+  // Authentication needs an unobstructed submit area on small screens. The
+  // paid top placement remains visible, while only the floating catfish is
+  // suppressed on account and policy forms.
+  const suppressOnSensitiveForm = /^\/(?:tai-khoan|policy)(?:\/|$)/.test(location.pathname);
+  if (suppressOnSensitiveForm || !visible || !isCampaignEnabled(campaign)) return null;
 
   return (
     <aside
