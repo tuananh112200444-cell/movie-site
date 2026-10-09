@@ -3,9 +3,9 @@ import { useLocation } from 'react-router-dom';
 import './CinematicLogoIntro.css';
 
 const INTRO_SESSION_KEY = 'khophim.cinematic-intro.seen.v1';
-const INTRO_MIN_MS = 2_500;
-const INTRO_MAX_MS = 2_700;
-const INTRO_EXIT_MS = 420;
+const INTRO_MIN_MS = 2_100;
+const INTRO_MAX_MS = 2_400;
+const INTRO_EXIT_MS = 360;
 const BOT_USER_AGENT = /bot|crawler|spider|googlebot|bingbot|facebookexternalhit|lighthouse/i;
 
 function waitForWindowLoad(): Promise<void> {
@@ -98,32 +98,52 @@ export default function CinematicLogoIntro() {
   if (!visible) return null;
 
   return (
-    <div className={`kp-logo-intro${leaving ? ' kp-logo-intro--leaving' : ''}`} data-kp-cinematic-intro="v1">
-      <div className="kp-logo-intro__aurora" aria-hidden="true" />
+    <div className={`kp-logo-intro${leaving ? ' kp-logo-intro--leaving' : ''}`} data-kp-cinematic-intro="v2">
+      <div className="kp-logo-intro__ambient" aria-hidden="true">
+        <span className="kp-logo-intro__beam kp-logo-intro__beam--red" />
+        <span className="kp-logo-intro__beam kp-logo-intro__beam--blue" />
+      </div>
       <div className="kp-logo-intro__grain" aria-hidden="true" />
-      <button type="button" className="kp-logo-intro__skip" onClick={finish} aria-label="Bỏ qua màn hình giới thiệu">
-        Bỏ qua
-      </button>
+      <div className="kp-logo-intro__frame" aria-hidden="true">
+        <span className="kp-logo-intro__corner kp-logo-intro__corner--tl" />
+        <span className="kp-logo-intro__corner kp-logo-intro__corner--tr" />
+        <span className="kp-logo-intro__corner kp-logo-intro__corner--bl" />
+        <span className="kp-logo-intro__corner kp-logo-intro__corner--br" />
+      </div>
 
       <div className="kp-logo-intro__content" role="status" aria-label="KhoPhim đang chuẩn bị nội dung">
+        <div className="kp-logo-intro__eyebrow" aria-hidden="true">
+          <span><i /> KHO PHIM ORIGINAL</span>
+          <span>EST. 2026</span>
+        </div>
+
         <div className="kp-logo-intro__scene" aria-hidden="true">
-          <div className="kp-logo-intro__orbit kp-logo-intro__orbit--outer" />
-          <div className="kp-logo-intro__orbit kp-logo-intro__orbit--inner" />
-          <div className="kp-logo-intro__logo-stack">
-            <img className="kp-logo-intro__logo-depth kp-logo-intro__logo-depth--4" src="/brand/khophim-logo-v2.png" alt="" />
-            <img className="kp-logo-intro__logo-depth kp-logo-intro__logo-depth--3" src="/brand/khophim-logo-v2.png" alt="" />
-            <img className="kp-logo-intro__logo-depth kp-logo-intro__logo-depth--2" src="/brand/khophim-logo-v2.png" alt="" />
-            <img className="kp-logo-intro__logo-depth kp-logo-intro__logo-depth--1" src="/brand/khophim-logo-v2.png" alt="" />
-            <img className="kp-logo-intro__logo-front" src="/brand/khophim-logo-v2.png" alt="" />
-            <span className="kp-logo-intro__shine" />
+          <div className="kp-logo-intro__aperture kp-logo-intro__aperture--outer" />
+          <div className="kp-logo-intro__aperture kp-logo-intro__aperture--inner" />
+          <span className="kp-logo-intro__scene-index">01 / KP</span>
+          <div className="kp-logo-intro__logo-shell">
+            <div className="kp-logo-intro__logo-stage">
+              <img className="kp-logo-intro__logo" src="/brand/khophim-logo-v2.png" alt="" />
+              <span className="kp-logo-intro__shine" />
+            </div>
           </div>
         </div>
 
         <div className="kp-logo-intro__wordmark" aria-hidden="true">
           <span>Kho</span><strong>Phim</strong>
         </div>
-        <p className="kp-logo-intro__tagline">RẠP PHIM CỦA RIÊNG BẠN</p>
+        <p className="kp-logo-intro__tagline">KHÔNG GIAN ĐIỆN ẢNH CỦA RIÊNG BẠN</p>
+        <div className="kp-logo-intro__status" aria-hidden="true">
+          <span>ĐANG MỞ RẠP PHIM</span>
+          <span>HD&nbsp;&nbsp;•&nbsp;&nbsp;VIETSUB&nbsp;&nbsp;•&nbsp;&nbsp;4K</span>
+        </div>
         <div className="kp-logo-intro__progress" aria-hidden="true"><span /></div>
+      </div>
+
+      <div className="kp-logo-intro__footer" aria-hidden="true">
+        <span>KHOPHIM.ORG</span>
+        <i />
+        <span>CINEMATIC STREAMING</span>
       </div>
     </div>
   );
