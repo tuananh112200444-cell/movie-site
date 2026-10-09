@@ -4005,6 +4005,19 @@ function publicArtworkUrl(value) {
   return /^https?:\/\/[^\s]+$/i.test(url) ? url : '';
 }
 
+function publicArtworkMovie(movie, slug, source) {
+  if (!movie || typeof movie !== 'object') return null;
+  return {
+    slug: String(movie.slug || slug),
+    name: String(movie.name || ''),
+    source_site: String(movie.source_site || source || ''),
+    thumb_url: publicArtworkUrl(movie.thumb_url),
+    poster_url: publicArtworkUrl(movie.poster_url),
+    hero_backdrop_url: publicArtworkUrl(movie.hero_backdrop_url),
+    hero_poster_url: publicArtworkUrl(movie.hero_poster_url),
+  };
+}
+
 async function proxyArtworkRecovery(request, context) {
   if (request.method !== 'GET') {
     return new Response('Method Not Allowed', {
@@ -4029,7 +4042,7 @@ async function proxyArtworkRecovery(request, context) {
     });
   }
 
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/artwork-recovery/${encodeURIComponent(slug)}?source=${encodeURIComponent(source || 'auto')}`);
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/artwork-recovery/${encodeURIComponent(slug)}?source=${encodeURIComponent(source || 'auto')}&rev=2`);
   if (typeof caches !== 'undefined') {
     const cached = await caches.default.match(cacheKey);
     if (cached) return cached;
@@ -4038,34 +4051,15 @@ async function proxyArtworkRecovery(request, context) {
   const detailUrl = new URL('/api/movie-detail', request.url);
   detailUrl.searchParams.set('slug', slug);
   if (source) detailUrl.searchParams.set('source', source);
-  let detailResponse = null;
-  if (source === 'nguonc') {
-    try {
-      const freshNguonc = await fetch(`https://phim.nguonc.com/api/film/${encodeURIComponent(slug)}`, {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'Mozilla/5.0 KhoPhim-Artwork-Recovery/1.0',
-        },
-        signal: AbortSignal.timeout(7000),
-      });
-      if (freshNguonc.ok && /json/i.test(freshNguonc.headers.get('content-type') || '')) {
-        detailResponse = freshNguonc;
-      }
-    } catch {
-      /* continue through the canonical detail pipeline */
-    }
-  }
-  if (!detailResponse) {
-    detailResponse = await proxyMovieDetail(new Request(detailUrl.toString(), {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    }), context);
-  }
+  let detailResponse = await proxyMovieDetail(new Request(detailUrl.toString(), {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  }), context);
 
   // Preview deployments do not receive production-only proxy secrets. Keep
   // previews testable through the already-public canonical detail endpoint;
   // the browser still calls this same-origin route, so no credential leaks.
-  if (url.hostname !== 'khophim.org' && (!detailResponse.ok || source !== 'nguonc')) {
+  if (url.hostname !== 'khophim.org') {
     const canonical = new URL('/api/movie-detail', SITE_URL);
     canonical.searchParams.set('slug', slug);
     if (source) canonical.searchParams.set('source', source);
@@ -4093,15 +4087,27 @@ async function proxyArtworkRecovery(request, context) {
     payload = null;
   }
   const movie = payload?.movie && typeof payload.movie === 'object' ? payload.movie : null;
-  const artwork = movie ? {
-    slug: String(movie.slug || slug),
-    name: String(movie.name || ''),
-    source_site: String(movie.source_site || source || ''),
-    thumb_url: publicArtworkUrl(movie.thumb_url),
-    poster_url: publicArtworkUrl(movie.poster_url),
-    hero_backdrop_url: publicArtworkUrl(movie.hero_backdrop_url),
-    hero_poster_url: publicArtworkUrl(movie.hero_poster_url),
-  } : null;
+  let artwork = publicArtworkMovie(movie, slug, source);
+  const artworkUrls = [artwork?.thumb_url, artwork?.poster_url].filter(Boolean).join(' ');
+  const resolvedSource = String(source || artwork?.source_site || '').toLowerCase()
+    || (/https?:\/\/(?:phim|img)\.nguonc\.com\//i.test(artworkUrls) ? 'nguonc' : '');
+  if (resolvedSource === 'nguonc') {
+    try {
+      const freshNguonc = await fetch(`https://phim.nguonc.com/api/film/${encodeURIComponent(slug)}`, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'Mozilla/5.0 KhoPhim-Artwork-Recovery/1.0',
+        },
+        signal: AbortSignal.timeout(7000),
+      });
+      if (freshNguonc.ok && /json/i.test(freshNguonc.headers.get('content-type') || '')) {
+        const freshPayload = await freshNguonc.json();
+        artwork = publicArtworkMovie(freshPayload?.movie, slug, 'nguonc') || artwork;
+      }
+    } catch {
+      /* keep the canonical artwork if the provider is temporarily unavailable */
+    }
+  }
   if (!artwork || ![artwork.thumb_url, artwork.poster_url, artwork.hero_backdrop_url, artwork.hero_poster_url].some(Boolean)) {
     return new Response(JSON.stringify({ status: false, message: 'Artwork unavailable' }), {
       status: 404,
