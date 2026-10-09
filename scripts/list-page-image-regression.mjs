@@ -72,8 +72,22 @@ for (const route of ['/the-loai/hanh-dong', '/the-loai/tinh-cam', '/phim-han-quo
 if (/^\/\*\s+\/index\.html\s+200$/m.test(redirectsSource)) {
   failures.push('Catalogue recovery must not replace the real unknown-route 404 with a soft-404 catch-all.');
 }
-if (!movieCardSource.includes('return getPortraitImagePaths(movie)')) {
+if (!movieCardSource.includes("aspect === 'portrait' ? getPortraitImagePaths(movie)")) {
   failures.push('Portrait movie cards do not use the provider-aware artwork contract.');
+}
+if (
+  !movieCardSource.includes("new URL('/api/artwork-recovery', window.location.origin)")
+  || !movieCardSource.includes("useMovieArtworkPaths(movie, 'portrait')")
+  || !movieCardSource.includes('if (original.primary || !movie.slug)')
+) {
+  failures.push('Cards with retired artwork do not recover fresh metadata on demand before showing the local placeholder.');
+}
+if (
+  !edgeSource.includes("pathname === '/api/artwork-recovery'")
+  || !edgeSource.includes("new URL('/api/movie-detail', SITE_URL)")
+  || !edgeSource.includes('publicArtworkUrl(movie.thumb_url)')
+) {
+  failures.push('The public artwork recovery route is missing or exposes more than sanitized image metadata.');
 }
 if (!movieApiSource.includes('function isKnownUnavailableArtwork')
   || !movieApiSource.includes('movie.hero_poster_url')
@@ -120,4 +134,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ status: 'passed', checks: 17 }, null, 2));
+console.log(JSON.stringify({ status: 'passed', checks: 19 }, null, 2));
