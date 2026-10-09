@@ -5,7 +5,7 @@ const DESKTOP_BANNER = '/banner-demo/assets/728x90.gif';
 const MOBILE_BANNER = '/banner-demo/assets/320x50.gif';
 const V2_BANNER = '/campaign-demo-2/728x90.gif';
 const V3_TOP_DESKTOP = '/campaign-demo-shbet/top-desktop-1090x66.gif';
-const V3_CATFISH_DESKTOP = '/campaign-demo-shbet/catfish-desktop-728x90.gif';
+const V3_CATFISH_DESKTOP = '/campaign-demo-shbet/catfish-desktop-728x90.gif?v=20261009';
 const V3_MOBILE = '/campaign-demo-shbet/mobile-300x80.gif';
 const F8BET_TOP_BANNER = '/campaign-demo-f8bet/top-728x90.gif';
 const MB66_BANNER = '/campaign-demo-mb66/mb66-728x90.gif';
