@@ -738,9 +738,13 @@ function usesLegacyOphimArtworkRoles(movie: MovieArtworkFields): boolean {
 
 export function getPortraitImagePaths(movie: MovieArtworkFields): { primary?: string; fallback?: string } {
   const legacy = usesLegacyOphimArtworkRoles(movie);
+  // Verified hero artwork has an explicit aspect contract, so prefer it over
+  // provider fields whose thumb/poster naming differs between APIs. This also
+  // prevents a TMDB backdrop stored in both legacy fields from winning over a
+  // later, verified portrait enrichment.
   const candidates = preferredArtworkCandidates(legacy
-    ? [movie.thumb_url, movie.poster_url, movie.hero_poster_url, movie.hero_backdrop_url]
-    : [movie.poster_url, movie.thumb_url, movie.hero_poster_url, movie.hero_backdrop_url]);
+    ? [movie.hero_poster_url, movie.thumb_url, movie.poster_url, movie.hero_backdrop_url]
+    : [movie.hero_poster_url, movie.poster_url, movie.thumb_url, movie.hero_backdrop_url]);
   const usable = candidates.filter((value) => !isKnownUnavailableArtwork(value));
   return { primary: usable[0], fallback: usable[1] };
 }
@@ -748,8 +752,8 @@ export function getPortraitImagePaths(movie: MovieArtworkFields): { primary?: st
 export function getLandscapeImagePaths(movie: MovieArtworkFields): { primary?: string; fallback?: string } {
   const legacy = usesLegacyOphimArtworkRoles(movie);
   const candidates = preferredArtworkCandidates(legacy
-    ? [movie.poster_url, movie.thumb_url, movie.hero_backdrop_url, movie.hero_poster_url]
-    : [movie.thumb_url, movie.poster_url, movie.hero_backdrop_url, movie.hero_poster_url]);
+    ? [movie.hero_backdrop_url, movie.poster_url, movie.thumb_url, movie.hero_poster_url]
+    : [movie.hero_backdrop_url, movie.thumb_url, movie.poster_url, movie.hero_poster_url]);
   const usable = candidates.filter((value) => !isKnownUnavailableArtwork(value));
   return { primary: usable[0], fallback: usable[1] };
 }
@@ -861,7 +865,7 @@ export function getOptimizedImageSrcSet(path: string, widths: number[], quality 
     .join(', ');
 }
 
-function getOriginalImageFromProxy(url: string): string | null {
+export function getOriginalImageFromProxy(url: string): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.hostname === 'wsrv.nl') return parsed.searchParams.get('url');
