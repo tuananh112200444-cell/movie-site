@@ -5524,7 +5524,40 @@ body.tab-hidden .animate-pulse {
 }
 
 .campaign-banner-mb66 .campaign-banner-mix__desktop {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 360px));
+  justify-content: center;
+  gap: 8px;
+}
+
+@media (min-width: 900px) {
+  .campaign-banner-mb66.campaign-banner-mix--top .campaign-banner-v2__shell {
+    width: min(740px, calc(100vw - 64px));
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .campaign-banner-mb66.campaign-banner-mix--catfish {
+    left: calc(50% - 14px);
+    width: min(740px, calc(100vw - 48px));
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .campaign-banner-mb66 .campaign-banner-v2__media {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .campaign-banner-mb66 .campaign-banner-mix__desktop {
+    padding: 0;
+  }
 }
 
 .campaign-banner-under-video {

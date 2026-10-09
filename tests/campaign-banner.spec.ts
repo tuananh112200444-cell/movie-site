@@ -26,7 +26,7 @@ test('banner top stays attached below the navigation while scrolling', async ({ 
   expect(await header.evaluate((element) => getComputedStyle(element).position)).toBe('fixed');
 });
 
-test('three compact banners per placement are the production default', async ({ page, isMobile }) => {
+test('desktop keeps two compact banners next to each other while mobile keeps its stack', async ({ page, isMobile }) => {
   await page.goto('/?intro=off');
   const top = page.getByTestId('campaign-top-banner');
   const catfish = page.getByTestId('campaign-catfish');
@@ -35,8 +35,8 @@ test('three compact banners per placement are the production default', async ({ 
 
   const topPair = isMobile ? top.locator('.campaign-banner-mix__mobile img') : top.getByTestId('campaign-top-desktop-split').locator('img');
   const catfishPair = isMobile ? catfish.locator('.campaign-banner-mix__mobile img') : catfish.getByTestId('campaign-catfish-desktop-split').locator('img');
-  await expect(topPair).toHaveCount(3);
-  await expect(catfishPair).toHaveCount(3);
+  await expect(topPair).toHaveCount(2);
+  await expect(catfishPair).toHaveCount(2);
 
   const topBox = await top.boundingBox();
   const catfishBox = await catfish.boundingBox();
@@ -70,6 +70,17 @@ test('three compact banners per placement are the production default', async ({ 
     expect(Math.abs((topMedia?.width ?? 0) - (catfishMedia?.width ?? 0))).toBeLessThanOrEqual(1);
     expect(Math.abs((topMedia?.x ?? 0) - (catfishMedia?.x ?? 0))).toBeLessThanOrEqual(1);
     expect(Math.abs((topMedia?.height ?? 0) - (catfishMedia?.height ?? 0))).toBeLessThanOrEqual(1);
+    const topLeft = await topPair.first().boundingBox();
+    const topRight = await topPair.last().boundingBox();
+    const bottomLeft = await catfishPair.first().boundingBox();
+    const bottomRight = await catfishPair.last().boundingBox();
+    expect(topLeft?.width ?? 0).toBeLessThanOrEqual(362);
+    expect(topRight?.width ?? 0).toBeLessThanOrEqual(362);
+    expect((topRight?.x ?? 0) - ((topLeft?.x ?? 0) + (topLeft?.width ?? 0))).toBeGreaterThanOrEqual(4);
+    expect((topRight?.x ?? 0) - ((topLeft?.x ?? 0) + (topLeft?.width ?? 0))).toBeLessThanOrEqual(16);
+    expect((bottomRight?.x ?? 0) - ((bottomLeft?.x ?? 0) + (bottomLeft?.width ?? 0))).toBeGreaterThanOrEqual(4);
+    expect((bottomRight?.x ?? 0) - ((bottomLeft?.x ?? 0) + (bottomLeft?.width ?? 0))).toBeLessThanOrEqual(16);
+    await expect(catfishPair.first()).toHaveAttribute('src', '/campaign-demo-shbet/catfish-desktop-728x90.gif?v=20261009');
   }
 });
 
@@ -143,12 +154,12 @@ test('SHBET demo chooses wide top and standard catfish assets', async ({ page })
   await expect(top).toHaveAttribute('data-campaign-style', 'v3');
   await expect(catfish).toHaveAttribute('data-campaign-style', 'v3');
   await expect(top.locator('img')).toHaveAttribute('src', '/campaign-demo-shbet/top-desktop-1090x66.gif');
-  await expect(catfish.locator('img')).toHaveAttribute('src', '/campaign-demo-shbet/catfish-desktop-728x90.gif');
+  await expect(catfish.locator('img')).toHaveAttribute('src', '/campaign-demo-shbet/catfish-desktop-728x90.gif?v=20261009');
   await expect(top.locator('source')).toHaveAttribute('srcset', '/campaign-demo-shbet/mobile-300x80.gif');
   await expect(catfish.locator('source')).toHaveAttribute('srcset', '/campaign-demo-shbet/mobile-300x80.gif');
 });
 
-test('MB66 demo adds the supplied creative without removing the existing campaigns', async ({ page, isMobile }) => {
+test('MB66 layout keeps both enabled campaigns adjacent on desktop', async ({ page, isMobile }) => {
   await page.goto('/?banner-mb66=1&intro=off');
 
   const top = page.getByTestId('campaign-top-banner');
@@ -162,11 +173,9 @@ test('MB66 demo adds the supplied creative without removing the existing campaig
   await expect(catfish).toHaveAttribute('data-campaign-style', 'mb66');
   await expect(top).toHaveAttribute('data-campaign-name', 'mb66-additive');
   await expect(catfish).toHaveAttribute('data-campaign-name', 'mb66-additive');
-  await expect(topScope.locator('img')).toHaveCount(3);
-  await expect(catfishScope.locator('img')).toHaveCount(3);
-  await expect(topScope.locator('[data-campaign-creative="9922"]')).toBeVisible();
+  await expect(topScope.locator('img')).toHaveCount(2);
+  await expect(catfishScope.locator('img')).toHaveCount(2);
   await expect(topScope.locator('[data-campaign-creative="f8bet"]')).toBeVisible();
-  await expect(catfishScope.locator('[data-campaign-creative="9922"]')).toBeVisible();
   await expect(catfishScope.locator('[data-campaign-creative="shbet"]')).toBeVisible();
   await expect(topCreative).toHaveAttribute('href', 'https://bit.ly/qtqctong2c184');
   await expect(catfishCreative).toHaveAttribute('href', 'https://bit.ly/qtqctong2c184');
@@ -185,8 +194,16 @@ test('MB66 demo adds the supplied creative without removing the existing campaig
   expect(catfishClose).not.toBeNull();
   expect(Math.abs((topFrame?.width ?? 0) - (catfishFrame?.width ?? 0))).toBeLessThanOrEqual(1);
   expect(Math.abs((topMedia?.height ?? 0) - (catfishMedia?.height ?? 0))).toBeLessThanOrEqual(2);
-  expect(topMedia?.width ?? 0).toBeLessThanOrEqual(isMobile ? 288 : 902);
+  expect(topMedia?.width ?? 0).toBeLessThanOrEqual(isMobile ? 288 : 742);
   expect(topMedia?.height ?? 0).toBeLessThanOrEqual(isMobile ? 118 : 48);
+  if (!isMobile) {
+    const left = await topScope.locator('img').first().boundingBox();
+    const right = await topScope.locator('img').last().boundingBox();
+    expect(left?.width ?? 0).toBeLessThanOrEqual(362);
+    expect(right?.width ?? 0).toBeLessThanOrEqual(362);
+    expect((right?.x ?? 0) - ((left?.x ?? 0) + (left?.width ?? 0))).toBeGreaterThanOrEqual(4);
+    expect((right?.x ?? 0) - ((left?.x ?? 0) + (left?.width ?? 0))).toBeLessThanOrEqual(16);
+  }
   expect(catfishClose?.y ?? 0).toBeLessThan(catfishFrame?.y ?? 0);
 });
 
@@ -228,7 +245,7 @@ test('mixed layout shows both campaigns on desktop and mobile', async ({ page, i
     await expect(topSplit.locator('img').nth(1)).toHaveAttribute('src', '/campaign-demo-f8bet/top-728x90.gif');
     await expect(topSplit.locator('[data-campaign-creative="f8bet"]')).toHaveAttribute('href', 'https://bit.ly/4cCE7SB');
     await expect(catfishSplit.locator('img').nth(0)).toHaveAttribute('src', '/banner-demo/assets/728x90.gif');
-    await expect(catfishSplit.locator('img').nth(1)).toHaveAttribute('src', '/campaign-demo-shbet/catfish-desktop-728x90.gif');
+    await expect(catfishSplit.locator('img').nth(1)).toHaveAttribute('src', '/campaign-demo-shbet/catfish-desktop-728x90.gif?v=20261009');
     await expect(catfishSplit.locator('[data-campaign-creative="shbet"]')).toHaveAttribute('href', 'https://bit.ly/SH2PP21');
     return;
   }
