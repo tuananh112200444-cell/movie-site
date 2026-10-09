@@ -4018,6 +4018,38 @@ function publicArtworkMovie(movie, slug, source) {
   };
 }
 
+function artworkIsRetired(url) {
+  return /^https?:\/\/phim\.nguonc\.com\/public\/images\//i.test(String(url || '').trim());
+}
+
+function artworkHasCurrentImage(artwork) {
+  return [artwork?.thumb_url, artwork?.poster_url, artwork?.hero_backdrop_url, artwork?.hero_poster_url]
+    .some((value) => value && !artworkIsRetired(value));
+}
+
+async function fetchStoredArtwork(slug) {
+  const lookupUrl = new URL(`${SUPABASE_REST_BASE}/movies`);
+  lookupUrl.searchParams.set('select', 'slug,name,source_site,thumb_url,poster_url,hero_backdrop_url,hero_poster_url');
+  lookupUrl.searchParams.set('slug', `eq.${slug}`);
+  lookupUrl.searchParams.set('is_published', 'eq.true');
+  lookupUrl.searchParams.set('limit', '1');
+  try {
+    const response = await fetch(lookupUrl.toString(), {
+      headers: {
+        Accept: 'application/json',
+        apikey: SUPABASE_PUBLIC_KEY,
+        Authorization: `Bearer ${SUPABASE_PUBLIC_KEY}`,
+      },
+      signal: AbortSignal.timeout(2200),
+    });
+    if (!response.ok) return null;
+    const rows = await response.json();
+    return Array.isArray(rows) ? rows[0] || null : null;
+  } catch {
+    return null;
+  }
+}
+
 async function proxyArtworkRecovery(request, context) {
   if (request.method !== 'GET') {
     return new Response('Method Not Allowed', {
@@ -4042,11 +4074,12 @@ async function proxyArtworkRecovery(request, context) {
     });
   }
 
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/artwork-recovery/${encodeURIComponent(slug)}?source=${encodeURIComponent(source || 'auto')}&rev=2`);
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/artwork-recovery/${encodeURIComponent(slug)}?source=${encodeURIComponent(source || 'auto')}&rev=3`);
   if (typeof caches !== 'undefined') {
     const cached = await caches.default.match(cacheKey);
     if (cached) return cached;
   }
+  const storedArtworkPromise = fetchStoredArtwork(slug);
 
   const detailUrl = new URL('/api/movie-detail', request.url);
   detailUrl.searchParams.set('slug', slug);
@@ -4088,10 +4121,13 @@ async function proxyArtworkRecovery(request, context) {
   }
   const movie = payload?.movie && typeof payload.movie === 'object' ? payload.movie : null;
   let artwork = publicArtworkMovie(movie, slug, source);
+  const storedMovie = await storedArtworkPromise;
+  const storedArtwork = publicArtworkMovie(storedMovie, slug, source);
+  if (artworkHasCurrentImage(storedArtwork)) artwork = storedArtwork;
   const artworkUrls = [artwork?.thumb_url, artwork?.poster_url].filter(Boolean).join(' ');
   const resolvedSource = String(source || artwork?.source_site || '').toLowerCase()
     || (/https?:\/\/(?:phim|img)\.nguonc\.com\//i.test(artworkUrls) ? 'nguonc' : '');
-  if (resolvedSource === 'nguonc') {
+  if (resolvedSource === 'nguonc' && !artworkHasCurrentImage(artwork)) {
     try {
       const freshNguonc = await fetch(`https://phim.nguonc.com/api/film/${encodeURIComponent(slug)}`, {
         headers: {
@@ -4108,7 +4144,7 @@ async function proxyArtworkRecovery(request, context) {
       /* keep the canonical artwork if the provider is temporarily unavailable */
     }
   }
-  if (!artwork || ![artwork.thumb_url, artwork.poster_url, artwork.hero_backdrop_url, artwork.hero_poster_url].some(Boolean)) {
+  if (!artwork || !artworkHasCurrentImage(artwork)) {
     return new Response(JSON.stringify({ status: false, message: 'Artwork unavailable' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60, s-maxage=300', ...SECURITY_HEADERS },
