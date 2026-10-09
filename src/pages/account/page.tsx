@@ -1,12 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import SEO from '@/components/base/SEO';
 import { useAuth } from '@/context/AuthContext';
 import { ACCOUNT_DATA_CHANGED_EVENT } from '@/services/accountSync';
 
-type FormMode = 'signin' | 'signup';
+type FormMode = 'signin' | 'signup' | 'forgot' | 'recovery';
+
+function formMode(value: string | null): FormMode {
+  return value === 'signup' || value === 'forgot' || value === 'recovery' ? value : 'signin';
+}
+
+function passwordRequirements(password: string) {
+  return {
+    length: password.length >= 8,
+    letter: /[a-z]/i.test(password),
+    number: /\d/.test(password),
+  };
+}
 
 function readLocalCounts() {
   try {
@@ -31,20 +43,32 @@ function readLocalCounts() {
 }
 
 export default function AccountPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, loading, syncStatus, syncError, signIn, signUp, signOut, syncNow } = useAuth();
-  const [mode, setMode] = useState<FormMode>(() => searchParams.get('mode') === 'signup' ? 'signup' : 'signin');
+  const {
+    user, loading, syncStatus, syncError, passwordRecoveryActive, googleAuthEnabled,
+    signIn, signUp, resendConfirmation, signInWithGoogle, requestPasswordReset, updatePassword, signOut, syncNow,
+  } = useAuth();
+  const [mode, setMode] = useState<FormMode>(() => formMode(searchParams.get('mode')));
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [counts, setCounts] = useState(readLocalCounts);
 
   useEffect(() => {
-    setMode(searchParams.get('mode') === 'signup' ? 'signup' : 'signin');
+    setMode(formMode(searchParams.get('mode')));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (passwordRecoveryActive) setMode('recovery');
+  }, [passwordRecoveryActive]);
 
   useEffect(() => {
     const refresh = () => setCounts(readLocalCounts());
@@ -59,6 +83,20 @@ export default function AccountPage() {
   const accountName = useMemo(() => String(
     user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Thành viên KhoPhim'
   ), [user]);
+  const requirements = useMemo(() => passwordRequirements(password), [password]);
+  const strongPassword = requirements.length && requirements.letter && requirements.number;
+
+  const changeMode = (nextMode: FormMode) => {
+    setMode(nextMode);
+    setError('');
+    setMessage('');
+    setPassword('');
+    setConfirmPassword('');
+    setPasswordVisible(false);
+    setAwaitingConfirmation(false);
+    const next = nextMode === 'signin' ? '/tai-khoan' : `/tai-khoan?mode=${nextMode}`;
+    navigate(next, { replace: true });
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -66,16 +104,53 @@ export default function AccountPage() {
     setError('');
     setMessage('');
     try {
-      if (mode === 'signin') {
+      if (mode === 'forgot') {
+        await requestPasswordReset(email);
+        setMessage('Nếu email đã được đăng ký, KhoPhim đã gửi liên kết đặt lại mật khẩu. Hãy kiểm tra cả thư rác.');
+      } else if (mode === 'recovery') {
+        if (!strongPassword) throw new Error('Mật khẩu cần ít nhất 8 ký tự, gồm chữ và số.');
+        if (password !== confirmPassword) throw new Error('Hai mật khẩu chưa trùng nhau.');
+        await updatePassword(password);
+        setMessage('Đã đổi mật khẩu thành công.');
+        window.setTimeout(() => navigate('/tai-khoan', { replace: true }), 900);
+      } else if (mode === 'signin') {
         await signIn(email, password);
       } else {
+        if (displayName.trim().length < 2) throw new Error('Tên hiển thị cần ít nhất 2 ký tự.');
+        if (!strongPassword) throw new Error('Mật khẩu cần ít nhất 8 ký tự, gồm chữ và số.');
+        if (password !== confirmPassword) throw new Error('Hai mật khẩu chưa trùng nhau.');
+        if (!privacyAccepted) throw new Error('Bạn cần đồng ý với chính sách bảo mật và điều khoản sử dụng.');
         const result = await signUp(email, password, displayName);
         if (result.needsEmailConfirmation) {
           setMessage('Đã tạo tài khoản. Hãy mở email để xác nhận rồi đăng nhập.');
+          setAwaitingConfirmation(true);
+          setPassword('');
+          setConfirmPassword('');
         }
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Không thể xử lý yêu cầu.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setSubmitting(true);
+    setError('');
+    try { await signInWithGoogle(); }
+    catch (googleError) { setError(googleError instanceof Error ? googleError.message : 'Không thể đăng nhập Google.'); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleResendConfirmation = async () => {
+    setSubmitting(true);
+    setError('');
+    try {
+      await resendConfirmation(email);
+      setMessage('Đã gửi lại email xác nhận. Hãy kiểm tra hộp thư đến và thư rác.');
+    } catch (resendError) {
+      setError(resendError instanceof Error ? resendError.message : 'Không thể gửi lại email xác nhận.');
     } finally {
       setSubmitting(false);
     }
@@ -116,6 +191,41 @@ export default function AccountPage() {
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/15 border-t-red-400" />
               Đang kiểm tra tài khoản...
             </div>
+          </div>
+        ) : mode === 'recovery' ? (
+          <div className="mx-auto max-w-xl rounded-3xl border border-white/[0.07] bg-[#0d0f18] p-5 md:p-8">
+            <button type="button" onClick={() => changeMode('signin')} className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-white/45 transition hover:text-white">
+              <i className="ri-arrow-left-line" /> Quay lại đăng nhập
+            </button>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-xl text-red-400"><i className="ri-lock-password-line" /></div>
+            <h2 className="mt-4 text-2xl font-black">Đặt mật khẩu mới</h2>
+            <p className="mt-2 text-sm leading-6 text-white/45">Liên kết khôi phục chỉ dùng được một lần và sẽ hết hạn vì lý do bảo mật.</p>
+            {user ? (
+              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-semibold text-white/50">Mật khẩu mới</span>
+                  <div className="relative">
+                    <input type={passwordVisible ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} autoComplete="new-password" placeholder="Ít nhất 8 ký tự, gồm chữ và số" className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 pr-12 text-sm outline-none transition placeholder:text-white/20 focus:border-red-500/50" />
+                    <button type="button" onClick={() => setPasswordVisible((value) => !value)} aria-label={passwordVisible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} className="absolute right-0 top-0 flex h-12 w-12 items-center justify-center text-white/35 hover:text-white"><i className={passwordVisible ? 'ri-eye-off-line' : 'ri-eye-line'} /></button>
+                  </div>
+                </label>
+                <div className="grid grid-cols-3 gap-2 text-[10px]">
+                  {[['8+ ký tự', requirements.length], ['Có chữ', requirements.letter], ['Có số', requirements.number]].map(([label, valid]) => <span key={String(label)} className={`rounded-lg px-2 py-1.5 text-center ${valid ? 'bg-emerald-500/10 text-emerald-300' : 'bg-white/[0.04] text-white/30'}`}>{valid ? '✓ ' : ''}{label}</span>)}
+                </div>
+                <label className="block">
+                  <span className="mb-2 block text-xs font-semibold text-white/50">Nhập lại mật khẩu</span>
+                  <input type={passwordVisible ? 'text' : 'password'} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required minLength={8} autoComplete="new-password" placeholder="Nhập lại mật khẩu mới" className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-sm outline-none transition placeholder:text-white/20 focus:border-red-500/50" />
+                </label>
+                {error && <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2.5 text-xs text-red-200">{error}</div>}
+                {message && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-xs text-emerald-200">{message}</div>}
+                <button disabled={submitting || !strongPassword || password !== confirmPassword} type="submit" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-500 text-sm font-black text-white transition hover:bg-red-600 disabled:opacity-40"><i className="ri-shield-keyhole-line" /> Lưu mật khẩu mới</button>
+              </form>
+            ) : (
+              <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/[0.08] p-4 text-sm text-amber-100/75">
+                Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Hãy gửi một yêu cầu mới.
+                <button type="button" onClick={() => changeMode('forgot')} className="mt-3 block font-bold text-amber-200 underline underline-offset-4">Gửi lại liên kết</button>
+              </div>
+            )}
           </div>
         ) : user ? (
           <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
@@ -193,10 +303,46 @@ export default function AccountPage() {
                   </div>
                 ))}
               </div>
-              <button type="button" onClick={() => void handleSignOut()} disabled={submitting} className="mt-7 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-white/40 transition hover:text-red-300 disabled:opacity-50">
-                <i className="ri-logout-box-r-line" /> Đăng xuất
-              </button>
+              <div className="mt-7 flex flex-wrap gap-4">
+                <button type="button" onClick={() => changeMode('recovery')} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-white/50 transition hover:text-white">
+                  <i className="ri-lock-password-line" /> Đổi mật khẩu
+                </button>
+                <button type="button" onClick={() => void handleSignOut()} disabled={submitting} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-white/40 transition hover:text-red-300 disabled:opacity-50">
+                  <i className="ri-logout-box-r-line" /> Đăng xuất
+                </button>
+              </div>
               {error && <p className="mt-3 text-xs text-red-300">{error}</p>}
+            </aside>
+          </div>
+        ) : mode === 'forgot' ? (
+          <div className="mx-auto grid max-w-4xl gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+            <section className="rounded-3xl border border-white/[0.07] bg-[#0d0f18] p-5 md:p-7">
+              <button type="button" onClick={() => changeMode('signin')} className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-white/45 transition hover:text-white"><i className="ri-arrow-left-line" /> Quay lại đăng nhập</button>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500/10 text-xl text-sky-300"><i className="ri-mail-lock-line" /></div>
+              <h2 className="mt-4 text-2xl font-black">Quên mật khẩu?</h2>
+              <p className="mt-2 text-sm leading-6 text-white/45">Nhập email tài khoản. Chúng tôi sẽ gửi liên kết bảo mật để bạn đặt mật khẩu mới.</p>
+              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-semibold text-white/50">Email</span>
+                  <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" placeholder="ban@email.com" className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-sm outline-none transition placeholder:text-white/20 focus:border-sky-500/50" />
+                </label>
+                {error && <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2.5 text-xs text-red-200">{error}</div>}
+                {message && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-xs leading-5 text-emerald-200">{message}</div>}
+                {awaitingConfirmation && (
+                  <button type="button" onClick={() => void handleResendConfirmation()} disabled={submitting} className="inline-flex min-h-10 items-center gap-2 text-xs font-bold text-emerald-300 transition hover:text-emerald-200 disabled:opacity-50">
+                    <i className="ri-mail-send-line" /> Chưa nhận được email? Gửi lại
+                  </button>
+                )}
+                <button disabled={submitting} type="submit" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-sky-500 text-sm font-black text-white transition hover:bg-sky-600 disabled:opacity-50">{submitting ? 'Đang gửi...' : <><i className="ri-send-plane-fill" /> Gửi liên kết đặt lại</>}</button>
+              </form>
+            </section>
+            <aside className="rounded-3xl border border-white/[0.07] bg-gradient-to-br from-[#0c151d] to-[#0d0f18] p-6 md:p-8">
+              <h3 className="text-lg font-black">Bảo vệ tài khoản của bạn</h3>
+              <div className="mt-5 space-y-4 text-sm leading-6 text-white/48">
+                <p><i className="ri-checkbox-circle-fill mr-2 text-emerald-400" />Liên kết chỉ dùng được một lần.</p>
+                <p><i className="ri-checkbox-circle-fill mr-2 text-emerald-400" />Không chia sẻ email khôi phục cho người khác.</p>
+                <p><i className="ri-checkbox-circle-fill mr-2 text-emerald-400" />Kiểm tra thư rác nếu chưa thấy email.</p>
+              </div>
             </aside>
           </div>
         ) : (
@@ -204,13 +350,22 @@ export default function AccountPage() {
             <section className="rounded-3xl border border-white/[0.07] bg-[#0d0f18] p-5 md:p-7">
               <div className="grid grid-cols-2 gap-2 rounded-2xl bg-black/20 p-1.5">
                 {(['signin', 'signup'] as const).map((item) => (
-                  <button key={item} type="button" onClick={() => { setMode(item); setError(''); setMessage(''); }} className={`min-h-11 rounded-xl text-sm font-bold transition ${mode === item ? 'bg-red-500 text-white shadow-lg shadow-red-950/30' : 'text-white/40 hover:text-white/70'}`}>
+                  <button key={item} type="button" onClick={() => changeMode(item)} className={`min-h-11 rounded-xl text-sm font-bold transition ${mode === item ? 'bg-red-500 text-white shadow-lg shadow-red-950/30' : 'text-white/40 hover:text-white/70'}`}>
                     {item === 'signin' ? 'Đăng nhập' : 'Tạo tài khoản'}
                   </button>
                 ))}
               </div>
 
-              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              {googleAuthEnabled && (
+                <>
+                  <button type="button" onClick={() => void handleGoogleSignIn()} disabled={submitting} className="mt-5 flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/[0.055] text-sm font-bold text-white/80 transition hover:bg-white/[0.09] hover:text-white disabled:opacity-50">
+                    <i className="ri-google-fill text-lg" /> Tiếp tục với Google
+                  </button>
+                  <div className="my-5 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/20"><span className="h-px flex-1 bg-white/[0.07]" />hoặc email<span className="h-px flex-1 bg-white/[0.07]" /></div>
+                </>
+              )}
+
+              <form onSubmit={handleSubmit} className={`${googleAuthEnabled ? '' : 'mt-6'} space-y-4`}>
                 {mode === 'signup' && (
                   <label className="block">
                     <span className="mb-2 block text-xs font-semibold text-white/50">Tên hiển thị</span>
@@ -222,12 +377,34 @@ export default function AccountPage() {
                   <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" placeholder="ban@email.com" className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-sm outline-none transition placeholder:text-white/20 focus:border-red-500/50 focus:bg-white/[0.065]" />
                 </label>
                 <label className="block">
-                  <span className="mb-2 block text-xs font-semibold text-white/50">Mật khẩu</span>
-                  <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} placeholder="Tối thiểu 6 ký tự" className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-sm outline-none transition placeholder:text-white/20 focus:border-red-500/50 focus:bg-white/[0.065]" />
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-white/50">Mật khẩu</span>
+                    {mode === 'signin' && <button type="button" onClick={() => changeMode('forgot')} className="text-[11px] font-semibold text-red-300/75 hover:text-red-300">Quên mật khẩu?</button>}
+                  </div>
+                  <div className="relative">
+                    <input type={passwordVisible ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={mode === 'signup' ? 8 : 6} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} placeholder={mode === 'signup' ? 'Ít nhất 8 ký tự, gồm chữ và số' : 'Mật khẩu của bạn'} className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 pr-12 text-sm outline-none transition placeholder:text-white/20 focus:border-red-500/50 focus:bg-white/[0.065]" />
+                    <button type="button" onClick={() => setPasswordVisible((value) => !value)} aria-label={passwordVisible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} className="absolute right-0 top-0 flex h-12 w-12 items-center justify-center text-white/35 hover:text-white"><i className={passwordVisible ? 'ri-eye-off-line' : 'ri-eye-line'} /></button>
+                  </div>
                 </label>
+                {mode === 'signup' && (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 text-[10px]">
+                      {[['8+ ký tự', requirements.length], ['Có chữ', requirements.letter], ['Có số', requirements.number]].map(([label, valid]) => <span key={String(label)} className={`rounded-lg px-2 py-1.5 text-center ${valid ? 'bg-emerald-500/10 text-emerald-300' : 'bg-white/[0.04] text-white/30'}`}>{valid ? '✓ ' : ''}{label}</span>)}
+                    </div>
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-semibold text-white/50">Nhập lại mật khẩu</span>
+                      <input type={passwordVisible ? 'text' : 'password'} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required minLength={8} autoComplete="new-password" placeholder="Nhập lại mật khẩu" className={`h-12 w-full rounded-xl border bg-white/[0.045] px-4 text-sm outline-none transition placeholder:text-white/20 ${confirmPassword && confirmPassword !== password ? 'border-red-500/50' : 'border-white/10 focus:border-red-500/50'}`} />
+                      {confirmPassword && confirmPassword !== password && <span className="mt-1.5 block text-[10px] text-red-300">Hai mật khẩu chưa trùng nhau.</span>}
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] p-3 text-xs leading-5 text-white/45">
+                      <input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} required className="mt-1 h-4 w-4 accent-red-500" />
+                      <span>Tôi đồng ý với <Link to="/policy?tab=privacy" className="font-semibold text-red-300 hover:underline">Chính sách bảo mật</Link> và <Link to="/policy?tab=terms" className="font-semibold text-red-300 hover:underline">Điều khoản sử dụng</Link>.</span>
+                    </label>
+                  </>
+                )}
                 {error && <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2.5 text-xs text-red-200">{error}</div>}
                 {message && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-xs leading-5 text-emerald-200">{message}</div>}
-                <button disabled={submitting} type="submit" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-500 text-sm font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50">
+                <button disabled={submitting || (mode === 'signup' && (!strongPassword || password !== confirmPassword || !privacyAccepted))} type="submit" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-500 text-sm font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50">
                   {submitting ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Đang xử lý...</> : <><i className={mode === 'signin' ? 'ri-login-box-line' : 'ri-user-add-line'} /> {mode === 'signin' ? 'Đăng nhập và đồng bộ' : 'Tạo tài khoản'}</>}
                 </button>
               </form>

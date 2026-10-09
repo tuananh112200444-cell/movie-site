@@ -30,7 +30,26 @@ test.describe('account and device sync demo', () => {
 
     await page.getByRole('button', { name: 'Tạo tài khoản', exact: true }).click();
     await expect(page.getByPlaceholder('Tên của bạn')).toBeVisible();
-    await expect(page.locator('form').getByRole('button', { name: /Tạo tài khoản/ })).toBeVisible();
+    await expect(page.getByPlaceholder('Nhập lại mật khẩu')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Hiện mật khẩu' })).toBeVisible();
+    await expect(page.getByText('8+ ký tự')).toBeVisible();
+    await expect(page.getByText(/Chính sách bảo mật/)).toBeVisible();
+    const createButton = page.locator('form').getByRole('button', { name: /Tạo tài khoản/ });
+    await expect(createButton).toBeDisabled();
+    await page.getByPlaceholder('Tên của bạn').fill('Khách KhoPhim');
+    await page.getByPlaceholder('ban@email.com').fill('demo@example.com');
+    await page.getByPlaceholder('Ít nhất 8 ký tự, gồm chữ và số').fill('KhoPhim123');
+    await page.getByPlaceholder('Nhập lại mật khẩu').fill('KhoPhim123');
+    await page.getByRole('checkbox').check();
+    await expect(createButton).toBeEnabled();
+    await expect(page.getByTestId('campaign-catfish')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+    await page.getByRole('button', { name: 'Quên mật khẩu?' }).click();
+    await expect(page.getByRole('heading', { name: 'Quên mật khẩu?' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Gửi liên kết đặt lại' })).toBeVisible();
+    await page.getByRole('button', { name: 'Quay lại đăng nhập' }).click();
+    await page.getByRole('button', { name: 'Tạo tài khoản', exact: true }).click();
 
     const suffix = testInfo.project.name.startsWith('mobile') ? 'mobile' : 'desktop';
     await page.screenshot({
