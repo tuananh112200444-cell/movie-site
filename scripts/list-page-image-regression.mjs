@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 const source = await readFile('src/pages/movie-list/components/FeaturedSection.tsx', 'utf8');
 const movieApiSource = await readFile('src/services/movieApi.ts', 'utf8');
 const imageFallbackSource = await readFile('src/hooks/useImageFallback.ts', 'utf8');
+const artworkRecoverySource = await readFile('src/hooks/useMovieArtworkPaths.ts', 'utf8');
 const movieCardSource = await readFile('src/components/base/MovieCard.tsx', 'utf8');
 const movieDetailHeroSource = await readFile('src/pages/movie-detail/components/MovieDetailHero.tsx', 'utf8');
 const homeProxySource = await readFile('supabase/functions/home-proxy/index.ts', 'utf8');
@@ -72,15 +73,16 @@ for (const route of ['/the-loai/hanh-dong', '/the-loai/tinh-cam', '/phim-han-quo
 if (/^\/\*\s+\/index\.html\s+200$/m.test(redirectsSource)) {
   failures.push('Catalogue recovery must not replace the real unknown-route 404 with a soft-404 catch-all.');
 }
-if (!movieCardSource.includes("aspect === 'portrait' ? getPortraitImagePaths(movie)")) {
+if (!artworkRecoverySource.includes("aspect === 'portrait' ? getPortraitImagePaths(movie)")) {
   failures.push('Portrait movie cards do not use the provider-aware artwork contract.');
 }
 if (
-  !movieCardSource.includes("new URL('/api/artwork-recovery', window.location.origin)")
+  !artworkRecoverySource.includes("new URL('/api/artwork-recovery', window.location.origin)")
   || !movieCardSource.includes("useMovieArtworkPaths(movie, 'portrait')")
-  || !movieCardSource.includes('if (original.primary || !movie.slug)')
+  || !artworkRecoverySource.includes('if (original.primary || !movie.slug)')
+  || !movieDetailHeroSource.includes("useMovieArtworkPaths(movie, 'portrait')")
 ) {
-  failures.push('Cards with retired artwork do not recover fresh metadata on demand before showing the local placeholder.');
+  failures.push('Cards or movie details with retired artwork do not recover fresh metadata on demand before showing the local placeholder.');
 }
 if (
   !edgeSource.includes("pathname === '/api/artwork-recovery'")

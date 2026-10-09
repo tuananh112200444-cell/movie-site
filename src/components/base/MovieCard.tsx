@@ -1,8 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useImageFallback } from '../../hooks/useImageFallback';
+import { useMovieArtworkPaths } from '../../hooks/useMovieArtworkPaths';
 import { Link } from 'react-router-dom';
 import type { MovieItem } from '../../types/movie';
-import { getImageUrl, getLandscapeImagePaths, getMovieDisplayName, getPortraitImagePaths } from '../../services/movieApi';
+import { getImageUrl, getMovieDisplayName } from '../../services/movieApi';
 import { movieDetailUrl } from '../../utils/slugEncoder';
 import { prefetchMovieDetail, cancelPrefetchMovieDetail } from '../../utils/prefetchRoute';
 import { isImagePreloaded, markImagePreloaded } from '../../utils/imagePreloader';
@@ -95,71 +96,6 @@ function getDisplayTime(movie: MovieItem): string | null {
 /* ─────────────────────────────────────────
    DEFAULT CARD
 ───────────────────────────────────────── */
-type ArtworkPaths = { primary?: string; fallback?: string };
-
-const recoveredArtworkCache = new Map<string, Promise<MovieItem | null>>();
-
-function preferredArtworkSource(movie: MovieItem): string {
-  const source = String(movie.source_site || '').trim().toLowerCase();
-  if (source === 'phimapi') return 'kkphim';
-  return ['kkphim', 'vsmov', 'ophim', 'nguonc'].includes(source) ? source : '';
-}
-
-async function recoverMovieArtwork(movie: MovieItem): Promise<MovieItem | null> {
-  const slug = String(movie.slug || '').trim();
-  if (!slug || typeof window === 'undefined') return null;
-  const source = preferredArtworkSource(movie);
-  const key = `${slug}:${source || 'auto'}`;
-  const cached = recoveredArtworkCache.get(key);
-  if (cached) return cached;
-
-  const request = (async () => {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 4500);
-    try {
-      const url = new URL('/api/artwork-recovery', window.location.origin);
-      url.searchParams.set('slug', slug);
-      if (source) url.searchParams.set('source', source);
-      const response = await fetch(url, { signal: controller.signal, cache: 'default' });
-      if (!response.ok) return null;
-      const payload = await response.json() as { movie?: MovieItem };
-      return payload.movie || null;
-    } catch {
-      return null;
-    } finally {
-      window.clearTimeout(timeout);
-    }
-  })();
-  recoveredArtworkCache.set(key, request);
-  return request;
-}
-
-function useMovieArtworkPaths(movie: MovieItem, aspect: 'portrait' | 'landscape'): ArtworkPaths {
-  const original = useMemo(
-    () => aspect === 'portrait' ? getPortraitImagePaths(movie) : getLandscapeImagePaths(movie),
-    [aspect, movie],
-  );
-  const [recovered, setRecovered] = useState<ArtworkPaths | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRecovered(null);
-    if (original.primary || !movie.slug) return () => { cancelled = true; };
-
-    void recoverMovieArtwork(movie).then((freshMovie) => {
-      if (cancelled || !freshMovie) return;
-      const fresh = aspect === 'portrait'
-        ? getPortraitImagePaths(freshMovie)
-        : getLandscapeImagePaths(freshMovie);
-      if (fresh.primary) setRecovered(fresh);
-    });
-
-    return () => { cancelled = true; };
-  }, [aspect, movie, original.primary]);
-
-  return recovered || original;
-}
-
 function DefaultCard({ movie, priority, contextLabel }: MovieCardProps) {
   // Use optimized image for homepage cards to reduce bandwidth
   const { primary: posterPath, fallback: fallbackPath } = useMovieArtworkPaths(movie, 'portrait');

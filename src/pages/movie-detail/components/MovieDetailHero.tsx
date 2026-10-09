@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useImageFallback } from '@/hooks/useImageFallback';
+import { useMovieArtworkPaths } from '@/hooks/useMovieArtworkPaths';
 import SEO, { SITE_URL } from '@/components/base/SEO';
 import type { MovieDetail } from '@/types/movie';
-import { getLandscapeImagePaths, getPortraitImagePaths, getMovieDisplayName, getOptimizedImageUrl } from '@/services/movieApi';
+import { getMovieDisplayName, getOptimizedImageUrl } from '@/services/movieApi';
 import AudioLanguageBadges from '@/components/base/AudioLanguageBadges';
 import MovieCountdown from '@/components/base/MovieCountdown';
 import SocialBrandIcon from '@/components/base/SocialBrandIcon';
@@ -315,8 +316,8 @@ export default function MovieDetailHero({ movie, slug, favored, followed, isTrai
   const [showDesc, setShowDesc] = useState(false);
   const [showNoSourceNotice, setShowNoSourceNotice] = useState(false);
 
-  const portraitArtwork = getPortraitImagePaths(movie);
-  const landscapeArtwork = getLandscapeImagePaths(movie);
+  const portraitArtwork = useMovieArtworkPaths(movie, 'portrait');
+  const landscapeArtwork = useMovieArtworkPaths(movie, 'landscape');
   const posterPath = portraitArtwork.primary || '';
   const backdropPath = movie.hero_backdrop_url || landscapeArtwork.primary || posterPath;
   const poster = useMemo(() => getOptimizedImageUrl(posterPath, 520, 84), [posterPath]);
