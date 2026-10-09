@@ -4000,6 +4000,128 @@ async function renderSeoStudioInspection(request, context) {
   });
 }
 
+function publicArtworkUrl(value) {
+  const url = String(value || '').trim();
+  return /^https?:\/\/[^\s]+$/i.test(url) ? url : '';
+}
+
+async function proxyArtworkRecovery(request, context) {
+  if (request.method !== 'GET') {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: { Allow: 'GET', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+
+  const url = new URL(request.url);
+  const slug = String(url.searchParams.get('slug') || '').trim().toLowerCase();
+  const source = String(url.searchParams.get('source') || '').trim().toLowerCase();
+  if (!slug || slug.length > 180 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    return new Response(JSON.stringify({ status: false, message: 'Invalid slug' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+  if (source && !['kkphim', 'vsmov', 'ophim', 'nguonc'].includes(source)) {
+    return new Response(JSON.stringify({ status: false, message: 'Invalid source' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS },
+    });
+  }
+
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/artwork-recovery/${encodeURIComponent(slug)}?source=${encodeURIComponent(source || 'auto')}`);
+  if (typeof caches !== 'undefined') {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) return cached;
+  }
+
+  const detailUrl = new URL('/api/movie-detail', request.url);
+  detailUrl.searchParams.set('slug', slug);
+  if (source) detailUrl.searchParams.set('source', source);
+  let detailResponse = null;
+  if (source === 'nguonc') {
+    try {
+      const freshNguonc = await fetch(`https://phim.nguonc.com/api/film/${encodeURIComponent(slug)}`, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'Mozilla/5.0 KhoPhim-Artwork-Recovery/1.0',
+        },
+        signal: AbortSignal.timeout(7000),
+      });
+      if (freshNguonc.ok && /json/i.test(freshNguonc.headers.get('content-type') || '')) {
+        detailResponse = freshNguonc;
+      }
+    } catch {
+      /* continue through the canonical detail pipeline */
+    }
+  }
+  if (!detailResponse) {
+    detailResponse = await proxyMovieDetail(new Request(detailUrl.toString(), {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    }), context);
+  }
+
+  // Preview deployments do not receive production-only proxy secrets. Keep
+  // previews testable through the already-public canonical detail endpoint;
+  // the browser still calls this same-origin route, so no credential leaks.
+  if (url.hostname !== 'khophim.org' && (!detailResponse.ok || source !== 'nguonc')) {
+    const canonical = new URL('/api/movie-detail', SITE_URL);
+    canonical.searchParams.set('slug', slug);
+    if (source) canonical.searchParams.set('source', source);
+    try {
+      detailResponse = await fetch(canonical.toString(), {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch {
+      /* return the local failure below */
+    }
+  }
+
+  if (!detailResponse.ok) {
+    return new Response(JSON.stringify({ status: false, message: 'Artwork unavailable' }), {
+      status: detailResponse.status >= 400 && detailResponse.status < 500 ? detailResponse.status : 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=30, s-maxage=60', ...SECURITY_HEADERS },
+    });
+  }
+
+  let payload;
+  try {
+    payload = await detailResponse.json();
+  } catch {
+    payload = null;
+  }
+  const movie = payload?.movie && typeof payload.movie === 'object' ? payload.movie : null;
+  const artwork = movie ? {
+    slug: String(movie.slug || slug),
+    name: String(movie.name || ''),
+    source_site: String(movie.source_site || source || ''),
+    thumb_url: publicArtworkUrl(movie.thumb_url),
+    poster_url: publicArtworkUrl(movie.poster_url),
+    hero_backdrop_url: publicArtworkUrl(movie.hero_backdrop_url),
+    hero_poster_url: publicArtworkUrl(movie.hero_poster_url),
+  } : null;
+  if (!artwork || ![artwork.thumb_url, artwork.poster_url, artwork.hero_backdrop_url, artwork.hero_poster_url].some(Boolean)) {
+    return new Response(JSON.stringify({ status: false, message: 'Artwork unavailable' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60, s-maxage=300', ...SECURITY_HEADERS },
+    });
+  }
+
+  const response = new Response(JSON.stringify({ status: true, movie: artwork }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=300, s-maxage=21600, stale-while-revalidate=86400',
+      'X-Robots-Tag': 'noindex, nofollow',
+      ...SECURITY_HEADERS,
+    },
+  });
+  if (typeof caches !== 'undefined') contextWaitUntil(context, caches.default.put(cacheKey, response.clone()));
+  return response;
+}
+
 async function proxyNguoncDetail(request, context) {
   if (request.method !== 'GET') {
     return new Response('Method Not Allowed', {
@@ -5781,6 +5903,10 @@ export async function onRequest(context) {
 
   if (pathname === '/internal/blvietsub-proxy') {
     return proxyBlvietsub(request, context);
+  }
+
+  if (pathname === '/api/artwork-recovery') {
+    return proxyArtworkRecovery(request, context);
   }
 
   if (pathname === '/api/movie-detail') {
