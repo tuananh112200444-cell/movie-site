@@ -146,20 +146,16 @@ test('alternate campaign demo uses the supplied 728 banner for top and catfish',
   await expect(catfish.locator('img')).toHaveAttribute('src', '/campaign-demo-2/728x90.gif');
 });
 
-test('SHBET demo chooses wide top and standard catfish assets', async ({ page }) => {
+test('paused SHBET demo does not render either placement', async ({ page }) => {
   await page.goto('/?banner-v3=1&intro=off');
 
   const top = page.getByTestId('campaign-top-banner');
   const catfish = page.getByTestId('campaign-catfish');
-  await expect(top).toHaveAttribute('data-campaign-style', 'v3');
-  await expect(catfish).toHaveAttribute('data-campaign-style', 'v3');
-  await expect(top.locator('img')).toHaveAttribute('src', '/campaign-demo-shbet/top-desktop-1090x66.gif');
-  await expect(catfish.locator('img')).toHaveAttribute('src', '/campaign-demo-shbet/catfish-desktop-728x90.gif?v=20261009');
-  await expect(top.locator('source')).toHaveAttribute('srcset', '/campaign-demo-shbet/mobile-300x80.gif');
-  await expect(catfish.locator('source')).toHaveAttribute('srcset', '/campaign-demo-shbet/mobile-300x80.gif');
+  await expect(top).toHaveCount(0);
+  await expect(catfish).toHaveCount(0);
 });
 
-test('MB66 layout keeps both enabled campaigns adjacent on desktop', async ({ page, isMobile }) => {
+test('MB66 layout keeps only the enabled MB66 campaign', async ({ page, isMobile }) => {
   await page.goto('/?banner-mb66=1&intro=off');
 
   const top = page.getByTestId('campaign-top-banner');
@@ -173,10 +169,10 @@ test('MB66 layout keeps both enabled campaigns adjacent on desktop', async ({ pa
   await expect(catfish).toHaveAttribute('data-campaign-style', 'mb66');
   await expect(top).toHaveAttribute('data-campaign-name', 'mb66-additive');
   await expect(catfish).toHaveAttribute('data-campaign-name', 'mb66-additive');
-  await expect(topScope.locator('img')).toHaveCount(2);
-  await expect(catfishScope.locator('img')).toHaveCount(2);
-  await expect(topScope.locator('[data-campaign-creative="f8bet"]')).toBeVisible();
-  await expect(catfishScope.locator('[data-campaign-creative="shbet"]')).toBeVisible();
+  await expect(topScope.locator('img')).toHaveCount(1);
+  await expect(catfishScope.locator('img')).toHaveCount(1);
+  await expect(topScope.locator('[data-campaign-creative="f8bet"]')).toHaveCount(0);
+  await expect(catfishScope.locator('[data-campaign-creative="shbet"]')).toHaveCount(0);
   await expect(topCreative).toHaveAttribute('href', 'https://bit.ly/qtqctong2c184');
   await expect(catfishCreative).toHaveAttribute('href', 'https://bit.ly/qtqctong2c184');
   await expect(topCreative.locator('img')).toHaveAttribute('src', '/campaign-demo-mb66/mb66-728x90.gif');
@@ -197,12 +193,8 @@ test('MB66 layout keeps both enabled campaigns adjacent on desktop', async ({ pa
   expect(topMedia?.width ?? 0).toBeLessThanOrEqual(isMobile ? 288 : 742);
   expect(topMedia?.height ?? 0).toBeLessThanOrEqual(isMobile ? 118 : 48);
   if (!isMobile) {
-    const left = await topScope.locator('img').first().boundingBox();
-    const right = await topScope.locator('img').last().boundingBox();
-    expect(left?.width ?? 0).toBeLessThanOrEqual(362);
-    expect(right?.width ?? 0).toBeLessThanOrEqual(362);
-    expect((right?.x ?? 0) - ((left?.x ?? 0) + (left?.width ?? 0))).toBeGreaterThanOrEqual(4);
-    expect((right?.x ?? 0) - ((left?.x ?? 0) + (left?.width ?? 0))).toBeLessThanOrEqual(16);
+    const creative = await topScope.locator('img').first().boundingBox();
+    expect(creative?.width ?? 0).toBeLessThanOrEqual(728);
   }
   expect(catfishClose?.y ?? 0).toBeLessThan(catfishFrame?.y ?? 0);
 });
@@ -228,36 +220,13 @@ test('MB66 demo adds a linked banner directly under the video player', async ({ 
   expect(bannerBox?.width ?? 0).toBeLessThanOrEqual(isMobile ? 328 : 736);
 });
 
-test('mixed layout shows both campaigns on desktop and mobile', async ({ page, isMobile }) => {
+test('mixed layout is hidden while all of its campaigns are paused', async ({ page }) => {
   await page.goto('/?banner-mix=1&intro=off');
 
   const top = page.getByTestId('campaign-top-banner');
   const catfish = page.getByTestId('campaign-catfish');
-  await expect(top).toHaveAttribute('data-campaign-style', 'mix');
-  await expect(catfish).toHaveAttribute('data-campaign-style', 'mix');
-
-  if (!isMobile) {
-    const topSplit = page.getByTestId('campaign-top-desktop-split');
-    const catfishSplit = page.getByTestId('campaign-catfish-desktop-split');
-    await expect(topSplit.locator('img')).toHaveCount(2);
-    await expect(catfishSplit.locator('img')).toHaveCount(2);
-    await expect(topSplit.locator('img').nth(0)).toHaveAttribute('src', '/banner-demo/assets/728x90.gif');
-    await expect(topSplit.locator('img').nth(1)).toHaveAttribute('src', '/campaign-demo-f8bet/top-728x90.gif');
-    await expect(topSplit.locator('[data-campaign-creative="f8bet"]')).toHaveAttribute('href', 'https://bit.ly/4cCE7SB');
-    await expect(catfishSplit.locator('img').nth(0)).toHaveAttribute('src', '/banner-demo/assets/728x90.gif');
-    await expect(catfishSplit.locator('img').nth(1)).toHaveAttribute('src', '/campaign-demo-shbet/catfish-desktop-728x90.gif?v=20261009');
-    await expect(catfishSplit.locator('[data-campaign-creative="shbet"]')).toHaveAttribute('href', 'https://bit.ly/SH2PP21');
-    return;
-  }
-
-  await expect(top).toHaveAttribute('data-mobile-state', 'expanded');
-  await expect(catfish).toHaveAttribute('data-mobile-state', 'expanded');
-  await expect(top.locator('.campaign-banner-mix__mobile img')).toHaveCount(2);
-  await expect(catfish.locator('.campaign-banner-mix__mobile img')).toHaveCount(2);
-  await expect(top.locator('.campaign-banner-mix__mobile [data-campaign-creative="f8bet"]')).toHaveAttribute('href', 'https://bit.ly/4cCE7SB');
-  await expect(catfish.locator('.campaign-banner-mix__mobile [data-campaign-creative="shbet"]')).toHaveAttribute('href', 'https://bit.ly/SH2PP21');
-  await expect(page.getByRole('button', { name: 'Đóng banner đầu trang' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Đóng banner catfish' })).toBeVisible();
+  await expect(top).toHaveCount(0);
+  await expect(catfish).toHaveCount(0);
 });
 
 test('compact watch demo keeps the player viewport clear', async ({ page, isMobile }) => {

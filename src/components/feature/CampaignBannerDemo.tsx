@@ -30,7 +30,7 @@ type CampaignAsset = {
 
 // Kept as a single switch so the campaign can be restored without touching
 // layouts, rotation behavior, or the remaining paid placements.
-const PAUSED_CAMPAIGN_NAMES = new Set<CampaignAsset['name']>(['9922']);
+const PAUSED_CAMPAIGN_NAMES = new Set<CampaignAsset['name']>(['9922', 'f8bet', 'shbet']);
 
 function isCampaignEnabled(campaign: CampaignAsset): boolean {
   return !PAUSED_CAMPAIGN_NAMES.has(campaign.name);
