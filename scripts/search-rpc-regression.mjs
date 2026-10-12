@@ -41,7 +41,7 @@ const architectureChecks = [
   [edgeSearchSource.includes('function isRetiredOphimItem') && edgeSearchSource.includes('void item;') && edgeSearchSource.includes('return false;'), 'Catalogue metadata must remain provider-neutral when OPhim playback is retired'],
   [edgeSearchSource.includes('mergeCanonicalSearchDuplicates') && edgeSearchSource.includes('searchIdentityKeys'), 'Edge search must merge duplicate canonical identities before ranking'],
   [cloudflareWorkerSource.includes('mergeProviderNeutralSearchRows') && cloudflareWorkerSource.includes('sameProviderNeutralSearchIdentity'), 'Search must merge provider rows into one canonical result'],
-  [cloudflareWorkerSource.includes("rpcName = 'search_movies_smart'") && cloudflareWorkerSource.includes('v20-canonical-dedupe'), 'Cloudflare search must use the smart RPC and a fresh canonical-dedupe cache generation'],
+  [cloudflareWorkerSource.includes("rpcName = 'search_movies_smart'") && cloudflareWorkerSource.includes('v21-high-kick-canonical'), 'Cloudflare search must use the smart RPC and the current canonical-dedupe cache generation'],
   [cloudflareWorkerSource.includes('vsmov.com/api/tim-kiem') && cloudflareWorkerSource.includes('phim.nguonc.com/api/films/search'), 'Search fallback must query KKPhim, VSMov and NguonC equally'],
   [searchPageSource.includes('matchesSearchIntent') && searchPageSource.includes('.filter((movie) => matchesSearchIntent'), 'Search page must remove unrelated fuzzy results'],
   [searchPageSource.includes('search_v14_') && searchPageSource.includes("slug: 'cam'") && movieApiSource.includes("20260827-canonical-dedupe-v2") && movieApiSource.includes("cache: 'no-store'"), 'Published canonical movies must bypass stale browser search caches'],
