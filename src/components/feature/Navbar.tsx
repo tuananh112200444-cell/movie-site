@@ -4,8 +4,6 @@ import { prefetchRoute } from '../../utils/prefetchRoute';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { CampaignTopBanner } from './CampaignBannerDemo';
 import SearchSuggestions from './SearchSuggestions';
-import SocialBrandIcon, { type SocialBrandPlatform } from '@/components/base/SocialBrandIcon';
-import { SOCIAL_URLS } from '@/config/socialLinks';
 import { useAuth } from '@/context/AuthContext';
 import { useFollowUpdates } from '@/context/FollowUpdatesContext';
 
@@ -56,21 +54,6 @@ const NAV_LINKS = [
   { label: 'Phim Lẻ', to: '/phim-le' },
   { label: 'Phim Bộ', to: '/phim-bo' },
   { label: 'Chiếu Rạp', to: '/phim-chieu-rap' },
-];
-interface NavbarSocialLink {
-  href: string;
-  brand?: SocialBrandPlatform;
-  icon?: string;
-  desktopColor: string;
-  mobileColor: string;
-  title: string;
-}
-
-const SOCIAL_LINKS: NavbarSocialLink[] = [
-  { href: SOCIAL_URLS.facebook, brand: 'facebook', desktopColor: 'text-white border-white/20 bg-gradient-to-br from-[#2d8cff] to-[#1264d8] shadow-[0_6px_18px_rgba(24,119,242,0.28)] hover:brightness-110 hover:shadow-[0_8px_24px_rgba(24,119,242,0.42)]', mobileColor: 'text-white bg-gradient-to-br from-[#2d8cff] to-[#1264d8] border-white/15', title: 'Facebook KhoPhim' },
-  { href: SOCIAL_URLS.messenger, brand: 'messenger', desktopColor: 'text-white border-white/20 bg-gradient-to-br from-[#00B2FF] via-[#686BFF] to-[#E944A1] shadow-[0_6px_18px_rgba(83,105,255,0.28)] hover:brightness-110 hover:shadow-[0_8px_24px_rgba(83,105,255,0.42)]', mobileColor: 'text-white bg-gradient-to-br from-[#00B2FF] via-[#686BFF] to-[#E944A1] border-white/15', title: 'Messenger KhoPhim' },
-  { href: SOCIAL_URLS.tiktok, brand: 'tiktok', desktopColor: 'text-white border-white/20 bg-[#111318] shadow-[5px_0_16px_rgba(254,44,85,0.22),-5px_0_16px_rgba(37,244,238,0.2)] hover:border-white/35 hover:shadow-[6px_0_22px_rgba(254,44,85,0.34),-6px_0_22px_rgba(37,244,238,0.32)]', mobileColor: 'text-white bg-[#111318] border-white/15', title: 'TikTok KhoPhim' },
-  { href: SOCIAL_URLS.telegram, icon: 'ri-telegram-fill', desktopColor: 'text-white border-white/20 bg-gradient-to-br from-[#37b9f1] to-[#168ac1] shadow-[0_6px_18px_rgba(41,168,232,0.25)] hover:brightness-110', mobileColor: 'text-white bg-gradient-to-br from-[#37b9f1] to-[#168ac1] border-white/15', title: 'Telegram KhoPhim' },
 ];
 export default function Navbar() {
   const { user, syncStatus } = useAuth();
@@ -413,36 +396,6 @@ export default function Navbar() {
 
           {/* ── Right Actions ── */}
           <div className="navbar-actions flex items-center gap-1">
-            {/* Social links */}
-            <div className="hidden 2xl:flex items-center gap-0.5 mr-1">
-              {SOCIAL_LINKS.map(({ href, brand, icon, desktopColor, title }) => (
-                <a key={href} href={href} target="_blank" rel="noopener noreferrer nofollow" title={title} aria-label={title}
-                  className={`w-8 h-8 flex items-center justify-center border ${desktopColor} transition-all duration-200 cursor-pointer rounded-lg hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70`}>
-                  {brand ? <SocialBrandIcon platform={brand} className="h-[18px] w-[18px]" /> : <i className={`${icon} text-[17px]`} aria-hidden="true" />}
-                  <span className="sr-only">{title}</span>
-                </a>
-              ))}
-              <div className="w-px h-4 bg-white/[0.08] mx-1" />
-            </div>
-
-            <div className="navbar-mobile-socials hidden min-[640px]:flex lg:hidden items-center gap-0.5">
-              {SOCIAL_LINKS.map(({ href, brand, icon, title, mobileColor }) => {
-                return (
-                <a
-                  key={href}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow"
-                  title={title}
-                  aria-label={title}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg border shadow-sm ${mobileColor} active:scale-95`}
-                >
-                  {brand ? <SocialBrandIcon platform={brand} className="h-[18px] w-[18px]" /> : <i className={`${icon} text-[17px]`} aria-hidden="true" />}
-                  <span className="sr-only">{title}</span>
-                </a>
-              );})}
-            </div>
-
             
 
             {/* Theme toggle */}

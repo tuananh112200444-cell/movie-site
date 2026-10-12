@@ -1242,7 +1242,6 @@ function renderHtml({ title, description, canonical, h1, body, schema, ogType = 
       name: 'KhoPhim',
       url: SITE_URL,
       logo: `${SITE_URL}/brand/khophim-logo-v2.png`,
-      sameAs: ['/'],
     },
   ];
   const schemas = Array.isArray(schema) ? [...baseSchema, ...schema] : [...baseSchema, schema].filter(Boolean);
@@ -5702,21 +5701,26 @@ const ADSTERRA_BANNER_FRAMES = new Map([
   ['/_ads/banner-300x250.html', { key: 'b9e4fcb9b31cf4b3ba07f94fd96f3290', width: 300, height: 250 }],
 ]);
 const ADSTERRA_BANNERS_ENABLED = false;
-const HLS_TRIAL_GATEWAY_ORIGIN = 'https://khophim-hls-gateway-trial.khophim.workers.dev';
-const HLS_PRODUCTION_GATEWAY_ORIGIN = 'https://khophim-hls-gateway.khophim.workers.dev';
 
 function isHlsTrialPath(pathname) {
   return pathname === '/api/hls-ticket' || pathname.startsWith('/hls/');
 }
 
-function hlsGatewayOrigin(url) {
-  return url.hostname === 'khophim.org' || url.hostname === 'www.khophim.org'
-    ? HLS_PRODUCTION_GATEWAY_ORIGIN
-    : HLS_TRIAL_GATEWAY_ORIGIN;
+function hlsGatewayOrigin(url, env) {
+  const production = url.hostname === 'khophim.org' || url.hostname === 'www.khophim.org';
+  const configured = production
+    ? env?.HLS_PRODUCTION_GATEWAY_ORIGIN
+    : env?.HLS_TRIAL_GATEWAY_ORIGIN;
+  if (!configured) throw new Error('HLS gateway origin is not configured');
+  const origin = new URL(configured);
+  if (origin.protocol !== 'https:' || origin.pathname !== '/' || origin.search || origin.hash) {
+    throw new Error('HLS gateway origin is invalid');
+  }
+  return origin.origin;
 }
 
 async function proxyHlsRequest(request, url, env) {
-  const target = new URL(`${url.pathname}${url.search}`, hlsGatewayOrigin(url));
+  const target = new URL(`${url.pathname}${url.search}`, hlsGatewayOrigin(url, env));
   const headers = new Headers(request.headers);
   // The staging gateway accepts only the production site's identity. Pages
   // preview acts as the same-origin frontend and never exposes the gateway

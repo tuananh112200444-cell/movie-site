@@ -1,7 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
-import { readFile } from 'node:fs/promises';
+import { writeFile, readFile, access } from 'node:fs/promises';
 
 async function writeFileWithRetry(filePath, contents, attempts = 6) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -34,6 +33,11 @@ const appFiles = git([
 ], '').split(/\r?\n/).map((value) => value.trim()).filter(Boolean).sort();
 const appHash = createHash('sha256');
 for (const file of appFiles) {
+  try {
+    await access(file);
+  } catch {
+    continue;
+  }
   appHash.update(file);
   appHash.update('\0');
   appHash.update(await readFile(file));

@@ -62,7 +62,7 @@ const CONTENT: Record<TabKey, { sections: { title: string; body: string }[] }> =
       },
       {
         title: '7. Liên Hệ',
-        body: 'Nếu bạn có câu hỏi về chính sách bảo mật, vui lòng liên hệ chúng tôi qua Telegram hoặc Facebook được liệt kê trong trang Giới Thiệu.',
+        body: 'Nếu bạn có câu hỏi về chính sách bảo mật, vui lòng gửi yêu cầu trực tiếp qua trang Yêu Cầu Phim của KhoPhim.',
       },
     ],
   },
@@ -114,7 +114,7 @@ const CONTENT: Record<TabKey, { sections: { title: string; body: string }[] }> =
       },
       {
         title: '3. Quy Trình Gỡ Bỏ Nội Dung',
-        body: 'Nếu bạn là chủ sở hữu bản quyền và tin rằng nội dung trên KhoPhim vi phạm quyền của bạn, vui lòng gửi thông báo DMCA đến chúng tôi qua Telegram hoặc Facebook. Thông báo cần bao gồm: (a) mô tả tác phẩm bị vi phạm; (b) URL cụ thể của nội dung vi phạm; (c) thông tin liên hệ của bạn; (d) tuyên bố rằng bạn là chủ sở hữu hợp pháp.',
+        body: 'Nếu bạn là chủ sở hữu bản quyền và tin rằng nội dung trên KhoPhim vi phạm quyền của bạn, vui lòng gửi thông báo DMCA qua trang Yêu Cầu Phim. Thông báo cần bao gồm: (a) mô tả tác phẩm bị vi phạm; (b) URL cụ thể của nội dung vi phạm; (c) thông tin liên hệ của bạn; (d) tuyên bố rằng bạn là chủ sở hữu hợp pháp.',
       },
       {
         title: '4. Thời Gian Xử Lý',
@@ -126,7 +126,7 @@ const CONTENT: Record<TabKey, { sections: { title: string; body: string }[] }> =
       },
       {
         title: '6. Liên Hệ DMCA',
-        body: 'Để gửi yêu cầu DMCA hoặc liên hệ về vấn đề bản quyền, vui lòng liên hệ qua Telegram: @khophim-support hoặc qua trang Facebook chính thức của KhoPhim. Chúng tôi cam kết xử lý mọi yêu cầu một cách nghiêm túc và kịp thời.',
+        body: 'Để gửi yêu cầu DMCA hoặc liên hệ về vấn đề bản quyền, vui lòng sử dụng biểu mẫu Yêu Cầu Phim trên KhoPhim và chọn nội dung phù hợp. Chúng tôi cam kết xử lý mọi yêu cầu một cách nghiêm túc và kịp thời.',
       },
     ],
   },
@@ -228,25 +228,16 @@ export default function PolicyPage() {
           <div className="flex-1 min-w-0">
             <p className="text-white font-semibold text-sm mb-1">Có câu hỏi về chính sách?</p>
             <p className="text-white/40 text-xs leading-relaxed">
-              Liên hệ chúng tôi qua Telegram hoặc Facebook. Đội ngũ KhoPhim sẽ phản hồi trong vòng 24-48 giờ.
+              Gửi yêu cầu trực tiếp trên KhoPhim. Đội ngũ KhoPhim sẽ phản hồi sau khi tiếp nhận và xác minh thông tin.
             </p>
           </div>
           <div className="flex gap-2 flex-shrink-0">
-            <a
-              href="https://t.me/khophim-support"
-              target="_blank"
-              rel="noopener noreferrer nofollow"
-              className="flex items-center gap-1.5 bg-[#29A8E8]/15 hover:bg-[#29A8E8]/25 border border-[#29A8E8]/25 text-[#29A8E8] text-xs font-semibold px-4 py-2 rounded-xl transition-all cursor-pointer whitespace-nowrap"
-            >
-              <i className="ri-telegram-fill" />
-              Telegram
-            </a>
             <Link
-              to="/about"
-              className="flex items-center gap-1.5 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.08] text-white/60 hover:text-white text-xs font-medium px-4 py-2 rounded-xl transition-all cursor-pointer whitespace-nowrap"
+              to="/yeu-cau-phim"
+              className="flex items-center gap-1.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/25 text-red-300 text-xs font-semibold px-4 py-2 rounded-xl transition-all cursor-pointer whitespace-nowrap"
             >
-              <i className="ri-information-line" />
-              Giới Thiệu
+              <i className="ri-customer-service-2-line" />
+              Gửi Yêu Cầu
             </Link>
           </div>
         </div>

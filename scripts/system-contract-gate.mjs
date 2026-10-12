@@ -7,7 +7,6 @@ const movieApi = read('src/services/movieApi.ts');
 const detailProxy = read('supabase/functions/movie-detail-proxy/index.ts');
 const playerBox = read('src/pages/movie-detail/components/PlayerBox.tsx');
 const navbar = read('src/components/feature/Navbar.tsx');
-const socialBrandIcon = read('src/components/base/SocialBrandIcon.tsx');
 const autoRepair = read('supabase/functions/auto-repair-player-issues/index.ts');
 const identityPolicy = read('supabase/functions/_shared/movie-identity.ts');
 const cronStagger = read('supabase/migrations/20260721162000_stagger_heavy_system_crons.sql');
@@ -38,19 +37,6 @@ const connectors = [
   'supabase/functions/sync-onlyflix-feed/index.ts',
   'supabase/functions/sync-cobephim-feed/index.ts',
 ];
-
-if (!navbar.includes("import SocialBrandIcon") || !navbar.includes('<SocialBrandIcon platform={brand}')) {
-  failures.push('navbar is not using the shared accessible social brand icon component');
-}
-for (const brandColor of ['from-[#2d8cff]', 'from-[#00B2FF]', 'bg-[#111318]', 'from-[#37b9f1]']) {
-  if (!navbar.includes(brandColor)) failures.push(`desktop social control is missing persistent brand treatment: ${brandColor}`);
-}
-for (const iconColor of ['fill="#25F4EE"', 'fill="#FE2C55"', 'fill="white"']) {
-  if (!socialBrandIcon.includes(iconColor)) failures.push(`TikTok brand icon is missing layer: ${iconColor}`);
-}
-if (!navbar.includes('${desktopColor}') || !navbar.includes('hover:brightness-110')) {
-  failures.push('desktop social controls can still render without their persistent brand treatment');
-}
 
 for (const step of ['schema:test', 'seo:upcoming:test', 'seo:ongoing:test', 'system:contracts', 'sync:safety:test', 'home:test', 'search:test', 'movie:data:test', 'watch:test', 'diagnostics:test']) {
   if (!releaseGate.includes(`['${step}']`)) failures.push(`release gate is missing ${step}`);

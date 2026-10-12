@@ -2,8 +2,6 @@
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import SEO, { SITE_URL } from '@/components/base/SEO';
-import SocialBrandIcon from '@/components/base/SocialBrandIcon';
-import { SOCIAL_URLS } from '@/config/socialLinks';
 
 const aboutSchema = [
   {
@@ -44,7 +42,6 @@ const aboutSchema = [
       'KhoPhim là website khám phá và xem phim tiếng Việt với metadata phim, danh mục, tìm kiếm và trạng thái cập nhật được chuẩn hóa.',
     areaServed: 'VN',
     knowsLanguage: 'vi',
-    sameAs: [SOCIAL_URLS.facebook, '/'],
     publishingPrinciples: `${SITE_URL}/press/`,
     contactPoint: {
       '@type': 'ContactPoint',
@@ -132,7 +129,7 @@ const FAQS = [
   },
   {
     q: 'Nếu phim bị lỗi, tôi phải làm gì?',
-    a: 'Nếu phim bị lỗi, hãy thử chuyển sang nguồn phim khác (Vietsub, Lồng Tiếng, Thuyết Minh) trong trang xem phim. Nếu vẫn lỗi, hãy liên hệ chúng tôi qua Telegram.',
+    a: 'Nếu phim bị lỗi, hãy thử chuyển sang nguồn phim khác (Vietsub, Lồng Tiếng, Thuyết Minh) trong trang xem phim. Nếu vẫn lỗi, hãy gửi báo lỗi trong trang Yêu Cầu Phim.',
   },
 ];
 
@@ -340,33 +337,18 @@ export default function AboutPage() {
             </div>
             <h2 className="text-2xl font-bold text-white mb-3">Liên Hệ & Hỗ Trợ</h2>
             <p className="text-white/45 text-sm max-w-lg mx-auto mb-6 leading-relaxed">
-              Gặp vấn đề khi xem phim? Muốn yêu cầu thêm phim? Hãy liên hệ với chúng tôi qua các kênh bên dưới. Đội ngũ hỗ trợ KhoPhim luôn sẵn sàng giúp đỡ bạn.
+              Gặp vấn đề khi xem phim hoặc muốn yêu cầu thêm phim? Hãy gửi yêu cầu trực tiếp trên KhoPhim mà không cần dùng tài khoản mạng xã hội bên ngoài.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <a href={SOCIAL_URLS.facebook} target="_blank" rel="noopener noreferrer nofollow"
-                className="flex items-center gap-2.5 bg-gradient-to-r from-[#2d8cff] to-[#1264d8] hover:brightness-110 border border-white/15 text-white font-semibold px-5 py-2.5 rounded-xl shadow-[0_8px_24px_rgba(24,119,242,0.22)] transition-all cursor-pointer whitespace-nowrap">
-                <SocialBrandIcon platform="facebook" className="h-5 w-5" />
-                Facebook
-              </a>
-              <a href={SOCIAL_URLS.messenger} target="_blank" rel="noopener noreferrer nofollow"
-                className="flex items-center gap-2.5 bg-gradient-to-r from-[#00B2FF] via-[#686BFF] to-[#E944A1] hover:brightness-110 border border-white/15 text-white font-semibold px-5 py-2.5 rounded-xl shadow-[0_8px_24px_rgba(83,105,255,0.2)] transition-all cursor-pointer whitespace-nowrap">
-                <SocialBrandIcon platform="messenger" className="h-5 w-5" />
-                Messenger
-              </a>
-              <a href={SOCIAL_URLS.tiktok} target="_blank" rel="me noopener noreferrer"
-                className="flex items-center gap-2.5 bg-[#111318] hover:bg-[#191c23] border border-white/15 text-white font-semibold px-5 py-2.5 rounded-xl shadow-[5px_0_18px_rgba(254,44,85,0.16),-5px_0_18px_rgba(37,244,238,0.14)] transition-all cursor-pointer whitespace-nowrap">
-                <SocialBrandIcon platform="tiktok" className="h-5 w-5" />
-                TikTok
-              </a>
-              <a href={SOCIAL_URLS.telegram} target="_blank" rel="noopener noreferrer nofollow"
-                className="flex items-center gap-2.5 bg-gradient-to-r from-[#37b9f1] to-[#168ac1] hover:brightness-110 border border-white/15 text-white font-semibold px-5 py-2.5 rounded-xl transition-all cursor-pointer whitespace-nowrap">
-                <i className="ri-telegram-fill text-xl" aria-hidden="true" />
-                Telegram
-              </a>
-              <Link to="/"
+              <Link to="/yeu-cau-phim"
                 className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white font-semibold px-5 py-2.5 rounded-xl transition-all cursor-pointer whitespace-nowrap">
-                <i className="ri-play-fill" />
-                Xem Phim Ngay
+                <i className="ri-customer-service-2-line" />
+                Gửi Yêu Cầu
+              </Link>
+              <Link to="/policy"
+                className="flex items-center gap-2 bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.10] text-white/80 hover:text-white font-semibold px-5 py-2.5 rounded-xl transition-all cursor-pointer whitespace-nowrap">
+                <i className="ri-shield-check-line" />
+                Chính Sách
               </Link>
             </div>
           </div>

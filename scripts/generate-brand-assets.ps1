@@ -1,5 +1,6 @@
 param(
-  [string]$Source = "[local]\Pictures\e1260dce-9377-44c8-83b0-d22bf9614677.png"
+  [Parameter(Mandatory = $true)]
+  [string]$Source
 )
 
 Add-Type -AssemblyName System.Drawing

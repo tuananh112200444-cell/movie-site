@@ -8,7 +8,7 @@ import { PINNED_CINEMA_MOVIES } from "./src/data/homePromotions";
 
 const base = process.env.BASE_PATH || "/";
 const isPreview = process.env.IS_PREVIEW ? true : false;
-const hlsTrialOrigin = 'https://khophim-hls-gateway-trial.khophim.workers.dev';
+const hlsTrialOrigin = process.env.HLS_TRIAL_GATEWAY_ORIGIN || 'http://127.0.0.1:8787';
 
 function hlsTrialProxy(): ProxyOptions {
   return {

@@ -3,6 +3,9 @@ out/
 dist/
 .env
 .env.local
+.env.*
+.dev.vars
+.dev.vars.*
 .wrangler/
 work/
 test-results/
@@ -11,6 +14,17 @@ test-results/
 .tmp-*/
 workers/**/.tmp-*/
 tmp_*
+*.log
+*.headers
+*.body
+*-deployments-*.json
+*-production-*.json
+*-release-gate.log
+*-domain-status.png
+*-dns-restored.png
+*-demo-*.png
+supabase/.temp/
+.supabase-functions-migration/
 motchill_page.html
 tools/video-pipeline/config.json
 .DS_Store

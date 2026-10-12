@@ -64,7 +64,7 @@
     "seo:generate": "node scripts/generate-static-sitemap.mjs && node scripts/generate-seo-sitemap.mjs && node scripts/generate-movie-sitemap-chunks.mjs && node scripts/generate-sitemap-index.mjs && node scripts/generate-mhophim-satellite.mjs",
     "watch:test": "node scripts/watch-page-regression.mjs && node scripts/player-ui-regression.mjs && node scripts/player-performance-regression.mjs && node scripts/playback-provider-brain-regression.mjs && node scripts/movie-detail-outage-regression.mjs",
     "home:test": "node scripts/home-experience-regression.mjs",
-    "social:test": "node scripts/social-links-regression.mjs",
+    "privacy:author:test": "node scripts/social-links-regression.mjs",
     "intro:test": "node scripts/cinematic-intro-regression.mjs",
     "list:test": "node scripts/list-page-image-regression.mjs && node scripts/catalog-pagination-regression.mjs",
     "feed:test": "node scripts/stable-catalog-feed-regression.mjs",

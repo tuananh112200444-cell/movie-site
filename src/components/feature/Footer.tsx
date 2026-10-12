@@ -1,8 +1,6 @@
 ﻿import { Link } from 'react-router-dom';
 import { memo } from 'react';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import SocialBrandIcon, { type SocialBrandPlatform } from '@/components/base/SocialBrandIcon';
-import { SOCIAL_URLS } from '@/config/socialLinks';
 
 const STATS = [
   { value: 'Đa dạng', label: 'Thư Viện Phim' },
@@ -74,21 +72,6 @@ const SEO_LANDING_LINKS = [
   { label: 'Phim Trailer', to: '/phim-trailer', icon: 'ri-time-line' },
 ];
 
-interface FooterSocialLink {
-  href: string;
-  brand?: SocialBrandPlatform;
-  icon?: string;
-  label: string;
-  color: string;
-}
-
-const SOCIAL_LINKS: FooterSocialLink[] = [
-  { href: SOCIAL_URLS.facebook, brand: 'facebook', label: 'Facebook', color: 'text-white border-white/15 bg-gradient-to-br from-[#2d8cff] to-[#1264d8] shadow-[0_7px_20px_rgba(24,119,242,0.2)] hover:brightness-110 hover:-translate-y-0.5' },
-  { href: SOCIAL_URLS.messenger, brand: 'messenger', label: 'Messenger', color: 'text-white border-white/15 bg-gradient-to-br from-[#00B2FF] via-[#686BFF] to-[#E944A1] shadow-[0_7px_20px_rgba(83,105,255,0.2)] hover:brightness-110 hover:-translate-y-0.5' },
-  { href: SOCIAL_URLS.tiktok, brand: 'tiktok', label: 'TikTok', color: 'text-white border-white/15 bg-[#111318] shadow-[4px_0_15px_rgba(254,44,85,0.18),-4px_0_15px_rgba(37,244,238,0.16)] hover:border-white/30 hover:-translate-y-0.5' },
-  { href: SOCIAL_URLS.telegram, icon: 'ri-telegram-fill', label: 'Telegram', color: 'text-white border-white/15 bg-gradient-to-br from-[#37b9f1] to-[#168ac1] shadow-[0_7px_20px_rgba(41,168,232,0.18)] hover:brightness-110 hover:-translate-y-0.5' },
-];
-
 const MOBILE_FOOTER_LINKS = [
   { label: 'Phim mới', to: '/phim-moi-cap-nhat' },
   { label: 'Phim lẻ', to: '/phim-le' },
@@ -125,22 +108,6 @@ function Footer() {
               </Link>
             ))}
           </nav>
-
-          <div className="mt-4 flex items-center gap-2 border-t border-white/[0.05] pt-4" aria-label="Mạng xã hội KhoPhim">
-            {SOCIAL_LINKS.map(({ href, brand, icon, label, color }) => (
-              <a
-                key={href}
-                href={href}
-                target="_blank"
-                rel={label === 'TikTok' ? 'me noopener noreferrer' : 'noopener noreferrer nofollow'}
-                title={label}
-                aria-label={label}
-                className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-all active:scale-90 ${color}`}
-              >
-                {brand ? <SocialBrandIcon platform={brand} className="h-5 w-5" /> : <i className={`${icon} text-xl`} aria-hidden="true" />}
-              </a>
-            ))}
-          </div>
 
           <div className="mt-4 text-[11px] leading-5 text-white/45">
             <p>Nội dung tổng hợp từ nguồn công khai; KhoPhim không lưu trữ tệp video.</p>
@@ -208,18 +175,6 @@ function Footer() {
               <span className="text-[13px] text-white/55 group-hover:text-white/80 transition-colors">Tìm kiếm phim...</span>
             </Link>
 
-            {/* Social */}
-            <div className="flex items-center gap-2">
-              {SOCIAL_LINKS.map(({ href, brand, icon, label, color }) => (
-                <a key={href} href={href} target="_blank" rel={label === 'TikTok' ? 'me noopener noreferrer' : 'noopener noreferrer nofollow'}
-                  title={label}
-                  aria-label={label}
-                  className={`flex h-11 w-11 items-center justify-center border rounded-xl transition-all cursor-pointer active:scale-90 active:opacity-80 touch-manipulation ${color}`}>
-                  {brand ? <SocialBrandIcon platform={brand} className="h-5 w-5" /> : <i className={`${icon} text-xl`} aria-hidden="true" />}
-                  <span className="sr-only">{label}</span>
-                </a>
-              ))}
-            </div>
           </div>
 
           {/* Danh Mục */}
