@@ -81,7 +81,7 @@ const checks = [
   [movieApi.includes('if (glvietsubMovies.length > 0) return glvietsubMovies;')
     && movieApi.includes('loadStaticQueerFallback(options.signal)')
     && movieApi.includes('return prepareQueerHomeRail(fallbackMovies, limit, true);'), 'Homepage GL shelf must keep the fallback restricted to GLVietsub rows'],
-  [home.includes('fetchGlvietsubHomeMovies') && home.includes('limit: 12') && home.includes('fetchKey="queer-universe" limit={compactMobile ? 6 : 12}'), 'Homepage queer shelf must render 12 GLVietsub movies on desktop and a bounded 6 on compact mobile'],
+  [home.includes('fetchGlvietsubHomeMovies') && home.includes('limit: 12') && home.includes('fetchKey="queer-universe" limit={compactMobile ? 9 : 12}'), 'Homepage queer shelf must render 12 GLVietsub movies on desktop and a bounded 9 on compact mobile'],
   [queerHome.includes('priority={false}') && !queerHome.includes('priority={index < 6}'), 'Queer grids must not compete with the hero using high-priority images'],
   [queerHero.includes('heroRequestWidth') && queerHero.includes('fetchPriority="low"'), 'Responsive queer hero image policy is missing'],
   [healthMigration.includes("auto-repair-player-issues-every-30-minutes") && healthMigration.includes("cron.unschedule('sync-blvietsub-smart-repair-every-30-minutes')"), 'Redundant/stuck repair cron cleanup is missing'],
