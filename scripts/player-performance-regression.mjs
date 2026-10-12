@@ -46,7 +46,7 @@ const checks = [
   [
     lightweightPlayer.includes('const callbacksRef = useRef({')
       && lightweightPlayer.includes('initialTimeRef.current = target')
-      && lightweightPlayer.includes('}, [src, autoPlay, retryNonce]);')
+      && lightweightPlayer.includes('}, [src, autoPlay, retryNonce, protectedSource]);')
       && lightweightPlayer.includes('callbacksRef.current.onTimeUpdate?.')
       && !lightweightPlayer.includes('}, [src, autoPlay, initialTime, onFatalError, onPlayerIssue, retryNonce]);'),
     'Progress, callback and countdown renders must not destroy and recreate the active HLS MediaSource',
@@ -82,7 +82,7 @@ const checks = [
   [hero.includes('hidden sm:block') && hero.includes('loading="eager"') && hero.includes('fetchPriority="high"') && !hero.includes('backdropFallback'), 'Desktop LCP backdrop must load eagerly while remaining hidden on mobile'],
   [navbar.includes('/brand/khophim-favicon-v2-96.png'), 'Navigation must use the compact brand asset'],
   [movieApi.includes("new URL('/api/movie-detail'"), 'Movie detail must use the same-origin edge cache'],
-  [movieApi.includes('delayMs: 1_200') && movieApi.includes('let winnerFound = false') && movieApi.indexOf("new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`)") < movieApi.indexOf("new URL('/api/movie-detail'"), 'Movie detail must prefer the public Singapore read and avoid spending a Pages Function request when it succeeds'],
+  [movieApi.includes('delayMs: 9_250') && movieApi.includes('let winnerFound = false') && movieApi.indexOf("new URL('/api/movie-detail'") < movieApi.indexOf("new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`)") && movieApi.includes('It must never outrun the canonical route.'), 'Movie detail must prefer the canonical same-origin read so a stale provider cannot replace a newer KhoPhim R2 source'],
   [movieApi.includes('withNullTimeout(proxyPlayablePromise, 4_100)') && movieApi.includes('raceFirstValidWithTimeout(playablePromises, 900)'), 'The complete provider/audio union must own most of the bounded quick-path budget before a single-provider response may win'],
   [movieApi.includes('External enrichment must never delay first render/player startup') && movieApi.includes('void mergeExternalDetailIfFast'), 'External detail enrichment must remain outside the critical render path'],
   [movieApi.includes('BLVIETSUB_DETAIL_DEDUPE_MS') && movieApi.includes('blvietsubDetailInflight'), 'Repeated BLVietsub detail failures must be deduplicated on the client'],
@@ -201,7 +201,7 @@ const checks = [
   [worker.includes('Large catalogues can finish just after four seconds') && worker.includes('signal: AbortSignal.timeout(7000)'), 'Cloudflare must not abort a valid large-catalogue detail response immediately before completion'],
   [worker.includes('/__circuit/blvietsub/') && worker.includes('/__circuit/movie-detail/') && worker.includes('X-KhoPhim-Circuit'), 'Cloudflare POP circuit breakers must protect detail upstreams'],
   [playerSection.includes("aria-label={cinemaMode ? 'Thoát chế độ Cinema' : 'Bật chế độ Cinema'}"), 'Cinema control must have an accessible name on mobile'],
-  [comments.includes('<h2 className="text-white font-bold text-base">'), 'Comments heading must preserve a valid document outline'],
+  [comments.includes('<h2 id="community-comments-title"') && comments.includes('aria-labelledby="community-comments-title"'), 'Comments heading must preserve a valid document outline'],
   [!imageFallback.includes('new Image()'), 'Lazy movie posters must not be eagerly downloaded by a duplicate JavaScript image loader'],
   [/backgroundWidth\s*=\s*isMobileHero\s*\?\s*(?:[1-3]\d{2}|4[0-8]0)\s*:\s*1360/.test(homeHero), 'Mobile hero must request an image rendition no wider than 480px before DPR scaling'],
   [lazyHomeSection.includes('return !isMobileViewport() && hasData && sectionIndex === 0;'), 'Offscreen mobile category shelves must not render eagerly'],
