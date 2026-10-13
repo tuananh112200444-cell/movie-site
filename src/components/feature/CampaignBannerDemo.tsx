@@ -161,10 +161,13 @@ export function CampaignTopBanner() {
   const compactDemo = style === 'compact';
   const focusDemo = style === 'focus';
   const mb66Demo = style === 'mb66';
-  const multiCampaignDemo = mixedDemo || mb66Demo;
-  const visibleTopCampaigns = (mb66Demo ? mb66TopCampaigns : mixedTopCampaigns).filter(isCampaignEnabled);
+  const f8WelcomeDemo = style === 'f8welcome';
+  // The welcome popup is additive: it must never replace the existing MB66 placements.
+  const mb66Surface = mb66Demo || f8WelcomeDemo;
+  const multiCampaignDemo = mixedDemo || mb66Surface;
+  const visibleTopCampaigns = (mb66Surface ? mb66TopCampaigns : mixedTopCampaigns).filter(isCampaignEnabled);
   const rotatingIndex = useRotatingIndex(mixedDemo || focusDemo, 0);
-  const campaign: CampaignAsset = mb66Demo
+  const campaign: CampaignAsset = mb66Surface
     ? mb66Campaign
     : mixedDemo || focusDemo
     ? mixedTopCampaigns[rotatingIndex]
@@ -178,10 +181,10 @@ export function CampaignTopBanner() {
     <div
       data-testid="campaign-top-banner"
       data-campaign-style={style}
-      data-campaign-name={mb66Demo ? 'mb66-additive' : campaign.name}
+      data-campaign-name={mb66Surface ? 'mb66-additive' : campaign.name}
       data-mobile-state={multiCampaignDemo ? 'expanded' : undefined}
       className={demo
-        ? `campaign-banner-v2 campaign-banner-v2--top${v3Demo ? ' campaign-banner-v3 campaign-banner-v3--top' : ''}${multiCampaignDemo ? ' campaign-banner-mix campaign-banner-mix--top' : ''}${focusDemo ? ' campaign-banner-focus campaign-banner-focus--top' : ''}${mb66Demo ? ' campaign-banner-mb66' : ''}`
+        ? `campaign-banner-v2 campaign-banner-v2--top${v3Demo ? ' campaign-banner-v3 campaign-banner-v3--top' : ''}${multiCampaignDemo ? ' campaign-banner-mix campaign-banner-mix--top' : ''}${focusDemo ? ' campaign-banner-focus campaign-banner-focus--top' : ''}${mb66Surface ? ' campaign-banner-mb66' : ''}`
         : 'relative flex min-h-[66px] w-full items-center justify-center border-y border-white/[0.06] bg-[#090b11] px-2 py-2 md:min-h-[106px] md:px-14'}
     >
       <div className={demo ? 'campaign-banner-v2__shell' : 'relative w-[min(320px,100%)] md:w-full md:max-w-[728px]'}>
@@ -330,7 +333,7 @@ export function CampaignWelcomePopup() {
 
 export function CampaignUnderVideoBanner() {
   const style = useCampaignStyle();
-  if (style !== 'mb66') return null;
+  if (style !== 'mb66' && style !== 'f8welcome') return null;
 
   return (
     <aside
