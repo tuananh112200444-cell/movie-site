@@ -234,8 +234,10 @@ export function CampaignCatfishBanner() {
   const focusDemo = style === 'focus';
   const mb66Demo = style === 'mb66';
   const f8WelcomeDemo = style === 'f8welcome';
-  const multiCampaignDemo = mixedDemo || mb66Demo;
-  const visibleCatfishCampaigns = (mb66Demo ? mb66CatfishCampaigns : mixedCatfishCampaigns).filter(isCampaignEnabled);
+  const multiCampaignDemo = mixedDemo || mb66Demo || f8WelcomeDemo;
+  const visibleCatfishCampaigns = f8WelcomeDemo
+    ? [mb66Campaign, catfishCampaigns[1]]
+    : (mb66Demo ? mb66CatfishCampaigns : mixedCatfishCampaigns).filter(isCampaignEnabled);
   const rotatingIndex = useRotatingIndex(mixedDemo || compactDemo || focusDemo, 1);
   const campaign: CampaignAsset = f8WelcomeDemo
     ? catfishCampaigns[1]
@@ -259,22 +261,22 @@ export function CampaignCatfishBanner() {
     <aside
       data-testid="campaign-catfish"
       data-campaign-style={style}
-      data-campaign-name={mb66Demo ? 'mb66-additive' : campaign.name}
+      data-campaign-name={f8WelcomeDemo ? 'mb66-shbet-additive' : mb66Demo ? 'mb66-additive' : campaign.name}
       data-mobile-state={multiCampaignDemo ? 'expanded' : undefined}
       aria-label="Banner catfish"
       className={demo
-        ? `campaign-banner-v2 campaign-banner-v2--catfish${v3Demo || f8WelcomeDemo ? ' campaign-banner-v3 campaign-banner-v3--catfish' : ''}${multiCampaignDemo ? ' campaign-banner-mix campaign-banner-mix--catfish' : ''}${compactDemo ? ' campaign-banner-compact campaign-banner-compact--catfish' : ''}${focusDemo ? ' campaign-banner-focus campaign-banner-focus--catfish' : ''}${mb66Demo ? ' campaign-banner-mb66' : ''}`
+        ? `campaign-banner-v2 campaign-banner-v2--catfish${v3Demo ? ' campaign-banner-v3 campaign-banner-v3--catfish' : ''}${multiCampaignDemo ? ' campaign-banner-mix campaign-banner-mix--catfish' : ''}${compactDemo ? ' campaign-banner-compact campaign-banner-compact--catfish' : ''}${focusDemo ? ' campaign-banner-focus campaign-banner-focus--catfish' : ''}${mb66Demo || f8WelcomeDemo ? ' campaign-banner-mb66' : ''}`
         : 'fixed left-1/2 z-[80] w-[min(320px,calc(100vw-16px))] -translate-x-1/2 [bottom:max(8px,env(safe-area-inset-bottom))] md:w-[min(728px,calc(100vw-40px))] md:[bottom:max(12px,env(safe-area-inset-bottom))]'}
     >
         <div className={demo ? 'campaign-banner-v2__media' : 'relative overflow-hidden rounded-lg border border-amber-200/25 bg-black shadow-[0_12px_42px_rgba(0,0,0,0.62)]'}>
           {multiCampaignDemo ? (
             <>
               <div className="campaign-banner-mix__desktop" data-testid="campaign-catfish-desktop-split">
-                {visibleCatfishCampaigns.map((item) => <CampaignCreative key={item.name} campaign={item} demo desktopOnly />)}
+                {visibleCatfishCampaigns.map((item) => <CampaignCreative key={item.name} campaign={item} demo desktopOnly allowPaused={f8WelcomeDemo} />)}
               </div>
               <div className="campaign-banner-mix__mobile">
                 <div className="campaign-banner-mix__mobile-stack">
-                  {visibleCatfishCampaigns.map((item) => <CampaignCreative key={item.name} campaign={item} demo />)}
+                  {visibleCatfishCampaigns.map((item) => <CampaignCreative key={item.name} campaign={item} demo allowPaused={f8WelcomeDemo} />)}
                 </div>
               </div>
             </>
