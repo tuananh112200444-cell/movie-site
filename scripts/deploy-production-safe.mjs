@@ -77,7 +77,8 @@ try {
       cwd: process.cwd(), shell: process.platform === 'win32', stdio: 'ignore',
     }).status === 0;
     if (!isAncestor) {
-      const rewrittenEquivalent = REWRITTEN_RELEASE_EQUIVALENTS.get(liveCommit);
+      const rewrittenEquivalent = [...REWRITTEN_RELEASE_EQUIVALENTS.entries()]
+        .find(([original]) => original.startsWith(liveCommit) || liveCommit.startsWith(original))?.[1];
       isAncestor = Boolean(rewrittenEquivalent) && spawnSync(
         'git',
         ['merge-base', '--is-ancestor', rewrittenEquivalent, head],
