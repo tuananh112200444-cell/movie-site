@@ -4,6 +4,13 @@ import { existsSync, readFileSync } from 'node:fs';
 const PROJECT = 'movie-site';
 const PRODUCTION_BRANCH = 'release-production-locked';
 const LIVE_RELEASE_URL = 'https://khophim.org/release.json';
+// The public repository history was privacy-rewritten after this release.
+// Keep the release ancestry guard strict while recognizing the single audited
+// replacement commit that contains the same banner-pause release plus the
+// intended author-data redactions.
+const REWRITTEN_RELEASE_EQUIVALENTS = new Map([
+  ['b9fd079b0b9a4aa357fbe2c2d82015539b283ec0', '48814663c75a6f4b792e008020416e42bb2f984e'],
+]);
 const deployRequested = process.argv.includes('--deploy');
 
 function fail(message) {
@@ -66,9 +73,20 @@ try {
   liveBefore = await readJson(LIVE_RELEASE_URL, 2);
   const liveCommit = String(liveBefore?.commit || '').trim();
   if (liveCommit && /^[0-9a-f]{7,40}$/i.test(liveCommit)) {
-    const isAncestor = spawnSync('git', ['merge-base', '--is-ancestor', liveCommit, head], {
+    let isAncestor = spawnSync('git', ['merge-base', '--is-ancestor', liveCommit, head], {
       cwd: process.cwd(), shell: process.platform === 'win32', stdio: 'ignore',
     }).status === 0;
+    if (!isAncestor) {
+      const rewrittenEquivalent = REWRITTEN_RELEASE_EQUIVALENTS.get(liveCommit);
+      isAncestor = Boolean(rewrittenEquivalent) && spawnSync(
+        'git',
+        ['merge-base', '--is-ancestor', rewrittenEquivalent, head],
+        { cwd: process.cwd(), shell: process.platform === 'win32', stdio: 'ignore' },
+      ).status === 0;
+      if (isAncestor) {
+        console.log(`[deploy-safe] accepted audited history rewrite ${liveCommit.slice(0, 12)} -> ${rewrittenEquivalent.slice(0, 12)}.`);
+      }
+    }
     if (!isAncestor) fail(`candidate ${head.slice(0, 12)} would roll back or diverge from live commit ${liveCommit}.`);
   }
 } catch (error) {

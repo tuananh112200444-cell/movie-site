@@ -10,6 +10,8 @@ for (const contract of [
   "git(['fetch', 'origin', 'main'])",
   "head !== originMain",
   "merge-base', '--is-ancestor'",
+  'REWRITTEN_RELEASE_EQUIVALENTS',
+  'accepted audited history rewrite',
   "KHOPHIM_PRODUCTION_DEPLOY !== 'YES'",
   "--branch', PRODUCTION_BRANCH",
   "--commit-hash', head",
