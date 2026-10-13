@@ -12,7 +12,7 @@ import UpdateCoordinator from "./components/base/UpdateCoordinator";
 import AdsterraSocialBar from "./components/feature/AdsterraSocialBar";
 import { warmViewerRegion } from "./services/viewerRegion";
 import CinematicLogoIntro from "./components/feature/CinematicLogoIntro";
-import { CampaignCatfishBanner } from "./components/feature/CampaignBannerDemo";
+import { CampaignCatfishBanner, CampaignWelcomePopup } from "./components/feature/CampaignBannerDemo";
 import { AuthProvider } from "./context/AuthContext";
 import { FollowUpdatesProvider } from "./context/FollowUpdatesContext";
 
@@ -215,6 +215,7 @@ function App() {
                   <ScrollProgressBar />
                   <AnimatedContent />
                   <CampaignCatfishBanner />
+                  <CampaignWelcomePopup />
                   <CinematicLogoIntro />
                   <NonCriticalEnhancements />
                 </AnalyticsProvider>
