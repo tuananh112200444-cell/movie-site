@@ -1938,6 +1938,7 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
 
   const controllers: AbortController[] = [];
   let winnerFound = false;
+  let metadataFallback: MovieDetailResponse | null = null;
   const requests = endpoints.map(async (endpoint): Promise<MovieDetailResponse | null> => {
     if (endpoint.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, endpoint.delayMs));
     if (winnerFound) return null;
@@ -1961,8 +1962,15 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
       if (!res.ok || !contentType.toLowerCase().includes('application/json')) return null;
       const data = await res.json() as MovieDetailResponse;
       if (data?.movie?.slug || data?.movie?.name) {
-        winnerFound = true;
-        return data;
+        // A fast Pages fallback can contain metadata plus provider embeds that
+        // the browser intentionally rejects (for example embed11.streamc.xyz).
+        // Do not let that response cancel the delayed canonical Edge read;
+        // keep it only as a last-resort metadata response.
+        if (detailHasPlayableEpisodes(data) || isAuthoritativeNoPlaybackDetail(data)) {
+          winnerFound = true;
+          return data;
+        }
+        metadataFallback ??= data;
       }
     } catch (e) {
       if (!isAbortLikeError(e) && import.meta.env.DEV) console.warn('[movieApi] Proxy fetch failed:', e);
@@ -1974,7 +1982,7 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
 
   const result = await raceFirstValidWithTimeout(requests, 18_250);
   if (result) controllers.forEach((controller) => controller.abort());
-  return result;
+  return result ?? metadataFallback;
 }
 
 /* ════════════════════════════════════════════
