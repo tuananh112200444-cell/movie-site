@@ -4,7 +4,8 @@ import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import AutoImport from "unplugin-auto-import/vite";
 import { compression } from "vite-plugin-compression2";
-import { PINNED_CINEMA_MOVIES } from "./src/data/homePromotions";
+import { pinHomeHeroPromotions } from "./src/data/homePromotions";
+import type { MovieItem } from "./src/types/movie";
 
 const base = process.env.BASE_PATH || "/";
 const isPreview = process.env.IS_PREVIEW ? true : false;
@@ -56,13 +57,8 @@ function readHomeHeroBootstrap(): HomeHeroMovie[] {
     const snapshot = JSON.parse(
       readFileSync(resolve(__dirname, 'public/home-fallback.json'), 'utf8'),
     ) as { sections?: Record<string, HomeHeroMovie[]> };
-    // The first paint must match the cinema shelf exactly, in its source order.
     const cinemaMovies = snapshot.sections?.['phim-chieu-rap'] ?? [];
-    const pinnedSlugs = new Set(PINNED_CINEMA_MOVIES.map((movie) => movie.slug));
-    return [
-      ...PINNED_CINEMA_MOVIES,
-      ...cinemaMovies.filter((movie) => !pinnedSlugs.has(String(movie.slug || ''))),
-    ].slice(0, 8);
+    return pinHomeHeroPromotions(cinemaMovies as MovieItem[], 8);
   } catch {
     return [];
   }

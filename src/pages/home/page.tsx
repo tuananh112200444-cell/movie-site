@@ -6,7 +6,7 @@ import EditorialHero from './components/EditorialHero';
 import { prefetchCriticalRoutes } from '../../utils/prefetchRoute';
 import { removeSmartSessionCache, setSmartSessionCache } from '../../utils/smartCache';
 import type { MovieItem } from '../../types/movie';
-import { pinCinemaPromotions } from '../../data/homePromotions';
+import { pinHomeHeroPromotions } from '../../data/homePromotions';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useWatchHistory, type WatchEntry } from '../../hooks/useWatchHistory';
 import { useFavorites, type FavMovie } from '../../hooks/useFavorites';
@@ -265,9 +265,7 @@ function buildPersonalizedHomeMovies(
 }
 
 function normalizeHomeSections(sections?: Record<string, MovieItem[]>): Record<string, MovieItem[]> {
-  const normalized = sections ? { ...sections } : {};
-  normalized['phim-chieu-rap'] = pinCinemaPromotions(normalized['phim-chieu-rap'] ?? []);
-  return normalized;
+  return sections ? { ...sections } : {};
 }
 
 type EditorialSectionTone = 'cinema' | 'hot' | 'ranking' | 'rated' | 'trailer' | 'anime' | 'series' | 'single' | 'western' | 'china' | 'korea' | 'thai' | 'mood';
@@ -375,9 +373,7 @@ function selectTopRatedMovies(sections: Record<string, MovieItem[]>, limit = TOP
 }
 
 function selectHeroMovies(sections: Record<string, MovieItem[]>): MovieItem[] {
-  // Keep the main artwork exactly aligned with the first 8 cards in the
-  // "Phim Đang Chiếu Rạp" shelf. Do not reorder or re-rank this list here.
-  return pinCinemaPromotions(sections['phim-chieu-rap'] ?? []).slice(0, HERO_MOVIE_LIMIT);
+  return pinHomeHeroPromotions(sections['phim-chieu-rap'] ?? [], HERO_MOVIE_LIMIT);
 }
 
 function readBootHeroMovies(): MovieItem[] {
@@ -386,9 +382,9 @@ function readBootHeroMovies(): MovieItem[] {
     if (!node?.textContent) return [];
     const parsed = JSON.parse(node.textContent) as unknown;
     if (!Array.isArray(parsed)) return [];
-    // The build-time snapshot is the same cinema order as the shelf. It is
-    // only used for the first paint; live home data refreshes it afterwards.
-    return pinCinemaPromotions(parsed as MovieItem[], HERO_MOVIE_LIMIT);
+    // The build-time snapshot already carries the curated hero order. Live
+    // home data refreshes the remaining source-ordered slides afterwards.
+    return pinHomeHeroPromotions(parsed as MovieItem[], HERO_MOVIE_LIMIT);
   } catch {
     return [];
   }
@@ -701,14 +697,15 @@ export default function Home() {
       ]))
       .then(([series, singles, cinema, anime]) => {
         if (cancelled) return;
-        const cinemaItems = pinCinemaPromotions(cinema.items ?? [], 18);
+        const cinemaItems = (cinema.items ?? []).slice(0, 18);
+        const heroItems = pinHomeHeroPromotions(cinemaItems, HERO_MOVIE_LIMIT);
         setCanonicalTypeRails({
           'phim-bo': (series.items ?? []).slice(0, 15),
           'phim-le': (singles.items ?? []).slice(0, 15),
           'phim-chieu-rap': cinemaItems,
           'hoat-hinh': (anime.items ?? []).slice(0, 12),
         });
-        if (cinemaItems.length >= HERO_MOVIE_LIMIT) setHeroMovies(cinemaItems.slice(0, HERO_MOVIE_LIMIT));
+        setHeroMovies(heroItems);
       })
       .catch(() => {
         if (!cancelled) setCanonicalTypeRails({

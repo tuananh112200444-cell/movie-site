@@ -3,6 +3,7 @@ import { readFile as readRawFile } from 'node:fs/promises';
 const readFile = async (path, encoding) => String(await readRawFile(path, encoding)).replace(/\r\n/g, '\n');
 
 const home = await readFile('src/pages/home/page.tsx', 'utf8');
+const homePromotions = await readFile('src/data/homePromotions.ts', 'utf8');
 const hero = await readFile('src/pages/home/components/HeroBanner.tsx', 'utf8');
 const editorialHero = await readFile('src/pages/home/components/EditorialHero.tsx', 'utf8');
 const trending = await readFile('src/pages/home/components/TrendingSection.tsx', 'utf8');
@@ -157,19 +158,32 @@ for (const contract of [
   'const HERO_MOVIE_LIMIT = 8',
   'function selectHeroMovies',
   "sections['phim-chieu-rap']",
-  '.slice(0, HERO_MOVIE_LIMIT)',
+  'pinHomeHeroPromotions',
 ]) {
   if (!home.includes(contract)) failures.push(`Homepage cinema hero contract is missing: ${contract}`);
+}
+for (const contract of [
+  "slug: 'bac-si-x'",
+  "slug: 'ban-nang-thu'",
+  "'phi-phong-quy-mau-rung-thieng'",
+  "'tham-tu-lung-danh-conan-vu-an-tien-gia-ultra-30'",
+  'PINNED_HOME_HERO_MOVIES',
+  'HOME_HERO_EXCLUDED_SLUGS',
+]) {
+  if (!homePromotions.includes(contract)) failures.push(`Homepage hero promotion contract is missing: ${contract}`);
+}
+if (homePromotions.indexOf("slug: 'bac-si-x'") > homePromotions.indexOf("slug: 'ban-nang-thu'")) {
+  failures.push('Bác Sĩ X must be the first hero and Bản Năng Thú the second.');
 }
 if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !home.includes("const MOBILE_HOME_SECTIONS = [\n  'top-rated'")) {
   failures.push('Desktop and mobile homepage requests must include the dedicated top-rated rail.');
 }
 for (const contract of [
-  'aria-label="8 phim đang chiếu rạp"',
-  '<span>Đang chiếu rạp</span>',
+  'lựa chọn nổi bật',
+  '<span>Phim nổi bật</span>',
   'editorial-hero-thumbnails',
 ]) {
-  if (!editorialHero.includes(contract)) failures.push(`Editorial hero cinema context is missing: ${contract}`);
+  if (!editorialHero.includes(contract)) failures.push(`Editorial hero featured context is missing: ${contract}`);
 }
 if (!editorialHero.includes('onReady?: () => void') || !editorialHero.includes('onReady?.();')) {
   failures.push('Editorial hero must release below-fold rendering only after its image is ready.');
@@ -221,8 +235,8 @@ if (topRatedMovies.length !== 5
   || topRatedMovies.some((movie, index) => index > 0 && Number(movie.tmdb_vote_average || 0) > Number(topRatedMovies[index - 1].tmdb_vote_average || 0))) {
   failures.push('Top-rated fallback must contain exactly five source-verified movies ordered by TMDb rating.');
 }
-if (!viteConfig.includes("snapshot.sections?.['phim-chieu-rap']") || !viteConfig.includes('.slice(0, 8)')) {
-  failures.push('Homepage hero bootstrap must use the first eight cinema-shelf movies.');
+if (!viteConfig.includes("snapshot.sections?.['phim-chieu-rap']") || !viteConfig.includes('pinHomeHeroPromotions(cinemaMovies as MovieItem[], 8)')) {
+  failures.push('Homepage hero bootstrap must prepend the curated hero order to the cinema fallback.');
 }
 for (const contract of [
   'function getResponsiveHeroImage',
@@ -335,7 +349,7 @@ for (const contract of [
   if (!proxy.includes(contract)) failures.push(`KKPhim cinema source contract is missing: ${contract}`);
 }
 for (const contract of [
-  'v12-conan-ultra30-pinned',
+  'v13-source-order',
   'function filterEdgeHomeSection',
   "key === 'phim-chieu-rap' && item.chieurap !== true",
   'X-KhoPhim-Home-Repair',
@@ -763,7 +777,7 @@ if (!proxy.includes("taxonomyHasSlug((movie as Record<string, unknown>).country,
 if (/const HOME_SUPABASE_SELECT = '[^']*chieurap/.test(proxy)) {
   failures.push('Home proxy still selects the missing movies.chieurap column and breaks all canonical rails.');
 }
-if (!pagesWorker.includes('edgeHomeHasTaxonomySlug') || !pagesWorker.includes('v12-conan-ultra30-pinned')) {
+if (!pagesWorker.includes('edgeHomeHasTaxonomySlug') || !pagesWorker.includes('v13-source-order')) {
   failures.push('Pages edge cache does not reject cross-country shelves or rotate the repaired payload version.');
 }
 if (!proxy.includes("if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) return 12;")

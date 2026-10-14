@@ -1,10 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { PINNED_CINEMA_MOVIES } from '../src/data/homePromotions.ts';
-
 const OUTPUT_URL = new URL('../public/home-fallback.json', import.meta.url);
 const TOP_RATED_OUTPUT_URL = new URL('../public/top-rated-fallback.json', import.meta.url);
 const ENV_URL = new URL('../.env', import.meta.url);
-const CONAN_PROMOTION = PINNED_CINEMA_MOVIES[0];
 const HOME_PROXY_URL = new URL(
   'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1/home-proxy',
 );
@@ -331,16 +328,6 @@ function normalizeFreshTypeRails(sections) {
   return sections;
 }
 
-function pinCinemaPromotion(sections) {
-  const promotion = CONAN_PROMOTION;
-  if (!sections || !promotion) return sections;
-  sections['phim-chieu-rap'] = [
-    promotion,
-    ...(sections['phim-chieu-rap'] ?? []).filter((movie) => movie.slug !== promotion.slug),
-  ].slice(0, 18);
-  return sections;
-}
-
 async function keepExistingFallback(reason) {
   try {
     const current = JSON.parse(await readFile(OUTPUT_URL, 'utf8'));
@@ -357,7 +344,6 @@ async function keepExistingFallback(reason) {
     }
     normalizeFreshTypeRails(current.sections);
     if (validateSections(current.sections, false)) {
-      pinCinemaPromotion(current.sections);
       await writeFile(OUTPUT_URL, `${JSON.stringify(current)}\n`, 'utf8');
       console.warn(`Home fallback refresh skipped: ${reason}. Kept the existing valid snapshot.`);
       return;
@@ -446,8 +432,6 @@ try {
   if ((sourceSections['top10-series']?.length ?? 0) < 6) {
     sourceSections['top10-series'] = (sourceSections['phim-bo'] ?? []).slice(0, 10);
   }
-
-  pinCinemaPromotion(sourceSections);
 
   const snapshot = {
     status: true,

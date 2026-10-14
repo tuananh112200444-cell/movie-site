@@ -11,41 +11,6 @@ const MAINTENANCE_MODE = false;
 const SEO_PRERENDER_VERSION = '20260903-editorial-cohort-v1';
 const HOME_DOCUMENT_CACHE_VERSION = '20260828-fast-home-v1';
 const STATIC_MOVIE_DOCUMENT_VERSION = '20261002-mb66-merged-v1';
-const CONAN_ULTRA_30_PROMOTION = {
-  id: 'fbc1045c-df6c-4021-8e61-9c75c8fcc30a',
-  _id: 'fbc1045c-df6c-4021-8e61-9c75c8fcc30a',
-  slug: 'tham-tu-lung-danh-conan-vu-an-tien-gia-ultra-30',
-  name: 'Thám Tử Lừng Danh Conan: Vụ Án Tiền Giả Ultra 30',
-  origin_name: 'Detective Conan: The Counterfeit Case of Ultra 30',
-  type: 'single',
-  status: 'completed',
-  thumb_url: 'https://vsmov.com/storage/images/pT9RIHf4K9OyOB3eqYj97E5h0YA.jpg',
-  poster_url: 'https://vsmov.com/storage/images/v0T74v8LPZBSL247oGeTOp06tnm.jpg',
-  hero_backdrop_url: 'https://vsmov.com/storage/images/pT9RIHf4K9OyOB3eqYj97E5h0YA.jpg',
-  hero_poster_url: 'https://vsmov.com/storage/images/v0T74v8LPZBSL247oGeTOp06tnm.jpg',
-  chieurap: true,
-  sub_docquyen: false,
-  time: '1 giờ 33 phút',
-  episode_current: 'Full',
-  episode_total: '1 tập',
-  current_episode: 1,
-  total_episodes: 1,
-  quality: 'FHD',
-  lang: 'Vietsub',
-  year: 2026,
-  category: [
-    { id: 'mystery', name: 'Bí Ẩn', slug: 'bi-an' },
-    { id: 'crime', name: 'Hình Sự', slug: 'hinh-su' },
-    { id: 'action', name: 'Hành Động', slug: 'hanh-dong' },
-    { id: 'adventure', name: 'Phiêu Lưu', slug: 'phieu-luu' },
-  ],
-  country: [{ id: 'japan', name: 'Nhật Bản', slug: 'nhat-ban' }],
-  source_site: 'vsmov',
-  source_name: 'VSMOV',
-  is_published: true,
-  seo_catalog_status: 'published',
-  modified: { time: '2026-09-29T00:00:00Z' },
-};
 const CONSOLIDATED_SEO_PATHS = new Map([
   ['/xem-phim', '/xem-phim-online'],
   ['/xem-phim-mien-phi', '/xem-phim-online'],
@@ -4830,15 +4795,6 @@ function filterEdgeHomeSection(key, items) {
   });
 }
 
-function pinEdgeHomePromotions(sections) {
-  if (!sections || typeof sections !== 'object' || !Array.isArray(sections['phim-chieu-rap'])) return sections;
-  sections['phim-chieu-rap'] = [
-    CONAN_ULTRA_30_PROMOTION,
-    ...sections['phim-chieu-rap'].filter((item) => item?.slug !== CONAN_ULTRA_30_PROMOTION.slug),
-  ];
-  return sections;
-}
-
 async function loadStaticHomeSnapshot(request, context, sections) {
   const assetRequest = new Request(new URL('/home-fallback.json', request.url), { method: 'GET' });
   const assetResponse = context?.env?.ASSETS?.fetch
@@ -4851,7 +4807,6 @@ async function loadStaticHomeSnapshot(request, context, sections) {
     key,
     filterEdgeHomeSection(key, snapshot.sections[key]),
   ]));
-  pinEdgeHomePromotions(normalizedSections);
   if (sections.includes('top-rated') && normalizedSections['top-rated'].length < 5) {
     try {
       const topRatedRequest = new Request(new URL('/top-rated-fallback.json', request.url), { method: 'GET' });
@@ -4876,7 +4831,6 @@ async function repairHomePayload(request, context, sections, payload) {
   if (!payload || typeof payload !== 'object') return { payload, repaired: [] };
   const liveSections = payload.sections && typeof payload.sections === 'object' ? payload.sections : {};
   const normalized = Object.fromEntries(sections.map((key) => [key, filterEdgeHomeSection(key, liveSections[key])]));
-  pinEdgeHomePromotions(normalized);
   const sparseKeys = sections.filter((key) => normalized[key].length < minimumEdgeHomeItems(key));
   if (sparseKeys.length === 0) return { payload: { ...payload, sections: normalized }, repaired: [] };
 
@@ -5368,8 +5322,8 @@ async function proxyHome(request, context) {
     ? requestedSections
     : ['au-my', 'han-quoc', 'hoat-hinh', 'phim-bo', 'phim-le', 'trending'];
   const sectionKey = sections.join(',');
-  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v12-conan-ultra30-pinned?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
-  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v12-conan-ultra30-pinned?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v13-source-order?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v13-source-order?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
 
   if (typeof caches !== 'undefined') {
     const cached = await caches.default.match(liveKey);
@@ -5397,7 +5351,7 @@ async function proxyHome(request, context) {
         cf: {
           cacheEverything: true,
           cacheTtl: 900,
-          cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v12-conan-ultra30-pinned`,
+          cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v13-source-order`,
         },
         signal: AbortSignal.timeout(6500),
       });

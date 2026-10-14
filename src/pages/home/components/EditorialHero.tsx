@@ -324,14 +324,14 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       <div className="editorial-hero-wash" aria-hidden="true" />
 
       <div className="editorial-hero-number" aria-hidden="true">
-        <span>Đang chiếu rạp</span>
+        <span>Phim nổi bật</span>
         <strong>{String(safeIndex + 1).padStart(2, '0')}</strong>
       </div>
 
       <div key={`copy-${movie._id || movie.slug}`} className="editorial-hero-copy">
         <p className="editorial-hero-kicker">
           <span aria-hidden="true" />
-          {HERO_DISPLAY_LIMIT} phim đang chiếu rạp
+          {HERO_DISPLAY_LIMIT} lựa chọn nổi bật
         </p>
 
         <div className="editorial-hero-meta">
@@ -359,7 +359,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       </div>
 
       {featured.length > 1 && (
-        <div className="editorial-hero-thumbnails" aria-label={`Chọn một trong ${featured.length} phim đang chiếu rạp`}>
+        <div className="editorial-hero-thumbnails" aria-label={`Chọn một trong ${featured.length} phim nổi bật`}>
           {featured.map((thumbnailMovie, index) => (
             <button
               key={thumbnailMovie._id || thumbnailMovie.slug}
@@ -381,11 +381,11 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       <div className="editorial-hero-footer">
         <span>{movie.lang || 'Vietsub'}{movie.episode_current ? ` · ${movie.episode_current}` : ''}</span>
         <div className="editorial-hero-controls" aria-label="Điều khiển phim nổi bật">
-          <button type="button" onClick={() => requestSlide(safeIndex - 1)} aria-label="Phim chiếu rạp trước">
+          <button type="button" onClick={() => requestSlide(safeIndex - 1)} aria-label="Phim nổi bật trước">
             <i className="ri-arrow-left-line" aria-hidden="true" />
           </button>
           <span>{String(safeIndex + 1).padStart(2, '0')} / {String(featured.length).padStart(2, '0')}</span>
-          <button type="button" onClick={() => requestSlide(safeIndex + 1)} aria-label="Phim chiếu rạp tiếp theo">
+          <button type="button" onClick={() => requestSlide(safeIndex + 1)} aria-label="Phim nổi bật tiếp theo">
             <i className="ri-arrow-right-line" aria-hidden="true" />
           </button>
         </div>
