@@ -273,10 +273,10 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
     setVideoLoaded(false);
     setVideoMuted(true);
     setVideoPaused(false);
-    if (!videoAllowed || !firstArtworkReady || !activeTrailerId) return;
+    if (!videoAllowed || !activeTrailerId) return;
     const timer = window.setTimeout(() => setVideoRequested(true), VIDEO_REVEAL_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [activeTrailerId, firstArtworkReady, videoAllowed]);
+  }, [activeTrailerId, videoAllowed]);
 
   const sendYoutubeCommand = useCallback((command: 'mute' | 'unMute' | 'pauseVideo' | 'playVideo') => {
     videoIframeRef.current?.contentWindow?.postMessage(JSON.stringify({
