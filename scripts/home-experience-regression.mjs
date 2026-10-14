@@ -202,6 +202,9 @@ for (const contract of [
   "sendYoutubeCommand(nextPaused ? 'pauseVideo' : 'playVideo')",
   'aria-label="Chuyển sang phim trước"',
   'aria-label="Chuyển sang phim tiếp theo"',
+  'requestSlide(index, true)',
+  'requestSlide(safeIndex + (delta < 0 ? 1 : -1), true)',
+  'setVideoRequested(false)',
 ]) {
   if (!editorialHero.includes(contract)) failures.push(`Desktop cinematic video hero contract is missing: ${contract}`);
 }

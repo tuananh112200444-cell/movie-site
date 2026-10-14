@@ -298,7 +298,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
     setVideoPaused(nextPaused);
   }, [sendYoutubeCommand, videoPaused]);
 
-  const requestSlide = useCallback((requestedIndex: number) => {
+  const requestSlide = useCallback((requestedIndex: number, immediate = false) => {
     if (featured.length < 2) return;
     const index = (requestedIndex + featured.length) % featured.length;
     setRequestedIndexes((current) => {
@@ -306,8 +306,12 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       next.add(index);
       return next;
     });
-    if (settledIndexes.has(index)) {
+    if (immediate || settledIndexes.has(index)) {
       pendingIndexRef.current = null;
+      setVideoRequested(false);
+      setVideoLoaded(false);
+      setVideoPaused(false);
+      setVideoMuted(true);
       setActiveIndex(index);
     } else {
       pendingIndexRef.current = index;
@@ -366,7 +370,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
     if (startX === null) return;
     const delta = (event.changedTouches[0]?.clientX ?? startX) - startX;
     if (Math.abs(delta) < 45) return;
-    requestSlide(safeIndex + (delta < 0 ? 1 : -1));
+    requestSlide(safeIndex + (delta < 0 ? 1 : -1), true);
   };
 
   if (loading && !movie) {
@@ -436,7 +440,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
 
       {videoActive && (
         <div className="editorial-hero-video-controls" aria-label="Điều khiển trailer nền">
-          <button type="button" onClick={() => requestSlide(safeIndex - 1)} aria-label="Chuyển sang phim trước">
+          <button type="button" onClick={() => requestSlide(safeIndex - 1, true)} aria-label="Chuyển sang phim trước">
             <i className="ri-arrow-left-line" aria-hidden="true" />
           </button>
           <button type="button" onClick={toggleVideoMuted} aria-label={videoMuted ? 'Bật âm thanh trailer' : 'Tắt âm thanh trailer'}>
@@ -445,7 +449,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
           <button type="button" onClick={toggleVideoPlayback} aria-label={videoPaused ? 'Phát trailer' : 'Tạm dừng trailer'}>
             <i className={videoPaused ? 'ri-play-fill' : 'ri-pause-fill'} aria-hidden="true" />
           </button>
-          <button type="button" onClick={() => requestSlide(safeIndex + 1)} aria-label="Chuyển sang phim tiếp theo">
+          <button type="button" onClick={() => requestSlide(safeIndex + 1, true)} aria-label="Chuyển sang phim tiếp theo">
             <i className="ri-arrow-right-line" aria-hidden="true" />
           </button>
         </div>
@@ -497,7 +501,7 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
               aria-current={index === safeIndex ? 'true' : undefined}
               onPointerEnter={() => setRequestedIndexes((current) => new Set(current).add(index))}
               onFocus={() => setRequestedIndexes((current) => new Set(current).add(index))}
-              onClick={() => requestSlide(index)}
+              onClick={() => requestSlide(index, true)}
             >
               <span>{String(index + 1).padStart(2, '0')}</span>
               <img src={getHeroThumbnail(thumbnailMovie)} alt="" loading={index < 2 ? 'eager' : 'lazy'} decoding="async" draggable={false} />
@@ -509,11 +513,11 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
       <div className="editorial-hero-footer">
         <span>{movie.lang || 'Vietsub'}{movie.episode_current ? ` · ${movie.episode_current}` : ''}</span>
         <div className="editorial-hero-controls" aria-label="Điều khiển phim nổi bật">
-          <button type="button" onClick={() => requestSlide(safeIndex - 1)} aria-label="Phim nổi bật trước">
+          <button type="button" onClick={() => requestSlide(safeIndex - 1, true)} aria-label="Phim nổi bật trước">
             <i className="ri-arrow-left-line" aria-hidden="true" />
           </button>
           <span>{String(safeIndex + 1).padStart(2, '0')} / {String(featured.length).padStart(2, '0')}</span>
-          <button type="button" onClick={() => requestSlide(safeIndex + 1)} aria-label="Phim nổi bật tiếp theo">
+          <button type="button" onClick={() => requestSlide(safeIndex + 1, true)} aria-label="Phim nổi bật tiếp theo">
             <i className="ri-arrow-right-line" aria-hidden="true" />
           </button>
         </div>
