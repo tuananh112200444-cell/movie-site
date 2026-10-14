@@ -15,7 +15,7 @@ interface EditorialHeroProps {
 const HERO_DISPLAY_LIMIT = 8;
 const IMAGE_SLIDE_DURATION_MS = 7_200;
 const VIDEO_SLIDE_DURATION_MS = 18_000;
-const VIDEO_REVEAL_DELAY_MS = 1_600;
+const VIDEO_REVEAL_DELAY_MS = 600;
 const YOUTUBE_PLAYER_ORIGIN = 'https://www.youtube-nocookie.com';
 
 function youtubeVideoId(value?: string): string {
@@ -436,11 +436,17 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
 
       {videoActive && (
         <div className="editorial-hero-video-controls" aria-label="Điều khiển trailer nền">
+          <button type="button" onClick={() => requestSlide(safeIndex - 1)} aria-label="Chuyển sang phim trước">
+            <i className="ri-arrow-left-line" aria-hidden="true" />
+          </button>
           <button type="button" onClick={toggleVideoMuted} aria-label={videoMuted ? 'Bật âm thanh trailer' : 'Tắt âm thanh trailer'}>
             <i className={videoMuted ? 'ri-volume-mute-line' : 'ri-volume-up-line'} aria-hidden="true" />
           </button>
           <button type="button" onClick={toggleVideoPlayback} aria-label={videoPaused ? 'Phát trailer' : 'Tạm dừng trailer'}>
             <i className={videoPaused ? 'ri-play-fill' : 'ri-pause-fill'} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => requestSlide(safeIndex + 1)} aria-label="Chuyển sang phim tiếp theo">
+            <i className="ri-arrow-right-line" aria-hidden="true" />
           </button>
         </div>
       )}

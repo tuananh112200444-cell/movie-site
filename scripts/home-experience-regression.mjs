@@ -192,7 +192,7 @@ for (const contract of [
   'youtube-nocookie.com',
   "autoplay: '1'",
   "mute: '1'",
-  'VIDEO_REVEAL_DELAY_MS = 1_600',
+  'VIDEO_REVEAL_DELAY_MS = 600',
   "window.matchMedia('(prefers-reduced-motion: reduce)')",
   'connection?.saveData',
   'compactHero',
@@ -200,6 +200,8 @@ for (const contract of [
   'editorial-hero-video-controls',
   "sendYoutubeCommand(nextMuted ? 'mute' : 'unMute')",
   "sendYoutubeCommand(nextPaused ? 'pauseVideo' : 'playVideo')",
+  'aria-label="Chuyển sang phim trước"',
+  'aria-label="Chuyển sang phim tiếp theo"',
 ]) {
   if (!editorialHero.includes(contract)) failures.push(`Desktop cinematic video hero contract is missing: ${contract}`);
 }
