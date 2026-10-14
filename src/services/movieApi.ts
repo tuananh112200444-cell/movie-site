@@ -5194,7 +5194,14 @@ function isDirectFileUrl(value = ''): boolean {
 }
 
 function isHlsStreamUrl(value = ''): boolean {
-  return /\.m3u8(?:[?#].*)?$/i.test(value);
+  try {
+    const parsed = new URL(value);
+    return /\.m3u8$/i.test(parsed.pathname)
+      || (/(^|\.)rumble\.cloud$/i.test(parsed.hostname)
+        && /\.m3u8$/i.test(parsed.searchParams.get('r_file') || ''));
+  } catch {
+    return /\.m3u8(?:[?#].*)?$/i.test(value);
+  }
 }
 
 function isSsplayOkWrapperUrl(value = ''): boolean {
@@ -5703,6 +5710,13 @@ export function pickBestEpisodeByScore(
     const aSsplayOnly = hasIndependentSource && a.failureCluster === 'ssplay_abyss';
     const bSsplayOnly = hasIndependentSource && b.failureCluster === 'ssplay_abyss';
     if (aSsplayOnly !== bSsplayOnly) return aSsplayOnly ? 1 : -1;
+    const aGlName = episodes[a.serverIndex]?.server_name || '';
+    const bGlName = episodes[b.serverIndex]?.server_name || '';
+    if (/^GLVietsub\b/i.test(aGlName) && /^GLVietsub\b/i.test(bGlName)) {
+      const aHls = /\bHLS 1$/i.test(aGlName) && Boolean(a.episode.link_m3u8) && a.reliabilityScore > -500;
+      const bHls = /\bHLS 1$/i.test(bGlName) && Boolean(b.episode.link_m3u8) && b.reliabilityScore > -500;
+      if (aHls !== bHls) return aHls ? -1 : 1;
+    }
     if (b.reliabilityScore !== a.reliabilityScore) return b.reliabilityScore - a.reliabilityScore;
     if (b.qualityScore !== a.qualityScore) return b.qualityScore - a.qualityScore;
     if (Boolean(aDirect) !== Boolean(bDirect)) return bDirect ? 1 : -1;
@@ -5723,6 +5737,7 @@ export function getAnonymousServerDisplay(serverName: string, index: number): st
   const normalized = normalizeServerPriorityText(serverName);
   const compact = normalized.replace(/\s+/g, '');
   if (compact.includes('KHOPHIM') || (normalized.includes('KHO') && normalized.includes('PHIM'))) return 'KhoPhim';
+  if (compact.includes('GLVIETSUB') && compact.includes('HLS1')) return 'GLVietsub HLS 1';
   if (compact.includes('BLVIETSUB')) return 'BLVietsub';
   if (compact.includes('OPHIM')) return 'OPhim';
   if (compact.includes('KKPHIM') || compact.includes('PHIMAPI')) return 'KKPhim';

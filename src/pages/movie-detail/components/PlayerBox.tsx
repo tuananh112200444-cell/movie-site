@@ -209,7 +209,12 @@ function isHlsUrl(url: string): boolean {
     // an HTML player, not a direct HLS manifest. Inspecting the complete URL
     // previously discarded that valid fallback because its query happened to
     // end in `.m3u8`.
-    return /\.m3u8$/i.test(new URL(raw).pathname);
+    const parsed = new URL(raw);
+    if (/\.m3u8$/i.test(parsed.pathname)) return true;
+    // Rumble serves its playlist through a .tar URL with the actual manifest
+    // name in r_file; GLVietsub Server 1 uses this form for some episodes.
+    return /(^|\.)rumble\.cloud$/i.test(parsed.hostname)
+      && /\.m3u8$/i.test(parsed.searchParams.get('r_file') || '');
   } catch {
     return /\.m3u8(?:[?#].*)?$/i.test(raw);
   }

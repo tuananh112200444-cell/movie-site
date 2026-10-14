@@ -167,6 +167,31 @@ function unwrapEmbed(payload: Record<string, unknown>): string {
   return decode(iframe || raw).replaceAll('\\/', '/').trim();
 }
 
+function isDirectHlsManifestUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') return false;
+    if (/\.m3u8$/i.test(url.pathname)) return true;
+    return /(^|\.)rumble\.cloud$/i.test(url.hostname)
+      && /\.m3u8$/i.test(url.searchParams.get('r_file') || '');
+  } catch {
+    return false;
+  }
+}
+
+function serverOneHlsUrl(value: string): string {
+  try {
+    const wrapper = new URL(value);
+    const source = /(^|\.)glvietsubz?\.net$/i.test(wrapper.hostname)
+      && wrapper.pathname === '/watch'
+      ? wrapper.searchParams.get('source') || ''
+      : value;
+    return isDirectHlsManifestUrl(source) ? source : '';
+  } catch {
+    return '';
+  }
+}
+
 function playbackIdentity(url: unknown): string {
   const raw = decode(String(url || '')).replaceAll('\\/', '/').trim();
   if (!raw) return '';
@@ -250,7 +275,7 @@ function rejectRepeatedEpisodePlaybackUrls(rows: Array<Record<string, unknown>>)
 }
 
 async function playerUrls(postId: string, type: string, serverCount: number): Promise<string[]> {
-  const candidates = (await Promise.all(Array.from(
+  const fetched = await Promise.all(Array.from(
     { length: Math.min(serverCount, 6) },
     async (_, index): Promise<string> => {
       const nume = index + 1;
@@ -268,9 +293,14 @@ async function playerUrls(postId: string, type: string, serverCount: number): Pr
       return '';
     }
     },
-  ))).filter((url, index, rows) => Boolean(url) && rows.indexOf(url) === index);
+  )));
+  const serverOneHls = serverOneHlsUrl(fetched[0] || '');
+  const candidates = fetched.filter((url, index, rows) => Boolean(url) && rows.indexOf(url) === index);
   const safe = candidates.filter((url) => /abyssplayer\.com|ok\.ru\/videoembed/i.test(url));
   const fallback = candidates.filter((url) => !/vk\.com|dailymotion\.com/i.test(url));
+  // Direct HLS from the provider's first server comes before the existing
+  // independent OK/Abyss mirrors. Never proxy the video through KhoPhim.
+  if (serverOneHls) return [serverOneHls, ...safe.filter((url) => url !== serverOneHls).slice(0, 2)];
   return (safe.length ? safe : fallback.length ? fallback : candidates).slice(0, 2);
 }
 
@@ -310,16 +340,22 @@ async function parseDetail(sourceUrl: string) {
     await Promise.all(urls.filter(isYouTubePlaybackUrl).map(async (url) => {
       youtubeTitles.set(url, await youtubePlaybackTitle(url));
     }));
+    const hasServerOneHls = urls.some(isDirectHlsManifestUrl);
     return urls.map((url, index) => {
       const youtubeTitle = youtubeTitles.get(url) || '';
+      const isHls = isDirectHlsManifestUrl(url);
+      const serverNumber = index + (hasServerOneHls ? 0 : 1);
       return {
       episode_number: episode.number,
       episode_name: episode.special
         ? `${episode.label.replace(/\s*RAW\b/i, '').trim() || 'Tập Đặc Biệt'}${episode.raw ? ' RAW' : ''}`
         : `Tập ${episode.number}${episode.raw ? ' RAW' : ''}`,
       slug: episode.slug,
-      server_name: episode.raw ? `GLVietsub RAW ${index + 1}` : `GLVietsub ${index + 1}`,
-      link_embed: url,
+      server_name: episode.raw
+        ? isHls ? 'GLVietsub RAW HLS 1' : `GLVietsub RAW ${serverNumber}`
+        : isHls ? 'GLVietsub HLS 1' : `GLVietsub ${serverNumber}`,
+      link_embed: isHls ? '' : url,
+      link_m3u8: isHls ? url : '',
       raw: episode.raw,
       special: episode.special,
       invalid_playback_reason: youtubeTitle && isTrailerPlaybackTitle(youtubeTitle) ? 'youtube_trailer' : '',
@@ -439,7 +475,7 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
   for (const episode of entry.episodes as Array<Record<string, unknown>>) {
     const payload = {
       movie_id: movie.id, episode_number: episode.episode_number, episode_name: episode.episode_name,
-      slug: episode.slug, server_name: episode.server_name, link_embed: episode.link_embed, link_m3u8: '',
+      slug: episode.slug, server_name: episode.server_name, link_embed: episode.link_embed, link_m3u8: episode.link_m3u8 || '',
       subtitle_url: '', thumbnail_url: entry.image || '', source: SOURCE,
       is_backup: movie.source_site !== SOURCE, audio_type: episode.raw ? 'raw' : 'vietsub',
     };
@@ -449,7 +485,8 @@ async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Reco
     else { const { error } = await db.from('movie_episodes').insert(payload); if (error) throw error; }
     const streamPayload = {
       movie_id: movie.id, server_name: episode.server_name, episode_slug: episode.slug,
-      stream_url: '', embed_url: episode.link_embed, source: SOURCE, quality: 'HD', priority: 45,
+      stream_url: episode.link_m3u8 || '', embed_url: episode.link_embed, source: SOURCE, quality: 'HD',
+      priority: episode.link_m3u8 ? 75 : 45,
       is_active: true, health_status: 'unchecked', failure_count: 0, last_error: '', audio_type: episode.raw ? 'raw' : 'vietsub',
     };
     const { data: stream } = await db.from('streams').select('id,stream_url,embed_url').eq('movie_id', movie.id).eq('source', SOURCE)
