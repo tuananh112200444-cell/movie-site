@@ -40,6 +40,11 @@ function isCampaignEnabled(campaign: CampaignAsset): boolean {
 
 const ROTATION_INTERVAL_MS = 6000;
 
+function isProductionSite(): boolean {
+  return typeof window !== 'undefined'
+    && (window.location.hostname === 'khophim.org' || window.location.hostname === 'www.khophim.org');
+}
+
 function isSessionFlagSet(storageKey: string): boolean {
   try {
     return window.sessionStorage.getItem(storageKey) === '1';
@@ -64,7 +69,7 @@ function useCampaignStyle(): CampaignStyle {
   const mb66PreviewHost = typeof window !== 'undefined'
     && window.location.hostname === 'mb66-banner-demo.movie-site-eds.pages.dev';
   if (params.get('banner-current') === '1') return 'current';
-  if (params.get('f8-welcome') === '1') return 'f8welcome';
+  if (params.get('f8-welcome') === '1' || isProductionSite()) return 'f8welcome';
   if (params.get('banner-mb66') === '1' || mb66PreviewHost) return 'mb66';
   if (params.get('banner-focus') === '1') return 'focus';
   if (params.get('banner-compact') === '1') return 'compact';
@@ -304,7 +309,7 @@ export function CampaignCatfishBanner() {
 
 export function CampaignWelcomePopup() {
   const location = useLocation();
-  const enabled = new URLSearchParams(location.search).get('f8-welcome') === '1';
+  const enabled = new URLSearchParams(location.search).get('f8-welcome') === '1' || isProductionSite();
   const [visible, setVisible] = useState(() => enabled && !isSessionFlagSet(F8BET_WELCOME_DISMISSED_KEY));
 
   useEffect(() => {
