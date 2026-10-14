@@ -1,6 +1,12 @@
 import fs from 'node:fs';
+import ts from 'typescript';
 
 const source = fs.readFileSync('supabase/functions/sync-glvietsub-feed/index.ts', 'utf8');
+const syntaxErrors = ts.transpileModule(source, {
+  fileName: 'sync-glvietsub-feed/index.ts',
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+  reportDiagnostics: true,
+}).diagnostics?.filter((item) => item.category === ts.DiagnosticCategory.Error) ?? [];
 const identity = fs.readFileSync('supabase/functions/_shared/movie-identity.ts', 'utf8');
 const playerBox = fs.readFileSync('src/pages/movie-detail/components/PlayerBox.tsx', 'utf8');
 const migration = fs.readFileSync('supabase/migrations/20260721195500_add_glvietsub_sync.sql', 'utf8');
@@ -18,6 +24,7 @@ const queerHome = fs.readFileSync('src/pages/home/components/QueerUniverseHome.t
 const queerHero = fs.readFileSync('src/pages/home/components/QueerUniverseHero.tsx', 'utf8');
 const home = fs.readFileSync('src/pages/home/page.tsx', 'utf8');
 const checks = [
+  [syntaxErrors.length === 0, `GLVietsub function syntax must compile: ${syntaxErrors.map((item) => ts.flattenDiagnosticMessageText(item.messageText, ' ')).join('; ')}`],
   [source.includes("const BASE = 'https://www.glvietsubz.net'") && source.includes('glvietsub(?:z)?'), 'GLVietsub sync must use the current domain while accepting legacy source URLs'],
   [source.includes("['www.glvietsub.net', 'glvietsub.net']") && source.includes(".in('source_url', [currentUrl.toString()"), 'Legacy GLVietsub URLs must resolve to one existing source movie before updating the current URL'],
   [detailProxy.includes("/^(?:www\\.)?glvietsub(?:z)?\\.net$/i.test(url.hostname)"), 'On-demand GL episode repair must recognize the current and legacy hostnames'],

@@ -293,7 +293,7 @@ async function playerUrls(postId: string, type: string, serverCount: number): Pr
       return '';
     }
     },
-  )));
+  ));
   const serverOneHls = serverOneHlsUrl(fetched[0] || '');
   const candidates = fetched.filter((url, index, rows) => Boolean(url) && rows.indexOf(url) === index);
   const safe = candidates.filter((url) => /abyssplayer\.com|ok\.ru\/videoembed/i.test(url));
