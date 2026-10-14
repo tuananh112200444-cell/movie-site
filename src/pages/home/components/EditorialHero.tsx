@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type SyntheticEvent, type TouchEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type SyntheticEvent, type TouchEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
 import { getOptimizedImageUrl } from '../../../services/movieApi';
@@ -13,6 +13,45 @@ interface EditorialHeroProps {
 }
 
 const HERO_DISPLAY_LIMIT = 8;
+const IMAGE_SLIDE_DURATION_MS = 7_200;
+const VIDEO_SLIDE_DURATION_MS = 18_000;
+const VIDEO_REVEAL_DELAY_MS = 1_600;
+const YOUTUBE_PLAYER_ORIGIN = 'https://www.youtube-nocookie.com';
+
+function youtubeVideoId(value?: string): string {
+  try {
+    const url = new URL(String(value || '').trim());
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'youtu.be') return url.pathname.replace(/^\/+/, '').split('/')[0] || '';
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      if (url.pathname === '/watch') return url.searchParams.get('v') || '';
+      return url.pathname.match(/^\/(?:embed|shorts)\/([A-Za-z0-9_-]{6,})/)?.[1] || '';
+    }
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+function youtubeBackgroundUrl(videoId: string): string {
+  const params = new URLSearchParams({
+    autoplay: '1',
+    mute: '1',
+    controls: '0',
+    loop: '1',
+    playlist: videoId,
+    playsinline: '1',
+    rel: '0',
+    modestbranding: '1',
+    iv_load_policy: '3',
+    disablekb: '1',
+    fs: '0',
+    enablejsapi: '1',
+    start: '5',
+  });
+  if (typeof window !== 'undefined') params.set('origin', window.location.origin);
+  return `${YOUTUBE_PLAYER_ORIGIN}/embed/${videoId}?${params.toString()}`;
+}
 
 function plainText(value?: string) {
   return String(value || '')
@@ -191,11 +230,22 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
   const [firstArtworkReady, setFirstArtworkReady] = useState(false);
   const [requestedIndexes, setRequestedIndexes] = useState<Set<number>>(() => new Set([0]));
   const [settledIndexes, setSettledIndexes] = useState<Set<number>>(() => new Set());
+  const [videoAllowed, setVideoAllowed] = useState(false);
+  const [videoRequested, setVideoRequested] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const [videoMuted, setVideoMuted] = useState(true);
+  const [videoPaused, setVideoPaused] = useState(false);
   const pendingIndexRef = useRef<number | null>(null);
   const parentReadyNotifiedRef = useRef(false);
   const touchStartXRef = useRef<number | null>(null);
+  const videoIframeRef = useRef<HTMLIFrameElement>(null);
   const safeIndex = featured.length > 0 ? activeIndex % featured.length : 0;
   const movie = featured[safeIndex];
+  const activeTrailerId = youtubeVideoId(movie?.trailer_url);
+  const videoActive = videoAllowed && videoRequested && Boolean(activeTrailerId);
+  const slideDurationMs = videoAllowed && activeTrailerId
+    ? VIDEO_SLIDE_DURATION_MS
+    : IMAGE_SLIDE_DURATION_MS;
 
   useLayoutEffect(() => {
     setActiveIndex(0);
@@ -204,6 +254,49 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
     setSettledIndexes(new Set());
     pendingIndexRef.current = null;
   }, [featured.length, featuredKey]);
+
+  useEffect(() => {
+    if (compactHero) {
+      setVideoAllowed(false);
+      return;
+    }
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const slowConnection = connection?.saveData || /(?:^|-)2g$|3g$/i.test(connection?.effectiveType || '');
+    setVideoAllowed(!reducedMotion && !slowConnection);
+  }, [compactHero]);
+
+  useEffect(() => {
+    setVideoRequested(false);
+    setVideoLoaded(false);
+    setVideoMuted(true);
+    setVideoPaused(false);
+    if (!videoAllowed || !firstArtworkReady || !activeTrailerId) return;
+    const timer = window.setTimeout(() => setVideoRequested(true), VIDEO_REVEAL_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeTrailerId, firstArtworkReady, videoAllowed]);
+
+  const sendYoutubeCommand = useCallback((command: 'mute' | 'unMute' | 'pauseVideo' | 'playVideo') => {
+    videoIframeRef.current?.contentWindow?.postMessage(JSON.stringify({
+      event: 'command',
+      func: command,
+      args: [],
+    }), YOUTUBE_PLAYER_ORIGIN);
+  }, []);
+
+  const toggleVideoMuted = useCallback(() => {
+    const nextMuted = !videoMuted;
+    sendYoutubeCommand(nextMuted ? 'mute' : 'unMute');
+    setVideoMuted(nextMuted);
+  }, [sendYoutubeCommand, videoMuted]);
+
+  const toggleVideoPlayback = useCallback(() => {
+    const nextPaused = !videoPaused;
+    sendYoutubeCommand(nextPaused ? 'pauseVideo' : 'playVideo');
+    setVideoPaused(nextPaused);
+  }, [sendYoutubeCommand, videoPaused]);
 
   const requestSlide = useCallback((requestedIndex: number) => {
     if (featured.length < 2) return;
@@ -255,13 +348,13 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
   }, [compactHero, featured.length, featuredKey, firstArtworkReady, safeIndex]);
 
   useEffect(() => {
-    if (featured.length < 2 || paused) return;
+    if (featured.length < 2 || paused || videoPaused) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') requestSlide(safeIndex + 1);
-    }, 7200);
+    }, slideDurationMs);
     return () => window.clearInterval(timer);
-  }, [featured.length, paused, requestSlide, safeIndex]);
+  }, [featured.length, paused, requestSlide, safeIndex, slideDurationMs, videoPaused]);
 
   const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
     touchStartXRef.current = event.touches[0]?.clientX ?? null;
@@ -298,9 +391,10 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
 
   return (
     <section
-      className={`editorial-hero${paused ? ' is-paused' : ''}`}
+      className={`editorial-hero${paused || videoPaused ? ' is-paused' : ''}${videoLoaded ? ' has-video' : ''}`}
       aria-labelledby="editorial-hero-title"
-      aria-label="8 phim đang chiếu rạp"
+      aria-label="8 phim nổi bật"
+      style={{ '--editorial-hero-duration': `${slideDurationMs}ms` } as CSSProperties}
       onPointerEnter={(event) => { if (event.pointerType === 'mouse') setPaused(true); }}
       onPointerLeave={(event) => { if (event.pointerType === 'mouse') setPaused(false); }}
       onTouchStart={handleTouchStart}
@@ -319,9 +413,37 @@ export default function EditorialHero({ movies, loading = false, onReady, varian
             onSettled={() => handleArtworkSettled(index)}
           />
         ))}
+        {videoActive && (
+          <div className={`editorial-hero-video-stage${videoLoaded ? ' is-ready' : ''}`} aria-hidden="true">
+            <iframe
+              ref={videoIframeRef}
+              src={youtubeBackgroundUrl(activeTrailerId)}
+              title={`Trailer nền ${movie.name}`}
+              allow="autoplay; encrypted-media; picture-in-picture"
+              loading="lazy"
+              tabIndex={-1}
+              onLoad={() => {
+                setVideoLoaded(true);
+                sendYoutubeCommand('mute');
+                sendYoutubeCommand('playVideo');
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <div className="editorial-hero-wash" aria-hidden="true" />
+
+      {videoActive && (
+        <div className="editorial-hero-video-controls" aria-label="Điều khiển trailer nền">
+          <button type="button" onClick={toggleVideoMuted} aria-label={videoMuted ? 'Bật âm thanh trailer' : 'Tắt âm thanh trailer'}>
+            <i className={videoMuted ? 'ri-volume-mute-line' : 'ri-volume-up-line'} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={toggleVideoPlayback} aria-label={videoPaused ? 'Phát trailer' : 'Tạm dừng trailer'}>
+            <i className={videoPaused ? 'ri-play-fill' : 'ri-pause-fill'} aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
       <div className="editorial-hero-number" aria-hidden="true">
         <span>Phim nổi bật</span>

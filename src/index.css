@@ -2366,6 +2366,74 @@ body.tab-hidden .animate-pulse {
   opacity: 1;
 }
 
+.editorial-hero-video-stage {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  overflow: hidden;
+  background: #0b0c12;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 900ms ease;
+}
+
+.editorial-hero-video-stage.is-ready {
+  opacity: 1;
+}
+
+.editorial-hero-video-stage iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: auto;
+  min-width: 100%;
+  min-height: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  transform: translate(-50%, -50%) scale(1.08);
+  pointer-events: none;
+}
+
+.editorial-hero-video-controls {
+  position: absolute;
+  z-index: 10;
+  top: 5rem;
+  right: 1.5rem;
+  display: flex;
+  gap: .55rem;
+  opacity: 0;
+  transform: translateY(-.35rem);
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+
+.editorial-hero.has-video .editorial-hero-video-controls {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.editorial-hero-video-controls button {
+  display: inline-flex;
+  width: 2.6rem;
+  height: 2.6rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(7, 9, 13, .68);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.editorial-hero-video-controls button:hover,
+.editorial-hero-video-controls button:focus-visible {
+  border-color: rgba(255, 255, 255, .52);
+  background: rgba(239, 68, 68, .72);
+  transform: scale(1.05);
+}
+
 .editorial-hero-wash {
   position: absolute;
   z-index: 2;
@@ -2717,7 +2785,7 @@ body.tab-hidden .animate-pulse {
   height: 100%;
   transform-origin: left;
   background: linear-gradient(90deg, #ef554c, #ffb09f);
-  animation: editorial-hero-progress 7.2s linear both;
+  animation: editorial-hero-progress var(--editorial-hero-duration, 7.2s) linear both;
 }
 
 .editorial-hero.is-paused .editorial-hero-progress span {
@@ -5150,6 +5218,11 @@ body.tab-hidden .animate-pulse {
 }
 
 @media (max-width: 639px) {
+  .editorial-hero-video-stage,
+  .editorial-hero-video-controls {
+    display: none !important;
+  }
+
   .home-cinema-v2 .editorial-hero-shell,
   .home-cinema-v2 .editorial-home-shell,
   .home-cinema-v2 .home-v2-discovery {

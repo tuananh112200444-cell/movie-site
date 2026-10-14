@@ -189,6 +189,33 @@ if (!editorialHero.includes('onReady?: () => void') || !editorialHero.includes('
   failures.push('Editorial hero must release below-fold rendering only after its image is ready.');
 }
 for (const contract of [
+  'youtube-nocookie.com',
+  "autoplay: '1'",
+  "mute: '1'",
+  'VIDEO_REVEAL_DELAY_MS = 1_600',
+  "window.matchMedia('(prefers-reduced-motion: reduce)')",
+  'connection?.saveData',
+  'compactHero',
+  'editorial-hero-video-stage',
+  'editorial-hero-video-controls',
+  "sendYoutubeCommand(nextMuted ? 'mute' : 'unMute')",
+  "sendYoutubeCommand(nextPaused ? 'pauseVideo' : 'playVideo')",
+]) {
+  if (!editorialHero.includes(contract)) failures.push(`Desktop cinematic video hero contract is missing: ${contract}`);
+}
+for (const contract of [
+  '.editorial-hero-video-stage.is-ready',
+  '.editorial-hero.has-video .editorial-hero-video-controls',
+  'animation: editorial-hero-progress var(--editorial-hero-duration, 7.2s)',
+  '.editorial-hero-video-stage,\n  .editorial-hero-video-controls',
+]) {
+  if (!globalCss.includes(contract)) failures.push(`Video hero styling contract is missing: ${contract}`);
+}
+if (!homePromotions.includes("trailer_url: 'https://www.youtube.com/watch?v=v6KNnhkLnnY'")
+  || !homePromotions.includes("trailer_url: 'https://www.youtube.com/watch?v=ZkN2M4ODdys'")) {
+  failures.push('Pinned hero movies must expose their verified trailers to the cinematic demo.');
+}
+for (const contract of [
   'editorial-hero-slide${active',
   'requestedIndexes',
   'settledIndexes',

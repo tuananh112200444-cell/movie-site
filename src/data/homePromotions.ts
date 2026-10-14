@@ -31,6 +31,7 @@ export const PINNED_HOME_HERO_MOVIES = [
     country: [{ id: '05de95be5fc404da9680bbb3dd8262e6', name: 'Hàn Quốc', slug: 'han-quoc' }],
     is_published: true,
     seo_catalog_status: 'published',
+    trailer_url: 'https://www.youtube.com/watch?v=v6KNnhkLnnY',
     content: 'Một bác sĩ phẫu thuật bí ẩn nhưng tài năng nhận những ca tưởng chừng bất khả thi tại bệnh viện nơi cái tôi và tham nhũng lộng hành.',
   },
   {
@@ -61,6 +62,7 @@ export const PINNED_HOME_HERO_MOVIES = [
     country: [{ id: '74d9fa92f4dea9ecea8fc2233dc7921a', name: 'Âu Mỹ', slug: 'au-my' }],
     is_published: true,
     seo_catalog_status: 'published',
+    trailer_url: 'https://www.youtube.com/watch?v=ZkN2M4ODdys',
     content: 'Khi con trai bị bắt cóc, một ứng viên thị trưởng Los Angeles và vợ phải xoay xở tiền chuộc, đồng thời đối mặt với những lựa chọn có thể phá tan thế giới của họ.',
   },
 ] satisfies MovieItem[];
