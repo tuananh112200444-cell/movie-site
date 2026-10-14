@@ -352,7 +352,17 @@ async function parseDetail(sourceUrl: string) {
 
 async function findMovie(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {
   const fields = 'id,slug,name,origin_name,title_vi,title_en,title_original,tmdb_id,normalized_name,year,source_site,current_episode,total_episodes,is_published';
-  const { data: bySource } = await db.from('movies').select(fields).eq('source_url', entry.sourceUrl).limit(1).maybeSingle();
+  const currentUrl = new URL(String(entry.sourceUrl || ''), BASE);
+  const legacyUrls = ['www.glvietsub.net', 'glvietsub.net'].map((host) => {
+    const url = new URL(currentUrl);
+    url.hostname = host;
+    return url.toString().replace(/\/$/, '');
+  });
+  const { data: bySourceRows } = await db.from('movies').select(fields)
+    .eq('source_site', SOURCE)
+    .in('source_url', [currentUrl.toString().replace(/\/$/, ''), ...legacyUrls])
+    .limit(2);
+  const bySource = bySourceRows?.length === 1 ? bySourceRows[0] : null;
   // Match through punctuation-safe normalized values. Raw titles can contain
   // commas/parentheses that alter PostgREST .or() syntax and silently prevent
   // GL episodes from attaching to an existing BL canonical movie.

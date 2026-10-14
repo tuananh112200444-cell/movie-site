@@ -7,6 +7,7 @@ const migration = fs.readFileSync('supabase/migrations/20260721195500_add_glviet
 const healthMigration = fs.readFileSync('supabase/migrations/20260721210000_harden_operations_health_and_cron.sql', 'utf8');
 const localizedUpgradeMigration = fs.readFileSync('supabase/migrations/20260814223000_restore_glvietsub_localized_upgrade_pipeline.sql', 'utf8');
 const freshnessMigration = fs.readFileSync('supabase/migrations/20260815163907_glvietsub_freshness_and_4_elements_canonical.sql', 'utf8');
+const domainMigration = fs.readFileSync('supabase/migrations/20261014160000_glvietsub_successor_domain.sql', 'utf8');
 const capacityMigration = fs.readFileSync('supabase/migrations/20260821170304_stabilize_viewer_brain_and_source_sync_capacity.sql', 'utf8');
 const gapProviderSync = fs.readFileSync('supabase/functions/sync-gap-playback-providers/index.ts', 'utf8');
 const movieApi = fs.readFileSync('src/services/movieApi.ts', 'utf8');
@@ -18,6 +19,9 @@ const queerHero = fs.readFileSync('src/pages/home/components/QueerUniverseHero.t
 const home = fs.readFileSync('src/pages/home/page.tsx', 'utf8');
 const checks = [
   [source.includes("const BASE = 'https://www.glvietsubz.net'") && source.includes('glvietsub(?:z)?'), 'GLVietsub sync must use the current domain while accepting legacy source URLs'],
+  [source.includes("['www.glvietsub.net', 'glvietsub.net']") && source.includes(".in('source_url', [currentUrl.toString()"), 'Legacy GLVietsub URLs must resolve to one existing source movie before updating the current URL'],
+  [detailProxy.includes("/^(?:www\\.)?glvietsub(?:z)?\\.net$/i.test(url.hostname)"), 'On-demand GL episode repair must recognize the current and legacy hostnames'],
+  [domainMigration.includes("lower(coalesce(source_site, '')) = 'glvietsub'") && domainMigration.includes("regexp_replace(source_url") && domainMigration.includes("regexp_replace(showtimes"), 'Stored GLVietsub links must move to the successor domain without changing unrelated catalogue records'],
   [source.includes('source_url: entry.sourceUrl, showtimes: entry.sourceUrl'), 'Existing GLVietsub movies must migrate their stored source URL to the current domain'],
   [movieApi.includes("'glvietsub-weirdo-101-the-series': 'blvietsub-1764-luc-hap-dan-giua-chung-ta-weirdo-101-2026'")
     && movieApi.includes('mergeQueerDetailWithSources(quickPlayable, sibling, null)'), 'Verified Weirdo GL/BL siblings must merge at read time while the database repair is pending'],

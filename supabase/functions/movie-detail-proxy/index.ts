@@ -832,7 +832,7 @@ function getGlvietsubMovieSlug(movie: Record<string, unknown> | null | undefined
     const raw = String(value || '').trim();
     try {
       const url = new URL(raw);
-      if (!/(^|\.)glvietsub\.net$/i.test(url.hostname)) continue;
+      if (!/^(?:www\.)?glvietsub(?:z)?\.net$/i.test(url.hostname)) continue;
       const match = url.pathname.match(/\/phim-bo\/([^/?#]+)/i);
       if (match?.[1]) return decodeURIComponent(match[1]).trim();
     } catch {
