@@ -5283,7 +5283,97 @@ body.tab-hidden .animate-pulse {
   }
 }
 
-/* Alternate 9922 campaign demo — enabled only by ?banner-v2=1. */
+/* Angular home layout preview: one large hero, medium cinema posters, compact rails. */
+.home-layout-demo .editorial-hero,
+.home-layout-demo .editorial-hero-copy {
+  min-height: clamp(410px, 50vh, 470px);
+}
+
+.home-layout-demo .editorial-hero {
+  border-radius: 3px;
+  border-color: rgba(255, 255, 255, .2);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .35);
+}
+
+.home-layout-demo .editorial-hero-copy {
+  padding: 2.5rem 2.75rem 2.75rem;
+}
+
+.home-layout-demo .editorial-hero h2 {
+  font-size: clamp(2.4rem, 3.7vw, 3.7rem);
+}
+
+.home-layout-demo .editorial-hero-kicker,
+.home-layout-demo .editorial-watch-button,
+.home-layout-demo .editorial-detail-link,
+.home-layout-demo .editorial-hero-thumbnails,
+.home-layout-demo .editorial-hero-thumbnails button,
+.home-layout-demo .home-v2-discovery,
+.home-layout-demo .home-v2-discovery nav a,
+.home-layout-demo .support-banner-demo,
+.home-layout-demo main.editorial-home-shell > [data-testid="daily-update-demo"] {
+  border-radius: 3px;
+}
+
+.home-layout-demo .editorial-section-frame,
+.home-layout-demo .editorial-section-frame:nth-of-type(even) {
+  margin-bottom: 2rem;
+}
+
+.home-layout-demo .editorial-section-chrome {
+  display: none;
+}
+
+.home-layout-demo .editorial-section-content {
+  padding: .75rem 0 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 0;
+  background: transparent;
+}
+
+.home-layout-demo .movie-art-frame,
+.home-layout-demo .editorial-section-frame .movie-card-contain .movie-art-frame,
+.home-layout-demo .movie-card-contain.movie-art-frame.movie-art-frame--wide {
+  clip-path: none !important;
+  border-radius: 3px !important;
+}
+
+.home-layout-demo [data-editorial-section="04"] .movie-section-desktop-grid,
+.home-layout-demo [data-editorial-section="05"] .movie-section-desktop-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.home-layout-demo [data-editorial-section="04"] .movie-section-desktop-grid > :nth-child(7),
+.home-layout-demo [data-editorial-section="05"] .movie-section-desktop-grid > :nth-child(7) {
+  display: block;
+}
+
+.home-layout-demo [data-editorial-section="04"] .movie-section-desktop-grid > :nth-child(n + 8),
+.home-layout-demo [data-editorial-section="05"] .movie-section-desktop-grid > :nth-child(n + 8) {
+  display: none;
+}
+
+.home-layout-demo .support-banner-demo-top {
+  margin-block: 1.5rem 2rem;
+}
+
+@media (max-width: 639px) {
+  .home-layout-demo .editorial-hero,
+  .home-layout-demo .editorial-hero-copy {
+    min-height: 430px;
+  }
+
+  .home-layout-demo .editorial-hero-copy {
+    padding: 8.75rem 1rem 1.15rem;
+  }
+
+  .home-layout-demo .editorial-section-frame,
+  .home-layout-demo .editorial-section-frame:nth-of-type(even) {
+    margin-bottom: 1.25rem;
+  }
+}
+
 .campaign-banner-v2 {
   isolation: isolate;
 }
@@ -6629,5 +6719,43 @@ body.tab-hidden .animate-pulse {
 
   .movie-section-mobile-grid.kp-pocket-rail {
     grid-auto-columns: 22.5%;
+  }
+}
+
+@media (max-width: 639px) {
+  .home-editorial-v4.home-layout-demo .editorial-hero,
+  .home-editorial-v4.home-layout-demo .editorial-hero-copy,
+  .home-editorial-v4.home-layout-demo .editorial-hero-visual {
+    min-height: 430px;
+  }
+
+  .home-editorial-v4.home-layout-demo .editorial-hero-copy {
+    padding: 2rem 1rem 1.2rem;
+  }
+
+  .home-layout-demo .movie-section-mobile-grid.kp-pocket-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1rem .7rem !important;
+  }
+
+  .home-layout-demo .movie-section-mobile-grid.kp-pocket-rail {
+    grid-auto-columns: 38%;
+    gap: .7rem !important;
+  }
+
+  .home-layout-demo .kp-pocket-grid .movie-art-frame,
+  .home-layout-demo .kp-pocket-rail .movie-art-frame {
+    clip-path: none !important;
+    border-radius: 3px !important;
+  }
+
+  .home-layout-demo .kp-pocket-grid .kp-card-title,
+  .home-layout-demo .kp-pocket-rail .kp-card-title {
+    font-size: .82rem;
+    line-height: 1.22;
+  }
+
+  .home-layout-demo .kp-pocket-grid .kp-card-facts {
+    display: none;
   }
 }

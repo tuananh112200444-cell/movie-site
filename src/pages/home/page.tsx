@@ -451,7 +451,9 @@ export default function Home() {
   const { favorites } = useFavorites();
   const { ref: bottomRef, visible: bottomVisible } = useInViewOnce('300px');
   const activePortal: 'movies' | 'queer' = location.pathname === QUEER_PORTAL_PATH ? 'queer' : 'movies';
-  const homeV2 = new URLSearchParams(location.search).get('home-v2') === '1';
+  const homeParams = new URLSearchParams(location.search);
+  const homeLayoutDemo = homeParams.get('home-layout') === '1';
+  const homeV2 = homeParams.get('home-v2') === '1' || homeLayoutDemo;
 
   const setActivePortal = (portal: 'movies' | 'queer' | null) => {
     const nextPortal = portal ?? 'movies';
@@ -765,6 +767,7 @@ export default function Home() {
   );
   const freshSeriesMovies = canonicalTypeRails['phim-bo'].slice(0, compactMobile ? 9 : 15);
   const freshSingleMovies = canonicalTypeRails['phim-le'].slice(0, compactMobile ? 9 : 15);
+  const cinemaShelfLimit = compactMobile ? (homeLayoutDemo ? 4 : 9) : 18;
   // Keep a stable hero-sized loading surface even if both the live endpoint
   // and the static snapshot are temporarily unavailable. Returning `null`
   // here collapsed the top of the page and made it look as if content had
@@ -792,7 +795,7 @@ export default function Home() {
     );
   }
   return (
-    <div className={`home-editorial-v4 home-editorial-v5 min-h-screen kp-cinema-page text-white${homeV2 ? ' home-cinema-v2' : ''}`}>
+    <div className={`home-editorial-v4 home-editorial-v5 min-h-screen kp-cinema-page text-white${homeV2 ? ' home-cinema-v2' : ''}${homeLayoutDemo ? ' home-layout-demo' : ''}`}>
       <h1 className="sr-only">KhoPhim – Tìm phim theo tên, thể loại và quốc gia</h1>
       {deferredContentReady && (
         <Suspense fallback={null}>
@@ -828,31 +831,57 @@ export default function Home() {
         </section>
       )}
 
-      <div className="editorial-home-shell support-banner-demo-top">
-        <Suspense fallback={<div className="support-banner-demo min-h-[220px] skeleton" />}>
-          <SupportBannerDemo />
-        </Suspense>
-      </div>
+      {!homeLayoutDemo && (
+        <div className="editorial-home-shell support-banner-demo-top">
+          <Suspense fallback={<div className="support-banner-demo min-h-[220px] skeleton" />}>
+            <SupportBannerDemo />
+          </Suspense>
+        </div>
+      )}
 
       {deferredContentReady ? <Suspense fallback={<div className="editorial-home-shell min-h-[220px] skeleton" />}><>
       <main className="editorial-home-shell">
         <EditorialSectionFrame number="01" code="NOW SCREENING" tone="cinema">
           <LazyMovieSection
-            fetchType="type" fetchKey="phim-chieu-rap" limit={compactMobile ? 9 : 18}
+            fetchType="type" fetchKey="phim-chieu-rap" limit={cinemaShelfLimit}
             title="Phim Đang Chiếu Rạp" viewAllLink="/phim-chieu-rap"
             cols={6} rootMargin="100px" sectionIndex={0} theme="cinematic"
-            movies={canonicalTypeRails['phim-chieu-rap'].slice(0, compactMobile ? 9 : 18)}
+            movies={canonicalTypeRails['phim-chieu-rap'].slice(0, cinemaShelfLimit)}
             loading={canonicalTypeRailsLoading}
           />
         </EditorialSectionFrame>
+
+        {homeLayoutDemo && <>
+          <EditorialSectionFrame number="04" code="SERIES INDEX" tone="series">
+            <LazyMovieSection
+              fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 15}
+              title="Phim Bộ Mới Cập Nhật" viewAllLink="/phim-bo?sort=updated"
+              cols={6} rootMargin="160px" sectionIndex={4} theme="trending" mobileLayout="rail"
+              movies={freshSeriesMovies}
+              loading={canonicalTypeRailsLoading}
+            />
+          </EditorialSectionFrame>
+
+          <EditorialSectionFrame number="05" code="FEATURE FILMS" tone="single">
+            <LazyMovieSection
+              fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 15}
+              title="Phim Lẻ Mới Cập Nhật" viewAllLink="/phim-le?sort=updated"
+              cols={6} rootMargin="160px" sectionIndex={5} theme="cinematic" mobileLayout="rail"
+              movies={freshSingleMovies}
+              loading={canonicalTypeRailsLoading}
+            />
+          </EditorialSectionFrame>
+        </>}
 
         <Suspense fallback={<div className="mb-10 h-[620px] skeleton" />}>
           <DailyUpdateDemoSection movies={dailyUpdateMovies} loading={homeLoading} compact={homeV2} />
         </Suspense>
 
-        <Suspense fallback={<div className="mb-8 h-[320px] skeleton" />}>
-          <GenreSEOSection />
-        </Suspense>
+        {!homeLayoutDemo && (
+          <Suspense fallback={<div className="mb-8 h-[320px] skeleton" />}>
+            <GenreSEOSection />
+          </Suspense>
+        )}
 
         <ContinueWatching />
 
@@ -892,7 +921,7 @@ export default function Home() {
         <AdsterraNativeBanner />
         <AdsterraResponsiveBanner />
 
-        <EditorialSectionFrame number="04" code="SERIES INDEX" tone="series">
+        {!homeLayoutDemo && <EditorialSectionFrame number="04" code="SERIES INDEX" tone="series">
           <LazyMovieSection
             fetchType="type" fetchKey="phim-bo" limit={compactMobile ? 9 : 15}
             title="Phim Bộ Mới Cập Nhật" viewAllLink="/phim-bo?sort=updated"
@@ -900,9 +929,9 @@ export default function Home() {
             movies={freshSeriesMovies}
             loading={canonicalTypeRailsLoading}
           />
-        </EditorialSectionFrame>
+        </EditorialSectionFrame>}
 
-        <EditorialSectionFrame number="05" code="FEATURE FILMS" tone="single">
+        {!homeLayoutDemo && <EditorialSectionFrame number="05" code="FEATURE FILMS" tone="single">
           <LazyMovieSection
             fetchType="type" fetchKey="phim-le" limit={compactMobile ? 9 : 15}
             title="Phim Lẻ Mới Cập Nhật" viewAllLink="/phim-le?sort=updated"
@@ -910,7 +939,7 @@ export default function Home() {
             movies={freshSingleMovies}
             loading={canonicalTypeRailsLoading}
           />
-        </EditorialSectionFrame>
+        </EditorialSectionFrame>}
 
         <EditorialSectionFrame number="BL" code="QUEER UNIVERSE" tone="mood">
           <LazyMovieSection
@@ -984,6 +1013,13 @@ export default function Home() {
           )}
         </div>
       </main>
+      {homeLayoutDemo && (
+        <div className="editorial-home-shell support-banner-demo-top">
+          <Suspense fallback={<div className="support-banner-demo min-h-[220px] skeleton" />}>
+            <SupportBannerDemo />
+          </Suspense>
+        </div>
+      )}
       <Footer />
       </></Suspense> : <div className="editorial-home-shell min-h-[220px]" aria-hidden="true" />}
     </div>
