@@ -81,10 +81,21 @@ export function pinCinemaPromotions(movies: MovieItem[], limit?: number): MovieI
 }
 
 export function pinHomeHeroPromotions(movies: MovieItem[], limit?: number): MovieItem[] {
+  const publicMovies = movies.filter((movie) => {
+    const status = String(movie.seo_catalog_status || 'published').trim().toLowerCase();
+    return movie.is_published !== false
+      && !movie.superseded_by_movie_id
+      && !['hidden', 'draft', 'superseded', 'awaiting_playback'].includes(status);
+  });
+  const liveBySlug = new Map(publicMovies.map((movie) => [movie.slug, movie]));
   const pinnedSlugs = new Set(PINNED_HOME_HERO_MOVIES.map((movie) => movie.slug));
   const promoted = [
-    ...PINNED_HOME_HERO_MOVIES,
-    ...movies.filter((movie) => !pinnedSlugs.has(movie.slug) && !HOME_HERO_EXCLUDED_SLUGS.has(movie.slug)),
+    ...PINNED_HOME_HERO_MOVIES.flatMap((promotion) => {
+      const live = liveBySlug.get(promotion.slug);
+      if (!live) return [];
+      return [{ ...promotion, ...live }];
+    }),
+    ...publicMovies.filter((movie) => !pinnedSlugs.has(movie.slug) && !HOME_HERO_EXCLUDED_SLUGS.has(movie.slug)),
   ];
   return typeof limit === 'number' ? promoted.slice(0, limit) : promoted;
 }

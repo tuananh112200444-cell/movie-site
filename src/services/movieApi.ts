@@ -1918,15 +1918,6 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
         headers: undefined,
         allowRefresh: true,
       },
-      {
-        // Keep a direct Edge read only as a late emergency hedge when Pages
-        // is unavailable. It must never outrun the canonical route.
-        url: new URL(`${SUPABASE_URL}/functions/v1/movie-detail-proxy`),
-        timeoutMs: 18_000,
-        delayMs: 9_250,
-        headers: { apikey: SUPABASE_ANON_KEY },
-        allowRefresh: false,
-      },
       ]
     : [{
         url: new URL('https://khophim.org/api/movie-detail'),
@@ -1980,7 +1971,7 @@ async function fetchMovieDetailFromProxy(slug: string, forceRefresh = false, sou
     return null;
   });
 
-  const result = await raceFirstValidWithTimeout(requests, 18_250);
+  const result = await raceFirstValidWithTimeout(requests, 9_250);
   if (result) controllers.forEach((controller) => controller.abort());
   return result ?? metadataFallback;
 }
@@ -4832,15 +4823,17 @@ export async function fetchMovieDetail(slug: string, forceRefresh = false, sourc
 
     // ── STEP 4: External fallback ──
     let external = externalPromise ? await externalPromise.catch(() => null) : await fetchMovieDetailFromExternal(slug);
-    if (!external && typeof window !== 'undefined') {
-      // Only reached after the canonical Supabase/Pages paths and their
-      // provider-neutral recovery have completed without a playable result.
-      // This preserves normal source scoring while keeping released movies
-      // watchable during a temporary Pages Functions fail-open window.
+    if (!external && typeof window !== 'undefined' && ALLOW_BROWSER_PROVIDER_FALLBACK) {
+      // Local diagnostics may read an exact provider response. Production
+      // browsers use only the same-origin Pages API so publication, identity,
+      // source ranking and repair policy have one owner at the edge.
       external = await fetchMovieDetailFromExternal(slug, true);
     }
     if (!external && canonicalSlug && canonicalSlug !== slug) {
-      external = await fetchMovieDetailFromExternal(canonicalSlug, typeof window !== 'undefined');
+      external = await fetchMovieDetailFromExternal(
+        canonicalSlug,
+        typeof window !== 'undefined' && ALLOW_BROWSER_PROVIDER_FALLBACK,
+      );
     }
     if (external && detailHasPlayableEpisodes(external)) {
       setCached(cacheKey, external);

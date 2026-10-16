@@ -57,6 +57,7 @@ const systemBrainMigration = fs.readFileSync('supabase/migrations/20260822070340
 const peakEpisodeFreshness = fs.readFileSync('supabase/migrations/20260825141500_add_peak_kkphim_episode_freshness.sql', 'utf8');
 const kkphimOngoingRefresh = fs.readFileSync('supabase/migrations/20260928154500_add_kkphim_ongoing_refresh_queue.sql', 'utf8');
 const unavailableConnectorPause = fs.readFileSync('supabase/migrations/20260928160000_pause_unavailable_catalog_connectors.sql', 'utf8');
+const awaitingPlaybackFairQueue = fs.readFileSync('supabase/migrations/20261016093000_prioritize_awaiting_playback_repair.sql', 'utf8');
 if (!ophim.includes('isTrailerEpisode(episode)') || !ophim.includes('if (isTrailerEpisode(ep)) continue')) {
   failures.push('OPhim sync must not treat a trailer episode as playable movie coverage');
 }
@@ -247,6 +248,15 @@ if (
   || !movieDetailProxy.includes("/\\b(phimapi|kkphim)\\b/")
 ) {
   failures.push('Episodic detail responses must suppress provider movie/Full slug collisions');
+}
+if (
+  !awaitingPlaybackFairQueue.includes('seed_awaiting_playback_repairs')
+  || !awaitingPlaybackFairQueue.includes('order by movie.updated_at desc nulls last')
+  || !awaitingPlaybackFairQueue.includes('order by movie.updated_at asc nulls first')
+  || !awaitingPlaybackFairQueue.includes("seo_catalog_status = 'awaiting_playback'")
+  || !awaitingPlaybackFairQueue.includes('seed-awaiting-playback-repairs-every-15-minutes')
+) {
+  failures.push('Awaiting-playback repair must seed bounded newest and oldest cohorts so backlog titles cannot starve forever');
 }
 
 console.log(JSON.stringify({

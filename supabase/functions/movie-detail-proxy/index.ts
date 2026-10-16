@@ -2249,9 +2249,9 @@ async function handleRequest(req: Request): Promise<Response> {
       ? Promise.resolve(null)
       : readCachedDetail(supabase, slug, null);
 
-    // An exact private catalogue row is an authoritative quarantine/tombstone.
-    // Do this before either cache lookup or provider fallback so a dead upstream
-    // URL cannot make an intentionally unpublished movie playable again.
+    // Editorial tombstones remain fail-closed. `awaiting_playback` is different:
+    // it is a recoverable operational state, so enqueue the existing provider
+    // brain without making the viewer wait for that repair to finish.
     const { data: exactCatalogMovie, error: exactCatalogError } = await supabase
       .from('movies')
       .select(MOVIE_DETAIL_SELECT)
@@ -2279,11 +2279,33 @@ async function handleRequest(req: Request): Promise<Response> {
         }
       }
     }
+    const exactCatalogStatus = String(exactCatalogMovie?.seo_catalog_status || '').trim().toLowerCase();
+    const recoverableAwaitingPlayback = exactCatalogStatus === 'awaiting_playback';
+    if (
+      !exactCatalogError
+      && exactCatalogMovie
+      && exactCatalogMovie.is_published !== true
+      && !exactMergeAlias?.movie_id
+      && recoverableAwaitingPlayback
+    ) {
+      triggerOnDemandEpisodeRepair(
+        supabase,
+        exactCatalogMovie as Record<string, unknown>,
+        slug,
+        'viewer-awaiting-playback',
+      );
+      return jsonResponse({ status: false, message: 'Playback repair queued' }, 503, {
+        'Cache-Control': 'no-store',
+        'Retry-After': '15',
+        'X-Catalog-State': 'awaiting_playback',
+      });
+    }
     if (!exactCatalogError && exactCatalogMovie && exactCatalogMovie.is_published !== true && !exactMergeAlias?.movie_id) {
       await supabase.from('movie_api_cache').delete().eq('slug', slug);
       return jsonResponse({ status: false, message: 'Movie is not currently available' }, 404, {
         'Cache-Control': 'no-store',
         'X-Catalog-Quarantine': '1',
+        'X-Catalog-State': exactCatalogStatus || 'private',
       });
     }
 
@@ -2650,7 +2672,8 @@ async function handleRequest(req: Request): Promise<Response> {
         const specialIdentity = parseStoredSpecialEpisodeIdentity(slugVal);
         const num = specialIdentity?.episodeNumber ?? extractEpNumber(slugVal);
         if (String(sm.audio_type || '').trim().toLowerCase() === 'raw' && localizedEpisodeNumbers.has(num)) continue;
-        const epName = specialIdentity?.name ?? (slugVal === 'full' ? 'Full' : `Tập ${num || slugVal}`);
+        const fullSlug = /^(?:tap-)?full(?:-hd)?$/i.test(slugVal);
+        const epName = specialIdentity?.name ?? (fullSlug ? 'Full' : `Tập ${num || slugVal}`);
         if (hasSeenEpisode(seen, serverName, slugVal, num, epName)) continue;
         markSeenEpisode(seen, serverName, slugVal, num, epName);
         const epData = {

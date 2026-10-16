@@ -188,6 +188,20 @@ try {
     assert.ok(providerCalls.length >= 1, 'provider rescue may start in parallel but must never override quarantine');
   }
 
+  {
+    const { context } = contextFor(
+      'awaiting-playback-movie',
+      Response.json(
+        { status: false, message: 'Playback repair queued' },
+        { status: 503, headers: { 'X-Catalog-State': 'awaiting_playback' } },
+      ),
+      { KKPHIM: 'playable', VSMOV: 'missing', NGUONC: 'missing' },
+    );
+    const response = await onRequest(context);
+    assert.equal(response.status, 200, 'recoverable awaiting playback must use the exact provider fallback while repair runs in the background');
+    assert.equal(response.headers.get('X-KhoPhim-Detail-Fallback'), 'KKPHIM');
+  }
+
 
   const edgeDetail = await readFile(new URL('../supabase/functions/movie-detail-proxy/index.ts', import.meta.url), 'utf8');
   assert.match(edgeDetail, /const catalogReadUnavailable = !!exactCatalogError/);

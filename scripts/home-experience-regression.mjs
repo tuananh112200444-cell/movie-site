@@ -175,6 +175,11 @@ for (const contract of [
 if (homePromotions.indexOf("slug: 'bac-si-x'") > homePromotions.indexOf("slug: 'ban-nang-thu'")) {
   failures.push('Bác Sĩ X must be the first hero and Bản Năng Thú the second.');
 }
+if (!homePromotions.includes('const liveBySlug = new Map(publicMovies.map')
+  || !homePromotions.includes("'awaiting_playback'")
+  || !homePromotions.includes('if (!live) return []')) {
+  failures.push('Pinned hero promotions must inherit live publication truth and never inject an awaiting/private movie.');
+}
 if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !home.includes("const MOBILE_HOME_SECTIONS = [\n  'top-rated'")) {
   failures.push('Desktop and mobile homepage requests must include the dedicated top-rated rail.');
 }
