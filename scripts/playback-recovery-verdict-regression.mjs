@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import {createJiti} from 'jiti';
-const {recoveryVerdict:v}=await createJiti(import.meta.url).import('../supabase/functions/_shared/playback-recovery-verdict.ts');
+const {recoveryVerdict:v,recoveryEpisodeAliases:aliases}=await createJiti(import.meta.url).import('../supabase/functions/_shared/playback-recovery-verdict.ts');
+assert.ok(aliases('tap-8').includes('tap-08'));
+assert.ok(aliases('tap-08').includes('tap-8'));
+assert.deepEqual(aliases('full'),['full']);
+assert.deepEqual(aliases('s02e08'),['s02e08']);
+assert.ok(!aliases('tap-8').includes('tap-9'));
 assert.equal(v({success:true,results:[{ok:true,playback_proof:'hls-segment'}]}),'verified_sample');
 assert.equal(v({success:true,results:[{ok:true,playback_proof:'direct-media'}]}),'verified_sample');
 assert.equal(v({success:true,results:[{ok:true,playback_proof:'embed-html',inconclusive:true}]}),'pending_browser');

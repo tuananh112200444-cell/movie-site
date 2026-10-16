@@ -16,7 +16,7 @@ begin
  result:=public.complete_playback_source_recovery(movie,(w->>'token')::uuid,'pending_browser','tap-1','{"reason":"region blocked"}');
  if not result then raise exception 'Valid completion rejected'; end if;
  if not exists(select 1 from playback_recovery_queue where movie_id=movie and outcome='pending_browser'
-  and next_attempt_at>now()+interval '5 hours' and lease_until is null) then raise exception 'Backoff not persisted'; end if;
+  and next_attempt_at>now()+interval '20 minutes' and lease_until is null) then raise exception 'Backoff not persisted'; end if;
  if (select is_published from movies where id=movie) is distinct from old_published then raise exception 'Probe changed publication'; end if;
  -- Expired invocations are reclaimable, and capacity protection blocks claims.
  update playback_recovery_queue set next_attempt_at=now()-interval '1 day',lease_until=now()-interval '1 second',priority=5 where movie_id=movie;

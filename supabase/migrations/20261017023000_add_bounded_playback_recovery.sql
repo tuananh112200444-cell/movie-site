@@ -132,6 +132,7 @@ begin
   next_attempt_at=now()+case
    when requested_episode is not null and requested_episode<>p_episode then interval '5 minutes'
    when p_outcome in ('verified_sample','recovered_sample') then interval '7 days'
+   when p_outcome in ('pending_browser','no_source') and attempts%3<>0 then interval '30 minutes'
    when p_outcome='pending_browser' then interval '6 hours'
    when p_outcome='no_source' then interval '1 day'
    else interval '30 minutes' end,

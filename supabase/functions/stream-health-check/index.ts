@@ -1,5 +1,6 @@
 import { isInconclusiveKkphimProbe } from '../_shared/provider-probe-policy.ts';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { recoveryEpisodeAliases } from '../_shared/playback-recovery-verdict.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const CORS_HEADERS = {
@@ -565,7 +566,7 @@ serve(async (req) => {
         .eq('movie_id', targetMovie.id).not('source','in','(ophim,ophim1.com)')
         .or('stream_url.neq.,embed_url.neq.')
         .order('is_active',{ascending:false}).order('priority',{ascending:false})
-        .limit(30).match(episodeSlug ? {episode_slug:episodeSlug} : {});
+        .limit(30).in('episode_slug', episodeSlug ? recoveryEpisodeAliases(episodeSlug) : ['full','1','tap-1','tap-01']);
       if (sample.error) return json({success:false,error:sample.error.message},500);
       const byProvider = new Set<string>();
       const byUrl = new Set<string>();
