@@ -22,7 +22,8 @@ async function run(probes,discoveryError=false){
    if(url.pathname.endsWith('unified-provider-brain')){
     discovery++;assert.equal(url.searchParams.get('force_refresh'),'1');assert.equal(url.searchParams.get('provider_budget'),'1');
     assert.equal(url.searchParams.get('provider_offset'),'1');
-    if(discoveryError)throw Error('Provider timeout');
+    if(discoveryError===true)throw Error('Provider timeout');
+    if(discoveryError==='protect')return Response.json({success:true,status:'capacity_protect',processed:0});
     return Response.json({success:true,results:[{outcome:'pending'}]});
    }
    assert.equal(url.searchParams.get('episode'),'tap-8');
@@ -43,4 +44,5 @@ r=await run([bad,good]);assert.equal(r.finish.p_outcome,'recovered_sample');asse
 r=await run([region,region]);assert.equal(r.finish.p_outcome,'pending_browser');
 r=await run([bad,bad]);assert.equal(r.finish.p_outcome,'no_source');
 r=await run([bad],true);assert.equal(r.finish.p_outcome,'retry');assert.match(r.finish.p_evidence.error,/timeout/);
+r=await run([bad],'protect');assert.equal(r.finish.p_outcome,'retry');assert.match(r.finish.p_evidence.error,/capacity guard/);
 console.log('Recovery worker scenarios passed: authorization, existing media, discovery + media proof, inconclusive regions, no source, provider timeout.');

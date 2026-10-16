@@ -10,10 +10,17 @@ begin
  if w is null then raise exception 'Expected an eligible verification claim'; end if;
  movie:=(w->>'movie_id')::uuid;
  select is_published into old_published from movies where id=movie;
+ perform public.enqueue_playback_source_failures(jsonb_build_array(jsonb_build_object('movie_id',movie,'episode_slug','tap-8')));
+ update playback_recovery_queue set next_attempt_at=now()-interval '10 minutes' where movie_id=movie;
+ perform public.enqueue_playback_source_failures(jsonb_build_array(jsonb_build_object('movie_id',movie)));
+ if not exists(select 1 from playback_recovery_queue where movie_id=movie and requested_episode='tap-8'
+  and next_attempt_at<=now()-interval '9 minutes') then raise exception 'Generic page refresh lost episode or queue position'; end if;
+ -- Restore the claimed request for the completion/backoff checks below.
+ update playback_recovery_queue set requested_episode=nullif(w->>'requested_episode','') where movie_id=movie;
  if public.claim_playback_source_recovery() is not null then raise exception 'Overlapping workers were admitted'; end if;
  result:=public.complete_playback_source_recovery(movie,gen_random_uuid(),'verified_sample','tap-1','{}');
  if result then raise exception 'Stale completion token accepted'; end if;
- result:=public.complete_playback_source_recovery(movie,(w->>'token')::uuid,'pending_browser','tap-1','{"reason":"region blocked"}');
+ result:=public.complete_playback_source_recovery(movie,(w->>'token')::uuid,'pending_browser',coalesce(w->>'requested_episode','tap-1'),'{"reason":"region blocked"}');
  if not result then raise exception 'Valid completion rejected'; end if;
  if not exists(select 1 from playback_recovery_queue where movie_id=movie and outcome='pending_browser'
   and next_attempt_at>now()+interval '20 minutes' and lease_until is null) then raise exception 'Backoff not persisted'; end if;
@@ -30,3 +37,4 @@ begin
 end;$test$;
 select 'Recovery queue lease, fencing, retry, capacity, publication and privileges passed' as result;
 rollback;
+
