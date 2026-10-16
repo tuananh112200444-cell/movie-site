@@ -1,3 +1,4 @@
+async function safeCachePut(cache,key,response) { try { await cache.put(key,response); } catch {} }
 const BASE = 'https://ceoxbhsdodllziyxmbqr.supabase.co/rest/v1/';
 const PUBLIC_KEY = 'sb_publishable_Juh45t-R83dfgJI0O4_PQw_iYYoU-yh';
 const PREFIX = '/api/catalog-read/';
@@ -61,6 +62,7 @@ function withState(response, state) {
   headers.set('Cache-Control',state === 'BOOTSTRAP' ? 'public, max-age=15' : 'public, max-age=60');
   const status=headers.get('X-Catalog-Upstream-Status')==='206' ? 206 : response.status;
   headers.delete('X-Catalog-Upstream-Status');
+  if(headers.has('X-Catalog-Content-Range')){headers.set('Content-Range',headers.get('X-Catalog-Content-Range'));headers.delete('X-Catalog-Content-Range');}
   return new Response(response.body,{status,headers});
 }
 async function bootstrap(context, spec) {
@@ -113,7 +115,7 @@ export async function handlePublicCatalog(context) {
     const leaseKey=new Request(leaseUrl,{method:'GET'});
     const leased=await cache.match(leaseKey).catch(()=>null);
     if(leased)return withState(stale || seed,stale ? 'STALE' : 'BOOTSTRAP');
-    await cache.put(leaseKey,new Response('1',{headers:{'Cache-Control':'public, max-age=10'}})).catch(()=>{});
+    await safeCachePut(cache,leaseKey,new Response('1',{headers:{'Cache-Control':'public, max-age=10'}})).catch(()=>{});
   }
   const work = (async () => {
     const headers = { Accept:'application/json', apikey:PUBLIC_KEY, Authorization:'Bearer ' + PUBLIC_KEY };
@@ -126,9 +128,10 @@ export async function handlePublicCatalog(context) {
     const response = new Response(body,{status:upstream.status,headers:outHeaders});
     if(cache) {
       const storedHeaders=new Headers(outHeaders);storedHeaders.set('X-Catalog-Upstream-Status',String(upstream.status));
+      if(storedHeaders.has('Content-Range')){storedHeaders.set('X-Catalog-Content-Range',storedHeaders.get('Content-Range'));storedHeaders.delete('Content-Range');}
       const staleHeaders=new Headers(storedHeaders);staleHeaders.set('Cache-Control','public, max-age=600');
       // Cloudflare Cache API rejects status 206. Preserve it as metadata and restore it for the browser.
-      await Promise.all([cache.put(key,new Response(body,{status:200,headers:storedHeaders})),cache.put(staleKey,new Response(body,{status:200,headers:staleHeaders}))]).catch(() => {});
+      await Promise.all([safeCachePut(cache,key,new Response(body,{status:200,headers:storedHeaders})),safeCachePut(cache,staleKey,new Response(body,{status:200,headers:staleHeaders}))]).catch(() => {});
     }
     return response;
   })();
@@ -136,8 +139,14 @@ export async function handlePublicCatalog(context) {
   context.waitUntil(work.then(() => {}).catch(() => {}));
   if (stale) return withState(stale,'STALE');
   if(seed) {
-    if(cache)await cache.put(key,seed.clone()).catch(()=>{});
+    if(cache)await safeCachePut(cache,key,seed.clone()).catch(()=>{});
     return withState(seed,'BOOTSTRAP');
   }
-  try { return withState(await work,'MISS'); } catch { return error(503); }
+  try { return withState(await work,'MISS'); } catch (failure) {
+    const message=failure instanceof Error ? failure.message : 'unknown';
+    console.warn(JSON.stringify({event:'public_catalog_upstream_error',message:message.slice(0,180)}));
+    const response=error(503);
+    response.headers.set('X-Catalog-Failure',/status (\d{3})/.exec(message)?.[1] || (message.includes('JSON') ? 'format' : 'transport'));
+    return response;
+  }
 }
