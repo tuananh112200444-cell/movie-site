@@ -1,3 +1,4 @@
+import { isInconclusiveKkphimProbe } from '../_shared/provider-probe-policy.ts';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -138,13 +139,7 @@ function getHost(url: string) {
 }
 
 function isBrowserManagedPhimApiProbeBlocked(row: StreamRow, result: ProbeResult) {
-  const directUrl = String(row.stream_url || '').trim();
-  const embedUrl = String(row.embed_url || '').trim();
-  return Boolean(
-    /https?:\/\/[^/]*(?:phim1280\.tv|kkphimplayer\d+\.com)\//i.test(directUrl)
-    && /https?:\/\/player\.phimapi\.com\/player\//i.test(embedUrl)
-    && (result.status === 401 || result.status === 403 || result.status === 404),
-  );
+  return isInconclusiveKkphimProbe(row, result);
 }
 
 function scoreStream(row: StreamRow, responseMs: number) {

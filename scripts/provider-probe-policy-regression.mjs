@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {createJiti} from 'jiti';
+const jiti=createJiti(import.meta.url);
+const {isInconclusiveKkphimProbe: test}=await jiti.import('../supabase/functions/_shared/provider-probe-policy.ts');
+const url='https://a.kvp726.com/20261012/L77Etn2K/index.m3u8';
+const row={source:'phimapi',stream_url:url,embed_url:'https://player.phimapi.com/player/?url='+encodeURIComponent(url),last_error:'HTTP 404'};
+for(const status of [401,403,404])assert.equal(test(row,{status,error:'HTTP '+status}),true);
+for(const status of [200,410,500,null])assert.equal(test(row,{status}),false);
+assert.equal(test({...row,last_error:'Viewer telemetry: playback fatal'},{status:404}),false);
+assert.equal(test(row,{status:404,error:'Viewer telemetry confirmed source failure: HTTP 404'}),false);
+assert.equal(test({...row,stream_url:'https://a.kvp726.com.attacker.example/x.m3u8'},{status:404}),false);
+assert.equal(test({...row,embed_url:'https://player.phimapi.com.attacker.example/player/?url='+url},{status:404}),false);
+assert.equal(test({...row,embed_url:'https://player.phimapi.com/player/?url=https://a.kvp726.com/another.m3u8'},{status:404}),false);
+assert.equal(test({...row,stream_url:'http://a.kvp726.com/a.m3u8'},{status:404}),false);
+assert.equal(test({source:'nguonc',embed_url:'https://embed15.streamc.xyz/embed.php?hash=x'},{status:404}),false);
+console.log('Provider probe policy passed: CDN region failures, URL pairing, host boundaries, real viewer errors, NguonC isolation.');
+
