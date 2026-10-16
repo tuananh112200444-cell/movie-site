@@ -4765,9 +4765,43 @@ function isRecentEdgeHomeTypeItem(item, key) {
   return expectedTypes.includes(type);
 }
 
+function edgeHomeModifiedAt(item) {
+  const raw = item?.modified?.time
+    ?? item?.updated_at
+    ?? item?.last_episode_change_at
+    ?? item?.published_at
+    ?? item?.created_at
+    ?? 0;
+  const value = Date.parse(String(raw));
+  return Number.isFinite(value) ? value : 0;
+}
+
+function canonicalizeEdgeHomeItem(item) {
+  const slug = String(item?.slug || '').trim().toLowerCase();
+  const originName = String(item?.origin_name || '').trim().toLowerCase();
+  const year = Number(item?.year || 0);
+
+  // The provider reused `vung-tu-dia` for Hope (2026), while that slug already
+  // belongs to Into the Badlands (2015) in our catalogue. Static snapshots can
+  // outlive the provider correction, so keep the identities separate at edge.
+  if (slug === 'vung-tu-dia' && originName === 'hope' && year === 2026) {
+    return {
+      ...item,
+      slug: 'hope-vung-tu-dia-2026',
+      _id: item?._id || 'ac2e123a-6c21-4c41-9096-c3f100861301',
+      id: item?.id || 'ac2e123a-6c21-4c41-9096-c3f100861301',
+      is_published: true,
+      seo_catalog_status: 'published',
+    };
+  }
+  return item;
+}
+
 function filterEdgeHomeSection(key, items) {
   const seen = new Set();
-  return (Array.isArray(items) ? items : []).filter((item) => {
+  const filtered = (Array.isArray(items) ? items : [])
+    .map(canonicalizeEdgeHomeItem)
+    .filter((item) => {
     if (!item || typeof item !== 'object') return false;
     const slug = String(item.slug || '').trim();
     const name = String(item.name || item.title_vi || item.origin_name || '').trim();
@@ -4793,6 +4827,13 @@ function filterEdgeHomeSection(key, items) {
     seen.add(slug);
     return true;
   });
+
+  // Ranked/editorial rails own their order. Discovery shelves must be newest
+  // first even when the edge serves the local snapshot during a slow cold start.
+  if (key === 'top-rated' || key.startsWith('top10-') || key === 'trending' || key === 'onlyflix-moi') {
+    return filtered;
+  }
+  return [...filtered].sort((a, b) => edgeHomeModifiedAt(b) - edgeHomeModifiedAt(a));
 }
 
 async function loadStaticHomeSnapshot(request, context, sections) {
@@ -5322,8 +5363,8 @@ async function proxyHome(request, context) {
     ? requestedSections
     : ['au-my', 'han-quoc', 'hoat-hinh', 'phim-bo', 'phim-le', 'trending'];
   const sectionKey = sections.join(',');
-  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v13-source-order?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
-  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v13-source-order?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const liveKey = new Request(`${SITE_URL}/__api-cache/home/v14-newest-first?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
+  const staleKey = new Request(`${SITE_URL}/__api-cache/home-stale/v14-newest-first?sections=${encodeURIComponent(sectionKey)}`, { method: 'GET' });
 
   if (typeof caches !== 'undefined') {
     const cached = await caches.default.match(liveKey);
@@ -5351,7 +5392,7 @@ async function proxyHome(request, context) {
         cf: {
           cacheEverything: true,
           cacheTtl: 900,
-          cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v13-source-order`,
+          cacheKey: `${SUPABASE_FUNCTION_BASE}/home-proxy?sections=${encodeURIComponent(sectionKey)}&edge=v14-newest-first`,
         },
         signal: AbortSignal.timeout(6500),
       });

@@ -189,6 +189,11 @@ if (!proxy.includes("key.startsWith('top10-')")
   || !proxy.includes('movieModifiedAt(b) - movieModifiedAt(a)')) {
   failures.push('Homepage discovery shelves must be sorted newest-first after canonical/cache merging while ranked rails preserve their order.');
 }
+if (!pagesWorker.includes('edgeHomeModifiedAt(b) - edgeHomeModifiedAt(a)')
+  || !pagesWorker.includes('v14-newest-first')
+  || !pagesWorker.includes("slug: 'hope-vung-tu-dia-2026'")) {
+  failures.push('Cloudflare static homepage fallback must sort discovery shelves newest-first, bypass stale cache, and preserve the canonical Hope identity.');
+}
 if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !home.includes("const MOBILE_HOME_SECTIONS = [\n  'top-rated'")) {
   failures.push('Desktop and mobile homepage requests must include the dedicated top-rated rail.');
 }
@@ -395,7 +400,7 @@ for (const contract of [
   if (!proxy.includes(contract)) failures.push(`KKPhim cinema source contract is missing: ${contract}`);
 }
 for (const contract of [
-  'v13-source-order',
+  'v14-newest-first',
   'function filterEdgeHomeSection',
   "key === 'phim-chieu-rap' && item.chieurap !== true",
   'X-KhoPhim-Home-Repair',
@@ -823,7 +828,7 @@ if (!proxy.includes("taxonomyHasSlug((movie as Record<string, unknown>).country,
 if (/const HOME_SUPABASE_SELECT = '[^']*chieurap/.test(proxy)) {
   failures.push('Home proxy still selects the missing movies.chieurap column and breaks all canonical rails.');
 }
-if (!pagesWorker.includes('edgeHomeHasTaxonomySlug') || !pagesWorker.includes('v13-source-order')) {
+if (!pagesWorker.includes('edgeHomeHasTaxonomySlug') || !pagesWorker.includes('v14-newest-first')) {
   failures.push('Pages edge cache does not reject cross-country shelves or rotate the repaired payload version.');
 }
 if (!proxy.includes("if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) return 12;")
