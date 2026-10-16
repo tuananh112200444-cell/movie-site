@@ -194,8 +194,12 @@ if (!proxy.includes("'X-Cache': 'EMPTY-GUARD'")
   || !proxy.includes('if (responseCompleteForRequest) {')) {
   failures.push('Home proxy must fail open to the Pages snapshot and never persist empty or incomplete section payloads.');
 }
+if (!proxy.includes("if (key === 'phim-chieu-rap') return 0;")) {
+  failures.push('The external cinema rail must not invalidate the canonical shared homepage cache.');
+}
 if (!pagesWorker.includes('edgeHomeModifiedAt(b) - edgeHomeModifiedAt(a)')
   || !pagesWorker.includes('v14-newest-first')
+  || !pagesWorker.includes("['vung-tu-dia', 'hope-vung-tu-dia'].includes(slug)")
   || !pagesWorker.includes("slug: 'hope-vung-tu-dia-2026'")) {
   failures.push('Cloudflare static homepage fallback must sort discovery shelves newest-first, bypass stale cache, and preserve the canonical Hope identity.');
 }

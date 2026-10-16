@@ -28,6 +28,10 @@ const HOME_FRESH_EPISODE_DAYS = 14;
 const STATIC_HOME_FALLBACK_URL = 'https://khophim.org/home-fallback.json';
 const STATIC_QUEER_FALLBACK_URL = 'https://khophim.org/queer-fallback.json?v=202608231630';
 function minimumHomeSectionItems(key: string): number {
+  // Cinema is repaired by the Pages worker from its verified KKPhim snapshot.
+  // Requiring six canonical UUIDs here made one external rail invalidate the
+  // shared cache for every otherwise healthy homepage section.
+  if (key === 'phim-chieu-rap') return 0;
   if (key === 'vsmov-4k') return 2;
   if (key === 'top-rated') return 5;
   if (['han-quoc', 'au-my', 'trung-quoc', 'thai-lan'].includes(key)) return 12;

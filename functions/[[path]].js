@@ -4784,7 +4784,7 @@ function canonicalizeEdgeHomeItem(item) {
   // The provider reused `vung-tu-dia` for Hope (2026), while that slug already
   // belongs to Into the Badlands (2015) in our catalogue. Static snapshots can
   // outlive the provider correction, so keep the identities separate at edge.
-  if (slug === 'vung-tu-dia' && originName === 'hope' && year === 2026) {
+  if (['vung-tu-dia', 'hope-vung-tu-dia'].includes(slug) && originName === 'hope' && year === 2026) {
     return {
       ...item,
       slug: 'hope-vung-tu-dia-2026',
