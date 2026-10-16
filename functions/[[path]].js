@@ -5121,7 +5121,7 @@ function normalizeKkphimCinemaItems(payload) {
   return (Array.isArray(data.items) ? data.items : [])
     .filter((item) => item && typeof item === 'object' && item.chieurap === true)
     .filter((item) => String(item.episode_current || '').trim().toLowerCase() !== 'trailer')
-    .map((item) => ({
+    .map((item) => canonicalizeEdgeHomeItem({
       ...item,
       _id: String(item._id || item.slug || ''),
       slug: String(item.slug || '').trim(),
@@ -5149,8 +5149,8 @@ async function proxyKkphimCinemaHot(request, context) {
     });
   }
 
-  const liveKey = new Request(`${SITE_URL}/__api-cache/kkphim-cinema-hot/v1`);
-  const staleKey = new Request(`${SITE_URL}/__api-cache/kkphim-cinema-hot-stale/v1`);
+  const liveKey = new Request(`${SITE_URL}/__api-cache/kkphim-cinema-hot/v2-canonical-slugs`);
+  const staleKey = new Request(`${SITE_URL}/__api-cache/kkphim-cinema-hot-stale/v2-canonical-slugs`);
   if (typeof caches !== 'undefined') {
     const cached = await caches.default.match(liveKey);
     if (cached) {

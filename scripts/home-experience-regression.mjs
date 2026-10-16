@@ -194,6 +194,10 @@ if (!pagesWorker.includes('edgeHomeModifiedAt(b) - edgeHomeModifiedAt(a)')
   || !pagesWorker.includes("slug: 'hope-vung-tu-dia-2026'")) {
   failures.push('Cloudflare static homepage fallback must sort discovery shelves newest-first, bypass stale cache, and preserve the canonical Hope identity.');
 }
+if (!pagesWorker.includes('.map((item) => canonicalizeEdgeHomeItem({')
+  || !pagesWorker.includes('kkphim-cinema-hot/v2-canonical-slugs')) {
+  failures.push('The live cinema feed must canonicalize provider slug collisions and rotate its edge cache.');
+}
 if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !home.includes("const MOBILE_HOME_SECTIONS = [\n  'top-rated'")) {
   failures.push('Desktop and mobile homepage requests must include the dedicated top-rated rail.');
 }
