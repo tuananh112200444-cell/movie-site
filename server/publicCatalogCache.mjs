@@ -120,7 +120,7 @@ export async function handlePublicCatalog(context) {
   const work = (async () => {
     const headers = { Accept:'application/json', apikey:PUBLIC_KEY, Authorization:'Bearer ' + PUBLIC_KEY };
     if (spec.count) headers.Prefer = 'count=' + spec.count;
-    const upstream = await fetch(spec.target,{headers,redirect:'error',signal:AbortSignal.timeout(8000)});
+    const upstream = await fetch(spec.target,{headers,redirect:'manual',signal:AbortSignal.timeout(8000)});
     if (![200,206].includes(upstream.status)) throw new Error('catalog upstream status ' + upstream.status);
     const body = await boundedJson(upstream);
     const outHeaders = new Headers({'Content-Type':'application/json; charset=utf-8','Cache-Control':'public, max-age=60','X-Catalog-Cached-At':new Date().toISOString(),'X-Content-Type-Options':'nosniff'});
