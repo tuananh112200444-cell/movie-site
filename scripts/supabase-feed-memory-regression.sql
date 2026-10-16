@@ -3,6 +3,7 @@
 -- compares execution buffers and rejects any temporary-file writes by the new feed.
 begin isolation level repeatable read;
 set local statement_timeout='45s';
+refresh materialized view concurrently public.catalog_feed_page_cache;
 CREATE OR REPLACE FUNCTION pg_temp.incident_old_feed(p_mode text DEFAULT 'new'::text, p_limit integer DEFAULT 36, p_offset integer DEFAULT 0)
  RETURNS TABLE(item jsonb, total_count bigint)
  LANGUAGE plpgsql
