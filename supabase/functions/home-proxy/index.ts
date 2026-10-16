@@ -144,7 +144,7 @@ function isRecentHomepageTypeItem(movie: Record<string, unknown>, key: string): 
 }
 
 function filteredSectionItems(sections: Record<string, unknown[]> | null | undefined, key: string): unknown[] {
-  return ((sections?.[key] ?? []) as unknown[])
+  const items = ((sections?.[key] ?? []) as unknown[])
     .filter((movie) => !isRetiredOphimCatalogItem(movie))
     // Provider lists are discovery inputs only. Every public card must already
     // resolve to the site's canonical UUID before it can enter cache, stale
@@ -163,7 +163,15 @@ function filteredSectionItems(sections: Record<string, unknown[]> | null | undef
       || taxonomyHasSlug((movie as Record<string, unknown>).country, key))
     .filter((movie) => key !== 'trending' || isFreshHomepageCandidate(movie as Record<string, unknown>))
     .filter((movie) => isRecentHomepageTypeItem(movie as Record<string, unknown>, key))
-    .filter((m) => key === 'onlyflix-moi' || !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as unknown[];
+    .filter((m) => key === 'onlyflix-moi' || !isTrailerOnly((m as Record<string, unknown>).episode_current as string)) as Record<string, unknown>[];
+
+  // Ranked/editorial rails own their order. Discovery shelves must always be
+  // newest-first even when they were rebuilt from the shared canonical pool
+  // or merged with a stale cache after an outage.
+  if (key === 'top-rated' || key.startsWith('top10-') || key === 'trending' || key === 'onlyflix-moi') {
+    return items;
+  }
+  return [...items].sort((a, b) => movieModifiedAt(b) - movieModifiedAt(a));
 }
 
 function cacheHasRequestedSections(sections: Record<string, unknown[]> | null | undefined, requestedSections: string[]): boolean {

@@ -184,6 +184,11 @@ if (!homePromotions.includes('const liveBySlug = new Map(publicMovies.map')
   || !homePromotions.includes('if (!live) return []')) {
   failures.push('Pinned hero promotions must inherit live publication truth and never inject an awaiting/private movie.');
 }
+if (!proxy.includes("key.startsWith('top10-')")
+  || !proxy.includes("key === 'trending'")
+  || !proxy.includes('movieModifiedAt(b) - movieModifiedAt(a)')) {
+  failures.push('Homepage discovery shelves must be sorted newest-first after canonical/cache merging while ranked rails preserve their order.');
+}
 if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !home.includes("const MOBILE_HOME_SECTIONS = [\n  'top-rated'")) {
   failures.push('Desktop and mobile homepage requests must include the dedicated top-rated rail.');
 }
