@@ -3,7 +3,7 @@ import { preloadBatch } from '../utils/imagePreloader';
 import { mergeMoviesUnique, sortMoviesForSearch } from '../utils/searchRanking';
 import { movieMatchesSearchIntent, normalizeSearchText } from '../utils/searchHelper';
 import { setSmartSessionCache } from '../utils/smartCache';
-import { supabase } from '@/lib/supabase';
+import { supabase, publicCatalogFetch } from '@/lib/supabase';
 import { isRecentlyBadExactSourceHost, isRecentlyBadSourceCluster } from '@/services/playerSourceHealth';
 import { isInternationalViewer } from '@/services/viewerRegion';
 import { getProviderEpisodeNumber, isFractionalProviderEpisode, normalizeVerifiedSeasonNumbering } from '../../supabase/functions/_shared/episode-numbering';
@@ -6535,7 +6535,7 @@ export async function fetchTop10TodayMovies(options: {
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 5_000);
 
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_top10_movies_today`, {
+    const response = await publicCatalogFetch(`${SUPABASE_URL}/rest/v1/rpc/get_top10_movies_today`, {
       method: 'POST',
       signal: controller.signal,
       cache: 'no-store',

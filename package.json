@@ -109,10 +109,11 @@
     "provider:brain:test": "node scripts/unified-provider-brain-regression.mjs",
     "system:brain:test": "node scripts/system-brain-consolidation-regression.mjs",
     "canonicalization:test": "node scripts/canonicalization-regression.mjs",
-    "prebuild": "node scripts/generate-remixicon-subset.mjs && node scripts/refresh-home-fallback.mjs && node scripts/generate-pages-api-fallbacks.mjs && npm run seo:generate && npm run seo:audit && npm run seo:static-pages:test && node scripts/generate-release-manifest.mjs",
+    "prebuild": "node scripts/refresh-public-catalog-bootstrap.mjs && node scripts/generate-remixicon-subset.mjs && node scripts/refresh-home-fallback.mjs && node scripts/generate-pages-api-fallbacks.mjs && npm run seo:generate && npm run seo:audit && npm run seo:static-pages:test && node scripts/generate-release-manifest.mjs",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "type-check": "tsc --noEmit --project tsconfig.app.json"
+    "type-check": "tsc --noEmit --project tsconfig.app.json",
+    "catalog:cache:test": "node scripts/public-catalog-cache-regression.mjs"
   },
   "type": "module",
   "version": "0.0.0"

@@ -1,3 +1,4 @@
+import { createPublicCatalogFetch } from './publicCatalogFetch';
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { adminSupabaseBaseUrl } from './supabaseEndpoint';
@@ -21,6 +22,7 @@ const supabaseAnonKey =
 
 export const PUBLIC_SUPABASE_URL = directSupabaseUrl;
 export const PUBLIC_SUPABASE_ANON_KEY = supabaseAnonKey;
+export const publicCatalogFetch = createPublicCatalogFetch({ baseUrl: directSupabaseUrl, publicKey: supabaseAnonKey });
 
 const SUPABASE_SINGLETON_KEY = '__khophim_public_supabase_client__';
 
@@ -30,6 +32,7 @@ type KhophimWindow = Window & typeof globalThis & {
 
 function createPublicClient(): SupabaseClient {
   return createClient(supabaseUrl, supabaseAnonKey, {
+    global: { fetch: publicCatalogFetch },
     auth: {
       persistSession: true,
       autoRefreshToken: true,
