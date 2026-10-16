@@ -35,13 +35,13 @@ await client(base+'/rest/v1/movies?select=id&is_published=eq.true&limit=36',{hea
 assert.equal(new URL(calls.at(-1).url).origin,base);
 globalThis.window=previousWindow;
 const map=new Map();const waits=[];
-globalThis.caches={default:{match:async req=>map.get(req.url)?.clone(),put:async(req,r)=>{map.set(req.url,r.clone());}}};
+globalThis.caches={default:{match:async req=>map.get(req.url)?.clone(),put:async(req,r)=>{assert.notEqual(r.status,206,'Cloudflare Cache API cannot store 206 responses');map.set(req.url,r.clone());}}};
 const makeContext=(path,headers={},assets)=>({request:new Request('https://khophim.org/api/catalog-read/'+path,{headers}),env:assets?{ASSETS:assets}:{},waitUntil:p=>waits.push(p)});
 let upstreamCalls=0;
 globalThis.fetch=async(input,init)=>{upstreamCalls++;assert.equal(new URL(input).origin,base);assert.equal(new Headers(init.headers).get('authorization').includes('personal'),false);return new Response('[{"id":"public-movie"}]',{status:206,headers:{'Content-Type':'application/json','Content-Range':'0-0/42','Range-Unit':'items'}});};
 let ctx=makeContext('movies?select=id&is_published=eq.true&limit=36&__count=exact');
 let response=await handlePublicCatalog(ctx);assert.equal(response.status,206);assert.equal(response.headers.get('content-range'),'0-0/42');assert.equal(response.headers.get('X-Catalog-Cache'),'MISS');await Promise.all(waits.splice(0));
-response=await handlePublicCatalog(ctx);assert.equal(response.headers.get('X-Catalog-Cache'),'HIT');assert.equal(upstreamCalls,1);
+response=await handlePublicCatalog(ctx);assert.equal(response.headers.get('X-Catalog-Cache'),'HIT');assert.equal(response.status,206);assert.equal(response.headers.get('content-range'),'0-0/42');assert.equal(response.headers.has('X-Catalog-Upstream-Status'),false);assert.equal(upstreamCalls,1);
 ctx=makeContext('movies?select=id&is_published=eq.true&limit=36&__count=estimated');
 await handlePublicCatalog(ctx);await Promise.all(waits.splice(0));assert.equal(upstreamCalls,2,'count variants must not share a cache entry');
 for(const path of ['users?limit=1','movies?select=id&limit=36','movies?select=id&is_published=eq.false&limit=36','movies?select=secret:users(*)&is_published=eq.true&limit=36','rpc/admin-auth','movies?select=id&is_published=eq.true&limit=1000']) {

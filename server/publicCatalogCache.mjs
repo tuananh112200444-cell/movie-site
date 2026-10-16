@@ -59,7 +59,9 @@ function withState(response, state) {
   const headers = new Headers(response.headers);
   headers.set('X-Catalog-Cache',state);
   headers.set('Cache-Control',state === 'BOOTSTRAP' ? 'public, max-age=15' : 'public, max-age=60');
-  return new Response(response.body,{status:response.status,headers});
+  const status=headers.get('X-Catalog-Upstream-Status')==='206' ? 206 : response.status;
+  headers.delete('X-Catalog-Upstream-Status');
+  return new Response(response.body,{status,headers});
 }
 async function bootstrap(context, spec) {
   if (!context.env?.ASSETS) return null;
@@ -123,8 +125,10 @@ export async function handlePublicCatalog(context) {
     for (const name of ['content-range','range-unit']) if(upstream.headers.has(name))outHeaders.set(name,upstream.headers.get(name));
     const response = new Response(body,{status:upstream.status,headers:outHeaders});
     if(cache) {
-      const staleHeaders=new Headers(outHeaders);staleHeaders.set('Cache-Control','public, max-age=600');
-      await Promise.all([cache.put(key,response.clone()),cache.put(staleKey,new Response(body,{status:upstream.status,headers:staleHeaders}))]).catch(() => {});
+      const storedHeaders=new Headers(outHeaders);storedHeaders.set('X-Catalog-Upstream-Status',String(upstream.status));
+      const staleHeaders=new Headers(storedHeaders);staleHeaders.set('Cache-Control','public, max-age=600');
+      // Cloudflare Cache API rejects status 206. Preserve it as metadata and restore it for the browser.
+      await Promise.all([cache.put(key,new Response(body,{status:200,headers:storedHeaders})),cache.put(staleKey,new Response(body,{status:200,headers:staleHeaders}))]).catch(() => {});
     }
     return response;
   })();
