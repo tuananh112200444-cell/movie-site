@@ -1148,7 +1148,20 @@ function triggerOnDemandEpisodeRepair(
       limit: 1,
       provider_budget: 4,
       reason,
-    });
+    })
+      .then(() => callInternalFunction('stream-health-check', {
+        slug: movieSlug,
+        limit: 12,
+        concurrency: 3,
+        deactivate_after: 3,
+        queue: 'recovery',
+      }))
+      .then(() => callInternalFunction('unified-provider-brain', {
+        slug: movieSlug,
+        limit: 1,
+        provider_budget: 1,
+        reason: 'post-probe-reconcile',
+      }));
   }
 
   if (!repairPromise) return false;
