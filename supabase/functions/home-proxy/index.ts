@@ -2197,6 +2197,16 @@ async function handleRequest(req: Request): Promise<Response> {
         'X-Cache': 'STATIC-FALLBACK',
       });
     }
+
+    // Never turn a transient database + snapshot outage into durable homepage
+    // corruption. Returning a retryable failure lets the Pages worker serve
+    // its local snapshot; persisting an all-empty payload poisoned every shelf
+    // for the full cache TTL and made subsequent healthy requests rebuild.
+    return jsonResponse({ status: false, source: 'unavailable', sections: {} }, 503, {
+      'Cache-Control': 'no-store',
+      'Retry-After': '15',
+      'X-Cache': 'EMPTY-GUARD',
+    });
   }
 
   /* 6. Persist to cache.
@@ -2209,29 +2219,32 @@ async function handleRequest(req: Request): Promise<Response> {
       filteredSectionItems({ [key]: items }, key),
     ]),
   ) as Record<string, Record<string, unknown>[]>;
-  try {
-    const expiresAt = new Date(Date.now() + CACHE_TTL_MIN * 60 * 1000).toISOString();
-    const payload = {
-      sections: responseSections as unknown as object,
-      updated_at: now,
-      expires_at: expiresAt,
-      source: 'multi-provider',
-    };
-    const { data: updatedRows, error: updateError } = await supabase
-      .from('home_page_cache')
-      .update(payload)
-      .eq('id', CACHE_KEY)
-      .select('id')
-      .abortSignal(timeoutSignal(6000));
-
-    if (!updateError && (!updatedRows || updatedRows.length === 0)) {
-      await supabase
+  const responseCompleteForRequest = cacheHasRequestedSections(responseSections, requestedSections);
+  if (responseCompleteForRequest) {
+    try {
+      const expiresAt = new Date(Date.now() + CACHE_TTL_MIN * 60 * 1000).toISOString();
+      const payload = {
+        sections: responseSections as unknown as object,
+        updated_at: now,
+        expires_at: expiresAt,
+        source: 'multi-provider',
+      };
+      const { data: updatedRows, error: updateError } = await supabase
         .from('home_page_cache')
-        .upsert({ id: CACHE_KEY, ...payload }, { onConflict: 'id' })
+        .update(payload)
+        .eq('id', CACHE_KEY)
+        .select('id')
         .abortSignal(timeoutSignal(6000));
+
+      if (!updateError && (!updatedRows || updatedRows.length === 0)) {
+        await supabase
+          .from('home_page_cache')
+          .upsert({ id: CACHE_KEY, ...payload }, { onConflict: 'id' })
+          .abortSignal(timeoutSignal(6000));
+      }
+    } catch {
+      /* ignore cache write errors */
     }
-  } catch {
-    /* ignore cache write errors */
   }
 
   /* 7. Return fresh */

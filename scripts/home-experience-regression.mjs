@@ -189,6 +189,11 @@ if (!proxy.includes("key.startsWith('top10-')")
   || !proxy.includes('movieModifiedAt(b) - movieModifiedAt(a)')) {
   failures.push('Homepage discovery shelves must be sorted newest-first after canonical/cache merging while ranked rails preserve their order.');
 }
+if (!proxy.includes("'X-Cache': 'EMPTY-GUARD'")
+  || !proxy.includes('responseCompleteForRequest = cacheHasRequestedSections(responseSections, requestedSections)')
+  || !proxy.includes('if (responseCompleteForRequest) {')) {
+  failures.push('Home proxy must fail open to the Pages snapshot and never persist empty or incomplete section payloads.');
+}
 if (!pagesWorker.includes('edgeHomeModifiedAt(b) - edgeHomeModifiedAt(a)')
   || !pagesWorker.includes('v14-newest-first')
   || !pagesWorker.includes("slug: 'hope-vung-tu-dia-2026'")) {
