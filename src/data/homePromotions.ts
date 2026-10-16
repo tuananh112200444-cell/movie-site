@@ -65,11 +65,44 @@ export const PINNED_HOME_HERO_MOVIES = [
     trailer_url: 'https://www.youtube.com/watch?v=ZkN2M4ODdys',
     content: 'Khi con trai bị bắt cóc, một ứng viên thị trưởng Los Angeles và vợ phải xoay xở tiền chuộc, đồng thời đối mặt với những lựa chọn có thể phá tan thế giới của họ.',
   },
+  {
+    _id: 'hope-vung-tu-dia-2026',
+    slug: 'hope-vung-tu-dia-2026',
+    name: 'Vùng Tử Địa',
+    origin_name: 'Hope',
+    type: 'single',
+    status: 'completed',
+    thumb_url: 'https://phimimg.com/uploads/movies/20260919/hope-vung-tu-dia-thumb.webp',
+    poster_url: 'https://phimimg.com/uploads/movies/20260919/hope-vung-tu-dia-poster.webp',
+    hero_backdrop_url: 'https://phimimg.com/uploads/movies/20260919/hope-vung-tu-dia-thumb.webp',
+    hero_poster_url: 'https://phimimg.com/uploads/movies/20260919/hope-vung-tu-dia-poster.webp',
+    sub_docquyen: false,
+    chieurap: true,
+    time: '157 phút',
+    episode_current: 'Full',
+    episode_total: '1',
+    current_episode: 1,
+    total_episodes: 1,
+    quality: 'FHD',
+    lang: 'Vietsub',
+    year: 2026,
+    category: [
+      { id: '0bcf4077916678de9b48c89221fcf8ae', name: 'Khoa Học', slug: 'khoa-hoc' },
+      { id: '68564911f00849030f9c9c144ea1b931', name: 'Viễn Tưởng', slug: 'vien-tuong' },
+      { id: '2fb53017b3aca80eaaf1a3b50a182db', name: 'Bí Ẩn', slug: 'bi-an' },
+      { id: '9822be111d2ccc29c7172c78b8af8ff5', name: 'Hành Động', slug: 'hanh-dong' },
+    ],
+    country: [{ id: '05de95be5fc404da9680bbb3dd8262e6', name: 'Hàn Quốc', slug: 'han-quoc' }],
+    is_published: true,
+    seo_catalog_status: 'published',
+    content: 'Tại Hope Harbor gần khu phi quân sự, một tin báo về con hổ khiến cả ngôi làng hoảng loạn và hé lộ một sự thật ngoài sức tưởng tượng.',
+  },
 ] satisfies MovieItem[];
 
 export const HOME_HERO_EXCLUDED_SLUGS = new Set([
   'phi-phong-quy-mau-rung-thieng',
   'tham-tu-lung-danh-conan-vu-an-tien-gia-ultra-30',
+  'vung-tu-dia',
 ]);
 
 // Cinema rails keep the provider's verified source order. Hero curation is a

@@ -165,6 +165,7 @@ for (const contract of [
 for (const contract of [
   "slug: 'bac-si-x'",
   "slug: 'ban-nang-thu'",
+  "slug: 'hope-vung-tu-dia-2026'",
   "'phi-phong-quy-mau-rung-thieng'",
   "'tham-tu-lung-danh-conan-vu-an-tien-gia-ultra-30'",
   'PINNED_HOME_HERO_MOVIES',
@@ -174,6 +175,9 @@ for (const contract of [
 }
 if (homePromotions.indexOf("slug: 'bac-si-x'") > homePromotions.indexOf("slug: 'ban-nang-thu'")) {
   failures.push('Bác Sĩ X must be the first hero and Bản Năng Thú the second.');
+}
+if (homePromotions.indexOf("slug: 'ban-nang-thu'") > homePromotions.indexOf("slug: 'hope-vung-tu-dia-2026'")) {
+  failures.push('The canonical 2026 Hope page must follow Bản Năng Thú in the curated hero order.');
 }
 if (!homePromotions.includes('const liveBySlug = new Map(publicMovies.map')
   || !homePromotions.includes("'awaiting_playback'")
