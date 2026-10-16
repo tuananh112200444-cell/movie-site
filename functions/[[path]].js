@@ -3652,6 +3652,69 @@ async function proxyMovieDetail(request, context) {
     });
   }
 
+  // Hope (2026) has a verified playable row in the production catalogue, but
+  // the large-table detail lookup can time out before reaching it. Keep this
+  // exact canonical identity available at edge so the cinema card never opens
+  // a 503 or falls back to the unrelated Into the Badlands title.
+  if (slug === 'hope-vung-tu-dia-2026') {
+    const movie = {
+      _id: 'ac2e6194-c66e-4a00-928d-750b667d941a',
+      slug,
+      name: 'Vùng Tử Địa',
+      origin_name: 'Hope',
+      content: 'Tại Hope Harbor, một ngôi làng hẻo lánh gần khu vực phi quân sự, cảnh sát trưởng Bum-seok nhận được tin báo về một con hổ. Khi cả làng chìm trong hoảng loạn, ông phát hiện một sự thật ngoài sức tưởng tượng.',
+      type: 'single',
+      status: 'completed',
+      thumb_url: 'https://phimimg.com/uploads/movies/20260919/hope-vung-tu-dia-thumb.webp',
+      poster_url: 'https://phimimg.com/uploads/movies/20260919/hope-vung-tu-dia-poster.webp',
+      is_copyright: false,
+      sub_docquyen: false,
+      chieurap: true,
+      trailer_url: '',
+      time: '157 phút',
+      episode_current: 'Full',
+      episode_total: '1',
+      current_episode: 1,
+      total_episodes: 1,
+      quality: 'FHD',
+      lang: 'Vietsub',
+      notify: '',
+      showtimes: '',
+      year: 2026,
+      view: 0,
+      actor: ['Hwang Jung-min', 'Zo In-sung', 'Hoyeon', 'Alicia Vikander'],
+      director: ['Na Hong-jin'],
+      category: [{ name: 'Khoa Học', slug: 'khoa-hoc' }, { name: 'Viễn Tưởng', slug: 'vien-tuong' }, { name: 'Bí Ẩn', slug: 'bi-an' }, { name: 'Hành Động', slug: 'hanh-dong' }],
+      country: [{ name: 'Hàn Quốc', slug: 'han-quoc' }],
+      source_site: 'phimapi',
+      source_name: 'KKPhim',
+      is_published: true,
+      seo_catalog_status: 'published',
+    };
+    const episode = {
+      name: 'Full',
+      slug: 'full',
+      episode_number: 1,
+      filename: '',
+      link_embed: 'https://player.phimapi.com/player/?url=https://a.kvp726.com/20261013/FotQCUTw/index.m3u8',
+      link_m3u8: 'https://a.kvp726.com/20261013/FotQCUTw/index.m3u8',
+      subtitle_url: '',
+      source_health_status: 'ok',
+      source_playback_score: 470,
+      source_priority: 1,
+      source_provider: 'kkphim',
+    };
+    return new Response(JSON.stringify({ status: true, movie, episodes: [{ server_name: 'KKPhim · Vietsub', server_data: [episode] }] }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'public, max-age=30, s-maxage=120, stale-while-revalidate=600, stale-if-error=86400',
+        'X-KhoPhim-Detail-Cache': 'PINNED_VERIFIED',
+        ...SECURITY_HEADERS,
+      },
+    });
+  }
+
   // This film's verified first-party stream is stored in R2. When the
   // catalogue read times out, provider discovery can produce a CAM version
   // under a different movie ID and cache it as if it were canonical. Keep the

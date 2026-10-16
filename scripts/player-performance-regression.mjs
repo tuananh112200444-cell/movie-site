@@ -36,6 +36,7 @@ const installPagesWorker = fs.readFileSync('scripts/install-pages-worker.mjs', '
 
 const checks = [
   [imageFallback.includes('useLayoutEffect(() => {') && imageFallback.includes('memory-cache `load` event'), 'Cached movie artwork must reset before load events so SPA logo navigation cannot leave decoded images at opacity zero'],
+  [worker.includes("slug === 'hope-vung-tu-dia-2026'") && worker.includes("'X-KhoPhim-Detail-Cache': 'PINNED_VERIFIED'") && worker.includes('https://a.kvp726.com/20261013/FotQCUTw/index.m3u8'), 'Hope (2026) must retain a verified edge playback response when the catalogue detail query times out'],
   [!detailProxy.includes('isPlayableEpisodeLink('), 'Movie detail must not call an undefined playback-link helper'],
   [detailProxy.includes('seo_has_playable_episode: hasEpisodes'), 'Movie detail must expose stored playback truth to SEO prerendering'],
   [playerBox.includes("function isOnlyflixEmbed(url: string)") && !playerBox.includes('allow-forms allow-popups'), 'OnlyFlix embeds must keep playback capabilities without popup permission'],
