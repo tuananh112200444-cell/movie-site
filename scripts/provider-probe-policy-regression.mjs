@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {createJiti} from 'jiti';
 const jiti=createJiti(import.meta.url);
@@ -14,3 +15,7 @@ assert.equal(test({...row,embed_url:'https://player.phimapi.com/player/?url=http
 assert.equal(test({...row,stream_url:'http://a.kvp726.com/a.m3u8'},{status:404}),false);
 assert.equal(test({source:'nguonc',embed_url:'https://embed15.streamc.xyz/embed.php?hash=x'},{status:404}),false);
 console.log('Provider probe policy passed: CDN region failures, URL pairing, host boundaries, real viewer errors, NguonC isolation.');
+
+const health=fs.readFileSync('supabase/functions/stream-health-check/index.ts','utf8');
+assert.match(health,/ok: result\.ok && !inconclusive,[\s\S]*?inconclusive,/,'actual API result must carry inconclusive verdict');
+assert.match(health,/failed: results\.filter\(\(item\) => !item\.ok && !item\.inconclusive\)/,'inconclusive probes must not increment API failure count');
