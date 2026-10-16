@@ -38,4 +38,3 @@ do $jobs$ declare j record;begin
  perform cron.schedule('bounded-playback-maintenance','2-59/5 * * * *','select private.run_bounded_playback_maintenance();');
 end;$jobs$;
 commit;
-

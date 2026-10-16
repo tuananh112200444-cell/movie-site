@@ -18,4 +18,3 @@ export function isInconclusiveKkphimProbe(row: ProviderProbeRow, result: Provide
     return new URL(embed.searchParams.get('url') || '').href===direct.href;
   } catch { return false; }
 }
-
