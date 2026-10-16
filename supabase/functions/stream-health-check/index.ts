@@ -249,7 +249,22 @@ async function probe(url: string): Promise<ProbeResult> {
         signal: controller.signal,
       });
       const segmentType = segmentResponse.headers.get('content-type') || '';
-      const segmentOk = segmentResponse.ok && !/text\/html/i.test(segmentType);
+      // Read real media bytes: a 200 HTML/JSON/empty response is not proof.
+      const reader = segmentResponse.body?.getReader();
+      let received = 0;
+      let looksLikeError = false;
+      try {
+        while (reader && received < 188) {
+          const part = await reader.read();
+          if (part.done) break;
+          if (received === 0) {
+            const prefix = new TextDecoder().decode(part.value.slice(0, 256)).trimStart();
+            looksLikeError = /^(?:<!doctype|<html|<\?xml|\{\s*"|\[\s*\{)/i.test(prefix);
+          }
+          received += part.value.byteLength;
+        }
+      } finally { await reader?.cancel().catch(() => undefined); }
+      const segmentOk = segmentResponse.ok && received >= 188 && !looksLikeError && !/text\/html|application\/json/i.test(segmentType);
       await segmentResponse.body?.cancel().catch(() => undefined);
       return {
         ok: segmentOk,
@@ -271,7 +286,21 @@ async function probe(url: string): Promise<ProbeResult> {
       }
     }
 
-    const embeddable = /text\/html|video\/|application\/octet-stream|application\/vnd\.apple\.mpegurl/i.test(contentType) || !contentType;
+    let mediaBytes = 0;
+    if (!htmlEmbed) {
+      const reader = response.body?.getReader();
+      let errorBody = false;
+      try {
+        while (reader && mediaBytes < 188) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          if (mediaBytes === 0) errorBody = /^(?:<!doctype|<html|<\?xml|\{\s*"|\[\s*\{)/i.test(new TextDecoder().decode(chunk.value.slice(0,256)).trimStart());
+          mediaBytes += chunk.value.byteLength;
+        }
+      } finally { await reader?.cancel().catch(() => undefined); }
+      if (errorBody) mediaBytes = 0;
+    }
+    const embeddable = htmlEmbed || (mediaBytes >= 188 && /video\/|application\/octet-stream/i.test(contentType));
     return {
       ok: embeddable,
       status: response.status,
@@ -495,6 +524,7 @@ serve(async (req) => {
   const episodeSlug = String(url.searchParams.get('episode') || '').trim();
   const queue = String(url.searchParams.get('queue') || 'hot').toLowerCase();
   const dryRun = url.searchParams.get('dry_run') === '1';
+  const recoverySample = url.searchParams.get('recovery_sample') === '1';
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
   const streamSelect = 'id,movie_id,episode_slug,source,server_name,stream_url,embed_url,quality,priority,health_status,failure_count,last_checked_at,last_error,response_time_ms,movies!inner(slug,is_published,status,seo_catalog_status,episode_current,current_episode,trailer_url)';
@@ -529,6 +559,26 @@ serve(async (req) => {
       .order('priority', { ascending: false })
       .limit(limit);
     if (episodeSlug) query = query.eq('episode_slug', episodeSlug);
+    if (recoverySample) {
+      // Consider provider alternatives in the same episode, without OPhim.
+      const sample = await supabase.from('streams').select(streamSelect)
+        .eq('movie_id', targetMovie.id).not('source','in','(ophim,ophim1.com)')
+        .or('stream_url.neq.,embed_url.neq.')
+        .order('is_active',{ascending:false}).order('priority',{ascending:false})
+        .limit(30).match(episodeSlug ? {episode_slug:episodeSlug} : {});
+      if (sample.error) return json({success:false,error:sample.error.message},500);
+      const byProvider = new Set<string>();
+      const byUrl = new Set<string>();
+      const candidates = (sample.data || []).sort((a,b) => Number(Boolean(b.stream_url))-Number(Boolean(a.stream_url)));
+      const selected: unknown[] = [];
+      for (const row of candidates) {
+        const urlKey = String(row.stream_url || row.embed_url || '');
+        if (byProvider.has(row.source) || byUrl.has(urlKey)) continue;
+        byProvider.add(row.source); byUrl.add(urlKey); selected.push(row);
+        if (selected.length >= limit) break;
+      }
+      preselectedRows = selected;
+    }
   }
   else if (queue === 'newest') {
     const { data: claimedRows, error: claimError } = await supabase.rpc(
@@ -782,6 +832,7 @@ serve(async (req) => {
         episode_slug: row.episode_slug,
         server_name: row.server_name,
         ok: result.ok && !inconclusive,
+        playback_proof: inconclusive ? null : result.playbackProof || null,
         inconclusive,
         recovered_from_region_probe: inconclusive && String(row.health_status || '') === 'dead',
         degraded: Boolean(result.directStreamFailed),
@@ -794,6 +845,15 @@ serve(async (req) => {
   }
 
   if (!dryRun) {
+    // Actual source failures enter recovery; HTML/region uncertainty alone
+    // never becomes a confirmed failure. Recovery's own probes do not requeue.
+    const failures = results.filter(item => !item.ok && !item.inconclusive);
+    if (!recoverySample && failures.length > 0) {
+      const enqueued = await supabase.rpc('enqueue_playback_source_failures', {
+        p_items: failures.map(item => ({movie_id:item.movie_id,episode_slug:item.episode_slug})),
+      });
+      if (enqueued.error) return json({success:false,error:'Recovery enqueue: '+enqueued.error.message},500);
+    }
     const staleDetailSlugs = unique(results
       .filter((item) => item && ((!item.ok && !item.inconclusive) || item.degraded || item.recovered_from_region_probe))
       .map((item) => String(item?.movie_slug || '').trim())

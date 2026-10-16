@@ -214,6 +214,8 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const targetSlug = String(url.searchParams.get('slug') || '').trim();
   const requestedEpisode = clamp(url.searchParams.get('episode'), 0, 0, 5000);
+  const forceRefresh = url.searchParams.get('force_refresh') === '1';
+  const providerOffset = clamp(url.searchParams.get('provider_offset'), 0, 0, 2);
   const dryRun = url.searchParams.get('dry_run') === '1';
   const limit = clamp(url.searchParams.get('limit'), targetSlug ? 1 : 2, 1, 4);
   const providerBudget = clamp(url.searchParams.get('provider_budget'), targetSlug ? 4 : 2, 1, 4);
@@ -269,7 +271,7 @@ Deno.serve(async (req) => {
   for (const work of workItems) {
     const before = await playbackState(supabase, work.movie_id);
     const order = providerOrder(work);
-    const initialCursor = Number(work.evidence?.unified_provider_cursor || 0) % order.length;
+    const initialCursor = ((forceRefresh ? 0 : Number(work.evidence?.unified_provider_cursor || 0)) + providerOffset) % order.length;
     const currentOrder = [
       ...order.slice(initialCursor),
       ...order.slice(0, initialCursor),
@@ -285,7 +287,7 @@ Deno.serve(async (req) => {
       });
       continue;
     }
-    if (issueSatisfied(work, before)) {
+    if (!forceRefresh && issueSatisfied(work, before)) {
       await supabase.rpc('reconcile_movie_release_state', { p_movie_id: work.movie_id });
       if (work.issue_key) await supabase.from('catalog_integrity_issues').update({
         status: 'resolved', resolved_at: new Date().toISOString(), last_error: null,
@@ -306,7 +308,7 @@ Deno.serve(async (req) => {
     remainingBudget -= selectedProviders.length;
     const cursor = (initialCursor + selectedProviders.length) % order.length;
     const after = await playbackState(supabase, work.movie_id);
-    if (issueSatisfied(work, after)) {
+    if (!forceRefresh && issueSatisfied(work, after)) {
       await supabase.rpc('reconcile_movie_release_state', { p_movie_id: work.movie_id });
       if (work.issue_key) await supabase.from('catalog_integrity_issues').update({
         status: 'resolved',
@@ -332,7 +334,7 @@ Deno.serve(async (req) => {
       const lastCall = calls.at(-1) as Record<string, unknown> | undefined;
       const completedProviderCycle = work.attempts > 0 && work.attempts % order.length === 0;
       const retryDelayMs = (completedProviderCycle ? 6 * 60 : 20) * 60_000;
-      if (work.issue_key) await supabase.from('catalog_integrity_issues').update({
+      if (!forceRefresh && work.issue_key) await supabase.from('catalog_integrity_issues').update({
         status: 'open',
         resolved_at: null,
         last_error: `Unified provider repair pending after ${calls.length} connector call(s)`,

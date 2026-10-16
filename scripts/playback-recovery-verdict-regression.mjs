@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {createJiti} from 'jiti';
+const {recoveryVerdict:v}=await createJiti(import.meta.url).import('../supabase/functions/_shared/playback-recovery-verdict.ts');
+assert.equal(v({success:true,results:[{ok:true,playback_proof:'hls-segment'}]}),'verified_sample');
+assert.equal(v({success:true,results:[{ok:true,playback_proof:'direct-media'}]}),'verified_sample');
+assert.equal(v({success:true,results:[{ok:true,playback_proof:'embed-html',inconclusive:true}]}),'pending_browser');
+assert.equal(v({success:true,results:[{ok:true}]}),'no_source');
+assert.equal(v({success:true,results:[{ok:false,status:404}]}),'no_source');
+assert.equal(v({success:true,results:[{ok:false,status:404,inconclusive:true}]}),'pending_browser');
+assert.equal(v({success:false,results:[{ok:true,playback_proof:'hls-segment'}]}),'retry');
+assert.equal(v({success:true,results:[]}),'no_source');
+assert.equal(v({success:true,results:[{ok:false},{ok:true,playback_proof:'hls-segment'}]}),'verified_sample');
+console.log('Recovery verdict: confirmed media, embeds, region blocks, empty results, partial alternatives, transport errors passed.');
