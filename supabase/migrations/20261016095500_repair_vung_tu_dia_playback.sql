@@ -70,7 +70,7 @@ begin
       response_time_ms = 254,
       failure_count = 0,
       last_checked_at = now(),
-      last_error = null,
+      last_error = '',
       updated_at = now()
   where movie_id = target_movie_id
     and provider_key = 'kkphim'
@@ -84,7 +84,7 @@ begin
     ) values (
       target_movie_id, 'KKPhim - Vietsub', 'full', target_url, target_embed, '',
       'phimapi', 'kkphim', 'vietsub', 1, 470, true,
-      'ok', 254, 0, now(), null
+      'ok', 254, 0, now(), ''
     );
   end if;
 
