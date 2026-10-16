@@ -207,6 +207,11 @@ if (!pagesWorker.includes('.map((item) => canonicalizeEdgeHomeItem({')
   || !pagesWorker.includes('kkphim-cinema-hot/v2-canonical-slugs')) {
   failures.push('The live cinema feed must canonicalize provider slug collisions and rotate its edge cache.');
 }
+if (!vietnamSection.includes('function canonicalCinemaSlug(movie: MovieItem)')
+  || !vietnamSection.includes("return 'hope-vung-tu-dia-2026';")
+  || !vietnamSection.includes('movieDetailUrl(canonicalCinemaSlug(movie)')) {
+  failures.push('Cinema cards must use the canonical Hope (2026) slug even when the browser provider feed still exposes a legacy alias.');
+}
 if (!home.includes("const ALL_SECTIONS = ['top-rated'") || !home.includes("const MOBILE_HOME_SECTIONS = [\n  'top-rated'")) {
   failures.push('Desktop and mobile homepage requests must include the dedicated top-rated rail.');
 }

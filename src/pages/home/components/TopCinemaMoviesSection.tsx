@@ -39,6 +39,17 @@ function normalizeVietnamMovies(items: MovieItem[]): MovieItem[] {
     });
 }
 
+function canonicalCinemaSlug(movie: MovieItem): string {
+  const slug = String(movie.slug || '').trim().toLowerCase();
+  const originName = String(movie.origin_name || '').trim().toLowerCase();
+  if (Number(movie.year || 0) === 2026
+    && originName === 'hope'
+    && ['vung-tu-dia', 'hope-vung-tu-dia'].includes(slug)) {
+    return 'hope-vung-tu-dia-2026';
+  }
+  return movie.slug || '';
+}
+
 async function fetchVietnamMovies(signal: AbortSignal): Promise<MovieItem[]> {
   const response = await fetchMoviesByCategory({
     country: 'viet-nam',
@@ -287,7 +298,7 @@ function CinemaCard({ movie, rank }: CinemaCardProps) {
   return (
     <div data-ccard className={`${HOME_POSTER_ITEM_CLASS} contain-layout`}>
       <Link
-        to={movieDetailUrl(movie.slug || '', {
+        to={movieDetailUrl(canonicalCinemaSlug(movie), {
           source: String(movie.source_site || '').toLowerCase() === 'phimapi'
             ? 'kkphim'
             : String(movie.source_site || '').toLowerCase() || undefined,
