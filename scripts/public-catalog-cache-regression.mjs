@@ -65,4 +65,3 @@ globalThis.fetch=async()=>new Response('unauthorized',{status:401});
 assert.equal((await handlePublicCatalog(makeContext('movies?select=id&is_published=eq.true&limit=36'))).status,503);await Promise.all(waits.splice(0));assert.equal(map.size,0,'errors must not be cached');
 globalThis.fetch=native;globalThis.window=previousWindow;globalThis.caches=previousCaches;
 console.log('public catalog cache passed: identity isolation, write bypass, allowlist, count headers, hits, stale fallback, snapshot freshness, error rejection');
-

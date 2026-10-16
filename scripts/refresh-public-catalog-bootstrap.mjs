@@ -38,4 +38,3 @@ for(let i=0;i<results.length;i++){
   console.log('[catalog-bootstrap] upstream unavailable; kept snapshot '+prior.generated_at);
  }
 }
-

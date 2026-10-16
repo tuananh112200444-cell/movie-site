@@ -41,4 +41,3 @@ export function createPublicCatalogFetch(options: CatalogFetchOptions): typeof f
     return fetch(proxy,{method:'GET',headers:{Accept:'application/json'},credentials:'omit',signal:request.signal});
   };
 }
-

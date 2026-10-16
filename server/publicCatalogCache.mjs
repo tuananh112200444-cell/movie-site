@@ -137,4 +137,3 @@ export async function handlePublicCatalog(context) {
   }
   try { return withState(await work,'MISS'); } catch { return error(503); }
 }
-
