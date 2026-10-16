@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
 
   const { data: capacity } = await supabase.from('runtime_capacity_state')
     .select('mode,last_reason').eq('singleton', true).maybeSingle();
-  if (!targetSlug && capacity?.mode === 'protect') {
+  if (!dryRun && capacity?.mode === 'protect') {
     return json({ success: true, status: 'capacity_protect', processed: 0, capacity });
   }
 

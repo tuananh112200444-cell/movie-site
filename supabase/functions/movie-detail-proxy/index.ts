@@ -1108,6 +1108,17 @@ async function clearDetailCaches(
   ));
 }
 
+function enqueueOnDemandRecovery(supabase: ReturnType<typeof createClient>, movie: Record<string, unknown>): boolean {
+  const id = String(movie.id || '');
+  if (!isUnifiedProviderMovieRecord(movie) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return false;
+  edgeWaitUntil(supabase.rpc('enqueue_playback_source_failures', {
+    p_items: [{movie_id: id}],
+  }).then(({error}) => {
+    if (error) console.error('[movie-detail-proxy] recovery enqueue:', error.message);
+  }));
+  return true;
+}
+
 function triggerOnDemandEpisodeRepair(
   supabase: ReturnType<typeof createClient>,
   movie: Record<string, unknown> | null | undefined,
@@ -1115,6 +1126,7 @@ function triggerOnDemandEpisodeRepair(
   reason: string,
 ): boolean {
   if (!movie) return false;
+  if (enqueueOnDemandRecovery(supabase, movie)) return true;
   const movieSlug = String(movie.slug || requestedSlug).trim();
   let repairPromise: Promise<unknown> | null = null;
 
@@ -1179,6 +1191,7 @@ function triggerOnDemandStreamRecovery(
   requestedSlug: string,
 ): boolean {
   if (!movie) return false;
+  if (enqueueOnDemandRecovery(supabase, movie)) return true;
   const movieSlug = String(movie.slug || requestedSlug).trim();
   if (!movieSlug) return false;
 

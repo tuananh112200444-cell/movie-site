@@ -23,6 +23,7 @@ Deno.serve(async req=>{
   const response=await fetch(url,{headers:{'x-cron-secret':secret,apikey:key,Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(timeout)});
   const body=await response.json();
   if(!response.ok || body.success===false)throw Error(`${name}: ${response.status} ${String(body.error||'failed')}`);
+  if(body.status==='capacity_protect')throw Error('Recovery paused by capacity guard');
   return body;
  }
  try{
