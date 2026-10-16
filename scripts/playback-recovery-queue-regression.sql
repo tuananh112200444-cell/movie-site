@@ -37,4 +37,3 @@ begin
 end;$test$;
 select 'Recovery queue lease, fencing, retry, capacity, publication and privileges passed' as result;
 rollback;
-

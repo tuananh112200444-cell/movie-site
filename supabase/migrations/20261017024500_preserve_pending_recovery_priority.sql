@@ -27,4 +27,3 @@ end;$$;
 
 update public.playback_recovery_queue set next_attempt_at=least(next_attempt_at,created_at) where attempts=0;
 commit;
-
