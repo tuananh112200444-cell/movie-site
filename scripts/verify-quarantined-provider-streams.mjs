@@ -36,4 +36,3 @@ async function worker(){for(;;){const i=at++;if(i>=jobs.length)return;const [url
 }}
 await Promise.all([worker(),worker()]);
 console.log(JSON.stringify({candidateRows:rows.length,uniqueUrls:jobs.length,verifiedRows:results.filter(r=>r.verified).reduce((n,r)=>n+r.ids.length,0),failedOrUnverified:results.filter(r=>!r.verified).length}));
-

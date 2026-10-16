@@ -767,6 +767,10 @@ serve(async (req) => {
       const playableUrl = streamUrl(row);
       if (!playableUrl) return null;
       const result = await probeStreamRow(row);
+      const embedOnly = !String(row.stream_url || '').trim();
+      const inconclusive = isBrowserManagedPhimApiProbeBlocked(row, result)
+        || (embedOnly && /https?:\/\/[^/]*streamc\.xyz\//i.test(String(row.embed_url || '')) && [401,403].includes(result.status ?? 0))
+        || (result.ok && result.playbackProof === 'embed-html');
       if (!dryRun) {
         await logHealth(supabase, row, result);
         await updateStream(supabase, row, result, deactivateAfter);
@@ -789,7 +793,7 @@ serve(async (req) => {
 
   if (!dryRun) {
     const staleDetailSlugs = unique(results
-      .filter((item) => item && (!item.ok || item.degraded))
+      .filter((item) => item && ((!item.ok && !item.inconclusive) || item.degraded || item.recovered_from_region_probe))
       .map((item) => String(item?.movie_slug || '').trim())
       .filter(Boolean));
     for (let index = 0; index < staleDetailSlugs.length; index += 100) {
@@ -800,7 +804,7 @@ serve(async (req) => {
     }
     if (queue === 'newest') {
       const okIds = results.filter((item) => item.ok).map((item) => item.stream_id);
-      const failedIds = results.filter((item) => !item.ok).map((item) => item.stream_id);
+      const failedIds = results.filter((item) => !item.ok && !item.inconclusive).map((item) => item.stream_id);
       await supabase.rpc('record_newest_playback_audit_batch', {
         p_ok_ids: okIds,
         p_failed_ids: failedIds,
@@ -816,7 +820,8 @@ serve(async (req) => {
     checked: results.length,
     ok: results.filter((item) => item.ok).length,
     degraded: results.filter((item) => item.degraded).length,
-    failed: results.filter((item) => !item.ok).length,
+    inconclusive: results.filter((item) => item.inconclusive).length,
+    failed: results.filter((item) => !item.ok && !item.inconclusive).length,
     results: results.slice(0, 20),
   });
 });
