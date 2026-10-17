@@ -37,9 +37,17 @@ more than 63 seconds in a real browser after the main release. Public detail
 API returned 109 KKPhim episodes for season 1 and 50 for season 2.
 
 Main production release dbb5a5fdd026 was verified at both khophim.org and
-https://1771dda7.movie-site-eds.pages.dev. The follow-up route release must be
-verified separately. Backend migrations 20261017110000 and 20261017113000 were
-applied. Capacity remained normal. No paid compute upgrade was requested.
+https://1771dda7.movie-site-eds.pages.dev. Follow-up route release cbadbe5fa3cc
+was verified at both khophim.org and https://9254ded5.movie-site-eds.pages.dev.
+Backend follow-up 83ec87de also closes admin-movie-upsert and sync-tmdb-catalog
+single-owner assumptions; executable tests prove both select season 2 among
+multiple same-TMDB records. Backend migrations 20261017110000, 20261017113000
+and 20261017114000 were applied. Capacity remained normal. No paid compute
+upgrade was requested. Public API now returns the same season-1 canonical slug
+for gao-nep-gao-te and gao-nep-gao-te-phan-1. The historical tap-110-phan-2 URL
+redirected to season 2 tap-01 in the browser. Season 2 episode 1 also progressed
+past 106 seconds, readyState 4. NguonC exposure is filtered by source health;
+109 stored candidates does not mean 109 playable or visible iframe episodes.
 
 Remaining: review the contradictory season/type records against actual provider
 episodes, review other aggregate collections before partitioning them, and
