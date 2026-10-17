@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { recoveryVerdict, recoveryEpisodeAliases } from '../_shared/playback-recovery-verdict.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -266,7 +267,9 @@ async function callFunction(
     } catch {
       result = text.slice(0, 1000);
     }
-    return { name, ok: response.ok, status: response.status, elapsed_ms: Date.now() - started, result };
+    const validBody = Boolean(result && typeof result === 'object'
+      && (result as Record<string,unknown>).success !== false && !(result as Record<string,unknown>).error);
+    return { name, ok: response.ok && validBody, status: response.status, elapsed_ms: Date.now() - started, result };
   } catch (error) {
     return {
       name,
@@ -313,6 +316,7 @@ async function logRun(
   payload: {
     scanned: number;
     repaired: number;
+    pending: number;
     skipped: number;
     errors: string[];
     details: unknown[];
@@ -334,6 +338,7 @@ async function logRun(
       ].filter(Boolean),
       elapsed_ms: payload.elapsed_ms,
       success: payload.success,
+      metadata: { pending: payload.pending, contract: 'verified_target_repair_v2' },
     });
   } catch {
     /* sync_logs is optional */
@@ -415,9 +420,12 @@ serve(async (req) => {
   const repairs: unknown[] = [];
   const errors: string[] = [];
   let repaired = 0;
+  let pending = 0;
   let skipped = 0;
 
   for (const candidate of candidates) {
+    if (Date.now() - started > 65_000) { skipped += candidates.length - repairs.length; break; }
+    const requestedEpisode = candidate.episodes[0] || '';
     const repairKey = `player-repair:${candidate.slug}`;
     if (recentRepairKeys.has(repairKey)) {
       skipped += 1;
@@ -468,7 +476,8 @@ serve(async (req) => {
       calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'unified-provider-brain', {
         slug: movie.slug,
         limit: 1,
-        provider_budget: candidate.critical >= 3 ? 4 : 2,
+        provider_budget: 1,
+        force_refresh: '1',
         reason: 'player_telemetry',
       }));
     }
@@ -488,8 +497,10 @@ serve(async (req) => {
     // row used to remain dead until a later global queue happened to reach it.
     calls.push(await callFunction(supabaseUrl, serviceKey, secret, 'stream-health-check', {
       slug: movie.slug,
+      episode: requestedEpisode || undefined,
       queue: 'recovery',
-      limit: 16,
+      recovery_sample: '1',
+      limit: 3,
       concurrency: 3,
       deactivate_after: 3,
     }));
@@ -507,11 +518,16 @@ serve(async (req) => {
     }
 
     const failed = calls.filter((call) => !call.ok);
-    const hasSuccessfulRepair = calls.some((call) => call.ok);
-    if (failed.length > 0 && !hasSuccessfulRepair) {
+    const hasSuccessfulOperation = calls.some((call) => call.ok);
+    const health = calls.find(call => call.name === 'stream-health-check')?.result as Record<string,unknown> | undefined;
+    const aliases = new Set(recoveryEpisodeAliases(requestedEpisode));
+    const exactRows = Array.isArray(health?.results) ? health.results.filter(row => aliases.has(String(row.episode_slug||''))) : [];
+    const verifiedRepair = Boolean(requestedEpisode && recoveryVerdict({ ...health, results: exactRows }) === 'verified_sample');
+    if (failed.length > 0 && !hasSuccessfulOperation) {
       errors.push(`${movie.slug}: ${failed.map((call) => `${call.name}:${call.status}`).join(', ')}`);
     } else {
-      repaired += 1;
+      if (verifiedRepair) repaired += 1;
+      else pending += 1;
       // sync_cursors.page has a strict `page > 0` contract. Writing zero made
       // every cooldown upsert fail silently, so the same source was penalized
       // and re-synced again every ten minutes. Persist a valid cursor and make
@@ -551,6 +567,7 @@ serve(async (req) => {
   await logRun(supabase, {
     scanned: (eventRows || []).length,
     repaired,
+    pending,
     skipped,
     errors,
     details: repairs,
@@ -565,6 +582,7 @@ serve(async (req) => {
     scanned_events: (eventRows || []).length,
     provider_incidents: [...providerIncidents],
     repaired,
+    pending,
     skipped,
     errors,
     candidates,

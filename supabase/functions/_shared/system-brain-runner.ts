@@ -45,6 +45,16 @@ function compactBody(body: Record<string, unknown>): Record<string, unknown> {
     updated: body.updated,
     added: body.added,
     repaired: body.repaired,
+    pending: body.pending,
+    checked: body.checked,
+    verified_media_samples: typeof body.checked === 'number' && typeof body.ok === 'number' ? body.ok : undefined,
+    inconclusive: body.inconclusive,
+    failed_probes: typeof body.checked === 'number' ? body.failed : undefined,
+    repair_outcomes: Array.isArray(body.results) ? body.results.reduce((counts: Record<string,number>,item) => {
+      const outcome=String((item as Record<string,unknown>).outcome||'');
+      if(outcome)counts[outcome]=(counts[outcome]||0)+1;
+      return counts;
+    },{}) : undefined,
     episodes_inserted: body.episodes_inserted,
     provider_calls: body.provider_calls,
     processed: body.processed,

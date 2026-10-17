@@ -27,6 +27,11 @@ Confirmed gaps and changes:
   healthy from one sample. Viewer error priority remains above bulk imports.
 - The player source badge said “Đang phát” merely when selected. It now says
   “Đang chọn”; the source selection badge is not a playback-success signal.
+- The telemetry repair worker counted any successful internal HTTP operation
+  as a repaired film. It now requires media proof for the requested episode,
+  records pending work separately, and bounds discovery/probes. Brain logs
+  retain checked/verified/inconclusive counts and repair outcomes rather than
+  making an operation-success flag stand in for playback success.
 
 Existing validated protections retained: requested-movie write binding,
 strict year/season/ID checks, private merge archives and aliases, stale-write
