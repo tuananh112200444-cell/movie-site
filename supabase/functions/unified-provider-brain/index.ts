@@ -131,6 +131,7 @@ async function playbackState(
   current_episode: number;
   provider_coverage: Record<string, string>;
   verified_sample: boolean;
+  verified_episode_numbers: number[];
 }> {
   const [{ data: usable }, { data: maxEpisode }, { data: episodeRows }, { data: movie }, { data: coverageRows }, verified] = await Promise.all([
     supabase.rpc('movie_has_usable_persisted_playback', { p_movie_id: movieId }),
@@ -138,8 +139,8 @@ async function playbackState(
     supabase.rpc('get_movie_playable_episode_numbers', { p_movie_id: movieId }),
     supabase.from('movies').select('is_published,current_episode').eq('id', movieId).maybeSingle(),
     supabase.from('movie_provider_coverage').select('provider,state').eq('movie_id', movieId),
-    supabase.from('streams').select('id').eq('movie_id',movieId).eq('is_active',true).eq('health_status','ok')
-      .neq('stream_url','').gte('last_checked_at',new Date(Date.now()-86400_000).toISOString()).limit(1),
+    supabase.from('streams').select('id,episode_slug').eq('movie_id',movieId).eq('is_active',true).eq('health_status','ok')
+      .neq('stream_url','').gte('last_checked_at',new Date(Date.now()-86400_000).toISOString()).limit(1000),
   ]);
   const episodeNumbers = (Array.isArray(episodeRows) ? episodeRows : [])
     .map((row) => Number((row as Record<string, unknown>).episode_number ?? Object.values(row as Record<string, unknown>)[0] ?? 0))
@@ -152,6 +153,12 @@ async function playbackState(
     current_episode: Number(movie?.current_episode || 0) || 0,
     provider_coverage: Object.fromEntries((coverageRows || []).map((row) => [String(row.provider), String(row.state)])),
     verified_sample: !verified.error && Boolean(verified.data?.length),
+    verified_episode_numbers: !verified.error ? [...new Set((verified.data || []).map(row => {
+      const slug=String(row.episode_slug||'').toLowerCase();
+      if(slug==='full')return 1;
+      const match=/^(?:(?:tap|ep|episode)[-_ ]*)?0*(\d+)$/.exec(slug);
+      return match ? Number(match[1]) : 0;
+    }).filter(number=>number>0))] : [],
   };
 }
 
@@ -161,10 +168,12 @@ function issueSatisfied(work: RepairWork, state: {
   episode_numbers: number[];
   provider_coverage: Record<string, string>;
   verified_sample: boolean;
+  verified_episode_numbers: number[];
 }): boolean {
   if (!state.usable || !state.verified_sample) return false;
   const requestedEpisode = Number(work.evidence?.requested_episode || 0) || 0;
   if (requestedEpisode > 0 && !state.episode_numbers.includes(requestedEpisode)) return false;
+  if (requestedEpisode > 0 && !state.verified_episode_numbers.includes(requestedEpisode)) return false;
 
   const advertised = Number(work.evidence?.advertised || work.evidence?.expected_episode || work.current_episode || 0) || 0;
   if (['episode_count_mismatch', 'episode_sequence_gap', 'targeted_repair'].includes(work.issue_type)) {
@@ -173,6 +182,7 @@ function issueSatisfied(work: RepairWork, state: {
       ? work.evidence.missing_episode_numbers.map(Number).filter((value) => Number.isInteger(value) && value > 0)
       : [];
     if (expectedNumbers.some((episode) => !state.episode_numbers.includes(episode))) return false;
+    if (expectedNumbers.some((episode) => !state.verified_episode_numbers.includes(episode))) return false;
   }
 
   const missingProviders = Array.isArray(work.evidence?.missing_providers)

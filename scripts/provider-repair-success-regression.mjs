@@ -7,9 +7,10 @@ const part=code.slice(code.indexOf('function issueSatisfied('),code.indexOf('\nf
 const ctx={};vm.createContext(ctx);
 vm.runInContext(ts.transpileModule(part,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,ctx);
 const work={issue_type:'targeted_repair',current_episode:4,evidence:{requested_episode:4}};
-const state={usable:true,max_episode:4,episode_numbers:[1,2,3,4],provider_coverage:{kkphim:'ready'},verified_sample:true};
+const state={usable:true,max_episode:4,episode_numbers:[1,2,3,4],provider_coverage:{kkphim:'ready'},verified_sample:true,verified_episode_numbers:[1,2,3,4]};
 assert.equal(ctx.issueSatisfied(work,state),true);
 assert.equal(ctx.issueSatisfied(work,{...state,verified_sample:false}),false);
+assert.equal(ctx.issueSatisfied(work,{...state,verified_episode_numbers:[1,2,3]}),false);
 assert.equal(ctx.issueSatisfied(work,{...state,episode_numbers:[1,2,3]}),false);
 assert.equal(ctx.issueSatisfied({...work,evidence:{missing_providers:['kkphim']}},{...state,provider_coverage:{kkphim:'pending'}}),false);
 assert.equal(ctx.issueSatisfied({...work,evidence:{missing_providers:['kkphim']}},state),true);
