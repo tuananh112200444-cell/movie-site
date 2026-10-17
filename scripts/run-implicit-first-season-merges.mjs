@@ -11,7 +11,7 @@ const history=(await fs.readFile(historyFile,'utf8').catch(()=>'')).split(/\r?\n
 const completed=history.filter(r=>r.status==='processed');
 const started=Date.now();let batches=completed.length,merged=completed.reduce((n,r)=>n+Number(r.merged||0),0),
  review=completed.reduce((n,r)=>n+Number(r.review||0),0),failed=completed.reduce((n,r)=>n+Number(r.failed||0),0),paused=previous.pauses||0;
-let size=3,connectionRetries=0;
+let size=1,connectionRetries=0;
 async function query(sql){
  const file=path.join(output,'batch.sql');await fs.writeFile(file,sql);
  const r=await new Promise((resolve,reject)=>{
@@ -51,4 +51,5 @@ while(true){
  await fs.writeFile(progressFile,JSON.stringify(progress,null,2));
  if(batches%10===0||done)console.log(JSON.stringify(progress));
  if(done)break;
+ await new Promise(resolve=>setTimeout(resolve,1000));
 }
