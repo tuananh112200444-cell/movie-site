@@ -4603,7 +4603,8 @@ function mergeProviderNeutralSearchRows(databaseRows, providerRows, query, limit
       const stored = item => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(item?.id || item?._id || ''));
       const current = merged[existingIndex];
       const live = item => databaseRows.some(db => db.slug === item.slug);
-      if ((live(row) && !live(current)) || (stored(row) && !stored(current))) merged[existingIndex]=row;
+      if ((live(row) && !live(current)) || (stored(row) && !stored(current))
+        || (stored(row) && stored(current) && !live(current) && seasonIdentity(row).season===1 && seasonIdentity(current).scope==='unknown')) merged[existingIndex]=row;
       continue;
     }
     // When two rows describe the same film, a non-retired provider identity
@@ -4700,7 +4701,7 @@ async function proxySearch(request, context) {
   const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
   // Version the edge key whenever canonical merge semantics change so a
   // retired provider slug cannot remain pinned in search for 15 minutes.
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v22-first-season-canonical/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v23-first-season-preserved-merges/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
   const rpcCircuitKey = new Request(`${SITE_URL}/__circuit/search-rpc/v1`, { method: 'GET' });
   let rpcCircuitOpen = false;
   if (request.method === 'GET' && typeof caches !== 'undefined') {
