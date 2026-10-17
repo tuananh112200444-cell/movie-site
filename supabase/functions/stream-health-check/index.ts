@@ -565,20 +565,22 @@ serve(async (req) => {
       const sample = await supabase.from('streams').select(streamSelect)
         .eq('movie_id', targetMovie.id).not('source','in','(ophim,ophim1.com)')
         .or('stream_url.neq.,embed_url.neq.')
-        .order('is_active',{ascending:false}).order('priority',{ascending:false})
+        .order('is_active',{ascending:false}).order('last_checked_at',{ascending:true,nullsFirst:true}).order('priority',{ascending:false})
         .limit(30).in('episode_slug', episodeSlug ? recoveryEpisodeAliases(episodeSlug) : ['full','1','tap-1','tap-01']);
       if (sample.error) return json({success:false,error:sample.error.message},500);
       const byProvider = new Set<string>();
       const byUrl = new Set<string>();
       const candidates = (sample.data || []).sort((a,b) => Number(Boolean(b.stream_url))-Number(Boolean(a.stream_url)));
       const selected: unknown[] = [];
+      const overflow: unknown[] = [];
       for (const row of candidates) {
         const urlKey = String(row.stream_url || row.embed_url || '');
-        if (byProvider.has(row.source) || byUrl.has(urlKey)) continue;
-        byProvider.add(row.source); byUrl.add(urlKey); selected.push(row);
-        if (selected.length >= limit) break;
+        if (byUrl.has(urlKey)) continue;
+        byUrl.add(urlKey);
+        if(byProvider.has(row.source)){overflow.push(row);continue;}
+        byProvider.add(row.source);selected.push(row);
       }
-      preselectedRows = selected;
+      preselectedRows = [...selected,...overflow].slice(0,limit);
     }
   }
   else if (queue === 'newest') {

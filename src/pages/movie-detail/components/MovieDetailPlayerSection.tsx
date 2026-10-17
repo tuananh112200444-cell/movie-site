@@ -761,7 +761,8 @@ const MovieDetailPlayerSection = forwardRef<HTMLDivElement, Props>(
                         : typeKey === 'vietsub' || typeKey === 'thuyetminh' || typeKey === 'longtieng'
                         ? type.label
                         : movieLanguages.length === 1 ? movieLanguages[0].label : 'Chưa xác định';
-                      const friendlyName = isActive ? 'Đang phát' : `Dự phòng ${idx + 1}`;
+                      // Selection alone cannot prove playback inside an opaque iframe.
+                      const friendlyName = isActive ? 'Đang chọn' : `Dự phòng ${idx + 1}`;
                       return (
                         <button
                           key={idx}

@@ -610,8 +610,8 @@ function episodeProviderKey(ep: Record<string, unknown>): string {
 
 // Old catalogues can look complete while every URL comes from one provider and
 // has never been checked. Request one independent provider before promising
-// playback; once either a healthy URL or a second provider exists, normal cache
-// behavior resumes and the external API is not called on every page view.
+// playback. A second unchecked provider is not proof either. Cache hits keep
+// returning quickly while the bounded queue verifies missing media evidence.
 function hasUnverifiedSingleProviderCoverage(
   serverMap: Map<string, unknown[]>,
   expectedEpisode: number,
@@ -621,7 +621,8 @@ function hasUnverifiedSingleProviderCoverage(
   for (const rows of serverMap.values()) {
     for (const raw of rows) {
       const ep = raw as Record<string, unknown>;
-      const number = extractEpNumber(String(ep.slug || ep.name || ''));
+      const label=String(ep.slug || ep.name || '');
+      const number = extractEpNumber(label) || (expectedEpisode===1 && /^(?:tap[-_ ]*)?full(?:-hd)?$/i.test(label.trim()) ? 1 : 0);
       if (number <= 0 || number > expectedEpisode) continue;
       const bucket = episodes.get(number) || [];
       bucket.push(ep);
@@ -631,11 +632,13 @@ function hasUnverifiedSingleProviderCoverage(
   for (const candidates of episodes.values()) {
     if (candidates.some((ep) => {
       if (String(ep.source_health_status || '').toLowerCase() !== 'ok') return false;
+      // An iframe page returning 200 does not prove media playback.
+      if (!String(ep.link_m3u8 || '').trim() && !/\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(String(ep.link_embed||''))) return false;
       const checkedAt = Date.parse(String(ep.source_last_checked_at || ''));
       return Number.isFinite(checkedAt) && Date.now() - checkedAt <= 6 * 60 * 60 * 1000;
     })) continue;
-    const providers = new Set(candidates.map(episodeProviderKey).filter(Boolean));
-    if (providers.size < 2) return true;
+    // Two unverified providers are still unverified coverage.
+    return true;
   }
   return false;
 }
@@ -2348,6 +2351,15 @@ async function handleRequest(req: Request): Promise<Response> {
         !isPlaceholderSeriesDetail(cachedDetail) &&
         !hasUntrustedQueerEpisodeServer(cachedDetail)
       ) {
+        if (isPrivilegedProxyRequest && exactCatalogMovie) {
+          const cachedServers=new Map<string,unknown[]>((cachedDetail.episodes || []).map(server=>[
+            String(server.server_name||''),server.server_data || [],
+          ]));
+          const expected=Math.max(1,getExpectedEpisodeNumber(cachedMovie));
+          if(hasUnverifiedSingleProviderCoverage(cachedServers,expected)){
+            enqueueOnDemandRecovery(supabase,(exactMergeCanonical || exactCatalogMovie) as Record<string,unknown>);
+          }
+        }
         return jsonResponse(cachedDetail, 200, {
           'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800, stale-if-error=86400',
           'X-Cache': 'DB-HIT',

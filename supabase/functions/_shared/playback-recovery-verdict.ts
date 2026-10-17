@@ -1,4 +1,5 @@
 export function recoveryEpisodeAliases(episode: string): string[] {
+ if(/^(?:full|tap-full|full-hd)$/i.test(episode))return ['full','tap-full','full-hd','1','01','tap-1','tap-01','episode-1','ep-1'];
  const match=/^(?:(?:tap|episode|ep)-)?0*(\d+)$/i.exec(episode);
  if(!match)return [episode];
  const number=String(Number(match[1]));
