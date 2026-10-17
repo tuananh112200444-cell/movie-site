@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+import assert from 'node:assert/strict';
+const code=fs.readFileSync('supabase/functions/unified-provider-brain/index.ts','utf8');
+const part=code.slice(code.indexOf('function issueSatisfied('),code.indexOf('\nfunction compactConnectorResult('));
+const ctx={};vm.createContext(ctx);
+vm.runInContext(ts.transpileModule(part,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,ctx);
+const work={issue_type:'targeted_repair',current_episode:4,evidence:{requested_episode:4}};
+const state={usable:true,max_episode:4,episode_numbers:[1,2,3,4],provider_coverage:{kkphim:'ready'},verified_sample:true};
+assert.equal(ctx.issueSatisfied(work,state),true);
+assert.equal(ctx.issueSatisfied(work,{...state,verified_sample:false}),false);
+assert.equal(ctx.issueSatisfied(work,{...state,episode_numbers:[1,2,3]}),false);
+assert.equal(ctx.issueSatisfied({...work,evidence:{missing_providers:['kkphim']}},{...state,provider_coverage:{kkphim:'pending'}}),false);
+assert.equal(ctx.issueSatisfied({...work,evidence:{missing_providers:['kkphim']}},state),true);
+console.log('Repair success requires a fresh verified direct sample, the requested episode and completed provider coverage; unchecked rows cannot close a repair.');

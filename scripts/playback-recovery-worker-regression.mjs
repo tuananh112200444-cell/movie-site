@@ -6,10 +6,12 @@ import {createJiti} from 'jiti';
 const {recoveryVerdict}=await createJiti(import.meta.url).import('../supabase/functions/_shared/playback-recovery-verdict.ts');
 const code=ts.transpileModule(fs.readFileSync('supabase/functions/playback-source-recovery/index.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},reportDiagnostics:true});
 assert.equal((code.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error).length,0);
-async function run(probes,discoveryError=false){
+async function run(probes,discoveryError=false,reused=0){
  let handler,finish,discovery=0,cleared=0;
  const work={movie_id:'a',slug:'film',token:'token',requested_episode:'tap-8',episode_cursor:'',attempts:2};
  const db={rpc:async(name,args)=>{
+  if(name==='seed_split_playback_recovery')return {data:0};
+  if(name==='recover_sibling_playback_sources')return {data:{added:reused}};
   if(name==='claim_playback_source_recovery')return {data:work};
   finish=args;return {data:true};
  },from:(table)=>({
@@ -45,4 +47,6 @@ r=await run([region,region]);assert.equal(r.finish.p_outcome,'pending_browser');
 r=await run([bad,bad]);assert.equal(r.finish.p_outcome,'no_source');
 r=await run([bad],true);assert.equal(r.finish.p_outcome,'retry');assert.match(r.finish.p_evidence.error,/timeout/);
 r=await run([bad],'protect');assert.equal(r.finish.p_outcome,'retry');assert.match(r.finish.p_evidence.error,/capacity guard/);
+r=await run([good],false,1);assert.equal(r.finish.p_outcome,'recovered_sample');assert.equal(r.discovery,0);
+r=await run([region,region],false,1);assert.equal(r.finish.p_outcome,'pending_browser');
 console.log('Recovery worker scenarios passed: authorization, existing media, discovery + media proof, inconclusive regions, no source, provider timeout.');

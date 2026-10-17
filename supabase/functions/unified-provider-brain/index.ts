@@ -130,13 +130,16 @@ async function playbackState(
   published: boolean;
   current_episode: number;
   provider_coverage: Record<string, string>;
+  verified_sample: boolean;
 }> {
-  const [{ data: usable }, { data: maxEpisode }, { data: episodeRows }, { data: movie }, { data: coverageRows }] = await Promise.all([
+  const [{ data: usable }, { data: maxEpisode }, { data: episodeRows }, { data: movie }, { data: coverageRows }, verified] = await Promise.all([
     supabase.rpc('movie_has_usable_persisted_playback', { p_movie_id: movieId }),
     supabase.rpc('get_movie_playable_max_episode', { p_movie_id: movieId }),
     supabase.rpc('get_movie_playable_episode_numbers', { p_movie_id: movieId }),
     supabase.from('movies').select('is_published,current_episode').eq('id', movieId).maybeSingle(),
     supabase.from('movie_provider_coverage').select('provider,state').eq('movie_id', movieId),
+    supabase.from('streams').select('id').eq('movie_id',movieId).eq('is_active',true).eq('health_status','ok')
+      .neq('stream_url','').gte('last_checked_at',new Date(Date.now()-86400_000).toISOString()).limit(1),
   ]);
   const episodeNumbers = (Array.isArray(episodeRows) ? episodeRows : [])
     .map((row) => Number((row as Record<string, unknown>).episode_number ?? Object.values(row as Record<string, unknown>)[0] ?? 0))
@@ -148,6 +151,7 @@ async function playbackState(
     published: movie?.is_published === true,
     current_episode: Number(movie?.current_episode || 0) || 0,
     provider_coverage: Object.fromEntries((coverageRows || []).map((row) => [String(row.provider), String(row.state)])),
+    verified_sample: !verified.error && Boolean(verified.data?.length),
   };
 }
 
@@ -156,8 +160,9 @@ function issueSatisfied(work: RepairWork, state: {
   max_episode: number;
   episode_numbers: number[];
   provider_coverage: Record<string, string>;
+  verified_sample: boolean;
 }): boolean {
-  if (!state.usable) return false;
+  if (!state.usable || !state.verified_sample) return false;
   const requestedEpisode = Number(work.evidence?.requested_episode || 0) || 0;
   if (requestedEpisode > 0 && !state.episode_numbers.includes(requestedEpisode)) return false;
 
@@ -173,7 +178,7 @@ function issueSatisfied(work: RepairWork, state: {
   const missingProviders = Array.isArray(work.evidence?.missing_providers)
     ? work.evidence.missing_providers.map(String).filter((provider) => provider !== 'ophim')
     : [];
-  if (missingProviders.some((provider) => !['ready', 'pending', 'degraded'].includes(state.provider_coverage[provider] || 'missing'))) {
+  if (missingProviders.some((provider) => !['ready', 'degraded'].includes(state.provider_coverage[provider] || 'missing'))) {
     return false;
   }
   return true;

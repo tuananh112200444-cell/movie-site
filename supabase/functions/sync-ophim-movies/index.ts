@@ -1289,9 +1289,26 @@ async function upsertMovie(
   supabase: SupabaseClient,
   provider: ProviderConfig,
   detail: ParsedDetail,
+  repairTarget: TargetMovieIdentity | null = null,
 ): Promise<{ id: string; created: boolean; updated: boolean; hasImage: boolean; retired?: boolean }> {
   const payload = moviePayload(provider, detail);
-  const existing = await findExistingMovie(supabase, provider, payload);
+  // A targeted repair must not re-resolve the provider's slug to a sibling
+  // row and leave the requested route unchanged. Recheck identity at the
+  // write boundary, including submitted details, before binding its target.
+  if (repairTarget && !isSafeTargetDetail(provider, repairTarget, detail)) {
+    throw new Error(`target identity mismatch: ${repairTarget.slug}`);
+  }
+  let existing: Record<string, unknown> | null;
+  if (repairTarget) {
+    const { data, error } = await supabase.from('movies').select('*').eq('id', repairTarget.id).maybeSingle();
+    if (error || !data) throw new Error(`repair target lookup: ${error?.message || 'not found'}`);
+    if (!isSafeTargetDetail(provider, data as TargetMovieIdentity, detail)) {
+      throw new Error(`target identity changed during repair: ${repairTarget.slug}`);
+    }
+    existing = data as Record<string, unknown>;
+  } else {
+    existing = await findExistingMovie(supabase, provider, payload);
+  }
 
   if (existing?.id) {
     const existingSource = `${existing.source_site || ''} ${existing.source_name || ''}`.toLowerCase();
@@ -2299,7 +2316,7 @@ serve(async (req) => {
           continue;
         }
         if (dryRun) continue;
-        const result = await upsertMovie(supabase, provider, detail);
+        const result = await upsertMovie(supabase, provider, detail, targetMovie);
         if (result.retired) {
           stats.skipped += 1;
           continue;
@@ -2359,6 +2376,7 @@ serve(async (req) => {
 
         if (result.created || result.updated || stats.episodesInserted > beforeEpisodesInserted) {
           changedSlugs.push(String(detail.movie.slug || slug));
+          if (targetMovie) changedSlugs.push(String(targetMovie.slug));
         }
         if (targetMovie && includeEpisodes) {
           // A targeted catalogue repair is incomplete until the refreshed

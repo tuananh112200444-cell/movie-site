@@ -11,6 +11,8 @@ Deno.serve(async req=>{
  const base=Deno.env.get('SUPABASE_URL')||'';
  const key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'';
  const db=createClient(base,key,{auth:{persistSession:false,autoRefreshToken:false}});
+ const {error:seedError}=await db.rpc('seed_split_playback_recovery',{p_limit:10});
+ if(seedError)return json({success:false,error:'Sibling recovery seed: '+seedError.message},500);
  const {data:work,error}=await db.rpc('claim_playback_source_recovery');
  if(error)return json({success:false,error:error.message},500);
  if(!work)return json({success:true,processed:0,status:'idle_or_capacity_protect'});
@@ -27,6 +29,11 @@ Deno.serve(async req=>{
   return body;
  }
  try{
+  const {data:reused,error:reuseError}=await db.rpc('recover_sibling_playback_sources',{
+   p_movie_id:work.movie_id,p_episode:episode,p_limit:6,
+  });
+  if(reuseError)throw Error('Sibling recovery: '+reuseError.message);
+  evidence.sibling_sources=reused;
   // Keyset traversal covers different episodes on subsequent visits. Keep
   // the exact episode reported by a viewer, including provider slug padding.
   if(!episode){
@@ -57,6 +64,7 @@ Deno.serve(async req=>{
    outcome=verdict==='verified_sample'?'recovered_sample':verdict;
    if(!episode)episode=String(after.results?.find((r:Record<string,unknown>)=>r.ok===true)?.episode_slug||'');
   }
+  if(outcome==='verified_sample' && Number(reused?.added||0)>0)outcome='recovered_sample';
   if(outcome==='recovered_sample'){
    const {error:cacheError}=await db.from('movie_api_cache').delete().eq('slug',work.slug);
    if(cacheError)evidence.cache_error=cacheError.message;
