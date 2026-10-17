@@ -35,6 +35,7 @@ const CONSOLIDATED_SEO_PATHS = new Map([
 // Search Console still knows these retired slugs. Redirect only when the
 // replacement identity is unambiguous; removed titles are handled as 410.
 const LEGACY_MOVIE_REDIRECTS = new Map([
+  ['/phim/gao-nep-gao-te', '/phim/gao-nep-gao-te-phan-1'],
   ['/phim/tham-tu-lung-danh-conan-25-nang-dau-halloween', '/phim/tham-tu-lung-danh-conan-nang-dau-halloween'],
   ['/phim/kisskh-goblin', '/phim/nu-hon-cua-yeu-tinh'],
   ['/phim/nguoi-nhen-khoi-dau-moi', '/phim/spider-man-brand-new-day-2026'],
@@ -3671,7 +3672,8 @@ async function proxyMovieDetail(request, context) {
   const url = new URL(request.url);
   const requestedSlug = String(url.searchParams.get('slug') || '').trim();
   const legacyInsidiousSlug = requestedSlug === 'quy-quyet-ranh-gioi-vo-dinh';
-  const slug = legacyInsidiousSlug ? 'quy-quyet-6-ranh-gioi-vo-dinh' : requestedSlug;
+  const slug = requestedSlug === 'gao-nep-gao-te' ? 'gao-nep-gao-te-phan-1'
+    : legacyInsidiousSlug ? 'quy-quyet-6-ranh-gioi-vo-dinh' : requestedSlug;
   const preferredSource = legacyInsidiousSlug ? '' : String(url.searchParams.get('source') || '').trim().toLowerCase();
   const refresh = url.searchParams.get('refresh') === '1';
   if (!slug || slug.length > 240 || !/^[\p{L}\p{N}._~-]+$/u.test(slug)) {
@@ -5932,6 +5934,16 @@ export async function onRequest(context) {
   );
   if (shouldCanonicalizeTrailingSlash) {
     return canonicalRedirect(url, cleanRequestPath);
+  }
+  // Reviewed aggregate numbering: old episodes 110..159 belong to season 2.
+  const collectionWatch = /^\/xem-phim\/gao-nep-gao-te(?:\/(?:tap-)?(\d+)(?:-phan-[12])?)?$/.exec(cleanRequestPath);
+  if (collectionWatch) {
+    const episode = Number(collectionWatch[1] || 1);
+    if (episode >= 1 && episode <= 159) {
+      const season = episode > 109 ? 2 : 1;
+      const localEpisode = episode > 109 ? episode - 109 : episode;
+      return canonicalRedirect(url, `/xem-phim/gao-nep-gao-te-phan-${season}/tap-${String(localEpisode).padStart(2,'0')}`);
+    }
   }
   const legacyMovieTarget = LEGACY_MOVIE_REDIRECTS.get(cleanRequestPath);
   if (legacyMovieTarget) {

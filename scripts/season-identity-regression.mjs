@@ -26,3 +26,14 @@ vm.runInContext(local,ctx);
 assert.equal(ctx.safeLocalAlternativeIdentity(movie('Same',1),movie('Same',2)),false);
 assert.equal(ctx.safeLocalAlternativeIdentity(movie('Same',1),movie('Same',1)),true);
 console.log('Season boundaries passed: explicit/unknown/aggregate, conflicting ids/types, same-year same-TMDB seasons, target import and edge local fallback.');
+const {onRequest}=await import('../functions/[[path]].js');
+for (const [from,to] of [
+ ['/phim/gao-nep-gao-te','/phim/gao-nep-gao-te-phan-1'],
+ ['/xem-phim/gao-nep-gao-te/tap-109','/xem-phim/gao-nep-gao-te-phan-1/tap-109'],
+ ['/xem-phim/gao-nep-gao-te/tap-110-phan-2','/xem-phim/gao-nep-gao-te-phan-2/tap-01'],
+ ['/xem-phim/gao-nep-gao-te/tap-159','/xem-phim/gao-nep-gao-te-phan-2/tap-50'],
+]) {
+ const response=await onRequest({request:new Request('https://khophim.org'+from),env:{},waitUntil(){}});
+ assert.equal(new URL(response.headers.get('location')).pathname,to);
+}
+console.log('Reviewed collection routes preserve season boundaries and cumulative episode numbering.');
