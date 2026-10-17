@@ -1,6 +1,6 @@
 ﻿const SITE_URL = 'https://khophim.org';
 const MHOPHIM_URL = 'https://mhophim.com';
-import { movieIdentityBoundaryCompatible } from '../supabase/functions/_shared/season-identity.ts';
+import { movieIdentityBoundaryCompatible, seasonIdentity } from '../supabase/functions/_shared/season-identity.ts';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 const SUPABASE_FUNCTION_BASE = 'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1';
 const SUPABASE_REST_BASE = 'https://ceoxbhsdodllziyxmbqr.supabase.co/rest/v1';
@@ -4549,6 +4549,7 @@ function providerNeutralType(value) {
 }
 
 function sameProviderNeutralSearchIdentity(left, right, query = '') {
+  if (implicitFirstSeasonSearchPair(left, right)) return true;
   const leftTitle = providerNeutralTitle(left?.name || left?.title_vi || left?.origin_name || '');
   const rightTitle = providerNeutralTitle(right?.name || right?.title_vi || right?.origin_name || '');
   if (!leftTitle || leftTitle !== rightTitle) return false;
@@ -4566,6 +4567,25 @@ function sameProviderNeutralSearchIdentity(left, right, query = '') {
   return !leftType || !rightType || leftType === rightType;
 }
 
+function implicitFirstSeasonSearchPair(left, right) {
+  const a = seasonIdentity(left || {}), b = seasonIdentity(right || {});
+  if (!((a.scope === 'unknown' && b.season === 1) || (b.scope === 'unknown' && a.season === 1))) return false;
+  const ay = Number(left?.year || 0), by = Number(right?.year || 0);
+  if (!ay || ay !== by) return false;
+  const at = providerNeutralType(left?.type), bt = providerNeutralType(right?.type);
+  if (at === 'single' || bt === 'single' || (at !== 'series' && bt !== 'series')) return false;
+  const strip = value => providerNeutralTitle(value).replace(/\s+(?:phan|season|part|mua|s)\s*0*1$/, '').trim();
+  const an = strip(left?.name || left?.title_vi), bn = strip(right?.name || right?.title_vi);
+  if (an.length < 5 || an !== bn) return false;
+  const ao = strip(left?.origin_name || left?.title_original || left?.title_en);
+  const bo = strip(right?.origin_name || right?.title_original || right?.title_en);
+  if (ao && bo && ao !== bo) return false;
+  const ai = Number(left?.tmdb_id || left?.tmdb?.id || 0), bi = Number(right?.tmdb_id || right?.tmdb?.id || 0);
+  if (ai && bi && ai !== bi) return false;
+  const am = String(left?.imdb_id || '').toLowerCase(), bm = String(right?.imdb_id || '').toLowerCase();
+  return !(am && bm && am !== bm);
+}
+
 function mergeProviderNeutralSearchRows(databaseRows, providerRows, query, limit) {
   // Live database rows are canonical for mutable fields such as episode
   // count. Static shards are an outage fallback and may be several hours old;
@@ -4576,6 +4596,14 @@ function mergeProviderNeutralSearchRows(databaseRows, providerRows, query, limit
     const existingIndex = merged.findIndex((existing) => sameProviderNeutralSearchIdentity(existing, row, query));
     if (existingIndex < 0) {
       merged.push(row);
+      continue;
+    }
+    if (implicitFirstSeasonSearchPair(merged[existingIndex],row)) {
+      // Prefer the stored canonical route over a provider-only search slug.
+      const stored = item => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(item?.id || item?._id || ''));
+      const current = merged[existingIndex];
+      const live = item => databaseRows.some(db => db.slug === item.slug);
+      if ((live(row) && !live(current)) || (stored(row) && !stored(current))) merged[existingIndex]=row;
       continue;
     }
     // When two rows describe the same film, a non-retired provider identity
@@ -4672,7 +4700,7 @@ async function proxySearch(request, context) {
   const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
   // Version the edge key whenever canonical merge semantics change so a
   // retired provider slug cannot remain pinned in search for 15 minutes.
-  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v21-high-kick-canonical/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
+  const cacheKey = new Request(`${SITE_URL}/__api-cache/search/v22-first-season-canonical/${limit}/${encodeURIComponent(normalizedQuery)}`, { method: 'GET' });
   const rpcCircuitKey = new Request(`${SITE_URL}/__circuit/search-rpc/v1`, { method: 'GET' });
   let rpcCircuitOpen = false;
   if (request.method === 'GET' && typeof caches !== 'undefined') {
