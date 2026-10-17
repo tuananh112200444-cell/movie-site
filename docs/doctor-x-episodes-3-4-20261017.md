@@ -26,5 +26,13 @@ The affected film is now enrolled. No global cron frequency or capacity guard
 was changed.
 
 Playback: episode 3 HLS played past 20 seconds, readyState 4 in the browser.
-Episode 4 opened the VSMOV iframe titled Bac si X_VIETSUB - Tap 04.mkv;
-iframe playback progress is verified separately before claiming success.
+Episode 4 opened the VSMOV iframe titled Bac si X_VIETSUB - Tap 04.mkv.
+After pressing Play, the actual player clock progressed from 00:11 to 00:35
+of 1:01:20. Its HLS media chunks returned HTTP 200. It was paused after the
+test. The iframe accessibility announcement remained stale at one second;
+the visible player clock, rather than iframe load or that announcement,
+was used to verify advancing playback.
+
+The final rollback regression also confirms that a mixed-provider ongoing
+movie is enrolled and a completed movie remains excluded. Both website
+episode pages now display all four episode choices. Database capacity normal.
