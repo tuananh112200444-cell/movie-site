@@ -1,3 +1,4 @@
+import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
 ﻿import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -349,7 +350,7 @@ async function upsertCatalogMovie(
 
     let query = supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_original,episode_current,current_episode,source_site,is_published,year')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_original,episode_current,current_episode,type,season_number,season_scope,tmdb_id,imdb_id,source_site,is_published,year')
       .eq('is_published', true)
       .eq('year', payloadYear)
       .neq('source_site', 'tmdb-catalog')
@@ -369,7 +370,7 @@ async function upsertCatalogMovie(
     const { data, error } = await query;
     if (error) throw error;
     playableDuplicate = ((data ?? []) as unknown as Record<string, unknown>[]).find((movie) => {
-      if (!hasPlayableMarker(movie)) return false;
+      if (!hasPlayableMarker(movie) || !movieIdentityBoundaryCompatible(movie,payload)) return false;
       const movieKeys = titleKeysFromMovie(movie);
       for (const key of payloadKeys) {
         if (movieKeys.has(key)) return true;
@@ -378,15 +379,16 @@ async function upsertCatalogMovie(
     }) ?? null;
   }
 
-  const existing = await supabase
+  const existingRows = await supabase
     .from('movies')
-    .select('id,slug,episode_current,source_site,is_published')
+    .select('id,slug,name,origin_name,type,season_number,season_scope,tmdb_id,episode_current,source_site,is_published')
     .eq('tmdb_id', tmdbId)
     .eq('tmdb_media_type', mediaType)
-    .limit(1)
-    .maybeSingle();
+    .is('superseded_by_movie_id', null)
+    .limit(100);
 
-  if (existing.error) throw existing.error;
+  if (existingRows.error) throw existingRows.error;
+  const existing = {data:(existingRows.data || []).find(movie=>movieIdentityBoundaryCompatible(movie,payload))};
 
   if (existing.data?.id) {
     const episode = String(existing.data.episode_current || '').toLowerCase().trim();

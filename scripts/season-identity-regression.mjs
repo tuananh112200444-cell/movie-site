@@ -37,3 +37,19 @@ for (const [from,to] of [
  assert.equal(new URL(response.headers.get('location')).pathname,to);
 }
 console.log('Reviewed collection routes preserve season boundaries and cumulative episode numbering.');
+const seasonRows=[movie('Fixture',1,{id:'season-one',slug:'fixture-1'}),movie('Fixture',2,{id:'season-two',slug:'fixture-2'})];
+function query(rows){const q={select(){return q},eq(){return q},neq(){return q},is(){return q},limit(){return Promise.resolve({data:rows})}};return q;}
+const admin=fs.readFileSync('supabase/functions/admin-movie-upsert/index.ts','utf8');
+const adminSlice=admin.slice(admin.indexOf('async function findExistingMovie(\n'),admin.indexOf('\nfunction mergeMovieData('));
+const adminContext={movieIdentityBoundaryCompatible:compatible,MOVIE_MATCH_SELECT:'id'};vm.createContext(adminContext);vm.runInContext(ts.transpileModule(adminSlice,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,adminContext);
+const found=await adminContext.findExistingMovie({from:()=>query(seasonRows)},movie('Fixture',2));
+assert.equal(found.id,'season-two','admin must choose same season among same-TMDB owners');
+const catalog=fs.readFileSync('supabase/functions/sync-tmdb-catalog/index.ts','utf8');
+const start=catalog.indexOf('async function upsertCatalogMovie(');const end=catalog.indexOf('\nserve(',start);
+const catalogSlice=catalog.slice(start,catalog.indexOf('\nasync function ',start+1)>0?catalog.indexOf('\nasync function ',start+1):end);
+let written;
+const catalogContext={movieIdentityBoundaryCompatible:compatible,titleKeysFromMovie:()=>new Set(),Date};vm.createContext(catalogContext);vm.runInContext(ts.transpileModule(catalogSlice,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,catalogContext);
+const catalogDb={from:()=>({...query(seasonRows),update:()=>({eq:async(_key,id)=>{written=id;return {}}})})};
+await catalogContext.upsertCatalogMovie(catalogDb,movie('Fixture',2,{tmdb_media_type:'tv'}));
+assert.equal(written,'season-two','TMDB catalog updater must not overwrite another season');
+console.log('Admin and TMDB catalog writers select the matching season from a shared external ID.');

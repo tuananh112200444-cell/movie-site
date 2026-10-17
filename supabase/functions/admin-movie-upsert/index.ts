@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
 import { verifyAdminSession } from '../_shared/admin-session.ts';
 
 const CORS_ORIGIN = Deno.env.get('CORS_ORIGIN') ?? 'https://khophim.org';
@@ -91,7 +92,7 @@ interface FindResult {
   schedule_note?: string | null;
 }
 
-const MOVIE_MATCH_SELECT = 'id,slug,name,title_vi,title_en,title_zh,title_original,status,type,episode_current,tmdb_id,imdb_id,ophim_id,ophim_slug,normalized_name,origin_name,year,source_site,source_name,content,thumb_url,poster_url,quality,lang,time,category,country,release_at,next_episode_at,next_episode_name,schedule_type,release_time,release_day,schedule_timezone,schedule_note';
+const MOVIE_MATCH_SELECT = 'id,slug,name,title_vi,title_en,title_zh,title_original,status,type,episode_current,season_number,season_scope,tmdb_id,imdb_id,ophim_id,ophim_slug,normalized_name,origin_name,year,source_site,source_name,content,thumb_url,poster_url,quality,lang,time,category,country,release_at,next_episode_at,next_episode_name,schedule_type,release_time,release_day,schedule_timezone,schedule_note';
 const MOVIE_MERGE_SELECT = 'id,slug,name,title_vi,title_en,title_zh,title_original,origin_name,normalized_name,type,status,episode_current,episode_total,current_episode,total_episodes,schedule_type,release_time,release_day,schedule_timezone,release_at,next_episode_at,next_episode_name,schedule_note,tmdb_id,imdb_id,ophim_id,ophim_slug,source_site,source_name,is_published,year,thumb_url,poster_url';
 
 function normalizeTitle(value: unknown): string {
@@ -253,6 +254,7 @@ function hasSharedTitle(existing: FindResult, payload: Record<string, unknown>):
   );
 }
 function isLikelySameMovie(existing: FindResult, payload: Record<string, unknown>): boolean {
+  if (!movieIdentityBoundaryCompatible(existing,payload)) return false;
   const incomingYear = movieYear(payload);
   const existingYear = movieYear(existing);
   if (incomingYear > 0 && existingYear > 0 && incomingYear !== existingYear) return false;
@@ -318,8 +320,10 @@ async function findExistingMovie(
       .from('movies')
       .select(MOVIE_MATCH_SELECT)
       .eq('tmdb_id', tmdbId)
-      .maybeSingle();
-    if (data) return data as unknown as FindResult;
+      .is('superseded_by_movie_id', null)
+      .limit(100);
+    const match = (data || []).find(item => movieIdentityBoundaryCompatible(item,payload));
+    if (match) return match as unknown as FindResult;
   }
 
   // Priority 2: exact canonical slug match
@@ -330,7 +334,7 @@ async function findExistingMovie(
       .select(MOVIE_MATCH_SELECT)
       .eq('slug', slug)
       .maybeSingle();
-    if (data) return data as unknown as FindResult;
+    if (data && movieIdentityBoundaryCompatible(data,payload)) return data as unknown as FindResult;
   }
 
   // Priority 3: exact imdb_id match
@@ -340,8 +344,10 @@ async function findExistingMovie(
       .from('movies')
       .select(MOVIE_MATCH_SELECT)
       .eq('imdb_id', imdbId)
-      .maybeSingle();
-    if (data) return data as unknown as FindResult;
+      .is('superseded_by_movie_id', null)
+      .limit(100);
+    const match = (data || []).find(item => movieIdentityBoundaryCompatible(item,payload));
+    if (match) return match as unknown as FindResult;
   }
 
   // Priority 4: exact ophim_slug match
@@ -352,7 +358,7 @@ async function findExistingMovie(
       .select(MOVIE_MATCH_SELECT)
       .eq('ophim_slug', ophimSlug)
       .maybeSingle();
-    if (data) return data as unknown as FindResult;
+    if (data && movieIdentityBoundaryCompatible(data,payload)) return data as unknown as FindResult;
   }
 
   // Priority 5: ophim_id match
@@ -363,7 +369,7 @@ async function findExistingMovie(
       .select(MOVIE_MATCH_SELECT)
       .eq('ophim_id', ophimId)
       .maybeSingle();
-    if (data) return data as unknown as FindResult;
+    if (data && movieIdentityBoundaryCompatible(data,payload)) return data as unknown as FindResult;
   }
 
   // Priority 6: normalized_name + year
@@ -377,7 +383,7 @@ async function findExistingMovie(
       .eq('year', year)
       .limit(1)
       .maybeSingle();
-    if (data) return data as unknown as FindResult;
+    if (data && movieIdentityBoundaryCompatible(data,payload)) return data as unknown as FindResult;
   }
 
   // Priority 7: origin_name + year
@@ -390,7 +396,7 @@ async function findExistingMovie(
       .eq('year', year)
       .limit(1)
       .maybeSingle();
-    if (data) return data as unknown as FindResult;
+    if (data && movieIdentityBoundaryCompatible(data,payload)) return data as unknown as FindResult;
   }
 // Priority 8: title/name + compatible year. This catches admin vs OPhim
   // duplicates where slug or provider IDs are different.
