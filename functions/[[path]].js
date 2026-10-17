@@ -3390,6 +3390,20 @@ function normalizeNguoncProviderDetail(payload, requestedSlug) {
   if (!payload || payload.status !== 'success' || !payload.movie || typeof payload.movie !== 'object') return null;
   const movie = payload.movie;
   if (String(movie.slug || '').trim() !== requestedSlug || !Array.isArray(movie.episodes)) return null;
+  const textKey = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase();
+  const groups = movie.category && typeof movie.category === 'object' && !Array.isArray(movie.category)
+    ? Object.values(movie.category) : [];
+  const groupItems = (name) => groups.filter((entry) => textKey(entry?.group?.name) === name)
+    .flatMap((entry) => Array.isArray(entry.list) ? entry.list : []);
+  const taxonomy = (items) => items.filter((item) => item && typeof item === 'object').map((item) => ({
+    id: String(item.id || ''), name: String(item.name || ''),
+    slug: String(item.slug || textKey(item.name).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')),
+  }));
+  const names = (value) => (Array.isArray(value) ? value : String(value || '').split(','))
+    .map((item) => String(item).trim()).filter(Boolean);
+  const format = groupItems('dinh dang').map((item) => textKey(item.name)).join(' ');
+  const currentLabel = String(movie.episode_current || movie.current_episode || '');
+  const currentNumber = Number(currentLabel.match(/\d+/)?.[0] || 0) || 0;
   const episodes = movie.episodes.map((server) => ({
     server_name: String(server?.server_name || 'NguồnC'),
     server_data: (Array.isArray(server?.items) ? server.items : []).map((episode) => ({
@@ -3404,8 +3418,21 @@ function normalizeNguoncProviderDetail(payload, requestedSlug) {
     status: true,
     movie: {
       ...movie,
+      _id: String(movie._id || movie.id || ''),
+      origin_name: String(movie.origin_name || movie.original_name || ''),
+      type: movie.type || (/phim bo|tv show/.test(format) ? 'series' : 'single'),
+      status: /trailer|sap chieu/.test(textKey(currentLabel)) ? 'upcoming'
+        : /full|hoan tat/.test(textKey(currentLabel)) ? 'completed' : 'ongoing',
+      current_episode: currentNumber,
+      total_episodes: Number(movie.total_episodes || 0) || null,
+      category: taxonomy(Array.isArray(movie.category) ? movie.category : groupItems('the loai')),
+      country: taxonomy(Array.isArray(movie.country) ? movie.country : groupItems('quoc gia')),
+      actor: names(movie.actor || movie.casts),
+      director: names(movie.director),
+      tmdb_id: Number(movie.tmdb?.id || 0) || null,
+      imdb_id: String(movie.imdb?.id || ''),
       content: movie.content || movie.description || '',
-      episode_current: movie.episode_current || movie.current_episode || '',
+      episode_current: currentLabel,
       episode_total: movie.episode_total || String(movie.total_episodes || ''),
       lang: movie.lang || movie.language || '',
       source_site: 'nguonc',

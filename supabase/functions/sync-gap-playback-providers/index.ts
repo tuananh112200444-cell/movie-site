@@ -434,7 +434,7 @@ async function findNguonc(movie: MovieRow, internalProxySecret: string): Promise
   return null;
 }
 
-async function probeMatch(match: ProviderMatch): Promise<{ ok: boolean; status: number | null; error: string }> {
+async function probeMatch(match: ProviderMatch): Promise<{ ok: boolean; status: number | null; error: string; inconclusive?: boolean }> {
   const first = match.episodes.find((episode) => episode.m3u8 || episode.embed);
   const url = first?.m3u8 || first?.embed || '';
   if (!url) return { ok: false, status: null, error: 'No playable URL' };
@@ -448,7 +448,19 @@ async function probeMatch(match: ProviderMatch): Promise<{ ok: boolean; status: 
       redirect: 'follow',
       signal: AbortSignal.timeout(12_000),
     });
-    if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      // An exact identity match with a trusted StreamC embed remains a
+      // candidate when cloud probes are denied. Persist unchecked, never ok.
+      let trustedEmbed = false;
+      try {
+        const parsed = new URL(url);
+        trustedEmbed = match.provider === 'nguonc' && parsed.protocol === 'https:'
+          && /^embed\d*\.streamc\.xyz$/i.test(parsed.hostname) && parsed.pathname === '/embed.php';
+      } catch { /* invalid source must still fail */ }
+      return { ok: false, status: response.status, error: `HTTP ${response.status}`,
+        inconclusive: trustedEmbed && [401, 403].includes(response.status) };
+    }
     const text = (await response.text()).slice(0, 120_000);
     if (match.provider === 'vsmov' && !text.includes('#EXTM3U')) {
       return { ok: false, status: response.status, error: 'Invalid HLS master playlist' };
@@ -731,7 +743,7 @@ Deno.serve(async (req) => {
           continue;
         }
         const probe = await probeMatch(match);
-        if (!probe.ok) {
+        if (!probe.ok && !probe.inconclusive) {
           providerResults.push({ provider, outcome: 'probe_failed', probe, matched_slug: match.sourceSlug });
           if (!dryRun) await supabase.from('movie_provider_coverage').upsert({
             movie_id: movie.id,
@@ -763,6 +775,7 @@ Deno.serve(async (req) => {
           matched_slug: match.sourceSlug,
           matched_title: match.title,
           matched_year: match.year,
+          probe_inconclusive: probe.inconclusive === true,
           discovered_episodes: match.discoveredEpisodes,
           resolved_episodes: match.episodes.length,
           ...persisted,
@@ -770,13 +783,13 @@ Deno.serve(async (req) => {
         await supabase.from('movie_provider_coverage').upsert({
           movie_id: movie.id,
           provider,
-          state: persisted.streams > 0 ? 'pending' : 'ready',
+          state: probe.inconclusive || persisted.streams > 0 ? 'pending' : 'ready',
           episode_count: match.discoveredEpisodes,
-          playable_stream_count: match.episodes.length,
+          playable_stream_count: probe.inconclusive ? 0 : match.episodes.length,
           last_attempt_at: new Date().toISOString(),
-          last_success_at: new Date().toISOString(),
-          next_retry_at: null,
-          last_error: '',
+          ...(!probe.inconclusive ? { last_success_at: new Date().toISOString() } : {}),
+          next_retry_at: probe.inconclusive ? new Date(Date.now() + 6 * 3600_000).toISOString() : null,
+          last_error: probe.inconclusive ? 'StreamC probe blocked; browser verification pending' : '',
           updated_at: new Date().toISOString(),
         }, { onConflict: 'movie_id,provider' });
       } catch (error) {
