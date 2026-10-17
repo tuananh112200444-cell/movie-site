@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { findFirstSeasonAlias } from '../_shared/first-season-lookup.mjs';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -279,6 +280,8 @@ async function writeGlobalCursor(supabase: SupabaseClient, key: string, globalOf
 }
 
 async function findExistingMovie(supabase: SupabaseClient, entry: Record<string, unknown>) {
+  const firstSeasonAlias=await findFirstSeasonAlias(supabase,entry);
+  if(firstSeasonAlias) return firstSeasonAlias;
   const fields = 'id,slug,name,origin_name,title_vi,title_en,source_site,source_name,source_url,showtimes,tmdb_id,imdb_id,episode_current,episode_total,current_episode,total_episodes,quality,lang,status,is_published';
   const checks: Array<[string, string]> = [];
   if (entry.imdbId) checks.push(['imdb_id', String(entry.imdbId)]);

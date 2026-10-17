@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { findFirstSeasonAlias } from '../supabase/functions/_shared/first-season-lookup.mjs';
 
 const BASE_URL = 'https://www.motchillkz.org';
 const ALLOWED_HOSTS = new Set(['motchillkz.org', 'www.motchillkz.org', 'motchills.us', 'www.motchills.us']);
@@ -293,6 +294,8 @@ export async function searchMotchill(query, limit = 10) {
 }
 
 async function fetchExistingMovie(supabase, entry) {
+  const firstSeasonAlias=await findFirstSeasonAlias(supabase,entry);
+  if(firstSeasonAlias) return firstSeasonAlias;
   const selectFields = 'id,slug,name,origin_name,title_vi,title_en,source_site,source_name,source_url,showtimes,tmdb_id,imdb_id,episode_current,episode_total,current_episode,total_episodes,quality,lang,status,is_published';
   for (const [column, value] of [
     ['slug', entry.sourceSlug],

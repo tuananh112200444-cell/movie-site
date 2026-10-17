@@ -11,8 +11,8 @@ export function seasonIdentity(movie: Movie) {
   const titleSeasons = [...new Set(declared)];
   const episodeSeasons = new Set<number>();
   for (const server of Array.isArray(movie.episodes) ? movie.episodes : []) {
-    for (const episode of server.server_data || server.items || []) {
-      for (const n of markers(`${episode.name || ''} ${episode.slug || ''}`)) episodeSeasons.add(n);
+    for (const episode of server.server_data || server.items || [server]) {
+      for (const n of markers(`${episode.name || episode.epName || ''} ${episode.slug || episode.episode_slug || episode.episodeSlug || ''}`)) episodeSeasons.add(n);
     }
   }
   if (titleSeasons.length > 1) return {scope: 'conflict', season: null};
@@ -41,7 +41,7 @@ export function movieIdentityBoundaryCompatible(a: Movie, b: Movie): boolean {
 
 export function implicitFirstSeasonIdentity(a: Movie,b: Movie): boolean {
   const sa=seasonIdentity(a),sb=seasonIdentity(b);
-  if (!((sa.scope==='unknown' && sb.season===1)||(sb.scope==='unknown' && sa.season===1))) return false;
+  if (!((sa.scope==='unknown' && sb.season===1)||(sb.scope==='unknown' && sa.season===1)||(sa.season===1 && sb.season===1))) return false;
   if (mediaType(a)!=='series'||mediaType(b)!=='series') return false;
   const ay=Number(a.year||0),by=Number(b.year||0);
   if (!ay||ay!==by) return false;

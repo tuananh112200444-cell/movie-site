@@ -1,4 +1,5 @@
 import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
+import { findFirstSeasonAlias } from '../_shared/first-season-lookup.mjs';
 ﻿import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
@@ -330,6 +331,7 @@ async function upsertCatalogMovie(
   supabase: ReturnType<typeof createClient>,
   payload: Record<string, unknown>,
 ): Promise<'inserted' | 'updated' | 'skipped'> {
+  if (await findFirstSeasonAlias(supabase,payload)) return 'skipped';
   const tmdbId = Number(payload.tmdb_id || 0);
   const mediaType = String(payload.tmdb_media_type || '');
   const payloadYear = Number(payload.year || 0);

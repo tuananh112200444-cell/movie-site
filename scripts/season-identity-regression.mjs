@@ -54,7 +54,7 @@ const catalog=fs.readFileSync('supabase/functions/sync-tmdb-catalog/index.ts','u
 const start=catalog.indexOf('async function upsertCatalogMovie(');const end=catalog.indexOf('\nserve(',start);
 const catalogSlice=catalog.slice(start,catalog.indexOf('\nasync function ',start+1)>0?catalog.indexOf('\nasync function ',start+1):end);
 let written;
-const catalogContext={movieIdentityBoundaryCompatible:compatible,titleKeysFromMovie:()=>new Set(),Date};vm.createContext(catalogContext);vm.runInContext(ts.transpileModule(catalogSlice,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,catalogContext);
+const catalogContext={movieIdentityBoundaryCompatible:compatible,findFirstSeasonAlias:async()=>null,titleKeysFromMovie:()=>new Set(),Date};vm.createContext(catalogContext);vm.runInContext(ts.transpileModule(catalogSlice,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,catalogContext);
 const catalogDb={from:()=>({...query(seasonRows),update:()=>({eq:async(_key,id)=>{written=id;return {}}})})};
 await catalogContext.upsertCatalogMovie(catalogDb,movie('Fixture',2,{tmdb_media_type:'tv'}));
 assert.equal(written,'season-two','TMDB catalog updater must not overwrite another season');

@@ -4569,7 +4569,7 @@ function sameProviderNeutralSearchIdentity(left, right, query = '') {
 
 function implicitFirstSeasonSearchPair(left, right) {
   const a = seasonIdentity(left || {}), b = seasonIdentity(right || {});
-  if (!((a.scope === 'unknown' && b.season === 1) || (b.scope === 'unknown' && a.season === 1))) return false;
+  if (!((a.scope === 'unknown' && b.season === 1) || (b.scope === 'unknown' && a.season === 1) || (a.season===1 && b.season===1))) return false;
   const ay = Number(left?.year || 0), by = Number(right?.year || 0);
   if (!ay || ay !== by) return false;
   const at = providerNeutralType(left?.type), bt = providerNeutralType(right?.type);

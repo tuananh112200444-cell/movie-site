@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {findFirstSeasonAlias} from '../supabase/functions/_shared/first-season-lookup.mjs';
+let calls=0;
+const db={rpc:async(name,args)=>{calls++;assert.equal(name,'find_verified_first_season_alias');assert.equal(args.p_movie.year,2026);return{data:{id:'canonical',slug:'first'}}}};
+const entry={title:'Phim Kiem Thu',originName:'Original Test Show',year:2026,type:'series'};
+assert.equal((await findFirstSeasonAlias(db,entry)).id,'canonical');
+for(const extra of [{year:0},{originName:''},{title:'Phim Kiem Thu Phan 2'},{episodes:[{name:'1 Phan 1'},{name:'110 Phan 2'}]}]) assert.equal(await findFirstSeasonAlias(db,{...entry,...extra}),null);
+assert.equal(calls,1);
+await assert.rejects(()=>findFirstSeasonAlias({rpc:async()=>({error:{message:'unavailable'}})},entry),/First-season identity lookup/);
+console.log('Secondary imports use the canonical alias lookup; missing evidence, later seasons and aggregates cannot silently create an alias.');

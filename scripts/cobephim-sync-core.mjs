@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { findFirstSeasonAlias } from '../supabase/functions/_shared/first-season-lookup.mjs';
 
 const BASE_URL = 'https://cobephim.sbs';
 const ALLOWED_COBEPHIM_HOSTS = new Set(['cobephim.sbs', 'cobephim.top']);
@@ -262,6 +263,8 @@ async function fetchCobeUrls({ sitemapUrl = '', sitemapPage = 1, limit = 10, off
 }
 
 async function fetchExistingMovie(supabase, entry) {
+  const firstSeasonAlias=await findFirstSeasonAlias(supabase,entry);
+  if(firstSeasonAlias) return firstSeasonAlias;
   const selectFields = 'id,slug,name,origin_name,title_vi,title_en,source_site,source_name,source_url,showtimes,tmdb_id,imdb_id,episode_current,episode_total,current_episode,total_episodes,quality,lang,status,is_published';
   const checks = [];
   if (entry.imdbId) checks.push(['imdb_id', entry.imdbId]);
