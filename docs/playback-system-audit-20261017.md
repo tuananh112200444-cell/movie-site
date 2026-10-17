@@ -50,3 +50,33 @@ permissions and task fairness; existing provider, media-proof, target-binding,
 recovery-worker, persistence and scheduler contracts are rerun. Live verification
 must separately confirm scheduled work, import counts, public API and browser
 playback before reporting completion.
+
+Live verification at 17 October 2026, approximately 12:54 Vietnam time:
+
+- Frontend release `9d0ba23c46c0` verified at the deployment URL and khophim.org.
+  Backend follow-up `5b0e16ae` deployed to auto-repair-player-issues and both brains.
+- Provider repair completed at 12:47 Vietnam time with no task error, after
+  previously being starved since 10 October. Capacity controller reports normal.
+- Imported exactly 30,000 local audit records; 6,577 unresolved samples mapped
+  to 6,576 distinct canonical movie records and were queued. This is not a
+  claim of completed repairs or complete episode coverage.
+- Total recovery queue (including pre-existing work) currently has 8,502 rows
+  with no completed outcome, 38 pending_browser, 10 no_source, 36 verified_sample
+  and 37 recovered_sample. These counts can change as scheduled work runs.
+- Scheduled recovery completed another recovered_sample at 12:49 and a
+  pending_browser attempt at 12:54. Its bounded pace remains one movie per five
+  minutes, subject to capacity and retry guards; a large backlog remains.
+- Real browser playback progressed for Tren Ban Nhau Duoi Ban Muu and Yeu Mot
+  Nguoi Khac episode 8. Transformers 4 has a ready-state-4 video at 138.57 seconds,
+  paused after verification. This does not certify all episodes or devices.
+- Protected auto-repair dry-run returned HTTP 200, zero recent candidates and
+  zero scanned events. Actual-handler regression separately proves that failed,
+  inconclusive and wrong-episode probes cannot count as repaired, while matching
+  episode media proof can.
+- Systemic SQL rollback tests, provider/identity/media-proof/recovery/scheduler
+  regressions, telemetry proof regression and production build checks passed.
+
+Operational interpretation: the confirmed pipeline defects above are repaired
+and deployed. Catalog-wide playback recovery is still in progress. Blocked
+providers need an alternative source or browser verification; they must not be
+reported as either healthy media or definitively absent media from a 403 alone.
