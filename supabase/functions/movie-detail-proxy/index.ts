@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { getProviderEpisodeNumber, normalizeVerifiedSeasonNumbering } from '../_shared/episode-numbering.ts';
 import { hasValidPublishableApiKey, withPublicReadCors } from '../_shared/public-api-key.ts';
+import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -16,7 +17,7 @@ const DETAIL_CACHE_TTL_MIN = 10;
 // Playback selection changed to preserve verified first-party R2 sources.
 // Cache entries built by earlier detail logic may contain only a provider
 // fallback, so they must never shadow the canonical stream rows.
-const DETAIL_CACHE_SCHEMA_VERSION = 'special-episodes-v14-r2-canonical';
+const DETAIL_CACHE_SCHEMA_VERSION = 'special-episodes-v15-season-boundaries';
 const VERIFIED_PLAYBACK_SAFETY_NET: Record<string, Array<{
   server_name: string;
   name: string;
@@ -98,6 +99,8 @@ const MOVIE_DETAIL_SELECT = [
   'seo_catalog_status',
   'catalog_source',
   'tmdb_media_type',
+  'season_number',
+  'season_scope',
   'tmdb_popularity',
   'tmdb_vote_count',
   'tmdb_vote_average',
@@ -1322,6 +1325,7 @@ function isSafeAuxiliaryExternalMatch(
   external: Record<string, unknown> | null | undefined,
 ): boolean {
   if (!primary || !external) return false;
+  if (!movieIdentityBoundaryCompatible(primary, external)) return false;
   const primaryTmdbObject = primary.tmdb && typeof primary.tmdb === 'object'
     ? primary.tmdb as Record<string, unknown>
     : null;
@@ -1794,6 +1798,7 @@ function hasSharedTitle(a: Record<string, unknown>, b: Record<string, unknown>):
 }
 
 function sameMovieYearOrUnknown(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  if (!movieIdentityBoundaryCompatible(a, b)) return false;
   const ay = Number(a.year || 0);
   const by = Number(b.year || 0);
   if (!Number.isFinite(ay) || !Number.isFinite(by)) return true;

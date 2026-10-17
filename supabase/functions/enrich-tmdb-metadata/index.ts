@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -433,14 +434,16 @@ serve(async (req) => {
         }
         const resolvedTmdbId = Number(patch.tmdb_id || resolved.tmdbId || 0) || 0;
         if (resolvedTmdbId > 0) {
-          const { data: existingOwner, error: ownerError } = await supabase
+          const { data: existingOwners, error: ownerError } = await supabase
             .from('movies')
-            .select('id,slug')
+            .select('id,slug,name,origin_name,type,tmdb_media_type,season_number,season_scope')
             .eq('tmdb_id', resolvedTmdbId)
             .neq('id', movieId)
-            .limit(1)
-            .maybeSingle();
+            .is('superseded_by_movie_id', null)
+            .limit(100);
           if (ownerError) throw new Error(ownerError.message);
+          const expected = {...movie,...patch, season_number: resolved.season?.season_number ?? movie.season_number};
+          const existingOwner = (existingOwners || []).find(owner => movieIdentityBoundaryCompatible(owner,expected));
           if (existingOwner?.id) {
             skippedIdentity++;
             await recordStatus(supabase, movieId, 'skipped_identity', {
@@ -454,7 +457,7 @@ serve(async (req) => {
         }
         patch.updated_at = new Date().toISOString();
         const { error } = await supabase.from('movies').update(patch).eq('id', movieId);
-        if (error?.code === '23505' && /movies_tmdb_id_unique/i.test(error.message || '')) {
+        if (error?.code === '23505' && /movies_tmdb_(?:id|season_identity)_unique/i.test(error.message || '')) {
           skippedIdentity++;
           await recordStatus(supabase, movieId, 'skipped_identity', {
             tmdb_id: resolvedTmdbId || resolved.tmdbId,

@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { findCanonicalMovieByIdentity, retireSourceMovieDuplicate } from '../_shared/movie-identity.ts';
+import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
 import { resolveLocalizedMovieTitles } from '../_shared/tmdb-title-localization.ts';
 import { resolveSourceTitleFields } from '../../../scripts/source-title-localization.mjs';
 
@@ -423,7 +424,7 @@ async function findMovie(db: ReturnType<typeof createClient>, entry: Record<stri
     createSlug: `glvietsub-${entry.sourceSlug}`,
     sourceName: 'GLVietsub',
   });
-  return canonical || bySource || null;
+  return canonical || (bySource && movieIdentityBoundaryCompatible(bySource,{name:entry.name,origin_name:entry.originName,type:'series',tmdb_id:entry.tmdbId}) ? bySource : null);
 }
 
 async function storeEntryLegacy(db: ReturnType<typeof createClient>, entry: Record<string, unknown>) {

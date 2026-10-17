@@ -1,5 +1,6 @@
 ﻿const SITE_URL = 'https://khophim.org';
 const MHOPHIM_URL = 'https://mhophim.com';
+import { movieIdentityBoundaryCompatible } from '../supabase/functions/_shared/season-identity.ts';
 const IMG_BASE = 'https://img.ophim.live/uploads/movies/';
 const SUPABASE_FUNCTION_BASE = 'https://ceoxbhsdodllziyxmbqr.supabase.co/functions/v1';
 const SUPABASE_REST_BASE = 'https://ceoxbhsdodllziyxmbqr.supabase.co/rest/v1';
@@ -3567,6 +3568,7 @@ function canonicalMovieType(value) {
 }
 
 function safeLocalAlternativeIdentity(base, candidate) {
+  if (!movieIdentityBoundaryCompatible(base || {}, candidate || {})) return false;
   const baseTmdb = Number(base?.tmdb_id || 0) || 0;
   const candidateTmdb = Number(candidate?.tmdb_id || 0) || 0;
   if (baseTmdb && candidateTmdb) return baseTmdb === candidateTmdb;
@@ -3811,10 +3813,10 @@ async function proxyMovieDetail(request, context) {
   if (refresh) upstreamUrl.searchParams.set('refresh', '1');
   const detailCacheRevision = preferredSource === 'vsmov'
     ? 'vsmov-4k-v1'
-    : 'canonical-v13-ongoing-episode-refresh';
+    : 'canonical-v14-season-boundaries';
   const detailCacheRevisionQuery = preferredSource === 'vsmov'
     ? `?rev=${detailCacheRevision}`
-    : '?rev=canonical-v13-ongoing-episode-refresh';
+    : '?rev=canonical-v14-season-boundaries';
   const cacheKey = new Request(`${SITE_URL}/__api-cache/movie-detail/${encodeURIComponent(slug)}${detailCacheRevisionQuery}`, { method: 'GET' });
   const failureKey = new Request(`${SITE_URL}/__circuit/movie-detail/${encodeURIComponent(slug)}?source=${encodeURIComponent(preferredSource || 'auto')}`, { method: 'GET' });
   let fallbackPromise;

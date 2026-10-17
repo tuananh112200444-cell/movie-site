@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
@@ -127,8 +128,9 @@ function movieNames(movie: MovieRow): string[] {
 
 function identityMatches(
   movie: MovieRow,
-  candidate: { names: unknown[]; year: unknown; type: unknown },
+  candidate: { names: unknown[]; year: unknown; type: unknown; metadata?: Record<string, unknown> },
 ): boolean {
+  if (!movieIdentityBoundaryCompatible(movie, candidate.metadata || {name:candidate.names[0], origin_name:candidate.names[1],type:candidate.type})) return false;
   const expectedYear = Number(movie.year || 0);
   const candidateYear = Number(candidate.year || 0);
   const expectedType = normalizeType(movie.type);
@@ -344,6 +346,7 @@ async function findVsmov(movie: MovieRow, existingStreams: StoredStream[]): Prom
     const discovered = vsmovEpisodes(detail.episodes);
     if (!discovered.length || !identityMatches(movie, {
       names: [providerMovie.name, providerMovie.origin_name],
+      metadata: {...providerMovie, episodes: detail.episodes},
       year: providerMovie.year,
       type: providerMovie.type,
     })) continue;
@@ -413,6 +416,7 @@ async function findNguonc(movie: MovieRow, internalProxySecret: string): Promise
     const episodes = nguoncEpisodes(providerMovie.episodes);
     if (!episodes.length || !identityMatches(movie, {
       names: [providerMovie.name, providerMovie.original_name],
+      metadata: {...providerMovie, type, episodes: providerMovie.episodes},
       year,
       type,
     })) continue;
@@ -692,7 +696,7 @@ Deno.serve(async (req) => {
 
   const [{ data: rawMovies, error: movieError }, { data: rawStreams, error: streamError }] = await Promise.all([
     supabase.from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_original,original_title,normalized_name,year,type,is_published,seo_catalog_status,tmdb_id')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_original,original_title,normalized_name,year,type,season_number,season_scope,imdb_id,is_published,seo_catalog_status,tmdb_id')
       .in('id', movieIds),
     supabase.from('streams')
       .select('movie_id,episode_slug,source,server_name,stream_url,embed_url,health_status,failure_count,last_checked_at')

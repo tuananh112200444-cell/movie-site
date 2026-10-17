@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { movieIdentityBoundaryCompatible, seasonIdentity } from '../_shared/season-identity.ts';
 import {
   getProviderEpisodeNumber,
   normalizeVerifiedSeasonNumbering,
@@ -203,6 +204,7 @@ function canonicalCandidateScore(record: Record<string, unknown>): number {
 }
 
 function sameMovieByTitle(existing: Record<string, unknown>, incoming: Record<string, unknown>): boolean {
+  if (!movieIdentityBoundaryCompatible(existing, incoming)) return false;
   const existingYear = Number(existing.year || 0);
   const incomingYear = Number(incoming.year || 0);
   if (!(existingYear > 0 && incomingYear > 0 && existingYear === incomingYear)) return false;
@@ -224,6 +226,7 @@ function sameMovieByTitle(existing: Record<string, unknown>, incoming: Record<st
 }
 
 function sameMovieByStableProviderIdentity(existing: Record<string, unknown>, incoming: Record<string, unknown>): boolean {
+  if (!movieIdentityBoundaryCompatible(existing, incoming)) return false;
   const incomingSource = String(incoming.source_site || '').toLowerCase();
   if (incomingSource !== 'ophim') return false;
   const sameId = String(existing.ophim_id || '') && String(existing.ophim_id) === String(incoming.ophim_id || '');
@@ -249,6 +252,7 @@ function resolvedCanonicalMatchesIncoming(
   incoming: Record<string, unknown>,
 ): boolean {
   const canonicalType = normalizedMovieType(canonical.type);
+  if (!movieIdentityBoundaryCompatible(canonical, incoming)) return false;
   const incomingType = normalizedMovieType(incoming.type);
   if (canonicalType && incomingType && canonicalType !== incomingType) return false;
 
@@ -811,6 +815,8 @@ interface TargetMovieIdentity {
   year?: number | null;
   type?: string | null;
   tmdb_id?: number | string | null;
+  season_number?: number | null;
+  season_scope?: string;
   ophim_slug?: string | null;
   source_site?: string | null;
   source_name?: string | null;
@@ -845,6 +851,7 @@ function isSafeTargetDetail(
   detail: ParsedDetail,
 ): boolean {
     const movie = detail.movie as Record<string, unknown>;
+    if (!movieIdentityBoundaryCompatible(target, {...movie, episodes: detail.episodes})) return false;
     const targetTmdb = String(target.tmdb_id || '').trim();
     const detailTmdbObject = movie.tmdb && typeof movie.tmdb === 'object'
       ? movie.tmdb as Record<string, unknown>
@@ -951,6 +958,8 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
   const sourceCurrentLooksClean = rawCurrent > 0 && rawCurrent === currentEpisode;
   const thumbUrl = normalizeProviderImage(provider, movie.thumb_url);
   const posterUrl = normalizeProviderImage(provider, movie.poster_url) || thumbUrl;
+  const season = seasonIdentity({...movie, episodes: detail.episodes});
+  if (season.scope === 'conflict') throw new Error(`Conflicting season metadata: ${slug}`);
 
   return {
     slug,
@@ -962,6 +971,8 @@ function moviePayload(provider: ProviderConfig, detail: ParsedDetail): Record<st
     title_en: originName,
     title_original: originName || name,
     normalized_name: slugify([name, originName].filter(Boolean).join(' ')),
+    season_number: season.season,
+    season_scope: season.scope,
     ...(Number(movie.tmdb?.id || 0) > 0 ? { tmdb_id: Number(movie.tmdb?.id) } : {}),
     content: String(movie.content || ''),
     type: String(movie.type || 'phim-le'),
@@ -1013,7 +1024,8 @@ async function findExistingMovie(
       p_localized_title: String(payload.title_vi || payload.name || ''),
       p_year: Number(payload.year || 0) || null,
       p_movie_type: String(payload.type || ''),
-      p_season: null,
+      // -1 declares a multi-season provider collection without changing the RPC signature.
+      p_season: payload.season_scope === 'aggregate' ? -1 : Number(payload.season_number || 0) || null,
       p_create_slug: String(payload.slug || providerSlug),
       p_source_name: provider.sourceName,
     });
@@ -1022,7 +1034,7 @@ async function findExistingMovie(
     if (resolvedId) {
       const { data: canonical, error: canonicalError } = await supabase
         .from('movies')
-        .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+        .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,season_number,season_scope,imdb_id,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
         .eq('id', resolvedId)
         .maybeSingle();
       if (canonicalError) throw new Error(`canonical movie lookup ${resolvedId}: ${canonicalError.message}`);
@@ -1042,7 +1054,7 @@ async function findExistingMovie(
   for (const [column, value] of checks) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,season_number,season_scope,imdb_id,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq(column as string, value as string)
       .limit(1)
       .maybeSingle();
@@ -1056,7 +1068,7 @@ async function findExistingMovie(
     if (providerIdentity) {
       const { data: identityMatch } = await supabase
         .from('movies')
-        .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+        .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,season_number,season_scope,imdb_id,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
         .eq('ophim_slug', providerIdentity)
         .limit(1)
         .maybeSingle();
@@ -1080,7 +1092,7 @@ async function findExistingMovie(
     // broad title scans for virtually every repeat/backfill update.
     if (
       sameMovieByStableProviderIdentity(exactMatch, payload)
-      || sameProviderSlug
+      || (sameProviderSlug && movieIdentityBoundaryCompatible(exactMatch, payload))
       || sameMovieByTitle(exactMatch, payload)
     ) return exactMatch;
   }
@@ -1090,7 +1102,7 @@ async function findExistingMovie(
   if (normalized.length >= 6 && year > 0) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,season_number,season_scope,imdb_id,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq('year', year)
       .eq('normalized_name', normalized)
       .limit(10);
@@ -1106,7 +1118,7 @@ async function findExistingMovie(
     const safe = escapePostgrestIlike(title);
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,season_number,season_scope,imdb_id,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq('year', year)
       .or(`name.ilike.%${safe}%,origin_name.ilike.%${safe}%,title_vi.ilike.%${safe}%,title_en.ilike.%${safe}%,title_zh.ilike.%${safe}%,title_original.ilike.%${safe}%`)
       .limit(20);
@@ -1125,7 +1137,7 @@ async function findExistingMovie(
   if (normalized.length >= 6 && year > 0) {
     const { data } = await supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,season_number,season_scope,imdb_id,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq('year', year)
       .ilike('normalized_name', normalized)
       .limit(10);
@@ -1162,7 +1174,7 @@ async function findMovieByProviderUniqueIdentity(
   for (const [column, value] of checks) {
     const result = await runDatabaseMutationWithRetry(() => supabase
       .from('movies')
-      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
+      .select('id,slug,name,origin_name,title_vi,title_en,title_zh,title_original,normalized_name,year,type,season_number,season_scope,imdb_id,source_site,source_name,current_episode,total_episodes,episode_current,episode_total,thumb_url,poster_url,tmdb_id,ophim_id,ophim_slug,is_published')
       .eq(column as string, value as string)
       .limit(1)
       .maybeSingle());
@@ -2196,7 +2208,7 @@ serve(async (req) => {
     if (targetMovieId || targetSlug) {
       const { data, error } = await supabase
         .from('movies')
-        .select('id,slug,name,origin_name,title_vi,title_en,title_original,year,type,tmdb_id,ophim_slug,source_site,source_name')
+        .select('id,slug,name,origin_name,title_vi,title_en,title_original,year,type,tmdb_id,imdb_id,season_number,season_scope,ophim_slug,source_site,source_name')
         .eq(targetMovieId ? 'id' : 'slug', targetMovieId || targetSlug)
         .maybeSingle();
       if (error) throw new Error(`target movie lookup ${targetMovieId || targetSlug}: ${error.message}`);

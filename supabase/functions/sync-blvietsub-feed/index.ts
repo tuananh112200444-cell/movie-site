@@ -4,6 +4,7 @@ import { extractImageFromHtml } from '../../../scripts/image-source-utils.mjs';
 import { countPlayableEpisodes, maxPlayableEpisodeNumber as getMaxPlayableEpisodeNumber, shouldPublishMovieFromSync, shouldIncludeMovieForBlvietsubSync } from '../../../scripts/blvietsub-sync-utils.mjs';
 import { resolveLocalizedMovieTitles } from '../_shared/tmdb-title-localization.ts';
 import { findCanonicalMovieByIdentity, retireSourceMovieDuplicate } from '../_shared/movie-identity.ts';
+import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
 import { resolveSourceTitleFields } from '../../../scripts/source-title-localization.mjs';
 
 const FEED_URL = Deno.env.get('BLVIETSUB_FEED_URL') || 'https://blvietsub.com/sitemap_index.xml';
@@ -857,7 +858,9 @@ async function findBestMovieForEntry(
   entry: ParsedEntry,
   indexes: ReturnType<typeof buildMovieIndexes>,
 ): Promise<MovieRow | null> {
-  const localMatch = findMovieForEntry(entry, indexes);
+  const localCandidate = findMovieForEntry(entry, indexes);
+  const boundary = {name:entry.title,origin_name:entry.originName,type:entry.type,tmdb_id:entry.tmdbId};
+  const localMatch = localCandidate && movieIdentityBoundaryCompatible(localCandidate,boundary) ? localCandidate : null;
   // Legacy source rows often retain an English/original title that disappeared
   // from the current provider page. Carry those exact aliases into the global
   // lookup so the public Admin slug can still win canonical selection.
@@ -873,7 +876,7 @@ async function findBestMovieForEntry(
     ]),
   } : entry;
   const globalMatch = await findGlobalMovieForEntry(supabase, identityEntry);
-  return selectPreferredMovie([localMatch, globalMatch].filter((movie): movie is MovieRow => Boolean(movie?.id)));
+  return selectPreferredMovie([localMatch, globalMatch].filter((movie): movie is MovieRow => Boolean(movie?.id) && movieIdentityBoundaryCompatible(movie!,boundary)));
 }
 
 function findBlvietsubSourceDuplicates(entry: ParsedEntry, rows: MovieRow[], targetId: string): MovieRow[] {

@@ -1,3 +1,4 @@
+import { movieIdentityBoundaryCompatible } from './season-identity.ts';
 type DbClient = {
   from: (table: string) => any;
   rpc?: (fn: string, args: Record<string, unknown>) => any;
@@ -53,7 +54,8 @@ export async function findCanonicalMovieByIdentity(
 ) {
   const year = Number(input.year || 0);
   const hasVerifiedYear = Number.isInteger(year) && year >= 1888 && year <= 2200;
-  const fields = 'id,slug,name,origin_name,title_vi,title_en,title_original,normalized_name,year,source_site,source_name,current_episode,total_episodes,is_published,superseded_by_movie_id';
+  const fields = 'id,slug,name,origin_name,title_vi,title_en,title_original,normalized_name,year,type,tmdb_id,imdb_id,season_number,season_scope,source_site,source_name,current_episode,total_episodes,is_published,superseded_by_movie_id';
+  const incoming = {name: input.localizedTitle || input.names[0], origin_name: input.originalTitle || input.names[1], type: input.movieType, season_number: input.season, tmdb_id: input.tmdbId, imdb_id: input.imdbId};
   const provider = String(input.provider || '').trim().toLowerCase();
   const providerSlug = String(input.providerSlug || '').trim().toLowerCase();
   const inputNames = unique(input.names);
@@ -74,7 +76,7 @@ export async function findCanonicalMovieByIdentity(
       .limit(5);
     if (hasVerifiedYear) query = query.eq('year', year);
     const { data, error } = await query;
-    if (!error) existingCandidates.push(...(data || []));
+    if (!error) existingCandidates.push(...(data || []).filter((m: Record<string, unknown>) => movieIdentityBoundaryCompatible(m, incoming)));
   }
   if (existingCandidates.length > 0) {
     return [...new Map(existingCandidates.map((movie) => [String(movie.id), movie])).values()]
@@ -107,7 +109,8 @@ export async function findCanonicalMovieByIdentity(
     if (resolvedId) {
       const { data: resolved, error: lookupError } = await db.from('movies').select(fields).eq('id', resolvedId).maybeSingle();
       if (lookupError) throw lookupError;
-      if (resolved?.id) return resolved as Record<string, unknown>;
+      if (resolved?.id && movieIdentityBoundaryCompatible(resolved, incoming)) return resolved as Record<string, unknown>;
+      if (resolved?.id) throw new Error('Canonical season identity mismatch');
     }
   }
   const candidates: Record<string, unknown>[] = [];
@@ -137,8 +140,9 @@ export async function findCanonicalMovieByIdentity(
       ));
     }
 
-    candidates.push(...passCandidates);
-    const expandedNames = unique(passCandidates.flatMap((movie) => TITLE_FIELDS.map((field) => movie[field])));
+    const compatible = passCandidates.filter(movie => movieIdentityBoundaryCompatible(movie, incoming));
+    candidates.push(...compatible);
+    const expandedNames = unique(compatible.flatMap((movie) => TITLE_FIELDS.map((field) => movie[field])));
     const expandedNormalizedNames = unique(expandedNames.map(normalizedTitleIdentity)).filter((value) => value.length >= 6);
     if (!expandedNormalizedNames.some((value) => !normalizedNames.includes(value))) break;
     names = unique([...names, ...expandedNames]);
@@ -164,6 +168,7 @@ export async function retireSourceMovieDuplicate(
   const provider = String(input.provider || '').toLowerCase();
   const sourceIdentity = `${input.source?.source_site || ''} ${input.source?.source_name || ''}`.toLowerCase();
   if (!sourceId || !targetId || sourceId === targetId || !sourceSlug || !targetSlug || !provider) return false;
+  if (!movieIdentityBoundaryCompatible(input.source!, input.target!)) return false;
   if (!sourceIdentity.includes(provider) && !sourceSlug.startsWith(`${provider}-`)) return false;
 
   // Collapse any older alias chain directly onto the final canonical movie.
