@@ -55,7 +55,7 @@ export async function findCanonicalMovieByIdentity(
   const year = Number(input.year || 0);
   const hasVerifiedYear = Number.isInteger(year) && year >= 1888 && year <= 2200;
   const fields = 'id,slug,name,origin_name,title_vi,title_en,title_original,normalized_name,year,type,tmdb_id,imdb_id,season_number,season_scope,source_site,source_name,current_episode,total_episodes,is_published,superseded_by_movie_id';
-  const incoming = {name: input.localizedTitle || input.names[0], origin_name: input.originalTitle || input.names[1], type: input.movieType, season_number: input.season, tmdb_id: input.tmdbId, imdb_id: input.imdbId};
+  const incoming = {name: input.localizedTitle || input.names[0], origin_name: input.originalTitle || input.names[1], year:input.year, type: input.movieType, season_number: input.season, tmdb_id: input.tmdbId, imdb_id: input.imdbId};
   const provider = String(input.provider || '').trim().toLowerCase();
   const providerSlug = String(input.providerSlug || '').trim().toLowerCase();
   const inputNames = unique(input.names);

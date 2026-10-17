@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { movieIdentityBoundaryCompatible, seasonIdentity } from '../_shared/season-identity.ts';
+import { movieIdentityBoundaryCompatible, seasonIdentity, implicitFirstSeasonIdentity } from '../_shared/season-identity.ts';
 import {
   getProviderEpisodeNumber,
   normalizeVerifiedSeasonNumbering,
@@ -205,6 +205,7 @@ function canonicalCandidateScore(record: Record<string, unknown>): number {
 
 function sameMovieByTitle(existing: Record<string, unknown>, incoming: Record<string, unknown>): boolean {
   if (!movieIdentityBoundaryCompatible(existing, incoming)) return false;
+  if (implicitFirstSeasonIdentity(existing,incoming)) return true;
   const existingYear = Number(existing.year || 0);
   const incomingYear = Number(incoming.year || 0);
   if (!(existingYear > 0 && incomingYear > 0 && existingYear === incomingYear)) return false;
@@ -852,6 +853,7 @@ function isSafeTargetDetail(
 ): boolean {
     const movie = detail.movie as Record<string, unknown>;
     if (!movieIdentityBoundaryCompatible(target, {...movie, episodes: detail.episodes})) return false;
+    if (implicitFirstSeasonIdentity(target,{...movie,episodes:detail.episodes})) return true;
     const targetTmdb = String(target.tmdb_id || '').trim();
     const detailTmdbObject = movie.tmdb && typeof movie.tmdb === 'object'
       ? movie.tmdb as Record<string, unknown>

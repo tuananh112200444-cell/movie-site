@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
+import { movieIdentityBoundaryCompatible, implicitFirstSeasonIdentity } from '../_shared/season-identity.ts';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
@@ -137,6 +137,7 @@ function identityMatches(
   const candidateType = normalizeType(candidate.type);
   if (!Number.isInteger(expectedYear) || expectedYear < 1888 || expectedYear > 2200) return false;
   if (candidateYear !== expectedYear || !expectedType || candidateType !== expectedType) return false;
+  if (candidate.metadata && implicitFirstSeasonIdentity(movie,candidate.metadata)) return true;
   const expectedNames = new Set(movieNames(movie));
   return splitNames(...candidate.names).some((name) => expectedNames.has(name));
 }

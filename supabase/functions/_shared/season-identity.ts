@@ -36,6 +36,17 @@ export function movieIdentityBoundaryCompatible(a: Movie, b: Movie): boolean {
   const as = seasonIdentity(a), bs = seasonIdentity(b);
   if (as.scope === 'conflict' || bs.scope === 'conflict') return false;
   if (as.scope === 'aggregate' || bs.scope === 'aggregate') return as.scope === bs.scope;
-  // Unknown is not implicitly season 1. A provider must supply evidence first.
-  return as.season === bs.season;
+  return as.season === bs.season || implicitFirstSeasonIdentity(a,b);
+}
+
+export function implicitFirstSeasonIdentity(a: Movie,b: Movie): boolean {
+  const sa=seasonIdentity(a),sb=seasonIdentity(b);
+  if (!((sa.scope==='unknown' && sb.season===1)||(sb.scope==='unknown' && sa.season===1))) return false;
+  if (mediaType(a)!=='series'||mediaType(b)!=='series') return false;
+  const ay=Number(a.year||0),by=Number(b.year||0);
+  if (!ay||ay!==by) return false;
+  const base=(v:unknown)=>normalize(v).replace(/[^a-z0-9]+/g,' ').trim().replace(/ (?:phan|season|mua|part|s) 0*1$/,'').trim();
+  const an=base(a.name||a.title_vi),bn=base(b.name||b.title_vi);
+  const ao=base(a.origin_name||a.original_name||a.title_original||a.title_en),bo=base(b.origin_name||b.original_name||b.title_original||b.title_en);
+  return an.length>=5 && an===bn && ao.length>=5 && ao===bo;
 }

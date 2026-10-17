@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { movieIdentityBoundaryCompatible } from '../_shared/season-identity.ts';
+import { movieIdentityBoundaryCompatible, implicitFirstSeasonIdentity } from '../_shared/season-identity.ts';
 import { verifyAdminSession } from '../_shared/admin-session.ts';
 
 const CORS_ORIGIN = Deno.env.get('CORS_ORIGIN') ?? 'https://khophim.org';
@@ -255,6 +255,7 @@ function hasSharedTitle(existing: FindResult, payload: Record<string, unknown>):
 }
 function isLikelySameMovie(existing: FindResult, payload: Record<string, unknown>): boolean {
   if (!movieIdentityBoundaryCompatible(existing,payload)) return false;
+  if (implicitFirstSeasonIdentity(existing,payload)) return true;
   const incomingYear = movieYear(payload);
   const existingYear = movieYear(existing);
   if (incomingYear > 0 && existingYear > 0 && incomingYear !== existingYear) return false;
